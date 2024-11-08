@@ -7,4 +7,4 @@ encoder_hidden_size: [600]      # (list of int) The MLP hidden layer.
 tau: 0.1                        # (float) Temperature of sigmoid/softmax, in (0,oo).
 anneal_cap: 0.2                 # (float) The hyper parameter of the weight of KL loss.
 total_anneal_steps: 200000      # (int) The maximum steps of anneal update.
-reg_weights: [0.0, 0.0]         # (list of float) L2 regularization weights.  
+reg_weights: [0.0, 0.0]         # (list of float) L2 regularization weights.

@@ -7,10 +7,10 @@
 # @Author : Zhichao Feng
 # @email  : fzcbupt@gmail.com
 
-"""
-hopwise.evaluator.register
+"""hopwise.evaluator.register
 ################################################
 """
+
 import inspect
 import sys
 
@@ -36,7 +36,7 @@ def cluster_info(module_name):
     Returns:
         dict: Three dictionaries containing the above information
         and a dictionary matching metric names to metric classes.
-    """
+    """  # noqa: E501
     smaller_m = []
     m_dict, m_info, m_types = {}, {}, {}
     metric_class = inspect.getmembers(
@@ -44,7 +44,7 @@ def cluster_info(module_name):
         lambda x: inspect.isclass(x) and x.__module__ == module_name,
     )
     for name, metric_cls in metric_class:
-        name = name.lower()
+        name = name.lower()  # noqa: PLW2901
         m_dict[name] = metric_cls
         if hasattr(metric_cls, "metric_need"):
             m_info[name] = metric_cls.metric_need
@@ -60,12 +60,10 @@ def cluster_info(module_name):
 
 
 metric_module_name = "hopwise.evaluator.metrics"
-smaller_metrics, metric_information, metric_types, metrics_dict = cluster_info(
-    metric_module_name
-)
+smaller_metrics, metric_information, metric_types, metrics_dict = cluster_info(metric_module_name)
 
 
-class Register(object):
+class Register:
     """Register module load the registry according to the metrics in config.
     It is a member of DataCollector.
     The DataCollector collect the resource that need for Evaluator under the guidance of Register

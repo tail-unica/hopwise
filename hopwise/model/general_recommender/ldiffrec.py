@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2023/10/6
 # @Author : Enze Liu
 # @Email  : enzeeliu@foxmail.com
 
-r"""
-DiffRec
+r"""DiffRec
 ################################################
 Reference:
     Wenjie Wang et al. "Diffusion Recommender Model." in SIGIR 2023.
@@ -14,24 +12,24 @@ Reference code:
 """
 
 import os
+
 import numpy as np
 import torch
 import torch.nn.functional as F
-import torch.nn as nn
-from hopwise.model.init import xavier_normal_initialization
-from hopwise.model.layers import MLPLayers
+from torch import nn
+
 from hopwise.model.general_recommender.diffrec import (
-    DiffRec,
     DNN,
+    DiffRec,
     ModelMeanType,
     mean_flat,
 )
+from hopwise.model.init import xavier_normal_initialization
+from hopwise.model.layers import MLPLayers
 
 
 class AutoEncoder(nn.Module):
-    r"""
-    Guassian Diffusion for large-scale recommendation.
-    """
+    r"""Guassian Diffusion for large-scale recommendation."""
 
     def __init__(
         self,
@@ -44,7 +42,7 @@ class AutoEncoder(nn.Module):
         reparam=True,
         dropout=0.1,
     ):
-        super(AutoEncoder, self).__init__()
+        super().__init__()
 
         self.item_emb = item_emb
         self.n_cate = n_cate
@@ -56,32 +54,26 @@ class AutoEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         if n_cate == 1:  # no clustering
-            in_dims_temp = (
-                [self.n_item + 1] + self.in_dims[:-1] + [self.in_dims[-1] * 2]
-            )
+            in_dims_temp = [self.n_item + 1] + self.in_dims[:-1] + [self.in_dims[-1] * 2]
             out_dims_temp = [self.in_dims[-1]] + self.out_dims + [self.n_item + 1]
 
             self.encoder = MLPLayers(in_dims_temp, activation=self.act_func)
-            self.decoder = MLPLayers(
-                out_dims_temp, activation=self.act_func, last_activation=False
-            )
+            self.decoder = MLPLayers(out_dims_temp, activation=self.act_func, last_activation=False)
 
         else:
             from kmeans_pytorch import kmeans
 
-            self.cluster_ids, _ = kmeans(
-                X=item_emb, num_clusters=n_cate, distance="euclidean", device=device
-            )
+            self.cluster_ids, _ = kmeans(X=item_emb, num_clusters=n_cate, distance="euclidean", device=device)
             # cluster_ids(labels): [0, 1, 2, 2, 1, 0, 0, ...]
             category_idx = []
             for i in range(n_cate):
                 idx = np.argwhere(self.cluster_ids.numpy() == i).flatten().tolist()
                 category_idx.append(torch.tensor(idx, dtype=int) + 1)
-            self.category_idx = category_idx  # [cate1: [iid1, iid2, ...], cate2: [iid3, iid4, ...], cate3: [iid5, iid6, ...]]
+            self.category_idx = (
+                category_idx  # [cate1: [iid1, iid2, ...], cate2: [iid3, iid4, ...], cate3: [iid5, iid6, ...]]
+            )
             self.category_map = torch.cat(tuple(category_idx), dim=-1)  # map
-            self.category_len = [
-                len(self.category_idx[i]) for i in range(n_cate)
-            ]  # item num in each category
+            self.category_len = [len(self.category_idx[i]) for i in range(n_cate)]  # item num in each category
             print("category length: ", self.category_len)
             assert sum(self.category_len) == self.n_item
 
@@ -93,16 +85,10 @@ class AutoEncoder(nn.Module):
                     latent_dims = list(self.in_dims - np.array(decode_dim).sum(axis=0))
                 else:
                     latent_dims = [
-                        int(self.category_len[i] / self.n_item * self.in_dims[j])
-                        for j in range(len(self.in_dims))
+                        int(self.category_len[i] / self.n_item * self.in_dims[j]) for j in range(len(self.in_dims))
                     ]
-                    latent_dims = [
-                        latent_dims[j] if latent_dims[j] != 0 else 1
-                        for j in range(len(self.in_dims))
-                    ]
-                in_dims_temp = (
-                    [self.category_len[i]] + latent_dims[:-1] + [latent_dims[-1] * 2]
-                )
+                    latent_dims = [latent_dims[j] if latent_dims[j] != 0 else 1 for j in range(len(self.in_dims))]
+                in_dims_temp = [self.category_len[i]] + latent_dims[:-1] + [latent_dims[-1] * 2]
                 encoders.append(MLPLayers(in_dims_temp, activation=self.act_func))
                 decode_dim.append(latent_dims)
 
@@ -142,9 +128,7 @@ class AutoEncoder(nn.Module):
             else:
                 latent = mu
 
-            kl_divergence = -0.5 * torch.mean(
-                torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
-            )
+            kl_divergence = -0.5 * torch.mean(torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
 
             return batch, latent, kl_divergence
 
@@ -168,9 +152,7 @@ class AutoEncoder(nn.Module):
             else:
                 latent = mu
 
-            kl_divergence = -0.5 * torch.mean(
-                torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
-            )
+            kl_divergence = -0.5 * torch.mean(torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
 
             return torch.cat(tuple(batch_cate), dim=-1), latent, kl_divergence
 
@@ -198,14 +180,13 @@ class AutoEncoder(nn.Module):
 
 
 class LDiffRec(DiffRec):
-    r"""
-    L-DiffRec clusters items into groups, compresses the interaction vector over each group into a
+    r"""L-DiffRec clusters items into groups, compresses the interaction vector over each group into a
     low-dimensional latent vector via a group-specific VAE, and conducts the forward and reverse
     diffusion processes in the latent space.
     """
 
     def __init__(self, config, dataset):
-        super(LDiffRec, self).__init__(config, dataset)
+        super().__init__(config, dataset)
         self.n_cate = config["n_cate"]
         self.reparam = config["reparam"]
         self.ae_act_func = config["ae_act_func"]
@@ -223,12 +204,10 @@ class LDiffRec(DiffRec):
 
         out_dims = self.out_dims
         in_dims = self.in_dims[::-1]
-        emb_path = os.path.join(dataset.dataset_path, f"item_emb.npy")
+        emb_path = os.path.join(dataset.dataset_path, "item_emb.npy")
         if self.n_cate > 1:
             if not os.path.exists(emb_path):
-                self.logger.exception(
-                    "The item embedding file must be given when n_cate>1."
-                )
+                self.logger.exception("The item embedding file must be given when n_cate>1.")
             item_emb = torch.from_numpy(np.load(emb_path, allow_pickle=True))
         else:
             item_emb = torch.zeros((self.n_items - 1, 64))
@@ -277,9 +256,7 @@ class LDiffRec(DiffRec):
 
         mse = mean_flat((target - model_output) ** 2)
 
-        reloss = self.reweight_loss(
-            batch_latent, x_t, mse, ts, target, model_output, device
-        )
+        reloss = self.reweight_loss(batch_latent, x_t, mse, ts, target, model_output, device)
 
         if self.mean_type == ModelMeanType.START_X:
             batch_latent_recon = model_output
@@ -301,9 +278,7 @@ class LDiffRec(DiffRec):
             lamda = max(self.lamda, self.anneal_cap)
 
         if self.vae_anneal_steps > 0:
-            anneal = min(
-                self.vae_anneal_cap, 1.0 * self.update_count_vae / self.vae_anneal_steps
-            )
+            anneal = min(self.vae_anneal_cap, 1.0 * self.update_count_vae / self.vae_anneal_steps)
         else:
             anneal = self.vae_anneal_cap
 
@@ -319,14 +294,10 @@ class LDiffRec(DiffRec):
         user = interaction[self.USER_ID]
         batch = self.get_rating_matrix(user)
         _, batch_latent, _ = self.autoencoder.Encode(batch)
-        batch_latent_recon = super(LDiffRec, self).p_sample(batch_latent)
-        prediction = self.autoencoder.Decode(
-            batch_latent_recon
-        )  # [batch_size, n1_items + n2_items + n3_items]
+        batch_latent_recon = super().p_sample(batch_latent)
+        prediction = self.autoencoder.Decode(batch_latent_recon)  # [batch_size, n1_items + n2_items + n3_items]
         if self.n_cate > 1:
-            transform = torch.zeros((prediction.shape[0], prediction.shape[1] + 1)).to(
-                prediction.device
-            )
+            transform = torch.zeros((prediction.shape[0], prediction.shape[1] + 1)).to(prediction.device)
             transform[:, self.autoencoder.category_map] = prediction
         else:
             transform = prediction
@@ -340,6 +311,4 @@ class LDiffRec(DiffRec):
 
 
 def compute_loss(recon_x, x):
-    return -torch.mean(
-        torch.sum(F.log_softmax(recon_x, 1) * x, -1)
-    )  # multinomial log likelihood in MultVAE
+    return -torch.mean(torch.sum(F.log_softmax(recon_x, 1) * x, -1))  # multinomial log likelihood in MultVAE

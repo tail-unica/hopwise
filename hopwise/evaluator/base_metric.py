@@ -7,16 +7,16 @@
 # @Author : Kaiyuan Li, Zhichao Feng
 # @email  : tsotfsk@outlook.com, fzcbupt@gmail.com
 
-"""
-hopwise.evaluator.abstract_metric
+"""hopwise.evaluator.abstract_metric
 #####################################
 """
 
 import torch
+
 from hopwise.utils import EvaluatorType
 
 
-class AbstractMetric(object):
+class AbstractMetric:
     """:class:`AbstractMetric` is the base object of all metrics. If you want to
         implement a metric, you should inherit this class.
 
@@ -77,7 +77,7 @@ class TopkMetric(AbstractMetric):
         metric_dict = {}
         avg_result = value.mean(axis=0)
         for k in self.topk:
-            key = "{}@{}".format(metric, k)
+            key = f"{metric}@{k}"
             metric_dict[key] = round(avg_result[k - 1], self.decimal_place)
         return metric_dict
 
@@ -91,10 +91,8 @@ class TopkMetric(AbstractMetric):
 
         Returns:
             numpy.ndarray: metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
-        """
-        raise NotImplementedError(
-            "Method [metric_info] of top-k metric should be implemented."
-        )
+        """  # noqa: E501
+        raise NotImplementedError("Method [metric_info] of top-k metric should be implemented.")
 
 
 class LossMetric(AbstractMetric):
@@ -133,6 +131,4 @@ class LossMetric(AbstractMetric):
         Returns:
             float: The value of the metric.
         """
-        raise NotImplementedError(
-            "Method [metric_info] of loss-based metric should be implemented."
-        )
+        raise NotImplementedError("Method [metric_info] of loss-based metric should be implemented.")

@@ -1,4 +1,3 @@
-# -*- encoding: utf-8 -*-
 # @Time    :   2020/09/01
 # @Author  :   Kaiyuan Li
 # @email   :   tsotfsk@outlook.com
@@ -8,8 +7,7 @@
 # @Author : Kaiyuan Li
 # @Email  : tsotfsk@outlook.com
 
-"""
-NAIS
+"""NAIS
 ######################################
 Reference:
     Xiangnan He et al. "NAIS: Neural Attentive Item Similarity Model for Recommendation." in TKDE 2018.
@@ -19,7 +17,7 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.nn.init import constant_, normal_, xavier_normal_
 
 from hopwise.model.abstract_recommender import GeneralRecommender
@@ -41,7 +39,7 @@ class NAIS(GeneralRecommender):
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
-        super(NAIS, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load dataset info
         self.LABEL = config["LABEL_FIELD"]
@@ -66,10 +64,8 @@ class NAIS(GeneralRecommender):
 
         # split the too large dataset into the specified pieces
         if self.split_to > 0:
-            self.logger.info("split the n_items to {} pieces".format(self.split_to))
-            self.group = torch.chunk(
-                torch.arange(self.n_items).to(self.device), self.split_to
-            )
+            self.logger.info(f"split the n_items to {self.split_to} pieces")
+            self.group = torch.chunk(torch.arange(self.n_items).to(self.device), self.split_to)
         else:
             self.logger.warning(
                 "Pay Attetion!! the `split_to` is set to 0. If you catch a OMM error in this case, "
@@ -79,29 +75,21 @@ class NAIS(GeneralRecommender):
 
         # define layers and loss
         # construct source and destination item embedding matrix
-        self.item_src_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
-        self.item_dst_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_src_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
+        self.item_dst_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.bias = nn.Parameter(torch.zeros(self.n_items))
         if self.algorithm == "concat":
             self.mlp_layers = MLPLayers([self.embedding_size * 2, self.weight_size])
         elif self.algorithm == "prod":
             self.mlp_layers = MLPLayers([self.embedding_size, self.weight_size])
         else:
-            raise ValueError(
-                "NAIS just support attention type in ['concat', 'prod'] but get {}".format(
-                    self.algorithm
-                )
-            )
+            raise ValueError(f"NAIS just support attention type in ['concat', 'prod'] but get {self.algorithm}")
         self.weight_layer = nn.Parameter(torch.ones(self.weight_size, 1))
         self.bceloss = nn.BCEWithLogitsLoss()
 
         # parameters initialization
         if self.pretrain_path is not None:
-            self.logger.info("use pretrain from [{}]...".format(self.pretrain_path))
+            self.logger.info(f"use pretrain from [{self.pretrain_path}]...")
             self._load_pretrain()
         else:
             self.logger.info("unused pretrain...")
@@ -134,7 +122,7 @@ class NAIS(GeneralRecommender):
                 constant_(parm.data, 0)
 
     def get_history_info(self, dataset):
-        """get the user history interaction information
+        """Get the user history interaction information
 
         Args:
             dataset (DataSet): train dataset
@@ -151,7 +139,7 @@ class NAIS(GeneralRecommender):
         return history_item_matrix, history_lens, mask_mat
 
     def reg_loss(self):
-        """calculate the reg loss for embedding layers and mlp layers
+        """Calculate the reg loss for embedding layers and mlp layers
 
         Returns:
             torch.Tensor: reg loss
@@ -167,7 +155,7 @@ class NAIS(GeneralRecommender):
         return loss_1 + loss_2 + loss_3
 
     def attention_mlp(self, inter, target):
-        """layers of attention which support `prod` and `concat`
+        """Layers of attention which support `prod` and `concat`
 
         Args:
             inter (torch.Tensor): the embedding of history items
@@ -178,22 +166,18 @@ class NAIS(GeneralRecommender):
 
         """
         if self.algorithm == "prod":
-            mlp_input = inter * target.unsqueeze(
-                1
-            )  # batch_size x max_len x embedding_size
+            mlp_input = inter * target.unsqueeze(1)  # batch_size x max_len x embedding_size
         else:
             mlp_input = torch.cat(
                 [inter, target.unsqueeze(1).expand_as(inter)], dim=2
             )  # batch_size x max_len x embedding_size*2
         mlp_output = self.mlp_layers(mlp_input)  # batch_size x max_len x weight_size
 
-        logits = torch.matmul(mlp_output, self.weight_layer).squeeze(
-            2
-        )  # batch_size x max_len
+        logits = torch.matmul(mlp_output, self.weight_layer).squeeze(2)  # batch_size x max_len
         return logits
 
     def mask_softmax(self, similarity, logits, bias, item_num, batch_mask_mat):
-        """softmax the unmasked user history items and get the final output
+        """Softmax the unmasked user history items and get the final output
 
         Args:
             similarity (torch.Tensor): the similarity between the history items and target items
@@ -219,7 +203,7 @@ class NAIS(GeneralRecommender):
         return output
 
     def softmax(self, similarity, logits, item_num, bias):
-        """softmax the user history features and get the final output
+        """Softmax the user history features and get the final output
 
         Args:
             similarity (torch.Tensor): the similarity between the history items and target items
@@ -236,31 +220,25 @@ class NAIS(GeneralRecommender):
         exp_sum = torch.pow(exp_sum, self.beta)
         weights = torch.div(exp_logits, exp_sum)
         coeff = torch.pow(item_num.squeeze(1), -self.alpha)
-        output = torch.sigmoid(
-            coeff.float() * torch.sum(weights * similarity, dim=1) + bias
-        )
+        output = torch.sigmoid(coeff.float() * torch.sum(weights * similarity, dim=1) + bias)
 
         return output
 
     def inter_forward(self, user, item):
-        """forward the model by interaction"""
+        """Forward the model by interaction"""
         user_inter = self.history_item_matrix[user]
         item_num = self.history_lens[user].unsqueeze(1)
         batch_mask_mat = self.mask_mat[user]
-        user_history = self.item_src_embedding(
-            user_inter
-        )  # batch_size x max_len x embedding_size
+        user_history = self.item_src_embedding(user_inter)  # batch_size x max_len x embedding_size
         target = self.item_dst_embedding(item)  # batch_size x embedding_size
         bias = self.bias[item]  # batch_size x 1
-        similarity = torch.bmm(user_history, target.unsqueeze(2)).squeeze(
-            2
-        )  # batch_size x max_len
+        similarity = torch.bmm(user_history, target.unsqueeze(2)).squeeze(2)  # batch_size x max_len
         logits = self.attention_mlp(user_history, target)
         scores = self.mask_softmax(similarity, logits, bias, item_num, batch_mask_mat)
         return scores
 
     def user_forward(self, user_input, item_num, repeats=None, pred_slc=None):
-        """forward the model by user
+        """Forward the model by user
 
         Args:
             user_input (torch.Tensor): user input tensor
@@ -275,18 +253,14 @@ class NAIS(GeneralRecommender):
         """
         item_num = item_num.repeat(repeats, 1)
         user_history = self.item_src_embedding(user_input)  # inter_num x embedding_size
-        user_history = user_history.repeat(
-            repeats, 1, 1
-        )  # target_items x inter_num x embedding_size
+        user_history = user_history.repeat(repeats, 1, 1)  # target_items x inter_num x embedding_size
         if pred_slc is None:
             targets = self.item_dst_embedding.weight  # target_items x embedding_size
             bias = self.bias
         else:
             targets = self.item_dst_embedding(pred_slc)
             bias = self.bias[pred_slc]
-        similarity = torch.bmm(user_history, targets.unsqueeze(2)).squeeze(
-            2
-        )  # inter_num x target_items
+        similarity = torch.bmm(user_history, targets.unsqueeze(2)).squeeze(2)  # inter_num x target_items
         logits = self.attention_mlp(user_history, targets)
         scores = self.softmax(similarity, logits, item_num, bias)
         return scores
@@ -311,9 +285,7 @@ class NAIS(GeneralRecommender):
         # test users one by one, if the number of items is too large, we will split it to some pieces
         for user_input, item_num in zip(user_inters, item_nums.unsqueeze(1)):
             if self.split_to <= 0:
-                output = self.user_forward(
-                    user_input[:item_num], item_num, repeats=self.n_items
-                )
+                output = self.user_forward(user_input[:item_num], item_num, repeats=self.n_items)
             else:
                 output = []
                 for mask in self.group:

@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/10/6
 # @Author : Yingqian Min
 # @Email  : eliver_min@foxmail.com
 
-r"""
-ConvNCF
+r"""ConvNCF
 ################################################
 Reference:
     Xiangnan He et al. "Outer Product-based Neural Collaborative Filtering." in IJCAI 2018.
@@ -13,13 +11,14 @@ Reference code:
     https://github.com/duxy-me/ConvNCF
 """
 
-import torch
-import torch.nn as nn
 import copy
 
+import torch
+from torch import nn
+
 from hopwise.model.abstract_recommender import GeneralRecommender
-from hopwise.model.layers import MLPLayers, CNNLayers
 from hopwise.model.general_recommender.bpr import BPR
+from hopwise.model.layers import CNNLayers, MLPLayers
 from hopwise.utils import InputType
 
 
@@ -41,11 +40,11 @@ class ConvNCFBPRLoss(nn.Module):
     """
 
     def __init__(self):
-        super(ConvNCFBPRLoss, self).__init__()
+        super().__init__()
 
     def forward(self, pos_score, neg_score):
         distance = pos_score - neg_score
-        loss = torch.sum(torch.log((1 + torch.exp(-distance))))
+        loss = torch.sum(torch.log(1 + torch.exp(-distance)))
         return loss
 
 
@@ -60,7 +59,7 @@ class ConvNCF(GeneralRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(ConvNCF, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load dataset info
         self.LABEL = config["LABEL_FIELD"]
@@ -88,12 +87,8 @@ class ConvNCF(GeneralRecommender):
             self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
             self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
 
-        self.cnn_layers = CNNLayers(
-            self.cnn_channels, self.cnn_kernels, self.cnn_strides, activation="relu"
-        )
-        self.predict_layers = MLPLayers(
-            [self.cnn_channels[-1], 1], self.dropout_prob, activation="none"
-        )
+        self.cnn_layers = CNNLayers(self.cnn_channels, self.cnn_kernels, self.cnn_strides, activation="relu")
+        self.predict_layers = MLPLayers([self.cnn_channels[-1], 1], self.dropout_prob, activation="none")
         self.loss = ConvNCFBPRLoss()
 
     def forward(self, user, item):

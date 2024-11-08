@@ -1,18 +1,16 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/9/15 10:57
 # @Author : Zihan Lin
 # @Email  : linzihan.super@foxmail.com
 # @File   : fnn.py
 
-r"""
-FNN
+r"""FNN
 ################################################
 Reference:
     Weinan Zhang1 et al. "Deep Learning over Multi-field Categorical Data" in ECIR 2016
 """
 
-import torch.nn as nn
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import ContextRecommender
 from hopwise.model.layers import MLPLayers
@@ -31,15 +29,13 @@ class FNN(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(FNN, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.mlp_hidden_size = config["mlp_hidden_size"]
         self.dropout_prob = config["dropout_prob"]
 
-        size_list = [
-            self.embedding_size * self.num_feature_field
-        ] + self.mlp_hidden_size
+        size_list = [self.embedding_size * self.num_feature_field] + self.mlp_hidden_size
 
         # define layers and loss
         self.mlp_layers = MLPLayers(
@@ -62,14 +58,10 @@ class FNN(ContextRecommender):
                 constant_(module.bias.data, 0)
 
     def forward(self, interaction):
-        fnn_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
+        fnn_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
         batch_size = fnn_all_embeddings.shape[0]
 
-        output = self.predict_layer(
-            self.mlp_layers(fnn_all_embeddings.view(batch_size, -1))
-        )
+        output = self.predict_layer(self.mlp_layers(fnn_all_embeddings.view(batch_size, -1)))
         return output.squeeze(-1)
 
     def calculate_loss(self, interaction):

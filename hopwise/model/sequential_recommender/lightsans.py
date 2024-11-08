@@ -1,37 +1,33 @@
-# -*- coding: utf-8 -*-
 # @Time    : 2021/05/01
 # @Author  : Xinyan Fan
 # @Email   : xinyan.fan@ruc.edu.cn
 
-"""
-LightSANs
+"""LightSANs
 ################################################
 Reference:
     Xin-Yan Fan et al. "Lighter and Better: Low-Rank Decomposed Self-Attention Networks for Next-Item Recommendation." in SIGIR 2021.
 Reference:
     https://github.com/BELIEVEfxy/LightSANs
-"""
+"""  # noqa: E501
 
 import torch
 from torch import nn
 
 from hopwise.model.abstract_recommender import SequentialRecommender
-from hopwise.model.loss import BPRLoss
 from hopwise.model.layers import LightTransformerEncoder
+from hopwise.model.loss import BPRLoss
 
 
 class LightSANs(SequentialRecommender):
     def __init__(self, config, dataset):
-        super(LightSANs, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.n_layers = config["n_layers"]
         self.n_heads = config["n_heads"]
         self.k_interests = config["k_interests"]
         self.hidden_size = config["hidden_size"]  # same as embedding_size
-        self.inner_size = config[
-            "inner_size"
-        ]  # the dimensionality in feed-forward layer
+        self.inner_size = config["inner_size"]  # the dimensionality in feed-forward layer
         self.hidden_dropout_prob = config["hidden_dropout_prob"]
         self.attn_dropout_prob = config["attn_dropout_prob"]
         self.hidden_act = config["hidden_act"]
@@ -42,9 +38,7 @@ class LightSANs(SequentialRecommender):
 
         self.seq_len = self.max_seq_length
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.hidden_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.hidden_size, padding_idx=0)
         self.position_embedding = nn.Embedding(self.max_seq_length, self.hidden_size)
         self.trm_encoder = LightTransformerEncoder(
             n_layers=self.n_layers,
@@ -83,9 +77,7 @@ class LightSANs(SequentialRecommender):
             module.bias.data.zero_()
 
     def embedding_layer(self, item_seq):
-        position_ids = torch.arange(
-            item_seq.size(1), dtype=torch.long, device=item_seq.device
-        )
+        position_ids = torch.arange(item_seq.size(1), dtype=torch.long, device=item_seq.device)
         position_embedding = self.position_embedding(position_ids)
         item_emb = self.item_embedding(item_seq)
         return item_emb, position_embedding
@@ -95,9 +87,7 @@ class LightSANs(SequentialRecommender):
         item_emb = self.LayerNorm(item_emb)
         item_emb = self.dropout(item_emb)
 
-        trm_output = self.trm_encoder(
-            item_emb, position_embedding, output_all_encoded_layers=True
-        )
+        trm_output = self.trm_encoder(item_emb, position_embedding, output_all_encoded_layers=True)
         output = trm_output[-1]
         output = self.gather_indexes(output, item_seq_len - 1)
         return output  # [B H]

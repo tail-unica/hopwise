@@ -7,20 +7,20 @@
 # @Author : Zhen Tian, Yupeng Hou, Yushuo Chen, Gaowei Zhang
 # @email  : chenyuwuxinn@gmail.com, houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, zgw15630559577@163.com
 
-"""
-hopwise.data.dataloader.abstract_dataloader
+"""hopwise.data.dataloader.abstract_dataloader
 ################################################
 """
 
-import math
+# ruff: noqa: PLW0602 PLW0603
+
 import copy
 from logging import getLogger
 
 import torch
 
 from hopwise.data.interaction import Interaction
-from hopwise.utils import InputType, FeatureType, FeatureSource, ModelType
 from hopwise.data.transform import construct_transform
+from hopwise.utils import FeatureSource, FeatureType, InputType, ModelType
 
 start_iter = False
 
@@ -74,9 +74,7 @@ class AbstractDataLoader(torch.utils.data.DataLoader):
 
     def _init_batch_size_and_step(self):
         """Initializing :attr:`step` and :attr:`batch_size`."""
-        raise NotImplementedError(
-            "Method [init_batch_size_and_step] should be implemented"
-        )
+        raise NotImplementedError("Method [init_batch_size_and_step] should be implemented")
 
     def update_config(self, config):
         """Update configure of dataloader, such as :attr:`batch_size`, :attr:`step` etc.
@@ -146,9 +144,7 @@ class NegSampleDataLoader(AbstractDataLoader):
                 self.sampling_func = self._neg_sample_by_point_wise_sampling
 
                 self.label_field = config["LABEL_FIELD"]
-                dataset.set_field_property(
-                    self.label_field, FeatureType.FLOAT, FeatureSource.INTERACTION, 1
-                )
+                dataset.set_field_property(self.label_field, FeatureType.FLOAT, FeatureSource.INTERACTION, 1)
             elif self.dl_format == InputType.PAIRWISE:
                 self.times = self.neg_sample_num
                 self.sampling_func = self._neg_sample_by_pair_wise_sampling
@@ -156,26 +152,15 @@ class NegSampleDataLoader(AbstractDataLoader):
                 self.neg_prefix = config["NEG_PREFIX"]
                 self.neg_item_id = self.neg_prefix + self.iid_field
 
-                columns = (
-                    [self.iid_field]
-                    if dataset.item_feat is None
-                    else dataset.item_feat.columns
-                )
+                columns = [self.iid_field] if dataset.item_feat is None else dataset.item_feat.columns
                 for item_feat_col in columns:
                     neg_item_feat_col = self.neg_prefix + item_feat_col
                     dataset.copy_field_property(neg_item_feat_col, item_feat_col)
             else:
-                raise ValueError(
-                    f"`neg sampling by` with dl_format [{self.dl_format}] not been implemented."
-                )
+                raise ValueError(f"`neg sampling by` with dl_format [{self.dl_format}] not been implemented.")
 
-        elif (
-            self.neg_sample_args["distribution"] != "none"
-            and self.neg_sample_args["sample_num"] != "none"
-        ):
-            raise ValueError(
-                f'`neg_sample_args` [{self.neg_sample_args["distribution"]}] is not supported!'
-            )
+        elif self.neg_sample_args["distribution"] != "none" and self.neg_sample_args["sample_num"] != "none":
+            raise ValueError(f'`neg_sample_args` [{self.neg_sample_args["distribution"]}] is not supported!')
 
     def _neg_sampling(self, inter_feat):
         if self.neg_sample_args.get("dynamic", False):
@@ -188,27 +173,18 @@ class NegSampleDataLoader(AbstractDataLoader):
             self.model.eval()
             interaction = copy.deepcopy(inter_feat).to(self.model.device)
             interaction = interaction.repeat(self.neg_sample_num * candidate_num)
-            neg_item_feat = Interaction(
-                {self.iid_field: neg_candidate_ids.to(self.model.device)}
-            )
+            neg_item_feat = Interaction({self.iid_field: neg_candidate_ids.to(self.model.device)})
             interaction.update(neg_item_feat)
             scores = self.model.predict(interaction).reshape(candidate_num, -1)
             indices = torch.max(scores, dim=0)[1].detach()
             neg_candidate_ids = neg_candidate_ids.reshape(candidate_num, -1)
-            neg_item_ids = neg_candidate_ids[
-                indices, [i for i in range(neg_candidate_ids.shape[1])]
-            ].view(-1)
+            neg_item_ids = neg_candidate_ids[indices, [i for i in range(neg_candidate_ids.shape[1])]].view(-1)
             self.model.train()
             return self.sampling_func(inter_feat, neg_item_ids)
-        elif (
-            self.neg_sample_args["distribution"] != "none"
-            and self.neg_sample_args["sample_num"] != "none"
-        ):
+        elif self.neg_sample_args["distribution"] != "none" and self.neg_sample_args["sample_num"] != "none":
             user_ids = inter_feat[self.uid_field].numpy()
             item_ids = inter_feat[self.iid_field].numpy()
-            neg_item_ids = self._sampler.sample_by_user_ids(
-                user_ids, item_ids, self.neg_sample_num
-            )
+            neg_item_ids = self._sampler.sample_by_user_ids(user_ids, item_ids, self.neg_sample_num)
             return self.sampling_func(inter_feat, neg_item_ids)
         else:
             return inter_feat

@@ -8,14 +8,13 @@
 # @Email  : slmu@ruc.edu.cn, 1462034631@qq.com
 
 
-"""
-hopwise.model.loss
+"""hopwise.model.loss
 #######################
 Common Loss in recommender system
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 class BPRLoss(nn.Module):
@@ -39,7 +38,7 @@ class BPRLoss(nn.Module):
     """
 
     def __init__(self, gamma=1e-10):
-        super(BPRLoss, self).__init__()
+        super().__init__()
         self.gamma = gamma
 
     def forward(self, pos_score, neg_score):
@@ -51,7 +50,7 @@ class RegLoss(nn.Module):
     """RegLoss, L2 regularization on model parameters"""
 
     def __init__(self):
-        super(RegLoss, self).__init__()
+        super().__init__()
 
     def forward(self, parameters):
         reg_loss = None
@@ -67,16 +66,14 @@ class EmbLoss(nn.Module):
     """EmbLoss, regularization on embeddings"""
 
     def __init__(self, norm=2):
-        super(EmbLoss, self).__init__()
+        super().__init__()
         self.norm = norm
 
     def forward(self, *embeddings, require_pow=False):
         if require_pow:
             emb_loss = torch.zeros(1).to(embeddings[-1].device)
             for embedding in embeddings:
-                emb_loss += torch.pow(
-                    input=torch.norm(embedding, p=self.norm), exponent=self.norm
-                )
+                emb_loss += torch.pow(input=torch.norm(embedding, p=self.norm), exponent=self.norm)
             emb_loss /= embeddings[-1].shape[0]
             emb_loss /= self.norm
             return emb_loss
@@ -92,7 +89,7 @@ class EmbMarginLoss(nn.Module):
     """EmbMarginLoss, regularization on embeddings"""
 
     def __init__(self, power=2):
-        super(EmbMarginLoss, self).__init__()
+        super().__init__()
         self.power = power
 
     def forward(self, *embeddings):

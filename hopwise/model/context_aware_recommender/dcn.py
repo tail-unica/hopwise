@@ -1,4 +1,3 @@
-# _*_ coding: utf-8 _*_
 # @Time : 2020/10/4
 # @Author : Zhichao Feng
 # @Email  : fzcbupt@gmail.com
@@ -8,8 +7,7 @@
 # @Author : Zhichao Feng
 # @email  : fzcbupt@gmail.com
 
-r"""
-DCN
+r"""DCN
 ################################################
 Reference:
     Ruoxi Wang at al. "Deep & Cross Network for Ad Click Predictions." in ADKDD 2017.
@@ -19,8 +17,8 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import ContextRecommender
 from hopwise.model.layers import MLPLayers
@@ -34,7 +32,7 @@ class DCN(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(DCN, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.mlp_hidden_size = config["mlp_hidden_size"]
@@ -45,30 +43,18 @@ class DCN(ContextRecommender):
         # define layers and loss
         # init weight and bias of each cross layer
         self.cross_layer_w = nn.ParameterList(
-            nn.Parameter(
-                torch.randn(self.num_feature_field * self.embedding_size).to(
-                    self.device
-                )
-            )
+            nn.Parameter(torch.randn(self.num_feature_field * self.embedding_size).to(self.device))
             for _ in range(self.cross_layer_num)
         )
         self.cross_layer_b = nn.ParameterList(
-            nn.Parameter(
-                torch.zeros(self.num_feature_field * self.embedding_size).to(
-                    self.device
-                )
-            )
+            nn.Parameter(torch.zeros(self.num_feature_field * self.embedding_size).to(self.device))
             for _ in range(self.cross_layer_num)
         )
 
         # size of mlp hidden layer
-        size_list = [
-            self.embedding_size * self.num_feature_field
-        ] + self.mlp_hidden_size
+        size_list = [self.embedding_size * self.num_feature_field] + self.mlp_hidden_size
         # size of cross network output
-        in_feature_num = (
-            self.embedding_size * self.num_feature_field + self.mlp_hidden_size[-1]
-        )
+        in_feature_num = self.embedding_size * self.num_feature_field + self.mlp_hidden_size[-1]
 
         self.mlp_layers = MLPLayers(size_list, dropout=self.dropout_prob, bn=True)
         self.predict_layer = nn.Linear(in_feature_num, 1)
@@ -111,9 +97,7 @@ class DCN(ContextRecommender):
         return x_l
 
     def forward(self, interaction):
-        dcn_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
+        dcn_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
         batch_size = dcn_all_embeddings.shape[0]
         dcn_all_embeddings = dcn_all_embeddings.view(batch_size, -1)
 

@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2022/7/15
 # @Author : Gaowei Zhang
 # @Email  : zgw15630559577@163.com
 import os
 import unittest
-from hopwise.trainer import HyperTuning
+
 from hopwise.quick_start import objective_function
+from hopwise.trainer import HyperTuning
 
 current_path = os.path.dirname(os.path.realpath(__file__))
 config_file_list = [os.path.join(current_path, "test_hyper_tuning_config.yaml")]

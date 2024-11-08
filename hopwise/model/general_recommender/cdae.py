@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/12/12
 # @Author : Xingyu Pan
 # @Email  : panxy@ruc.edu.cn
 
-r"""
-CDAE
+r"""CDAE
 ################################################
 Reference:
     Yao Wu et al., Collaborative denoising auto-encoders for top-n recommender systems. In WSDM 2016.
@@ -14,7 +12,7 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from hopwise.model.abstract_recommender import AutoEncoderMixin, GeneralRecommender
 from hopwise.model.init import xavier_normal_initialization
@@ -30,7 +28,7 @@ class CDAE(GeneralRecommender, AutoEncoderMixin):
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
-        super(CDAE, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         self.reg_weight_1 = config["reg_weight_1"]
         self.reg_weight_2 = config["reg_weight_2"]
@@ -90,13 +88,9 @@ class CDAE(GeneralRecommender, AutoEncoderMixin):
             raise ValueError("Invalid loss_type, loss_type must in [MSE, BCE]")
         loss = loss_func(predict, x_items)
         # l1-regularization
-        loss += self.reg_weight_1 * (
-            self.h_user.weight.norm(p=1) + self.h_item.weight.norm(p=1)
-        )
+        loss += self.reg_weight_1 * (self.h_user.weight.norm(p=1) + self.h_item.weight.norm(p=1))
         # l2-regularization
-        loss += self.reg_weight_2 * (
-            self.h_user.weight.norm() + self.h_item.weight.norm()
-        )
+        loss += self.reg_weight_2 * (self.h_user.weight.norm() + self.h_item.weight.norm())
 
         return loss
 

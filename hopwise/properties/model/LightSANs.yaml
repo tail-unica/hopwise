@@ -1,4 +1,4 @@
-# k_interests (int): The number of latent interests dimension in item-to-interest aggregation. 
+# k_interests (int): The number of latent interests dimension in item-to-interest aggregation.
 # k_interests equals to 0.1 * MAX_ITEM_LIST_LENGTH is suggested to ensure the compression effect.
 k_interests: 5
 n_layers: 2                     # (int) The number of transformer layers in transformer encoder.

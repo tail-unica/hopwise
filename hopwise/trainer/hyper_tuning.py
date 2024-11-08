@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/7/19 19:06
 # @Author : Shanlei Mu
 # @Email  : slmu@ruc.edu.cn
@@ -9,8 +8,7 @@
 # @Author : Gaowei Zhang
 # @Email  : zgw15630559577@163.com
 
-"""
-hopwise.trainer.hyper_tuning
+"""hopwise.trainer.hyper_tuning
 ############################
 """
 
@@ -74,7 +72,7 @@ class ExhaustiveSearchError(Exception):
 
 
 def _validate_space_exhaustive_search(space):
-    from hyperopt.pyll.base import dfs, as_apply
+    from hyperopt.pyll.base import as_apply, dfs
     from hyperopt.pyll.stochastic import implicit_stochastic_symbols
 
     supported_stochastic_symbols = [
@@ -133,14 +131,7 @@ def exhaustive_search(new_ids, domain, trials, seed, nbMaxSucessiveFailures=1000
             miscs_update_idxs_vals([new_misc], idxs, vals)
 
             # Compare with previous hashes
-            h = hash(
-                frozenset(
-                    [
-                        (key, value[0]) if len(value) > 0 else ((key, None))
-                        for key, value in vals.items()
-                    ]
-                )
-            )
+            h = hash(frozenset([(key, value[0]) if len(value) > 0 else ((key, None)) for key, value in vals.items()]))
             if h not in hashset:
                 newSample = True
             else:
@@ -155,7 +146,7 @@ def exhaustive_search(new_ids, domain, trials, seed, nbMaxSucessiveFailures=1000
     return rval
 
 
-class HyperTuning(object):
+class HyperTuning:
     r"""HyperTuning Class is used to manage the parameter tuning process of recommender system models.
     Given objective funciton, parameters range and optimization algorithm, using HyperTuning can find
     the best result among these parameters
@@ -166,6 +157,8 @@ class HyperTuning(object):
         Thanks to sbrodeur for the exhaustive search code.
         https://github.com/hyperopt/hyperopt/issues/200
     """
+
+    PARAMS_PER_ROW = 3
 
     def __init__(
         self,
@@ -197,9 +190,7 @@ class HyperTuning(object):
         elif params_dict:
             self.space = self._build_space_from_dict(params_dict)
         else:
-            raise ValueError(
-                "at least one of `space`, `params_file` and `params_dict` is provided"
-            )
+            raise ValueError("at least one of `space`, `params_file` and `params_dict` is provided")
         if isinstance(algo, str):
             if algo == "exhaustive":
                 self.algo = partial(exhaustive_search, nbMaxSucessiveFailures=1000)
@@ -213,7 +204,7 @@ class HyperTuning(object):
 
                 self.algo = tpe.suggest
             else:
-                raise ValueError("Illegal algo [{}]".format(algo))
+                raise ValueError(f"Illegal algo [{algo}]")
         else:
             self.algo = algo
         from hyperopt.early_stop import no_progress_loss
@@ -225,10 +216,10 @@ class HyperTuning(object):
         from hyperopt import hp
 
         space = {}
-        with open(file, "r") as fp:
+        with open(file) as fp:
             for line in fp:
                 para_list = line.strip().split(" ")
-                if len(para_list) < 3:
+                if len(para_list) < HyperTuning.PARAMS_PER_ROW:
                     continue
                 para_name, para_type, para_value = (
                     para_list[0],
@@ -243,14 +234,12 @@ class HyperTuning(object):
                     space[para_name] = hp.uniform(para_name, float(low), float(high))
                 elif para_type == "quniform":
                     low, high, q = para_value.strip().split(",")
-                    space[para_name] = hp.quniform(
-                        para_name, float(low), float(high), float(q)
-                    )
+                    space[para_name] = hp.quniform(para_name, float(low), float(high), float(q))
                 elif para_type == "loguniform":
                     low, high = para_value.strip().split(",")
                     space[para_name] = hp.loguniform(para_name, float(low), float(high))
                 else:
-                    raise ValueError("Illegal param type [{}]".format(para_type))
+                    raise ValueError(f"Illegal param type [{para_type}]")
         return space
 
     @staticmethod
@@ -275,9 +264,7 @@ class HyperTuning(object):
                     low = para_value[0]
                     high = para_value[1]
                     q = para_value[2]
-                    space[para_name] = hp.quniform(
-                        para_name, float(low), float(high), float(q)
-                    )
+                    space[para_name] = hp.quniform(para_name, float(low), float(high), float(q))
             elif para_type == "loguniform":
                 for para_name in config_dict["loguniform"]:
                     para_value = config_dict["loguniform"][para_name]
@@ -285,12 +272,12 @@ class HyperTuning(object):
                     high = para_value[1]
                     space[para_name] = hp.loguniform(para_name, float(low), float(high))
             else:
-                raise ValueError("Illegal param type [{}]".format(para_type))
+                raise ValueError(f"Illegal param type [{para_type}]")
         return space
 
     @staticmethod
     def params2str(params):
-        r"""convert dict to str
+        r"""Convert dict to str
 
         Args:
             params (dict): parameters dict
@@ -321,17 +308,9 @@ class HyperTuning(object):
         with open(output_file, "w") as fp:
             for params in self.params2result:
                 fp.write(params + "\n")
-                fp.write(
-                    "Valid result:\n"
-                    + dict2str(self.params2result[params]["best_valid_result"])
-                    + "\n"
-                )
+                fp.write("Valid result:\n" + dict2str(self.params2result[params]["best_valid_result"]) + "\n")
 
-                fp.write(
-                    "Test result:\n"
-                    + dict2str(self.params2result[params]["test_result"])
-                    + "\n\n"
-                )
+                fp.write("Test result:\n" + dict2str(self.params2result[params]["test_result"]) + "\n\n")
 
     def trial(self, params):
         r"""Given a set of parameters, return results and optimization status
@@ -359,26 +338,24 @@ class HyperTuning(object):
             self.best_score = score
             self.best_params = params
             self._print_result(result_dict)
-        else:
-            if bigger:
-                if score > self.best_score:
-                    self.best_score = score
-                    self.best_params = params
-                    self._print_result(result_dict)
-            else:
-                if score < self.best_score:
-                    self.best_score = score
-                    self.best_params = params
-                    self._print_result(result_dict)
+        elif bigger:
+            if score > self.best_score:
+                self.best_score = score
+                self.best_params = params
+                self._print_result(result_dict)
+        elif score < self.best_score:
+            self.best_score = score
+            self.best_params = params
+            self._print_result(result_dict)
 
         if bigger:
             score = -score
         return {"loss": score, "status": hyperopt.STATUS_OK}
 
     def plot_hyper(self):
+        import pandas as pd
         import plotly.graph_objs as go
         from plotly.offline import plot
-        import pandas as pd
 
         data_dict = {"valid_score": self.score_list, "params": self.params_list}
         trial_df = pd.DataFrame(data_dict)
@@ -407,7 +384,7 @@ class HyperTuning(object):
         plot(fig, filename=self.display_file)
 
     def run(self):
-        r"""begin to search the best parameters"""
+        r"""Begin to search the best parameters"""
         from hyperopt import fmin
 
         fmin(

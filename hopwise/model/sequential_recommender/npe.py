@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 # @Time     : 2020/11/22 14:56
 # @Author   : Shao Weiqi
 # @Reviewer : Lin Kun
 # @Email    : shaoweiqi@ruc.edu.cn
 
-r"""
-NPE
+r"""NPE
 ################################################
 
 Reference:
@@ -17,7 +15,7 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.nn.init import xavier_normal_
 
 from hopwise.model.abstract_recommender import SequentialRecommender
@@ -25,14 +23,13 @@ from hopwise.model.loss import BPRLoss
 
 
 class NPE(SequentialRecommender):
-    r"""
-    models a user’s click to an item in two terms: the personal preference of the user for the item,
+    r"""models a user’s click to an item in two terms: the personal preference of the user for the item,
     and the relationships between this item and other items clicked by the user
 
     """
 
     def __init__(self, config, dataset):
-        super(NPE, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load the dataset information
         self.n_user = dataset.num(self.USER_ID)
@@ -45,9 +42,7 @@ class NPE(SequentialRecommender):
         # define layers and loss type
         self.user_embedding = nn.Embedding(self.n_user, self.embedding_size)
         self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
-        self.embedding_seq_item = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.embedding_seq_item = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(self.dropout_prob)
 

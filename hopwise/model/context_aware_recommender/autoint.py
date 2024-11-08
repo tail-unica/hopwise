@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/09/01
 # @Author : Shuqing Bian
 # @Email  : shuqingbian@gmail.com
 # @File   : autoint.py
 
-r"""
-AutoInt
+r"""AutoInt
 ################################################
 Reference:
     Weiping Song et al. "AutoInt: Automatic Feature Interaction Learning via Self-Attentive Neural Networks"
@@ -13,9 +11,9 @@ Reference:
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import ContextRecommender
 from hopwise.model.layers import MLPLayers
@@ -28,7 +26,7 @@ class AutoInt(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(AutoInt, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.attention_size = config["attention_size"]
@@ -47,18 +45,14 @@ class AutoInt(ContextRecommender):
         # multi-head self-attention network
         self.self_attns = nn.ModuleList(
             [
-                nn.MultiheadAttention(
-                    self.attention_size, self.num_heads, dropout=self.dropout_probs[0]
-                )
+                nn.MultiheadAttention(self.attention_size, self.num_heads, dropout=self.dropout_probs[0])
                 for _ in range(self.n_layers)
             ]
         )
         self.attn_fc = torch.nn.Linear(self.atten_output_dim, 1)
         self.deep_predict_layer = nn.Linear(self.mlp_hidden_size[-1], 1)
         if self.has_residual:
-            self.v_res_embedding = torch.nn.Linear(
-                self.embedding_size, self.attention_size
-            )
+            self.v_res_embedding = torch.nn.Linear(self.embedding_size, self.attention_size)
 
         self.dropout_layer = nn.Dropout(p=self.dropout_probs[2])
         self.sigmoid = nn.Sigmoid()
@@ -84,7 +78,6 @@ class AutoInt(ContextRecommender):
         Returns:
             torch.FloatTensor: Result of score. shape of [batch_size,1] .
         """
-
         att_infeature = self.att_embedding(infeature)
         cross_term = att_infeature.transpose(0, 1)
         for self_attn in self.self_attns:
@@ -103,12 +96,8 @@ class AutoInt(ContextRecommender):
         return att_output
 
     def forward(self, interaction):
-        autoint_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
-        output = self.first_order_linear(interaction) + self.autoint_layer(
-            autoint_all_embeddings
-        )
+        autoint_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
+        output = self.first_order_linear(interaction) + self.autoint_layer(autoint_all_embeddings)
         return output.squeeze(1)
 
     def calculate_loss(self, interaction):

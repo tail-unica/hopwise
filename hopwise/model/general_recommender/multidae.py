@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/12/14
 # @Author : Yihong Guo
 # @Email  : gyihong@hotmail.com
 
-r"""
-MultiDAE
+r"""MultiDAE
 ################################################
 Reference:
     Dawen Liang et al. "Variational Autoencoders for Collaborative Filtering." in WWW 2018.
@@ -12,8 +10,8 @@ Reference:
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from hopwise.model.abstract_recommender import AutoEncoderMixin, GeneralRecommender
 from hopwise.model.init import xavier_normal_initialization
@@ -30,7 +28,7 @@ class MultiDAE(GeneralRecommender, AutoEncoderMixin):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(MultiDAE, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         self.layers = config["mlp_hidden_size"]
         self.lat_dim = config["latent_dimension"]

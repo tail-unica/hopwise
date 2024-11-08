@@ -1,4 +1,3 @@
-# -*- encoding: utf-8 -*-
 # @Time    :   2020/11/1
 # @Author  :   Kaiyuan Li
 # @email   :   tsotfsk@outlook.com
@@ -10,6 +9,7 @@ import unittest
 
 sys.path.append(os.getcwd())
 import numpy as np
+
 from hopwise.config import Config
 from hopwise.evaluator.register import metrics_dict
 
@@ -20,7 +20,7 @@ parameters_dict = {
 config = Config("BPR", "ml-1m", config_dict=parameters_dict)
 
 
-class TestCases(object):
+class TestCases:
     preds_0 = np.array([0.1, 0.9, 0.2, 0.3])
     trues_0 = np.array([1, 0, 1, 1])
 
@@ -30,9 +30,7 @@ class TestCases(object):
 
 def get_result(name, case=0):
     Metric = metrics_dict[name](config)
-    return Metric.metric_info(
-        getattr(TestCases, f"preds_{case}"), getattr(TestCases, f"trues_{case}")
-    )
+    return Metric.metric_info(getattr(TestCases, f"preds_{case}"), getattr(TestCases, f"trues_{case}"))
 
 
 class TestLossMetrics(unittest.TestCase):

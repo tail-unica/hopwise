@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time    : 2020/9/18 11:33
 # @Author  : Hui Wang
 # @Email   : hui.wang@ruc.edu.cn
 
-"""
-SASRec
+"""SASRec
 ################################################
 
 Reference:
@@ -24,25 +22,22 @@ from hopwise.model.loss import BPRLoss
 
 
 class SASRec(SequentialRecommender):
-    r"""
-    SASRec is the first sequential recommender based on self-attentive mechanism.
+    r"""SASRec is the first sequential recommender based on self-attentive mechanism.
 
-    NOTE:
+    Note:
         In the author's implementation, the Point-Wise Feed-Forward Network (PFFN) is implemented
         by CNN with 1x1 kernel. In this implementation, we follows the original BERT implementation
         using Fully Connected Layer to implement the PFFN.
     """
 
     def __init__(self, config, dataset):
-        super(SASRec, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.n_layers = config["n_layers"]
         self.n_heads = config["n_heads"]
         self.hidden_size = config["hidden_size"]  # same as embedding_size
-        self.inner_size = config[
-            "inner_size"
-        ]  # the dimensionality in feed-forward layer
+        self.inner_size = config["inner_size"]  # the dimensionality in feed-forward layer
         self.hidden_dropout_prob = config["hidden_dropout_prob"]
         self.attn_dropout_prob = config["attn_dropout_prob"]
         self.hidden_act = config["hidden_act"]
@@ -52,9 +47,7 @@ class SASRec(SequentialRecommender):
         self.loss_type = config["loss_type"]
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.hidden_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.hidden_size, padding_idx=0)
         self.position_embedding = nn.Embedding(self.max_seq_length, self.hidden_size)
         self.trm_encoder = TransformerEncoder(
             n_layers=self.n_layers,
@@ -93,9 +86,7 @@ class SASRec(SequentialRecommender):
             module.bias.data.zero_()
 
     def forward(self, item_seq, item_seq_len):
-        position_ids = torch.arange(
-            item_seq.size(1), dtype=torch.long, device=item_seq.device
-        )
+        position_ids = torch.arange(item_seq.size(1), dtype=torch.long, device=item_seq.device)
         position_ids = position_ids.unsqueeze(0).expand_as(item_seq)
         position_embedding = self.position_embedding(position_ids)
 
@@ -106,9 +97,7 @@ class SASRec(SequentialRecommender):
 
         extended_attention_mask = self.get_attention_mask(item_seq)
 
-        trm_output = self.trm_encoder(
-            input_emb, extended_attention_mask, output_all_encoded_layers=True
-        )
+        trm_output = self.trm_encoder(input_emb, extended_attention_mask, output_all_encoded_layers=True)
         output = trm_output[-1]
         output = self.gather_indexes(output, item_seq_len - 1)
         return output  # [B H]

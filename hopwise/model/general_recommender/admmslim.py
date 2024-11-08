@@ -1,21 +1,19 @@
 # @Time   : 2021/01/09
 # @Author : Deklan Webster
 
-r"""
-ADMMSLIM
+r"""ADMMSLIM
 ################################################
 Reference:
     Steck et al. ADMM SLIM: Sparse Recommendations for Many Users. https://doi.org/10.1145/3336191.3371774
 
 """
 
-from hopwise.utils.enum_type import ModelType
 import numpy as np
-import scipy.sparse as sp
 import torch
 
-from hopwise.utils import InputType
 from hopwise.model.abstract_recommender import GeneralRecommender
+from hopwise.utils import InputType
+from hopwise.utils.enum_type import ModelType
 
 
 def soft_threshold(x, threshold):
@@ -61,9 +59,7 @@ class ADMMSLIM(GeneralRecommender):
         else:
             G = (X.T @ X).toarray()
 
-        diag = lambda2 * np.diag(np.power(self.item_means, alpha)) + rho * np.identity(
-            num_items
-        )
+        diag = lambda2 * np.diag(np.power(self.item_means, alpha)) + rho * np.identity(num_items)
 
         P = np.linalg.inv(G + diag).astype(np.float32)
         B_aux = (P @ G).astype(np.float32)
@@ -99,17 +95,10 @@ class ADMMSLIM(GeneralRecommender):
 
         if self.center_columns:
             r = (
-                (
-                    (user_interactions - self.item_means)
-                    * self.item_similarity[:, item].T
-                ).sum(axis=1)
+                ((user_interactions - self.item_means) * self.item_similarity[:, item].T).sum(axis=1)
             ).flatten() + self.item_means[item]
         else:
-            r = (
-                (user_interactions * self.item_similarity[:, item].T)
-                .sum(axis=1)
-                .flatten()
-            )
+            r = (user_interactions * self.item_similarity[:, item].T).sum(axis=1).flatten()
 
         return add_noise(torch.from_numpy(r)).to(self.device)
 
@@ -119,10 +108,7 @@ class ADMMSLIM(GeneralRecommender):
         user_interactions = self.interaction_matrix[user, :].toarray()
 
         if self.center_columns:
-            r = (
-                (user_interactions - self.item_means) @ self.item_similarity
-                + self.item_means
-            ).flatten()
+            r = ((user_interactions - self.item_means) @ self.item_similarity + self.item_means).flatten()
         else:
             r = (user_interactions @ self.item_similarity).flatten()
 

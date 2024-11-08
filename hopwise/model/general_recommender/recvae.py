@@ -1,26 +1,24 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2021/2/28
 # @Author : Lanling Xu
 # @Email  : xulanling_sherry@163.com
 
-r"""
-RecVAE
+r"""RecVAE
 ################################################
 Reference:
     Shenbin, Ilya, et al. "RecVAE: A new variational autoencoder for Top-N recommendations with implicit feedback." In WSDM 2020.
 
 Reference code:
     https://github.com/ilya-shenbin/RecVAE
-"""
+"""  # noqa: E501
 
-import numpy as np
 from copy import deepcopy
 
+import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
-from hopwise.model.abstract_recommender import GeneralRecommender, AutoEncoderMixin
+from hopwise.model.abstract_recommender import AutoEncoderMixin, GeneralRecommender
 from hopwise.model.init import xavier_normal_initialization
 from hopwise.utils import InputType
 
@@ -40,21 +38,17 @@ def log_norm_pdf(x, mu, logvar):
 
 class CompositePrior(nn.Module):
     def __init__(self, hidden_dim, latent_dim, input_dim, mixture_weights):
-        super(CompositePrior, self).__init__()
+        super().__init__()
 
         self.mixture_weights = mixture_weights
 
         self.mu_prior = nn.Parameter(torch.Tensor(1, latent_dim), requires_grad=False)
         self.mu_prior.data.fill_(0)
 
-        self.logvar_prior = nn.Parameter(
-            torch.Tensor(1, latent_dim), requires_grad=False
-        )
+        self.logvar_prior = nn.Parameter(torch.Tensor(1, latent_dim), requires_grad=False)
         self.logvar_prior.data.fill_(0)
 
-        self.logvar_uniform_prior = nn.Parameter(
-            torch.Tensor(1, latent_dim), requires_grad=False
-        )
+        self.logvar_uniform_prior = nn.Parameter(torch.Tensor(1, latent_dim), requires_grad=False)
         self.logvar_uniform_prior.data.fill_(10)
 
         self.encoder_old = Encoder(hidden_dim, latent_dim, input_dim)
@@ -77,7 +71,7 @@ class CompositePrior(nn.Module):
 
 class Encoder(nn.Module):
     def __init__(self, hidden_dim, latent_dim, input_dim, eps=1e-1):
-        super(Encoder, self).__init__()
+        super().__init__()
 
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.ln1 = nn.LayerNorm(hidden_dim, eps=eps)
@@ -114,7 +108,7 @@ class RecVAE(GeneralRecommender, AutoEncoderMixin):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(RecVAE, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         self.hidden_dim = config["hidden_dimension"]
         self.latent_dim = config["latent_dimension"]
@@ -126,9 +120,7 @@ class RecVAE(GeneralRecommender, AutoEncoderMixin):
         self.build_histroy_items(dataset)
 
         self.encoder = Encoder(self.hidden_dim, self.latent_dim, self.n_items)
-        self.prior = CompositePrior(
-            self.hidden_dim, self.latent_dim, self.n_items, self.mixture_weights
-        )
+        self.prior = CompositePrior(self.hidden_dim, self.latent_dim, self.n_items, self.mixture_weights)
         self.decoder = nn.Linear(self.latent_dim, self.n_items)
 
         # parameters initialization
@@ -164,12 +156,7 @@ class RecVAE(GeneralRecommender, AutoEncoderMixin):
             kl_weight = self.beta
 
         mll = (F.log_softmax(x_pred, dim=-1) * rating_matrix).sum(dim=-1).mean()
-        kld = (
-            (log_norm_pdf(z, mu, logvar) - self.prior(rating_matrix, z))
-            .sum(dim=-1)
-            .mul(kl_weight)
-            .mean()
-        )
+        kld = (log_norm_pdf(z, mu, logvar) - self.prior(rating_matrix, z)).sum(dim=-1).mul(kl_weight).mean()
         negative_elbo = -(mll - kld)
 
         return negative_elbo

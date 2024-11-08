@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/6/25
 # @Author : Shanlei Mu
 # @Email  : slmu@ruc.edu.cn
@@ -8,15 +7,14 @@
 # @Author : Shanlei Mu
 # @Email  : slmu@ruc.edu.cn
 
-r"""
-BPR
+r"""BPR
 ################################################
 Reference:
     Steffen Rendle et al. "BPR: Bayesian Personalized Ranking from Implicit Feedback." in UAI 2009.
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from hopwise.model.abstract_recommender import GeneralRecommender
 from hopwise.model.init import xavier_normal_initialization
@@ -30,7 +28,7 @@ class BPR(GeneralRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(BPR, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
@@ -77,9 +75,10 @@ class BPR(GeneralRecommender):
 
         user_e, pos_e = self.forward(user, pos_item)
         neg_e = self.get_item_embedding(neg_item)
-        pos_item_score, neg_item_score = torch.mul(user_e, pos_e).sum(dim=1), torch.mul(
-            user_e, neg_e
-        ).sum(dim=1)
+        pos_item_score, neg_item_score = (
+            torch.mul(user_e, pos_e).sum(dim=1),
+            torch.mul(user_e, neg_e).sum(dim=1),
+        )
         loss = self.loss(pos_item_score, neg_item_score)
         return loss
 

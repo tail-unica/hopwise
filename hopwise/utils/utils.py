@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/7/17
 # @Author : Shanlei Mu
 # @Email  : slmu@ruc.edu.cn
@@ -8,8 +7,7 @@
 # @Author : Jiawei Guan, Lei Wang, Gaowei Zhang
 # @Email  : guanjw@ruc.edu.cn, zxcptss@gmail.com, zgw2022101006@ruc.edu.cn
 
-"""
-hopwise.utils.utils
+"""hopwise.utils.utils
 ################################
 """
 
@@ -17,14 +15,13 @@ import datetime
 import importlib
 import os
 import random
-import pandas as pd
 
 import numpy as np
+import pandas as pd
 import torch
-import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
 from texttable import Texttable
-
+from torch import nn
+from torch.utils.tensorboard import SummaryWriter
 
 from hopwise.utils.enum_type import ModelType
 
@@ -78,9 +75,7 @@ def get_model(model_name):
             break
 
     if model_module is None:
-        raise ValueError(
-            "`model_name` [{}] is not the name of an existing model.".format(model_name)
-        )
+        raise ValueError(f"`model_name` [{model_name}] is not the name of an existing model.")
     model_class = getattr(model_module, model_name)
     return model_class
 
@@ -96,16 +91,12 @@ def get_trainer(model_type, model_name):
         Trainer: trainer class
     """
     try:
-        return getattr(
-            importlib.import_module("hopwise.trainer"), model_name + "Trainer"
-        )
+        return getattr(importlib.import_module("hopwise.trainer"), model_name + "Trainer")
     except AttributeError:
         if model_type == ModelType.KNOWLEDGE:
             return getattr(importlib.import_module("hopwise.trainer"), "KGTrainer")
         elif model_type == ModelType.TRADITIONAL:
-            return getattr(
-                importlib.import_module("hopwise.trainer"), "TraditionalTrainer"
-            )
+            return getattr(importlib.import_module("hopwise.trainer"), "TraditionalTrainer")
         else:
             return getattr(importlib.import_module("hopwise.trainer"), "Trainer")
 
@@ -142,20 +133,19 @@ def early_stopping(value, best, cur_step, max_step, bigger=True):
             cur_step += 1
             if cur_step > max_step:
                 stop_flag = True
+    elif value <= best:
+        cur_step = 0
+        best = value
+        update_flag = True
     else:
-        if value <= best:
-            cur_step = 0
-            best = value
-            update_flag = True
-        else:
-            cur_step += 1
-            if cur_step > max_step:
-                stop_flag = True
+        cur_step += 1
+        if cur_step > max_step:
+            stop_flag = True
     return best, cur_step, stop_flag, update_flag
 
 
 def calculate_valid_score(valid_result, valid_metric=None):
-    r"""return valid score from valid result
+    r"""Return valid score from valid result
 
     Args:
         valid_result (dict): valid result
@@ -171,7 +161,7 @@ def calculate_valid_score(valid_result, valid_metric=None):
 
 
 def dict2str(result_dict):
-    r"""convert result dict to str
+    r"""Convert result dict to str
 
     Args:
         result_dict (dict): result dict
@@ -179,14 +169,11 @@ def dict2str(result_dict):
     Returns:
         str: result str
     """
-
-    return "    ".join(
-        [str(metric) + " : " + str(value) for metric, value in result_dict.items()]
-    )
+    return "    ".join([str(metric) + " : " + str(value) for metric, value in result_dict.items()])
 
 
 def init_seed(seed, reproducibility):
-    r"""init random seed for random functions in numpy, torch, cuda and cudnn
+    r"""Init random seed for random functions in numpy, torch, cuda and cudnn
 
     Args:
         seed (int): random seed
@@ -234,22 +221,23 @@ def get_tensorboard(logger):
 
 def get_gpu_usage(device=None):
     r"""Return the reserved memory and total memory of given device in a string.
+
     Args:
         device: cuda.device. It is the device that the model run on.
 
     Returns:
         str: it contains the info about reserved memory and total memory of given device.
     """
-
     reserved = torch.cuda.max_memory_reserved(device) / 1024**3
     total = torch.cuda.get_device_properties(device).total_memory / 1024**3
 
-    return "{:.2f} G/{:.2f} G".format(reserved, total)
+    return f"{reserved:.2f} G/{total:.2f} G"
 
 
 def get_flops(model, dataset, device, logger, transform, verbose=False):
     r"""Given a model and dataset to the model, compute the per-operator flops
     of the given model.
+
     Args:
         model: the model to compute flop counts.
         dataset: dataset that are passed to `model` to count flops.
@@ -320,12 +308,8 @@ def get_flops(model, dataset, device, logger, transform, verbose=False):
             fn = register_hooks[m_type]
             if m_type not in types_collection and verbose:
                 logger.info("Register %s() for %s." % (fn.__qualname__, m_type))
-        else:
-            if m_type not in types_collection and verbose:
-                logger.warning(
-                    "[WARN] Cannot find rule for %s. Treat it as zero Macs and zero Params."
-                    % m_type
-                )
+        elif m_type not in types_collection and verbose:
+            logger.warning("[WARN] Cannot find rule for %s. Treat it as zero Macs and zero Params." % m_type)
 
         if fn is not None:
             handle_fn = m.register_forward_hook(fn)
@@ -351,9 +335,7 @@ def get_flops(model, dataset, device, logger, transform, verbose=False):
         ret_dict = {}
         for n, m in module.named_children():
             next_dict = {}
-            if m in handler_collection and not isinstance(
-                m, (nn.Sequential, nn.ModuleList)
-            ):
+            if m in handler_collection and not isinstance(m, (nn.Sequential, nn.ModuleList)):
                 m_ops, m_params = m.total_ops.item(), m.total_params.item()
             else:
                 m_ops, m_params, next_dict = dfs_count(m, prefix=prefix + "\t")
@@ -386,11 +368,11 @@ def list_to_latex(convert_list, bigger_flag=True, subset_columns=[]):
             else:
                 result[key] = [value]
 
-    df = pd.DataFrame.from_dict(result, orient="index").T
+    df_result = pd.DataFrame.from_dict(result, orient="index").T
 
     if len(subset_columns) == 0:
-        tex = df.to_latex(index=False)
-        return df, tex
+        tex = df_result.to_latex(index=False)
+        return df_result, tex
 
     def bold_func(x, bigger_flag):
         if bigger_flag:
@@ -398,11 +380,11 @@ def list_to_latex(convert_list, bigger_flag=True, subset_columns=[]):
         else:
             return np.where(x == np.min(x.to_numpy()), "font-weight:bold", None)
 
-    style = df.style
+    style = df_result.style
     style.apply(bold_func, bigger_flag=bigger_flag, subset=subset_columns)
     style.format(precision=4)
 
-    num_column = len(df.columns)
+    num_column = len(df_result.columns)
     column_format = "c" * num_column
     tex = style.hide(axis="index").to_latex(
         caption="Result Table",
@@ -412,22 +394,18 @@ def list_to_latex(convert_list, bigger_flag=True, subset_columns=[]):
         column_format=column_format,
     )
 
-    return df, tex
+    return df_result, tex
 
 
 def get_environment(config):
-    gpu_usage = (
-        get_gpu_usage(config["device"])
-        if torch.cuda.is_available() and config["use_gpu"]
-        else "0.0 / 0.0"
-    )
+    gpu_usage = get_gpu_usage(config["device"]) if torch.cuda.is_available() and config["use_gpu"] else "0.0 / 0.0"
 
     import psutil
 
     memory_used = psutil.Process(os.getpid()).memory_info().rss / 1024**3
     memory_total = psutil.virtual_memory()[0] / 1024**3
-    memory_usage = "{:.2f} G/{:.2f} G".format(memory_used, memory_total)
-    cpu_usage = "{:.2f} %".format(psutil.cpu_percent(interval=1))
+    memory_usage = f"{memory_used:.2f} G/{memory_total:.2f} G"
+    cpu_usage = f"{psutil.cpu_percent(interval=1):.2f} %"
     """environment_data = [
         {"Environment": "CPU", "Usage": cpu_usage,},
         {"Environment": "GPU", "Usage": gpu_usage, },

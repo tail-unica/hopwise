@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/10/2
 # @Author : Changxin Tian
 # @Email  : cx.tian@outlook.com
 
-"""
-SpectralCF
+"""SpectralCF
 ################################################
 
 Reference:
@@ -25,7 +23,7 @@ from hopwise.utils import InputType
 
 
 class SpectralCF(GeneralRecommender):
-    r"""SpectralCF is a spectral convolution model that directly learns latent factors of users and items 
+    r"""SpectralCF is a spectral convolution model that directly learns latent factors of users and items
     from the spectral domain for recommendation.
 
     The spectral convolution operation with C input channels and F filters is shown as the following:
@@ -36,12 +34,11 @@ class SpectralCF(GeneralRecommender):
         \left[\begin{array}{c} X^{u} \\
         X^{i} \end{array}\right] \Theta^{\prime}\right)
 
-    where :math:`X_{new}^{u} \in R^{n_{users} \times F}` and :math:`X_{new}^{i} \in R^{n_{items} \times F}` 
-    denote convolution results learned with F filters from the spectral domain for users and items, respectively; 
+    where :math:`X_{new}^{u} \in R^{n_{users} \times F}` and :math:`X_{new}^{i} \in R^{n_{items} \times F}`
+    denote convolution results learned with F filters from the spectral domain for users and items, respectively;
     :math:`\sigma` denotes the logistic sigmoid function.
 
     Note:
-
         Our implementation is a improved version which is different from the original paper.
         For a better stability, we replace :math:`U U^T` with identity matrix :math:`I` and
         replace :math:`U \Lambda U^T` with laplace matrix :math:`L`.
@@ -50,7 +47,7 @@ class SpectralCF(GeneralRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(SpectralCF, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.n_layers = config["n_layers"]
@@ -60,24 +57,18 @@ class SpectralCF(GeneralRecommender):
         # generate intermediate data
         # "A_hat = I + L" is equivalent to "A_hat = U U^T + U \Lambda U^T"
         self.interaction_matrix = dataset.inter_matrix(form="coo").astype(np.float32)
-        I = self.get_eye_mat(self.n_items + self.n_users)
+        I = self.get_eye_mat(self.n_items + self.n_users)  # noqa: E741
         L = self.get_laplacian_matrix()
         A_hat = I + L
         self.A_hat = A_hat.to(self.device)
 
         # define layers and loss
-        self.user_embedding = torch.nn.Embedding(
-            num_embeddings=self.n_users, embedding_dim=self.emb_dim
-        )
-        self.item_embedding = torch.nn.Embedding(
-            num_embeddings=self.n_items, embedding_dim=self.emb_dim
-        )
+        self.user_embedding = torch.nn.Embedding(num_embeddings=self.n_users, embedding_dim=self.emb_dim)
+        self.item_embedding = torch.nn.Embedding(num_embeddings=self.n_items, embedding_dim=self.emb_dim)
         self.filters = torch.nn.ParameterList(
             [
                 torch.nn.Parameter(
-                    torch.normal(
-                        mean=0.01, std=0.02, size=(self.emb_dim, self.emb_dim)
-                    ),
+                    torch.normal(mean=0.01, std=0.02, size=(self.emb_dim, self.emb_dim)),
                     requires_grad=True,
                 )
                 for _ in range(self.n_layers)
@@ -104,14 +95,10 @@ class SpectralCF(GeneralRecommender):
             Sparse tensor of the laplacian matrix.
         """
         # build adj matrix
-        A = sp.dok_matrix(
-            (self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32
-        )
+        A = sp.dok_matrix((self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32)
         inter_M = self.interaction_matrix
         inter_M_t = self.interaction_matrix.transpose()
-        data_dict = dict(
-            zip(zip(inter_M.row, inter_M.col + self.n_users), [1] * inter_M.nnz)
-        )
+        data_dict = dict(zip(zip(inter_M.row, inter_M.col + self.n_users), [1] * inter_M.nnz))
         data_dict.update(
             dict(
                 zip(
@@ -175,9 +162,7 @@ class SpectralCF(GeneralRecommender):
             embeddings_list.append(all_embeddings)
 
         new_embeddings = torch.cat(embeddings_list, dim=1)
-        user_all_embeddings, item_all_embeddings = torch.split(
-            new_embeddings, [self.n_users, self.n_items]
-        )
+        user_all_embeddings, item_all_embeddings = torch.split(new_embeddings, [self.n_users, self.n_items])
         return user_all_embeddings, item_all_embeddings
 
     def calculate_loss(self, interaction):

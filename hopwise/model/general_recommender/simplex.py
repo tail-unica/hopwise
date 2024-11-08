@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2022/3/25 13:38
 # @Author : HaoJun Qin
 # @Email  : 18697951462@163.com
 
-r"""
-SimpleX
+r"""SimpleX
 ################################################
 
 Reference:
@@ -13,12 +11,13 @@ Reference:
 Reference code:
     https://github.com/xue-pai/TwoToweRS
 """
-import torch
-from torch import nn
-import torch.nn.functional as F
 
-from hopwise.model.init import xavier_normal_initialization
+import torch
+import torch.nn.functional as F
+from torch import nn
+
 from hopwise.model.abstract_recommender import GeneralRecommender
+from hopwise.model.init import xavier_normal_initialization
 from hopwise.model.loss import EmbLoss
 from hopwise.utils import InputType
 
@@ -38,7 +37,7 @@ class SimpleX(GeneralRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(SimpleX, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # Get user history interacted items
         self.history_item_id, _, self.history_item_len = dataset.history_item_matrix(
@@ -56,9 +55,7 @@ class SimpleX(GeneralRecommender):
         self.reg_weight = config["reg_weight"]
         self.aggregator = config["aggregator"]
         if self.aggregator not in ["mean", "user_attention", "self_attention"]:
-            raise ValueError(
-                "aggregator must be mean, user_attention or self_attention"
-            )
+            raise ValueError("aggregator must be mean, user_attention or self_attention")
         self.history_len = torch.max(self.history_item_len, dim=0)
 
         # user embedding matrix
@@ -68,9 +65,7 @@ class SimpleX(GeneralRecommender):
         # feature space mapping matrix of user and item
         self.UI_map = nn.Linear(self.embedding_size, self.embedding_size, bias=False)
         if self.aggregator in ["user_attention", "self_attention"]:
-            self.W_k = nn.Sequential(
-                nn.Linear(self.embedding_size, self.embedding_size), nn.Tanh()
-            )
+            self.W_k = nn.Sequential(nn.Linear(self.embedding_size, self.embedding_size), nn.Tanh())
             if self.aggregator == "self_attention":
                 self.W_q = nn.Linear(self.embedding_size, 1, bias=False)
         # dropout
@@ -113,9 +108,7 @@ class SimpleX(GeneralRecommender):
             mask = (history_item_e.sum(dim=-1) != 0).int()
             e_attention = e_attention * mask
             # [user_num, max_history_len]
-            attention_weight = e_attention / (
-                e_attention.sum(dim=1, keepdim=True) + 1.0e-10
-            )
+            attention_weight = e_attention / (e_attention.sum(dim=1, keepdim=True) + 1.0e-10)
             # [user_num, embedding_size]
             out = torch.matmul(attention_weight.unsqueeze(1), history_item_e).squeeze(1)
         # Combined vector of user and item sequences

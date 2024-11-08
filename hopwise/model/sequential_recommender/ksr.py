@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/8/17 19:38
 # @Author : Jin Huang and Shanlei Mu
 # @Email  : Betsyj.huang@gmail.com and slmu@ruc.edu.cn
 
-r"""
-KSR
+r"""KSR
 ################################################
 
 Reference:
@@ -15,21 +13,20 @@ Reference:
 
 import torch
 from torch import nn
-from torch.nn.init import xavier_uniform_, xavier_normal_
+from torch.nn.init import xavier_normal_, xavier_uniform_
 
 from hopwise.model.abstract_recommender import SequentialRecommender
 from hopwise.model.loss import BPRLoss
 
 
 class KSR(SequentialRecommender):
-    r"""
-    KSR integrates the RNN-based networks with Key-Value Memory Network (KV-MN).
+    r"""KSR integrates the RNN-based networks with Key-Value Memory Network (KV-MN).
     And it further incorporates knowledge base (KB) information to enhance the semantic representation of KV-MN.
 
     """
 
     def __init__(self, config, dataset):
-        super(KSR, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load dataset info
         self.ENTITY_ID = config["ENTITY_ID_FIELD"]
@@ -41,9 +38,7 @@ class KSR(SequentialRecommender):
 
         # load parameters info
         self.embedding_size = config["embedding_size"]  # later use "E" to represent
-        self.kg_embedding_size = config[
-            "kg_embedding_size"
-        ]  # later use "K" to represent
+        self.kg_embedding_size = config["kg_embedding_size"]  # later use "K" to represent
         self.hidden_size = config["hidden_size"]  # later use "H" to represent
         self.loss_type = config["loss_type"]
         self.num_layers = config["num_layers"]
@@ -54,12 +49,8 @@ class KSR(SequentialRecommender):
         self.freeze_kg = config["freeze_kg"]
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
-        self.entity_embedding = nn.Embedding(
-            self.n_items, self.kg_embedding_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
+        self.entity_embedding = nn.Embedding(self.n_items, self.kg_embedding_size, padding_idx=0)
         self.entity_embedding.weight.requires_grad = not self.freeze_kg
 
         self.emb_dropout = nn.Dropout(self.dropout_prob)
@@ -71,12 +62,8 @@ class KSR(SequentialRecommender):
             batch_first=True,
         )
         self.dense = nn.Linear(self.hidden_size, self.kg_embedding_size)
-        self.dense_layer_u = nn.Linear(
-            self.hidden_size + self.kg_embedding_size, self.embedding_size
-        )
-        self.dense_layer_i = nn.Linear(
-            self.embedding_size + self.kg_embedding_size, self.embedding_size
-        )
+        self.dense_layer_u = nn.Linear(self.hidden_size + self.kg_embedding_size, self.embedding_size)
+        self.dense_layer_i = nn.Linear(self.embedding_size + self.kg_embedding_size, self.embedding_size)
         if self.loss_type == "BPR":
             self.loss_fct = BPRLoss()
         elif self.loss_type == "CE":
@@ -86,12 +73,8 @@ class KSR(SequentialRecommender):
 
         # parameters initialization
         self.apply(self._init_weights)
-        self.entity_embedding.weight.data.copy_(
-            torch.from_numpy(self.entity_embedding_matrix[: self.n_items])
-        )
-        self.relation_Matrix = torch.from_numpy(
-            self.relation_embedding_matrix[: self.n_relations]
-        ).to(
+        self.entity_embedding.weight.data.copy_(torch.from_numpy(self.entity_embedding_matrix[: self.n_items]))
+        self.relation_Matrix = torch.from_numpy(self.relation_embedding_matrix[: self.n_relations]).to(
             self.device
         )  # [R K]
 
@@ -108,46 +91,36 @@ class KSR(SequentialRecommender):
         We generate the embeddings of the tail entities on every relations only for head due to the 1-N problems.
         """
         head_e = self.entity_embedding(head)  # [B K]
-        relation_Matrix = self.relation_Matrix.unsqueeze(0).repeat(
-            head_e.size()[0], 1, 1
-        )  # [B R K]
-        head_Matrix = torch.unsqueeze(head_e, 1).repeat(
-            1, self.n_relations, 1
-        )  # [B R K]
+        relation_Matrix = self.relation_Matrix.unsqueeze(0).repeat(head_e.size()[0], 1, 1)  # [B R K]
+        head_Matrix = torch.unsqueeze(head_e, 1).repeat(1, self.n_relations, 1)  # [B R K]
         tail_Matrix = head_Matrix + relation_Matrix
 
         return head_e, tail_Matrix
 
     def _memory_update_cell(self, user_memory, update_memory):
-        z = torch.sigmoid(
-            torch.mul(user_memory, update_memory).sum(-1).float()
-        ).unsqueeze(
+        z = torch.sigmoid(torch.mul(user_memory, update_memory).sum(-1).float()).unsqueeze(
             -1
         )  # [B R 1], the gate vector
         updated_user_memory = (1.0 - z) * user_memory + z * update_memory
         return updated_user_memory
 
     def memory_update(self, item_seq, item_seq_len):
-        """define write operator"""
+        """Define write operator"""
         step_length = item_seq.size()[1]
         last_item = item_seq_len - 1
         # init user memory with 0s
         user_memory = (
-            torch.zeros(item_seq.size()[0], self.n_relations, self.kg_embedding_size)
-            .float()
-            .to(self.device)
+            torch.zeros(item_seq.size()[0], self.n_relations, self.kg_embedding_size).float().to(self.device)
         )  # [B R K]
         last_user_memory = torch.zeros_like(user_memory)
         for i in range(step_length):  # [len]
             _, update_memory = self._get_kg_embedding(item_seq[:, i])  # [B R K]
-            user_memory = self._memory_update_cell(
-                user_memory, update_memory
-            )  # [B R K]
+            user_memory = self._memory_update_cell(user_memory, update_memory)  # [B R K]
             last_user_memory[last_item == i] = user_memory[last_item == i].float()
         return last_user_memory
 
     def memory_read(self, seq_output, user_memory):
-        """define read operator"""
+        """Define read operator"""
         attrs = self.relation_Matrix
         attentions = nn.functional.softmax(
             self.gamma * torch.matmul(seq_output, attrs.transpose(0, 1)).float(), -1
@@ -194,9 +167,7 @@ class KSR(SequentialRecommender):
             return loss
         else:  # self.loss_type = 'CE'
             test_items_emb = self.dense_layer_i(
-                torch.cat(
-                    (self.item_embedding.weight, self.entity_embedding.weight), -1
-                )
+                torch.cat((self.item_embedding.weight, self.entity_embedding.weight), -1)
             )  # [n_items E]
             logits = torch.matmul(seq_output, test_items_emb.transpose(0, 1))
             loss = self.loss_fct(logits, pos_items)
@@ -218,7 +189,5 @@ class KSR(SequentialRecommender):
         test_items_emb = self.dense_layer_i(
             torch.cat((self.item_embedding.weight, self.entity_embedding.weight), -1)
         )  # [n_items E]
-        scores = torch.matmul(
-            seq_output, test_items_emb.transpose(0, 1)
-        )  # [B, n_items]
+        scores = torch.matmul(seq_output, test_items_emb.transpose(0, 1))  # [B, n_items]
         return scores

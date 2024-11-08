@@ -1,20 +1,19 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2022/7/30
 # @Author : Gaowei Zhang
 # @Email  : zgw15630559577@163.com
 
 
 import logging
-import os
 import math
-import numpy as np
+import os
 
+import numpy as np
 import pytest
 
 from hopwise.config import Config
 from hopwise.data import create_dataset
-from hopwise.utils import init_seed
 from hopwise.data.transform import construct_transform
+from hopwise.utils import init_seed
 
 current_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -50,9 +49,7 @@ class TestTransform:
             "mask_ratio": 1.0,
             "ft_ratio": 0.0,
         }
-        train_dataset, valid_dataset, test_dataset = split_dataset(
-            config_dict=config_dict
-        )
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
         transform = new_transform(config_dict=config_dict)
 
         train_transform_interaction = transform(train_dataset, train_dataset.inter_feat)
@@ -93,9 +90,7 @@ class TestTransform:
             "transform": "inverse_itemseq",
             "eval_args": {"split": {"RS": [0.3, 0.3, 0.4]}, "order": "TO"},
         }
-        train_dataset, valid_dataset, test_dataset = split_dataset(
-            config_dict=config_dict
-        )
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
         transform = new_transform(config_dict=config_dict)
 
         train_transform_interaction = transform(train_dataset, train_dataset.inter_feat)
@@ -141,9 +136,7 @@ class TestTransform:
             "eta": eta,
             "eval_args": {"split": {"RS": [0.3, 0.3, 0.4]}, "order": "TO"},
         }
-        train_dataset, valid_dataset, test_dataset = split_dataset(
-            config_dict=config_dict
-        )
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
         transform = new_transform(config_dict=config_dict)
 
         train_transform_interaction = transform(train_dataset, train_dataset.inter_feat)
@@ -188,9 +181,7 @@ class TestTransform:
             "beta": beta,
             "eval_args": {"split": {"RS": [0.3, 0.3, 0.4]}, "order": "TO"},
         }
-        train_dataset, valid_dataset, test_dataset = split_dataset(
-            config_dict=config_dict
-        )
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
         transform = new_transform(config_dict=config_dict)
 
         train_transform_interaction = transform(train_dataset, train_dataset.inter_feat)

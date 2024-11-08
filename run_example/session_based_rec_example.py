@@ -7,8 +7,7 @@
 # @Author : Yupeng Hou
 # @Email  : houyupeng@ruc.edu.cn
 
-"""
-session-based recommendation example
+"""session-based recommendation example
 ========================
 Here is the sample code for running session-based recommendation benchmarks using RecBole.
 
@@ -21,7 +20,7 @@ from logging import getLogger
 from hopwise.config import Config
 from hopwise.data import create_dataset
 from hopwise.data.utils import get_dataloader
-from hopwise.utils import init_logger, init_seed, get_model, get_trainer, set_color
+from hopwise.utils import get_model, get_trainer, init_logger, init_seed, set_color
 
 
 def get_args():
@@ -45,9 +44,7 @@ def get_args():
         action="store_true",
         help="Whether evaluating on validation set (split from train set), otherwise on test set.",
     )
-    parser.add_argument(
-        "--valid_portion", type=float, default=0.1, help="ratio of validation set."
-    )
+    parser.add_argument("--valid_portion", type=float, default=0.1, help="ratio of validation set.")
     return parser.parse_known_args()[0]
 
 
@@ -66,9 +63,7 @@ if __name__ == "__main__":
         "valid_metric": "MRR@20",
     }
 
-    config = Config(
-        model=args.model, dataset=f"{args.dataset}", config_dict=config_dict
-    )
+    config = Config(model=args.model, dataset=f"{args.dataset}", config_dict=config_dict)
     init_seed(config["seed"], config["reproducibility"])
 
     # logger initialization
@@ -89,19 +84,11 @@ if __name__ == "__main__":
         new_train_dataset, new_test_dataset = train_dataset.split_by_ratio(
             [1 - args.valid_portion, args.valid_portion]
         )
-        train_data = get_dataloader(config, "train")(
-            config, new_train_dataset, None, shuffle=True
-        )
-        test_data = get_dataloader(config, "test")(
-            config, new_test_dataset, None, shuffle=False
-        )
+        train_data = get_dataloader(config, "train")(config, new_train_dataset, None, shuffle=True)
+        test_data = get_dataloader(config, "test")(config, new_test_dataset, None, shuffle=False)
     else:
-        train_data = get_dataloader(config, "train")(
-            config, train_dataset, None, shuffle=True
-        )
-        test_data = get_dataloader(config, "test")(
-            config, test_dataset, None, shuffle=False
-        )
+        train_data = get_dataloader(config, "train")(config, train_dataset, None, shuffle=True)
+        test_data = get_dataloader(config, "test")(config, test_dataset, None, shuffle=False)
 
     # model loading and initialization
     model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
@@ -111,8 +98,6 @@ if __name__ == "__main__":
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
 
     # model training and evaluation
-    test_score, test_result = trainer.fit(
-        train_data, test_data, saved=True, show_progress=config["show_progress"]
-    )
+    test_score, test_result = trainer.fit(train_data, test_data, saved=True, show_progress=config["show_progress"])
 
     logger.info(set_color("test result", "yellow") + f": {test_result}")

@@ -1,4 +1,3 @@
-# -*- encoding: utf-8 -*-
 # @Time    :   2020/08/04
 # @Author  :   Kaiyuan Li
 # @email   :   tsotfsk@outlook.com
@@ -8,8 +7,7 @@
 # @Author  :   Kaiyuan Li, Zhichao Feng
 # @email   :   tsotfsk@outlook.com, fzcbupt@gmail.com
 
-"""
-hopwise.evaluator.utils
+"""hopwise.evaluator.utils
 ################################
 """
 
@@ -20,7 +18,7 @@ import torch
 
 
 def pad_sequence(sequences, len_list, pad_to=None, padding_value=0):
-    """pad sequences to a matrix
+    """Pad sequences to a matrix
 
     Args:
         sequences (list): list of variable length sequences.
@@ -62,19 +60,16 @@ def trunc(scores, method):
     Returns:
         numpy.ndarray: processed scores
     """
-
     try:
         cut_method = getattr(np, method)
     except NotImplementedError:
-        raise NotImplementedError(
-            "module 'numpy' has no function named '{}'".format(method)
-        )
+        raise NotImplementedError(f"module 'numpy' has no function named '{method}'")
     scores = cut_method(scores)
     return scores
 
 
 def cutoff(scores, threshold):
-    """cut of the scores based on threshold
+    """Cut of the scores based on threshold
 
     Args:
         scores (numpy.ndarray): scores

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/8/7
 # @Author : Zihan Lin
 # @Email  : linzihan.super@foxmail.com
@@ -13,18 +12,19 @@
 # @Author : Junjie Zhang
 # @Email  : zjj001128@163.com
 
-"""
-hopwise.utils.logger
+"""hopwise.utils.logger
 ###############################
 """
 
+import hashlib
 import logging
 import os
-import colorlog
 import re
-import hashlib
-from hopwise.utils.utils import get_local_time, ensure_dir
+
+import colorlog
 from colorama import init
+
+from hopwise.utils.utils import ensure_dir, get_local_time
 
 log_colors_config = {
     "DEBUG": "cyan",
@@ -46,7 +46,7 @@ def set_color(log, color, highlight=True):
     color_set = ["black", "red", "green", "yellow", "blue", "pink", "cyan", "white"]
     try:
         index = color_set.index(color)
-    except:
+    except IndexError:
         index = len(color_set) - 1
     prev_log = "\033["
     if highlight:
@@ -58,8 +58,7 @@ def set_color(log, color, highlight=True):
 
 
 def init_logger(config):
-    """
-    A logger that can show a message on standard output and write it into the
+    """A logger that can show a message on standard output and write it into the
     file named `filename` simultaneously.
     All the message that you want to log MUST be str.
 

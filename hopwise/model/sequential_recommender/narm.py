@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/8/25 19:56
 # @Author : Yujie Lu
 # @Email  : yujielu1998@gmail.com
@@ -8,8 +7,7 @@
 # @Author : Yupeng Hou, Yujie Lu
 # @Email  : houyupeng@ruc.edu.cn, yujielu1998@gmail.com
 
-r"""
-NARM
+r"""NARM
 ################################################
 
 Reference:
@@ -22,7 +20,7 @@ Reference code:
 
 import torch
 from torch import nn
-from torch.nn.init import xavier_normal_, constant_
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import SequentialRecommender
 from hopwise.model.loss import BPRLoss
@@ -35,7 +33,7 @@ class NARM(SequentialRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(NARM, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
@@ -45,9 +43,7 @@ class NARM(SequentialRecommender):
         self.device = config["device"]
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.emb_dropout = nn.Dropout(self.dropout_probs[0])
         self.gru = nn.GRU(
             self.embedding_size,

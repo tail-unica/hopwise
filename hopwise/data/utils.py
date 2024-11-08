@@ -5,14 +5,14 @@
 # UPDATE:
 # @Time   : 2021/7/9, 2020/9/17, 2020/8/31, 2021/2/20, 2021/3/1, 2022/7/6
 # @Author : Yupeng Hou, Yushuo Chen, Kaiyuan Li, Haoran Cheng, Jiawei Guan, Gaowei Zhang
-# @Email  : houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, tsotfsk@outlook.com, chenghaoran29@foxmail.com, guanjw@ruc.edu.cn, zgw15630559577@163.com
+# @Email  : houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, tsotfsk@outlook.com, chenghaoran29@foxmail.com, guanjw@ruc.edu.cn, zgw15630559577@163.com  # noqa: E501
 
-"""
-hopwise.data.utils
+"""hopwise.data.utils
 ########################
 """
 
-import copy
+# ruff: noqa: F403, F405
+
 import importlib
 import os
 import pickle
@@ -20,8 +20,8 @@ import warnings
 from typing import Literal
 
 from hopwise.data.dataloader import *
-from hopwise.sampler import KGSampler, Sampler, RepeatableSampler
-from hopwise.utils import ModelType, ensure_dir, get_local_time, set_color
+from hopwise.sampler import KGSampler, RepeatableSampler, Sampler
+from hopwise.utils import ModelType, ensure_dir, set_color
 from hopwise.utils.argument_list import dataset_arguments
 
 
@@ -52,9 +52,7 @@ def create_dataset(config):
         }
         dataset_class = getattr(dataset_module, type2class[model_type])
 
-    default_file = os.path.join(
-        config["checkpoint_dir"], f'{config["dataset"]}-{dataset_class.__name__}.pth'
-    )
+    default_file = os.path.join(config["checkpoint_dir"], f'{config["dataset"]}-{dataset_class.__name__}.pth')
     file = config["dataset_save_path"] or default_file
     if os.path.exists(file):
         with open(file, "rb") as f:
@@ -109,7 +107,6 @@ def load_split_dataloaders(config):
     Returns:
         dataloaders (tuple of AbstractDataLoader or None): The split dataloaders.
     """
-
     default_file = os.path.join(
         config["checkpoint_dir"],
         f'{config["dataset"]}-for-{config["model"]}-dataloader.pth',
@@ -134,10 +131,7 @@ def load_split_dataloaders(config):
     valid_data.update_config(config)
     test_data.update_config(config)
     logger = getLogger()
-    logger.info(
-        set_color("Load split dataloaders from", "pink")
-        + f": [{dataloaders_save_path}]"
-    )
+    logger.info(set_color("Load split dataloaders from", "pink") + f": [{dataloaders_save_path}]")
     return train_data, valid_data, test_data
 
 
@@ -156,7 +150,7 @@ def data_preparation(config, dataset):
             - train_data (AbstractDataLoader): The dataloader for training.
             - valid_data (AbstractDataLoader): The dataloader for validation.
             - test_data (AbstractDataLoader): The dataloader for testing.
-    """
+    """  # noqa: E501
     dataloaders = load_split_dataloaders(config)
     if dataloaders is not None:
         train_data, valid_data, test_data = dataloaders
@@ -166,9 +160,7 @@ def data_preparation(config, dataset):
         built_datasets = dataset.build()
 
         train_dataset, valid_dataset, test_dataset = built_datasets
-        train_sampler, valid_sampler, test_sampler = create_samplers(
-            config, dataset, built_datasets
-        )
+        train_sampler, valid_sampler, test_sampler = create_samplers(config, dataset, built_datasets)
 
         if model_type != ModelType.KNOWLEDGE:
             train_data = get_dataloader(config, "train")(
@@ -184,16 +176,10 @@ def data_preparation(config, dataset):
                 config, train_dataset, train_sampler, kg_sampler, shuffle=True
             )
 
-        valid_data = get_dataloader(config, "valid")(
-            config, valid_dataset, valid_sampler, shuffle=False
-        )
-        test_data = get_dataloader(config, "test")(
-            config, test_dataset, test_sampler, shuffle=False
-        )
+        valid_data = get_dataloader(config, "valid")(config, valid_dataset, valid_sampler, shuffle=False)
+        test_data = get_dataloader(config, "test")(config, test_dataset, test_sampler, shuffle=False)
         if config["save_dataloaders"]:
-            save_split_dataloaders(
-                config, dataloaders=(train_data, valid_data, test_data)
-            )
+            save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
 
     logger = getLogger()
     logger.info(
@@ -224,13 +210,12 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
         config (Config): An instance object of Config, used to record parameter information.
         phase (str): The stage of dataloader. It can only take 4 values: 'train', 'valid', 'test' or 'evaluation'.
             Notes: 'evaluation' has been deprecated, please use 'valid' or 'test' instead.
+
     Returns:
         type: The dataloader class that meets the requirements in :attr:`config` and :attr:`phase`.
     """
     if phase not in ["train", "valid", "test", "evaluation"]:
-        raise ValueError(
-            "`phase` can only be 'train', 'valid', 'test' or 'evaluation'."
-        )
+        raise ValueError("`phase` can only be 'train', 'valid', 'test' or 'evaluation'.")
     if phase == "evaluation":
         phase = "test"
         warnings.warn(
@@ -279,9 +264,7 @@ def _get_AE_dataloader(config, phase: Literal["train", "valid", "test", "evaluat
         type: The dataloader class that meets the requirements in :attr:`config` and :attr:`phase`.
     """
     if phase not in ["train", "valid", "test", "evaluation"]:
-        raise ValueError(
-            "`phase` can only be 'train', 'valid', 'test' or 'evaluation'."
-        )
+        raise ValueError("`phase` can only be 'train', 'valid', 'test' or 'evaluation'.")
     if phase == "evaluation":
         phase = "test"
         warnings.warn(

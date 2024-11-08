@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time    : 2020/9/18 11:32
 # @Author  : Hui Wang
 # @Email   : hui.wang@ruc.edu.cn
 
-r"""
-SASRecF
+r"""SASRecF
 ################################################
 """
 
@@ -12,7 +10,7 @@ import torch
 from torch import nn
 
 from hopwise.model.abstract_recommender import SequentialRecommender
-from hopwise.model.layers import TransformerEncoder, FeatureSeqEmbLayer
+from hopwise.model.layers import FeatureSeqEmbLayer, TransformerEncoder
 from hopwise.model.loss import BPRLoss
 from hopwise.utils import FeatureType
 
@@ -23,15 +21,13 @@ class SASRecF(SequentialRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(SASRecF, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.n_layers = config["n_layers"]
         self.n_heads = config["n_heads"]
         self.hidden_size = config["hidden_size"]  # same as embedding_size
-        self.inner_size = config[
-            "inner_size"
-        ]  # the dimensionality in feed-forward layer
+        self.inner_size = config["inner_size"]  # the dimensionality in feed-forward layer
         self.hidden_dropout_prob = config["hidden_dropout_prob"]
         self.attn_dropout_prob = config["attn_dropout_prob"]
         self.hidden_act = config["hidden_act"]
@@ -41,11 +37,7 @@ class SASRecF(SequentialRecommender):
         self.pooling_mode = config["pooling_mode"]
         self.device = config["device"]
         self.num_feature_field = sum(
-            (
-                1
-                if dataset.field2type[field] != FeatureType.FLOAT_SEQ
-                else dataset.num(field)
-            )
+            (1 if dataset.field2type[field] != FeatureType.FLOAT_SEQ else dataset.num(field))
             for field in config["selected_features"]
         )
 
@@ -53,9 +45,7 @@ class SASRecF(SequentialRecommender):
         self.loss_type = config["loss_type"]
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.hidden_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.hidden_size, padding_idx=0)
         self.position_embedding = nn.Embedding(self.max_seq_length, self.hidden_size)
         self.feature_embed_layer = FeatureSeqEmbLayer(
             dataset,
@@ -76,9 +66,7 @@ class SASRecF(SequentialRecommender):
             layer_norm_eps=self.layer_norm_eps,
         )
 
-        self.concat_layer = nn.Linear(
-            self.hidden_size * (1 + self.num_feature_field), self.hidden_size
-        )
+        self.concat_layer = nn.Linear(self.hidden_size * (1 + self.num_feature_field), self.hidden_size)
 
         self.LayerNorm = nn.LayerNorm(self.hidden_size, eps=self.layer_norm_eps)
         self.dropout = nn.Dropout(self.hidden_dropout_prob)
@@ -110,9 +98,7 @@ class SASRecF(SequentialRecommender):
         item_emb = self.item_embedding(item_seq)
 
         # position embedding
-        position_ids = torch.arange(
-            item_seq.size(1), dtype=torch.long, device=item_seq.device
-        )
+        position_ids = torch.arange(item_seq.size(1), dtype=torch.long, device=item_seq.device)
         position_ids = position_ids.unsqueeze(0).expand_as(item_seq)
         position_embedding = self.position_embedding(position_ids)
 
@@ -129,9 +115,7 @@ class SASRecF(SequentialRecommender):
         feature_table = torch.cat(feature_table, dim=-2)
         table_shape = feature_table.shape
         feat_num, embedding_size = table_shape[-2], table_shape[-1]
-        feature_emb = feature_table.view(
-            table_shape[:-2] + (feat_num * embedding_size,)
-        )
+        feature_emb = feature_table.view(table_shape[:-2] + (feat_num * embedding_size,))
         input_concat = torch.cat((item_emb, feature_emb), -1)  # [B 1+field_num*H]
 
         input_emb = self.concat_layer(input_concat)
@@ -140,9 +124,7 @@ class SASRecF(SequentialRecommender):
         input_emb = self.dropout(input_emb)
 
         extended_attention_mask = self.get_attention_mask(item_seq)
-        trm_output = self.trm_encoder(
-            input_emb, extended_attention_mask, output_all_encoded_layers=True
-        )
+        trm_output = self.trm_encoder(input_emb, extended_attention_mask, output_all_encoded_layers=True)
         output = trm_output[-1]
         seq_output = self.gather_indexes(output, item_seq_len - 1)
         return seq_output  # [B H]
@@ -180,7 +162,5 @@ class SASRecF(SequentialRecommender):
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
         seq_output = self.forward(item_seq, item_seq_len)
         test_items_emb = self.item_embedding.weight
-        scores = torch.matmul(
-            seq_output, test_items_emb.transpose(0, 1)
-        )  # [B, item_num]
+        scores = torch.matmul(seq_output, test_items_emb.transpose(0, 1))  # [B, item_num]
         return scores

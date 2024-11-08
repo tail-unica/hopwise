@@ -10,31 +10,15 @@ from hopwise.utils import list_to_latex
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model_list", "-m", type=str, default="BPR", help="name of models"
-    )
-    parser.add_argument(
-        "--dataset", "-d", type=str, default="ml-100k", help="name of datasets"
-    )
+    parser.add_argument("--model_list", "-m", type=str, default="BPR", help="name of models")
+    parser.add_argument("--dataset", "-d", type=str, default="ml-100k", help="name of datasets")
     parser.add_argument("--config_files", type=str, default=None, help="config files")
-    parser.add_argument(
-        "--valid_latex", type=str, default="./latex/valid.tex", help="config files"
-    )
-    parser.add_argument(
-        "--test_latex", type=str, default="./latex/test.tex", help="config files"
-    )
-    parser.add_argument(
-        "--nproc", type=int, default=1, help="the number of process in this group"
-    )
-    parser.add_argument(
-        "--ip", type=str, default="localhost", help="the ip of master node"
-    )
-    parser.add_argument(
-        "--port", type=str, default="5678", help="the port of master node"
-    )
-    parser.add_argument(
-        "--world_size", type=int, default=-1, help="total number of jobs"
-    )
+    parser.add_argument("--valid_latex", type=str, default="./latex/valid.tex", help="config files")
+    parser.add_argument("--test_latex", type=str, default="./latex/test.tex", help="config files")
+    parser.add_argument("--nproc", type=int, default=1, help="the number of process in this group")
+    parser.add_argument("--ip", type=str, default="localhost", help="the ip of master node")
+    parser.add_argument("--port", type=str, default="5678", help="the port of master node")
+    parser.add_argument("--world_size", type=int, default=-1, help="total number of jobs")
     parser.add_argument(
         "--group_offset",
         type=int,
@@ -45,9 +29,7 @@ if __name__ == "__main__":
     args, _ = parser.parse_known_args()
 
     model_list = args.model_list.strip().split(",")
-    config_file_list = (
-        args.config_files.strip().split(" ") if args.config_files else None
-    )
+    config_file_list = args.config_files.strip().split(" ") if args.config_files else None
     valid_file = args.valid_latex.strip()
     test_file = args.test_latex.strip()
 

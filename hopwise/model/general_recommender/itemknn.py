@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/8/18
 # @Author : Zihan Lin
 # @Email  : linzihan.super@foxmail.com
 
-r"""
-ItemKNN
+r"""ItemKNN
 ################################################
 Reference:
     Aiolli,F et al. Efficient top-n recommendation for very large scale binary rated datasets.
@@ -33,8 +31,7 @@ class ComputeSimilarity:
             shrink (int) :  hyper-parameter in calculate cosine distance.
             normalize (bool):   If True divide the dot product by the product of the norms.
         """
-
-        super(ComputeSimilarity, self).__init__()
+        super().__init__()
 
         self.shrink = shrink
         self.normalize = normalize
@@ -53,13 +50,11 @@ class ComputeSimilarity:
                  otherwise, divide matrix to :math:`n\_columns \div block\_size`.
 
         Returns:
-
             list: The similar nodes, if method is 'user', the shape is [number of users, neigh_num],
             else, the shape is [number of items, neigh_num].
             scipy.sparse.csr_matrix: sparse matrix W, if method is 'user', the shape is [self.n_rows, self.n_rows],
             else, the shape is [self.n_columns, self.n_columns].
-        """
-
+        """  # noqa: E501
         values = []
         rows = []
         cols = []
@@ -107,9 +102,7 @@ class ComputeSimilarity:
 
                 # Apply normalization and shrinkage, ensure denominator != 0
                 if self.normalize:
-                    denominator = (
-                        sumOfSquared[Index] * sumOfSquared + self.shrink + 1e-6
-                    )
+                    denominator = sumOfSquared[Index] * sumOfSquared + self.shrink + 1e-6
                     this_line_weights = np.multiply(this_line_weights, 1 / denominator)
 
                 elif self.shrink != 0:
@@ -120,12 +113,8 @@ class ComputeSimilarity:
                 # - Partition the data to extract the set of relevant users or items
                 # - Sort only the relevant users or items
                 # - Get the original index
-                relevant_partition = (-this_line_weights).argpartition(self.TopK - 1)[
-                    0 : self.TopK
-                ]
-                relevant_partition_sorting = np.argsort(
-                    -this_line_weights[relevant_partition]
-                )
+                relevant_partition = (-this_line_weights).argpartition(self.TopK - 1)[0 : self.TopK]
+                relevant_partition_sorting = np.argsort(-this_line_weights[relevant_partition])
                 top_k_idx = relevant_partition[relevant_partition_sorting]
                 neigh.append(top_k_idx)
 
@@ -166,7 +155,7 @@ class ItemKNN(GeneralRecommender):
     type = ModelType.TRADITIONAL
 
     def __init__(self, config, dataset):
-        super(ItemKNN, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.k = config["k"]
@@ -175,9 +164,9 @@ class ItemKNN(GeneralRecommender):
         self.interaction_matrix = dataset.inter_matrix(form="csr").astype(np.float32)
         shape = self.interaction_matrix.shape
         assert self.n_users == shape[0] and self.n_items == shape[1]
-        _, self.w = ComputeSimilarity(
-            self.interaction_matrix, topk=self.k, shrink=self.shrink
-        ).compute_similarity("item")
+        _, self.w = ComputeSimilarity(self.interaction_matrix, topk=self.k, shrink=self.shrink).compute_similarity(
+            "item"
+        )
         self.pred_mat = self.interaction_matrix.dot(self.w).tolil()
 
         self.fake_loss = torch.nn.Parameter(torch.zeros(1))

@@ -2,8 +2,7 @@
 # @Author : Chen Yang
 # @Email  : 254170321@qq.com
 
-"""
-hopwise.data.decisiontree_dataset
+"""hopwise.data.decisiontree_dataset
 ##########################
 """
 
@@ -26,7 +25,7 @@ class DecisionTreeDataset(Dataset):
         # get columns whose type is token
         col_list = []
         for col_name in feat:
-            if col_name == self.uid_field or col_name == self.iid_field:
+            if col_name in (self.uid_field, self.iid_field):
                 continue
             if self.field2type[col_name] == FeatureType.TOKEN:
                 col_list.append(col_name)

@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2021/10/12
 # @Author : Tian Zhen
 # @Email  : chenyuwuxinn@gmail.com
 
-r"""
-SGL
+r"""SGL
 ################################################
 Reference:
     Jiancan Wu et al. "SGL: Self-supervised Graph Learning for Recommendation" in SIGIR 2021.
@@ -16,11 +14,12 @@ Reference code:
 import numpy as np
 import scipy.sparse as sp
 import torch
+import torch.nn.functional as F
+
 from hopwise.model.abstract_recommender import GeneralRecommender
 from hopwise.model.init import xavier_uniform_initialization
-from hopwise.model.loss import BPRLoss, EmbLoss
+from hopwise.model.loss import EmbLoss
 from hopwise.utils import InputType
-import torch.nn.functional as F
 
 
 class SGL(GeneralRecommender):
@@ -39,7 +38,7 @@ class SGL(GeneralRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(SGL, self).__init__(config, dataset)
+        super().__init__(config, dataset)
         self._user = dataset.inter_feat[dataset.uid_field]
         self._item = dataset.inter_feat[dataset.iid_field]
         self.embed_dim = config["embedding_size"]
@@ -61,7 +60,7 @@ class SGL(GeneralRecommender):
     def graph_construction(self):
         r"""Devise three operators to generate the views — node dropout, edge dropout, and random walk of a node."""
         self.sub_graph1 = []
-        if self.type == "ND" or self.type == "ED":
+        if self.type in ("ND", "ED"):
             self.sub_graph1 = self.csr2tensor(self.create_adjust_matrix(is_sub=True))
         elif self.type == "RW":
             for i in range(self.n_layers):
@@ -69,7 +68,7 @@ class SGL(GeneralRecommender):
                 self.sub_graph1.append(_g)
 
         self.sub_graph2 = []
-        if self.type == "ND" or self.type == "ED":
+        if self.type in ("ND", "ED"):
             self.sub_graph2 = self.csr2tensor(self.create_adjust_matrix(is_sub=True))
         elif self.type == "RW":
             for i in range(self.n_layers):
@@ -86,7 +85,6 @@ class SGL(GeneralRecommender):
         Returns:
             numpy.ndarray: Array index after sampling, shape: [size]
         """
-
         a = np.arange(high)
         sample = np.random.choice(a, size=size, replace=replace)
         return sample
@@ -111,54 +109,53 @@ class SGL(GeneralRecommender):
                 (ratings, (self._user, self._item + self.n_users)),
                 shape=(self.n_users + self.n_items, self.n_users + self.n_items),
             )
-        else:
-            if self.type == "ND":
-                drop_user = self.rand_sample(
-                    self.n_users,
-                    size=int(self.n_users * self.drop_ratio),
-                    replace=False,
-                )
-                drop_item = self.rand_sample(
-                    self.n_items,
-                    size=int(self.n_items * self.drop_ratio),
-                    replace=False,
-                )
-                R_user = np.ones(self.n_users, dtype=np.float32)
-                R_user[drop_user] = 0.0
-                R_item = np.ones(self.n_items, dtype=np.float32)
-                R_item[drop_item] = 0.0
-                R_user = sp.diags(R_user)
-                R_item = sp.diags(R_item)
-                R_G = sp.csr_matrix(
-                    (
-                        np.ones_like(self._user, dtype=np.float32),
-                        (self._user, self._item),
-                    ),
-                    shape=(self.n_users, self.n_items),
-                )
-                res = R_user.dot(R_G)
-                res = res.dot(R_item)
+        elif self.type == "ND":
+            drop_user = self.rand_sample(
+                self.n_users,
+                size=int(self.n_users * self.drop_ratio),
+                replace=False,
+            )
+            drop_item = self.rand_sample(
+                self.n_items,
+                size=int(self.n_items * self.drop_ratio),
+                replace=False,
+            )
+            R_user = np.ones(self.n_users, dtype=np.float32)
+            R_user[drop_user] = 0.0
+            R_item = np.ones(self.n_items, dtype=np.float32)
+            R_item[drop_item] = 0.0
+            R_user = sp.diags(R_user)
+            R_item = sp.diags(R_item)
+            R_G = sp.csr_matrix(
+                (
+                    np.ones_like(self._user, dtype=np.float32),
+                    (self._user, self._item),
+                ),
+                shape=(self.n_users, self.n_items),
+            )
+            res = R_user.dot(R_G)
+            res = res.dot(R_item)
 
-                user, item = res.nonzero()
-                ratings = res.data
-                matrix = sp.csr_matrix(
-                    (ratings, (user, item + self.n_users)),
-                    shape=(self.n_users + self.n_items, self.n_users + self.n_items),
-                )
+            user, item = res.nonzero()
+            ratings = res.data
+            matrix = sp.csr_matrix(
+                (ratings, (user, item + self.n_users)),
+                shape=(self.n_users + self.n_items, self.n_users + self.n_items),
+            )
 
-            elif self.type == "ED" or self.type == "RW":
-                keep_item = self.rand_sample(
-                    len(self._user),
-                    size=int(len(self._user) * (1 - self.drop_ratio)),
-                    replace=False,
-                )
-                user = self._user[keep_item]
-                item = self._item[keep_item]
+        elif self.type in ("ED", "RW"):
+            keep_item = self.rand_sample(
+                len(self._user),
+                size=int(len(self._user) * (1 - self.drop_ratio)),
+                replace=False,
+            )
+            user = self._user[keep_item]
+            item = self._item[keep_item]
 
-                matrix = sp.csr_matrix(
-                    (np.ones_like(user), (user, item + self.n_users)),
-                    shape=(self.n_users + self.n_items, self.n_users + self.n_items),
-                )
+            matrix = sp.csr_matrix(
+                (np.ones_like(user), (user, item + self.n_users)),
+                shape=(self.n_users + self.n_items, self.n_users + self.n_items),
+            )
 
         matrix = matrix + matrix.T
         D = np.array(matrix.sum(axis=1)) + 1e-7
@@ -212,14 +209,10 @@ class SGL(GeneralRecommender):
         user_sub2, item_sub2 = self.forward(self.sub_graph2)
         total_loss = self.calc_bpr_loss(
             user_emd, item_emd, user_list, pos_item_list, neg_item_list
-        ) + self.calc_ssl_loss(
-            user_list, pos_item_list, user_sub1, user_sub2, item_sub1, item_sub2
-        )
+        ) + self.calc_ssl_loss(user_list, pos_item_list, user_sub1, user_sub2, item_sub1, item_sub2)
         return total_loss
 
-    def calc_bpr_loss(
-        self, user_emd, item_emd, user_list, pos_item_list, neg_item_list
-    ):
+    def calc_bpr_loss(self, user_emd, item_emd, user_list, pos_item_list, neg_item_list):
         r"""Calculate the the pairwise Bayesian Personalized Ranking (BPR) loss and parameter regularization loss.
 
         Args:
@@ -248,9 +241,7 @@ class SGL(GeneralRecommender):
 
         return l1 + l2 * self.reg_weight
 
-    def calc_ssl_loss(
-        self, user_list, pos_item_list, user_sub1, user_sub2, item_sub1, item_sub2
-    ):
+    def calc_ssl_loss(self, user_list, pos_item_list, user_sub1, user_sub2, item_sub1, item_sub2):
         r"""Calculate the loss of self-supervised tasks.
 
         Args:
@@ -264,7 +255,6 @@ class SGL(GeneralRecommender):
         Returns:
             torch.Tensor: Loss of self-supervised tasks.
         """
-
         u_emd1 = F.normalize(user_sub1[user_list], dim=1)
         u_emd2 = F.normalize(user_sub2[user_list], dim=1)
         all_user2 = F.normalize(user_sub2, dim=1)

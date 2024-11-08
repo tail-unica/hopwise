@@ -7,7 +7,7 @@ mlp_hidden_size: [128,64,32,16] # (list of int) The hidden size of each layer in
 neigh_num: 20                   # (int) The number of neighbors we choose.
 dropout: 0.5                    # (float) The dropout rate in MLP layers.
 
-# The method to use neighborhood information, you can choose random, knn or louvain algorithm 
+# The method to use neighborhood information, you can choose random, knn or louvain algorithm
 # e.g. neigh_info_method: "knn" or neigh_info_method: "louvain"
 neigh_info_method: "random"
 

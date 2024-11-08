@@ -1,15 +1,14 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/11/19
 # @Author : Chen Yang
 # @Email  : 254170321@qq.com
 
-r"""
-hopwise.model.exlib_recommender.xgboost
+r"""hopwise.model.exlib_recommender.xgboost
 ########################################
 """
 
 import xgboost as xgb
-from hopwise.utils import ModelType, InputType
+
+from hopwise.utils import InputType, ModelType
 
 
 class XGBoost(xgb.Booster):

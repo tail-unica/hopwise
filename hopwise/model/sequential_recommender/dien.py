@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2021/2/15
 # @Author : Zhichao Feng
 # @Email  : fzcbupt@gmail.com
@@ -8,8 +7,7 @@
 # @Author : Zhichao Feng
 # @email  : fzcbupt@gmail.com
 
-r"""
-DIEN
+r"""DIEN
 ##############################################
 Reference:
     Guorui Zhou et al. "Deep Interest Evolution Network for Click-Through Rate Prediction" in AAAI 2019
@@ -21,19 +19,18 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.init import xavier_normal_, constant_
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
+from torch.nn.utils.rnn import PackedSequence, pack_padded_sequence, pad_packed_sequence
 
-from hopwise.utils import ModelType, InputType, FeatureType
+from hopwise.model.abstract_recommender import SequentialRecommender
 from hopwise.model.layers import (
-    FMEmbedding,
-    MLPLayers,
     ContextSeqEmbLayer,
+    MLPLayers,
     SequenceAttLayer,
 )
-from hopwise.model.abstract_recommender import SequentialRecommender
+from hopwise.utils import FeatureType, InputType
 
 
 class DIEN(SequentialRecommender):
@@ -47,7 +44,7 @@ class DIEN(SequentialRecommender):
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
-        super(DIEN, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # get field names and parameter value from config
         self.device = config["device"]
@@ -67,8 +64,7 @@ class DIEN(SequentialRecommender):
         num_item_feature = sum(
             (
                 1
-                if dataset.field2type[field]
-                not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT]
+                if dataset.field2type[field] not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT]
                 or field in config["numerical_features"]
                 else 0
             )
@@ -77,40 +73,27 @@ class DIEN(SequentialRecommender):
         num_user_feature = sum(
             (
                 1
-                if dataset.field2type[field]
-                not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT]
+                if dataset.field2type[field] not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT]
                 or field in config["numerical_features"]
                 else 0
             )
             for field in self.user_feat.interaction.keys()
         )
         item_feat_dim = num_item_feature * self.embedding_size
-        mask_mat = (
-            torch.arange(self.max_seq_length).to(self.device).view(1, -1)
-        )  # init mask
+        mask_mat = torch.arange(self.max_seq_length).to(self.device).view(1, -1)  # init mask
 
         # init sizes of used layers
-        self.att_list = [
-            4 * num_item_feature * self.embedding_size
-        ] + self.mlp_hidden_size
+        self.att_list = [4 * num_item_feature * self.embedding_size] + self.mlp_hidden_size
         self.interest_mlp_list = [2 * item_feat_dim] + self.mlp_hidden_size + [1]
-        self.dnn_mlp_list = [
-            2 * item_feat_dim + num_user_feature * self.embedding_size
-        ] + self.mlp_hidden_size
+        self.dnn_mlp_list = [2 * item_feat_dim + num_user_feature * self.embedding_size] + self.mlp_hidden_size
 
         # init interest extractor layer, interest evolving layer embedding layer, MLP layer and linear layer
-        self.interset_extractor = InterestExtractorNetwork(
-            item_feat_dim, item_feat_dim, self.interest_mlp_list
-        )
+        self.interset_extractor = InterestExtractorNetwork(item_feat_dim, item_feat_dim, self.interest_mlp_list)
         self.interest_evolution = InterestEvolvingLayer(
             mask_mat, item_feat_dim, item_feat_dim, self.att_list, gru=self.gru
         )
-        self.embedding_layer = ContextSeqEmbLayer(
-            dataset, self.embedding_size, self.pooling_mode, self.device
-        )
-        self.dnn_mlp_layers = MLPLayers(
-            self.dnn_mlp_list, activation="Dice", dropout=self.dropout_prob, bn=True
-        )
+        self.embedding_layer = ContextSeqEmbLayer(dataset, self.embedding_size, self.pooling_mode, self.device)
+        self.dnn_mlp_layers = MLPLayers(self.dnn_mlp_list, activation="Dice", dropout=self.dropout_prob, bn=True)
         self.dnn_predict_layer = nn.Linear(self.mlp_hidden_size[-1], 1)
         self.sigmoid = nn.Sigmoid()
         self.loss = nn.BCEWithLogitsLoss()
@@ -129,12 +112,8 @@ class DIEN(SequentialRecommender):
     def forward(self, user, item_seq, neg_item_seq, item_seq_len, next_items):
         max_length = item_seq.shape[1]
         # concatenate the history item seq with the target item to get embedding together
-        item_seq_next_item = torch.cat(
-            (item_seq, neg_item_seq, next_items.unsqueeze(1)), dim=-1
-        )
-        sparse_embedding, dense_embedding = self.embedding_layer(
-            user, item_seq_next_item
-        )
+        item_seq_next_item = torch.cat((item_seq, neg_item_seq, next_items.unsqueeze(1)), dim=-1)
+        sparse_embedding, dense_embedding = self.embedding_layer(user, item_seq_next_item)
         # concat the sparse embedding and float embedding
         feature_table = {}
         for type in self.types:
@@ -147,23 +126,17 @@ class DIEN(SequentialRecommender):
             feature_table[type] = torch.cat(feature_table[type], dim=-2)
             table_shape = feature_table[type].shape
             feat_num, embedding_size = table_shape[-2], table_shape[-1]
-            feature_table[type] = feature_table[type].view(
-                table_shape[:-2] + (feat_num * embedding_size,)
-            )
+            feature_table[type] = feature_table[type].view(table_shape[:-2] + (feat_num * embedding_size,))
 
         user_feat_list = feature_table["user"]
-        item_feat_list, neg_item_feat_list, target_item_feat_emb = feature_table[
-            "item"
-        ].split([max_length, max_length, 1], dim=1)
+        item_feat_list, neg_item_feat_list, target_item_feat_emb = feature_table["item"].split(
+            [max_length, max_length, 1], dim=1
+        )
         target_item_feat_emb = target_item_feat_emb.squeeze(1)
 
         # interest
-        interest, aux_loss = self.interset_extractor(
-            item_feat_list, item_seq_len, neg_item_feat_list
-        )
-        evolution = self.interest_evolution(
-            target_item_feat_emb, interest, item_seq_len
-        )
+        interest, aux_loss = self.interset_extractor(item_feat_list, item_seq_len, neg_item_feat_list)
+        evolution = self.interest_evolution(target_item_feat_emb, interest, item_seq_len)
 
         dien_in = torch.cat([evolution, target_item_feat_emb, user_feat_list], dim=-1)
         # input the DNN to get the prediction score
@@ -178,9 +151,7 @@ class DIEN(SequentialRecommender):
         user = interaction[self.USER_ID]
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
         next_items = interaction[self.POS_ITEM_ID]
-        output, aux_loss = self.forward(
-            user, item_seq, neg_item_seq, item_seq_len, next_items
-        )
+        output, aux_loss = self.forward(user, item_seq, neg_item_seq, item_seq_len, next_items)
         loss = self.loss(output, label) + self.alpha * aux_loss
         return loss
 
@@ -201,25 +172,19 @@ class InterestExtractorNetwork(nn.Module):
     """
 
     def __init__(self, input_size, hidden_size, mlp_size):
-        super(InterestExtractorNetwork, self).__init__()
-        self.gru = nn.GRU(
-            input_size=input_size, hidden_size=hidden_size, batch_first=True
-        )
+        super().__init__()
+        self.gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, batch_first=True)
         self.auxiliary_net = MLPLayers(layers=mlp_size, activation="none")
 
     def forward(self, keys, keys_length, neg_keys=None):
         batch_size, hist_len, embedding_size = keys.shape
-        packed_keys = pack_padded_sequence(
-            keys, lengths=keys_length.cpu(), batch_first=True, enforce_sorted=False
-        )
+        packed_keys = pack_padded_sequence(keys, lengths=keys_length.cpu(), batch_first=True, enforce_sorted=False)
         packed_rnn_outputs, _ = self.gru(packed_keys)
         rnn_outputs, _ = pad_packed_sequence(
             packed_rnn_outputs, batch_first=True, padding_value=0, total_length=hist_len
         )
 
-        aux_loss = self.auxiliary_loss(
-            rnn_outputs[:, :-1, :], keys[:, 1:, :], neg_keys[:, 1:, :], keys_length - 1
-        )
+        aux_loss = self.auxiliary_loss(rnn_outputs[:, :-1, :], keys[:, 1:, :], neg_keys[:, 1:, :], keys_length - 1)
 
         return rnn_outputs, aux_loss
 
@@ -235,17 +200,16 @@ class InterestExtractorNetwork(nn.Module):
             click_seq (torch.Tensor): The sequence that users consumed, [batch_size, history_length - 1, embedding,size].
             noclick_seq (torch.Tensor): The sequence that users did not consume, [batch_size, history_length - 1, embedding_size].
 
-         Returns:
+        Returns:
             torch.Tensor: auxiliary loss
 
-        """
+        """  # noqa: E501
         batch_size, hist_length, embedding_size = h_states.shape
         click_input = torch.cat([h_states, click_seq], dim=-1)
         noclick_input = torch.cat([h_states, noclick_seq], dim=-1)
 
         mask = (
-            torch.arange(hist_length, device=h_states.device).repeat(batch_size, 1)
-            < keys_length.view(-1, 1)
+            torch.arange(hist_length, device=h_states.device).repeat(batch_size, 1) < keys_length.view(-1, 1)
         ).float()
         # click predict
         click_prop = (
@@ -289,37 +253,25 @@ class InterestEvolvingLayer(nn.Module):
         softmax_stag=True,
         gru="GRU",
     ):
-        super(InterestEvolvingLayer, self).__init__()
+        super().__init__()
 
         self.mask_mat = mask_mat
         self.gru = gru
 
         if gru == "GRU":
-            self.attention_layer = SequenceAttLayer(
-                mask_mat, att_hidden_size, activation, softmax_stag, False
-            )
-            self.dynamic_rnn = nn.GRU(
-                input_size=input_size, hidden_size=rnn_hidden_size, batch_first=True
-            )
+            self.attention_layer = SequenceAttLayer(mask_mat, att_hidden_size, activation, softmax_stag, False)
+            self.dynamic_rnn = nn.GRU(input_size=input_size, hidden_size=rnn_hidden_size, batch_first=True)
 
         elif gru == "AIGRU":
-            self.attention_layer = SequenceAttLayer(
-                mask_mat, att_hidden_size, activation, softmax_stag, True
-            )
-            self.dynamic_rnn = nn.GRU(
-                input_size=input_size, hidden_size=rnn_hidden_size, batch_first=True
-            )
+            self.attention_layer = SequenceAttLayer(mask_mat, att_hidden_size, activation, softmax_stag, True)
+            self.dynamic_rnn = nn.GRU(input_size=input_size, hidden_size=rnn_hidden_size, batch_first=True)
 
-        elif gru == "AGRU" or gru == "AUGRU":
-            self.attention_layer = SequenceAttLayer(
-                mask_mat, att_hidden_size, activation, softmax_stag, True
-            )
-            self.dynamic_rnn = DynamicRNN(
-                input_size=input_size, hidden_size=rnn_hidden_size, gru=gru
-            )
+        elif self.gru in ("AGRU", "AUGRU"):
+            self.attention_layer = SequenceAttLayer(mask_mat, att_hidden_size, activation, softmax_stag, True)
+            self.dynamic_rnn = DynamicRNN(input_size=input_size, hidden_size=rnn_hidden_size, gru=gru)
 
     def final_output(self, outputs, keys_length):
-        """get the last effective value in the interest evolution sequence
+        """Get the last effective value in the interest evolution sequence
         Args:
             outputs (torch.Tensor): the output of `DynamicRNN` after `pad_packed_sequence`
             keys_length (torch.Tensor): the true length of the user history sequence
@@ -329,9 +281,7 @@ class InterestEvolvingLayer(nn.Module):
         """
         batch_size, hist_len, _ = outputs.shape  # [B, T, H]
 
-        mask = torch.arange(hist_len, device=keys_length.device).repeat(
-            batch_size, 1
-        ) == (keys_length.view(-1, 1) - 1)
+        mask = torch.arange(hist_len, device=keys_length.device).repeat(batch_size, 1) == (keys_length.view(-1, 1) - 1)
 
         return outputs[mask]
 
@@ -368,10 +318,8 @@ class InterestEvolvingLayer(nn.Module):
             _, outputs = self.dynamic_rnn(packed_rnn_outputs)
             outputs = outputs.squeeze(0)
 
-        elif self.gru == "AGRU" or self.gru == "AUGRU":
-            att_outputs = self.attention_layer(queries, keys, keys_length).squeeze(
-                1
-            )  # [B, T]
+        elif self.gru in ("AGRU", "AUGRU"):
+            att_outputs = self.attention_layer(queries, keys, keys_length).squeeze(1)  # [B, T]
             packed_rnn_outputs = pack_padded_sequence(
                 keys, lengths=keys_length_cpu, batch_first=True, enforce_sorted=False
             )
@@ -382,9 +330,7 @@ class InterestEvolvingLayer(nn.Module):
                 enforce_sorted=False,
             )
             outputs = self.dynamic_rnn(packed_rnn_outputs, packed_att_outputs)
-            outputs, _ = pad_packed_sequence(
-                outputs, batch_first=True, padding_value=0.0, total_length=hist_len
-            )
+            outputs, _ = pad_packed_sequence(outputs, batch_first=True, padding_value=0.0, total_length=hist_len)
             outputs = self.final_output(outputs, keys_length)  # [B, H]
 
         return outputs
@@ -403,7 +349,7 @@ class AGRUCell(nn.Module):
     """
 
     def __init__(self, input_size, hidden_size, bias=True):
-        super(AGRUCell, self).__init__()
+        super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
@@ -436,16 +382,16 @@ class AGRUCell(nn.Module):
 
 
 class AUGRUCell(nn.Module):
-    """ Effect of GRU with attentional update gate (AUGRU). AUGRU combines attention mechanism and GRU seamlessly.
+    """Effect of GRU with attentional update gate (AUGRU). AUGRU combines attention mechanism and GRU seamlessly.
 
     Formally:
         ..math: \tilde{{u}}_{t}^{\prime}=a_{t} * {u}_{t}^{\prime} \\
                 {h}_{t}^{\prime}=\left(1-\tilde{{u}}_{t}^{\prime}\right) \circ {h}_{t-1}^{\prime}+\tilde{{u}}_{t}^{\prime} \circ \tilde{{h}}_{t}^{\prime}
 
-    """
+    """  # noqa: E501
 
     def __init__(self, input_size, hidden_size, bias=True):
-        super(AUGRUCell, self).__init__()
+        super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
@@ -481,7 +427,7 @@ class AUGRUCell(nn.Module):
 
 class DynamicRNN(nn.Module):
     def __init__(self, input_size, hidden_size, bias=True, gru="AGRU"):
-        super(DynamicRNN, self).__init__()
+        super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
 
@@ -491,25 +437,17 @@ class DynamicRNN(nn.Module):
             self.rnn = AUGRUCell(input_size, hidden_size, bias)
 
     def forward(self, input, att_scores=None, hidden_output=None):
-        if not isinstance(input, PackedSequence) or not isinstance(
-            att_scores, PackedSequence
-        ):
-            raise NotImplementedError(
-                "DynamicRNN only supports packed input and att_scores"
-            )
+        if not isinstance(input, PackedSequence) or not isinstance(att_scores, PackedSequence):
+            raise NotImplementedError("DynamicRNN only supports packed input and att_scores")
 
         input, batch_sizes, sorted_indices, unsorted_indices = input
         att_scores = att_scores.data
 
         max_batch_size = int(batch_sizes[0])
         if hidden_output is None:
-            hidden_output = torch.zeros(
-                max_batch_size, self.hidden_size, dtype=input.dtype, device=input.device
-            )
+            hidden_output = torch.zeros(max_batch_size, self.hidden_size, dtype=input.dtype, device=input.device)
 
-        outputs = torch.zeros(
-            input.size(0), self.hidden_size, dtype=input.dtype, device=input.device
-        )
+        outputs = torch.zeros(input.size(0), self.hidden_size, dtype=input.dtype, device=input.device)
 
         begin = 0
         for batch in batch_sizes:

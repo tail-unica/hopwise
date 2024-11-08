@@ -4,6 +4,7 @@ from hopwise.model.sequential_recommender.core import CORE
 from hopwise.model.sequential_recommender.dien import DIEN
 from hopwise.model.sequential_recommender.din import DIN
 from hopwise.model.sequential_recommender.fdsa import FDSA
+from hopwise.model.sequential_recommender.fearec import FEARec
 from hopwise.model.sequential_recommender.fossil import FOSSIL
 from hopwise.model.sequential_recommender.fpmc import FPMC
 from hopwise.model.sequential_recommender.gcsan import GCSAN
@@ -28,4 +29,3 @@ from hopwise.model.sequential_recommender.sine import SINE
 from hopwise.model.sequential_recommender.srgnn import SRGNN
 from hopwise.model.sequential_recommender.stamp import STAMP
 from hopwise.model.sequential_recommender.transrec import TransRec
-from hopwise.model.sequential_recommender.fearec import FEARec

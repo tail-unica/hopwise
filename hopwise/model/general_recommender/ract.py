@@ -1,20 +1,18 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2021/2/16
 # @Author : Haoran Cheng
 # @Email  : chenghaoran29@foxmail.com
 
-r"""
-RaCT
+r"""RaCT
 ################################################
 Reference:
     Sam Lobel et al. "RaCT: Towards Amortized Ranking-Critical Training for Collaborative Filtering." in ICLR 2020.
 
 """
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
+import torch
+import torch.nn.functional as F
+from torch import nn
 
 from hopwise.model.abstract_recommender import AutoEncoderMixin, GeneralRecommender
 from hopwise.model.init import xavier_normal_initialization
@@ -25,12 +23,12 @@ class RaCT(GeneralRecommender, AutoEncoderMixin):
     r"""RaCT is a collaborative filtering model which uses methods based on actor-critic reinforcement learning for training.
 
     We implement the RaCT model with only user dataloader.
-    """
+    """  # noqa: E501
 
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(RaCT, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         self.layers = config["mlp_hidden_size"]
         self.lat_dim = config["latent_dimension"]
@@ -43,9 +41,7 @@ class RaCT(GeneralRecommender, AutoEncoderMixin):
         self.update = 0
 
         self.encode_layer_dims = [self.n_items] + self.layers + [self.lat_dim]
-        self.decode_layer_dims = [int(self.lat_dim / 2)] + self.encode_layer_dims[::-1][
-            1:
-        ]
+        self.decode_layer_dims = [int(self.lat_dim / 2)] + self.encode_layer_dims[::-1][1:]
 
         self.encoder = self.mlp_layers(self.encode_layer_dims)
         self.decoder = self.mlp_layers(self.decode_layer_dims)
@@ -73,7 +69,7 @@ class RaCT(GeneralRecommender, AutoEncoderMixin):
         elif self.train_stage == "critic_pretrain":
             # load pretrained model for finetune
             pretrained = torch.load(self.pre_model_path)
-            self.logger.info("Load pretrained model from", self.pre_model_path)
+            self.logger.info("Load pretrained model from" + self.pre_model_path)
             self.load_state_dict(pretrained["state_dict"])
             for p in self.encoder.parameters():
                 p.requires_grad = False
@@ -82,7 +78,7 @@ class RaCT(GeneralRecommender, AutoEncoderMixin):
         else:
             # load pretrained model for finetune
             pretrained = torch.load(self.pre_model_path)
-            self.logger.info("Load pretrained model from", self.pre_model_path)
+            self.logger.info("Load pretrained model from" + self.pre_model_path)
             self.load_state_dict(pretrained["state_dict"])
             for p in self.critic_net.parameters():
                 p.requires_grad = False
@@ -112,9 +108,7 @@ class RaCT(GeneralRecommender, AutoEncoderMixin):
 
         mask = (h > 0) * (t > 0)
         self.true_matrix = t * ~mask
-        self.number_of_unseen_items = (self.true_matrix != 0).sum(
-            dim=1
-        )  # remaining input
+        self.number_of_unseen_items = (self.true_matrix != 0).sum(dim=1)  # remaining input
 
         h = self.encoder(h)
 
@@ -139,9 +133,7 @@ class RaCT(GeneralRecommender, AutoEncoderMixin):
         z, mu, logvar = self.forward(rating_matrix)
 
         # KL loss
-        kl_loss = (
-            -0.5 * (torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)) * anneal
-        )
+        kl_loss = -0.5 * (torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)) * anneal
 
         # CE loss
         ce_loss = -(F.log_softmax(z, 1) * rating_matrix).sum(1)
@@ -171,19 +163,13 @@ class RaCT(GeneralRecommender, AutoEncoderMixin):
         predict_matrix[input_matrix.nonzero(as_tuple=True)] = -np.inf
         _, idx_sorted = torch.sort(predict_matrix, dim=1, descending=True)
 
-        topk_result = true_matrix[
-            np.arange(users_num)[:, np.newaxis], idx_sorted[:, :k]
-        ]
+        topk_result = true_matrix[np.arange(users_num)[:, np.newaxis], idx_sorted[:, :k]]
 
         number_non_zero = ((true_matrix > 0) * 1).sum(dim=1)
 
-        tp = 1.0 / torch.log2(torch.arange(2, k + 2).type(torch.FloatTensor)).to(
-            topk_result.device
-        )
+        tp = 1.0 / torch.log2(torch.arange(2, k + 2).type(torch.FloatTensor)).to(topk_result.device)
         DCG = (topk_result * tp).sum(dim=1)
-        IDCG = torch.Tensor([(tp[: min(n, k)]).sum() for n in number_non_zero]).to(
-            topk_result.device
-        )
+        IDCG = torch.Tensor([(tp[: min(n, k)]).sum() for n in number_non_zero]).to(topk_result.device)
         IDCG = torch.maximum(0.1 * torch.ones_like(IDCG).to(IDCG.device), IDCG)
 
         return DCG / IDCG
@@ -197,9 +183,7 @@ class RaCT(GeneralRecommender, AutoEncoderMixin):
     def calculate_critic_loss(self, interaction):
         actor_loss = self.calculate_actor_loss(interaction)
         y = self.critic_forward(actor_loss)
-        score = self.calculate_ndcg(
-            self.predict_matrix, self.true_matrix, self.input_matrix, self.metrics_k
-        )
+        score = self.calculate_ndcg(self.predict_matrix, self.true_matrix, self.input_matrix, self.metrics_k)
 
         mse_loss = (y - score) ** 2
         return mse_loss

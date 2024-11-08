@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/10/06
 # @Author : Xinyan Fan
 # @Email  : xinyan.fan@ruc.edu.cn
 # @File   : fwfm.py
 
-r"""
-FwFM
+r"""FwFM
 #####################################################
 Reference:
     Junwei Pan et al. "Field-weighted Factorization Machines for Click-Through Rate Prediction in Display Advertising."
@@ -13,8 +11,8 @@ Reference:
 """
 
 import torch
-import torch.nn as nn
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import ContextRecommender
 
@@ -31,7 +29,7 @@ class FwFM(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(FwFM, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.dropout_prob = config["dropout_prob"]
@@ -58,9 +56,7 @@ class FwFM(ContextRecommender):
         self._get_feature2field()
         self.num_fields = len(set(self.feature2field.values()))  # the number of fields
         self.num_pair = self.num_fields * self.num_fields
-        self.weight = torch.randn(
-            self.num_fields, self.num_fields, 1, requires_grad=True, device=self.device
-        )
+        self.weight = torch.randn(self.num_fields, self.num_fields, 1, requires_grad=True, device=self.device)
         self.loss = nn.BCEWithLogitsLoss()
 
         # parameters initialization
@@ -93,7 +89,7 @@ class FwFM(ContextRecommender):
                 for v in value:
                     try:
                         self.feature2field[self.feature2id[v]] = key
-                    except:
+                    except IndexError:
                         pass
 
     def fwfm_layer(self, infeature):
@@ -124,13 +120,9 @@ class FwFM(ContextRecommender):
         return fwfm_output
 
     def forward(self, interaction):
-        fwfm_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
+        fwfm_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
 
-        output = self.first_order_linear(interaction) + self.fwfm_layer(
-            fwfm_all_embeddings
-        )
+        output = self.first_order_linear(interaction) + self.fwfm_layer(fwfm_all_embeddings)
 
         return output.squeeze(-1)
 

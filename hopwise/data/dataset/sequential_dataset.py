@@ -7,8 +7,7 @@
 # @Author : Zhen Tian, Yushuo Chen, Xingyu Pan, Yupeng Hou
 # @Email  : chenyuwuxinn@gmail.com, chenyushuo@ruc.edu.cn, xy_pan@foxmail.com, houyupeng@ruc.edu.cn
 
-"""
-hopwise.data.sequential_dataset
+"""hopwise.data.sequential_dataset
 ###############################
 """
 
@@ -17,7 +16,7 @@ import torch
 
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
-from hopwise.utils.enum_type import FeatureType, FeatureSource
+from hopwise.utils.enum_type import FeatureSource, FeatureType
 
 
 class SequentialDataset(Dataset):
@@ -66,13 +65,9 @@ class SequentialDataset(Dataset):
                 else:
                     list_len = self.max_item_list_len
 
-                self.set_field_property(
-                    list_field, list_ftype, FeatureSource.INTERACTION, list_len
-                )
+                self.set_field_property(list_field, list_ftype, FeatureSource.INTERACTION, list_len)
 
-        self.set_field_property(
-            self.item_list_length_field, FeatureType.TOKEN, FeatureSource.INTERACTION, 1
-        )
+        self.set_field_property(self.item_list_length_field, FeatureType.TOKEN, FeatureSource.INTERACTION, 1)
 
     def data_augmentation(self):
         """Augmentation processing for sequential dataset.
@@ -128,24 +123,16 @@ class SequentialDataset(Dataset):
             if field != self.uid_field:
                 list_field = getattr(self, f"{field}_list_field")
                 list_len = self.field2seqlen[list_field]
-                shape = (
-                    (new_length, list_len)
-                    if isinstance(list_len, int)
-                    else (new_length,) + list_len
-                )
+                shape = (new_length, list_len) if isinstance(list_len, int) else (new_length,) + list_len
                 if (
                     self.field2type[field] in [FeatureType.FLOAT, FeatureType.FLOAT_SEQ]
                     and field in self.config["numerical_features"]
                 ):
                     shape += (2,)
-                new_dict[list_field] = torch.zeros(
-                    shape, dtype=self.inter_feat[field].dtype
-                )
+                new_dict[list_field] = torch.zeros(shape, dtype=self.inter_feat[field].dtype)
 
                 value = self.inter_feat[field]
-                for i, (index, length) in enumerate(
-                    zip(item_list_index, item_list_length)
-                ):
+                for i, (index, length) in enumerate(zip(item_list_index, item_list_length)):
                     new_dict[list_field][i][:length] = value[index]
 
         new_data.update(Interaction(new_dict))
@@ -157,12 +144,8 @@ class SequentialDataset(Dataset):
             if field + list_suffix in self.inter_feat:
                 list_field = field + list_suffix
                 setattr(self, f"{field}_list_field", list_field)
-        self.set_field_property(
-            self.item_list_length_field, FeatureType.TOKEN, FeatureSource.INTERACTION, 1
-        )
-        self.inter_feat[self.item_list_length_field] = self.inter_feat[
-            self.item_id_list_field
-        ].agg(len)
+        self.set_field_property(self.item_list_length_field, FeatureType.TOKEN, FeatureSource.INTERACTION, 1)
+        self.inter_feat[self.item_list_length_field] = self.inter_feat[self.item_id_list_field].agg(len)
 
     def inter_matrix(self, form="coo", value_field=None):
         """Get sparse matrix that describe interactions between user_id and item_id.
@@ -179,9 +162,7 @@ class SequentialDataset(Dataset):
             scipy.sparse: Sparse matrix in form ``coo`` or ``csr``.
         """
         if not self.uid_field or not self.iid_field:
-            raise ValueError(
-                "dataset does not exist uid/iid, thus can not converted to sparse matrix."
-            )
+            raise ValueError("dataset does not exist uid/iid, thus can not converted to sparse matrix.")
 
         l1_idx = self.inter_feat[self.item_list_length_field] == 1
         l1_inter_dict = self.inter_feat[l1_idx].interaction
@@ -191,19 +172,11 @@ class SequentialDataset(Dataset):
         for field in l1_inter_dict:
             if field != self.uid_field and field + list_suffix in l1_inter_dict:
                 candidate_field_set.add(field)
-                new_dict[field] = torch.cat(
-                    [self.inter_feat[field], l1_inter_dict[field + list_suffix][:, 0]]
-                )
-            elif (not field.endswith(list_suffix)) and (
-                field != self.item_list_length_field
-            ):
-                new_dict[field] = torch.cat(
-                    [self.inter_feat[field], l1_inter_dict[field]]
-                )
+                new_dict[field] = torch.cat([self.inter_feat[field], l1_inter_dict[field + list_suffix][:, 0]])
+            elif (not field.endswith(list_suffix)) and (field != self.item_list_length_field):
+                new_dict[field] = torch.cat([self.inter_feat[field], l1_inter_dict[field]])
         local_inter_feat = Interaction(new_dict)
-        return self._create_sparse_matrix(
-            local_inter_feat, self.uid_field, self.iid_field, form, value_field
-        )
+        return self._create_sparse_matrix(local_inter_feat, self.uid_field, self.iid_field, form, value_field)
 
     def build(self):
         """Processing dataset according to evaluation setting, including Group, Order and Split.
@@ -218,8 +191,6 @@ class SequentialDataset(Dataset):
         """
         ordering_args = self.config["eval_args"]["order"]
         if ordering_args != "TO":
-            raise ValueError(
-                f"The ordering args for sequential recommendation has to be 'TO'"
-            )
+            raise ValueError("The ordering args for sequential recommendation has to be 'TO'")
 
         return super().build()

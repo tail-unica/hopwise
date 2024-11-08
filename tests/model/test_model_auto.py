@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/10/24
 # @Author : Shanlei Mu
 # @Email  : slmu@ruc.edu.cn
@@ -18,9 +17,7 @@ config_file_list = [os.path.join(current_path, "test_model.yaml")]
 
 
 def quick_test(config_dict):
-    objective_function(
-        config_dict=config_dict, config_file_list=config_file_list, saved=False
-    )
+    objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
 
 class TestGeneralRecommender(unittest.TestCase):

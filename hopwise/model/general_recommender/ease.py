@@ -1,16 +1,15 @@
-r"""
-EASE
+r"""EASE
 ################################################
 Reference:
     Harald Steck. "Embarrassingly Shallow Autoencoders for Sparse Data" in WWW 2019.
 """
 
-import torch
 import numpy as np
 import scipy.sparse as sp
+import torch
 
-from hopwise.utils import InputType, ModelType
 from hopwise.model.abstract_recommender import GeneralRecommender
+from hopwise.utils import InputType, ModelType
 
 
 class EASE(GeneralRecommender):
@@ -76,9 +75,7 @@ class EASE(GeneralRecommender):
         item = interaction[self.ITEM_ID].cpu().numpy()
 
         return torch.from_numpy(
-            (self.interaction_matrix[user, :].multiply(self.item_similarity[:, item].T))
-            .sum(axis=1)
-            .getA1()
+            (self.interaction_matrix[user, :].multiply(self.item_similarity[:, item].T)).sum(axis=1).getA1()
         ).to(self.device)
 
     def full_sort_predict(self, interaction):

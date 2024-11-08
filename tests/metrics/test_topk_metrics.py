@@ -1,4 +1,3 @@
-# -*- encoding: utf-8 -*-
 # @Time    :   2020/11/1
 # @Author  :   Kaiyuan Li
 # @email   :   tsotfsk@outlook.com
@@ -14,6 +13,7 @@ import unittest
 
 sys.path.append(os.getcwd())
 import numpy as np
+
 from hopwise.config import Config
 from hopwise.evaluator.register import metrics_dict
 
@@ -61,10 +61,7 @@ class TestTopKMetrics(unittest.TestCase):
                     [
                         1,
                         (1 / np.log2(2) / (1 / np.log2(2) + 1 / np.log2(3))),
-                        (
-                            (1 / np.log2(2) + 1 / np.log2(4))
-                            / (1 / np.log2(2) + 1 / np.log2(3) + 1 / np.log2(4))
-                        ),
+                        ((1 / np.log2(2) + 1 / np.log2(4)) / (1 / np.log2(2) + 1 / np.log2(3) + 1 / np.log2(4))),
                     ],
                     [0, 0, (1 / np.log2(4) / (1 / np.log2(2) + 1 / np.log2(3)))],
                 ]
@@ -99,9 +96,7 @@ class TestTopKMetrics(unittest.TestCase):
         Metric = metrics_dict[name](config)
         self.assertEqual(
             Metric.metric_info(pos_idx, pos_len).tolist(),
-            np.array(
-                [[0, 0, 0], [1 / 3, 2 / 3, 3 / 3], [1 / 4, 1 / 4, 2 / 4], [0, 0, 1 / 2]]
-            ).tolist(),
+            np.array([[0, 0, 0], [1 / 3, 2 / 3, 3 / 3], [1 / 4, 1 / 4, 2 / 4], [0, 0, 1 / 2]]).tolist(),
         )
 
     def test_precision(self):
@@ -109,9 +104,7 @@ class TestTopKMetrics(unittest.TestCase):
         Metric = metrics_dict[name](config)
         self.assertEqual(
             Metric.metric_info(pos_idx).tolist(),
-            np.array(
-                [[0, 0, 0], [1 / 1, 2 / 2, 3 / 3], [1 / 1, 1 / 2, 2 / 3], [0, 0, 1 / 3]]
-            ).tolist(),
+            np.array([[0, 0, 0], [1 / 1, 2 / 2, 3 / 3], [1 / 1, 1 / 2, 2 / 3], [0, 0, 1 / 3]]).tolist(),
         )
 
     def test_itemcoverage(self):
@@ -140,8 +133,7 @@ class TestTopKMetrics(unittest.TestCase):
         Metric = metrics_dict[name](config)
         self.assertEqual(
             Metric.get_gini(item_matrix, num_items),
-            ((-7) * 0 + (-5) * 1 + (-3) * 1 + (-1) * 2 + 1 * 2 + 3 * 2 + 5 * 3 + 7 * 4)
-            / (8 * (3 * 5)),
+            ((-7) * 0 + (-5) * 1 + (-3) * 1 + (-1) * 2 + 1 * 2 + 3 * 2 + 5 * 3 + 7 * 4) / (8 * (3 * 5)),
         )
 
     def test_shannonentropy(self):

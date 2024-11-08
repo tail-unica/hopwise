@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/8/17 19:38
 # @Author : Yujie Lu
 # @Email  : yujielu1998@gmail.com
@@ -8,8 +7,7 @@
 # @Author : Yupeng Hou, Yujie Lu
 # @Email  : houyupeng@ruc.edu.cn, yujielu1998@gmail.com
 
-r"""
-GRU4Rec
+r"""GRU4Rec
 ################################################
 
 Reference:
@@ -19,7 +17,7 @@ Reference:
 
 import torch
 from torch import nn
-from torch.nn.init import xavier_uniform_, xavier_normal_
+from torch.nn.init import xavier_normal_, xavier_uniform_
 
 from hopwise.model.abstract_recommender import SequentialRecommender
 from hopwise.model.loss import BPRLoss
@@ -29,14 +27,13 @@ class GRU4Rec(SequentialRecommender):
     r"""GRU4Rec is a model that incorporate RNN for recommendation.
 
     Note:
-
         Regarding the innovation of this article,we can only achieve the data augmentation mentioned
         in the paper and directly output the embedding of the item,
         in order that the generation method we used is common to other sequential models.
     """
 
     def __init__(self, config, dataset):
-        super(GRU4Rec, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
@@ -46,9 +43,7 @@ class GRU4Rec(SequentialRecommender):
         self.dropout_prob = config["dropout_prob"]
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.emb_dropout = nn.Dropout(self.dropout_prob)
         self.gru_layers = nn.GRU(
             input_size=self.embedding_size,
@@ -117,7 +112,5 @@ class GRU4Rec(SequentialRecommender):
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
         seq_output = self.forward(item_seq, item_seq_len)
         test_items_emb = self.item_embedding.weight
-        scores = torch.matmul(
-            seq_output, test_items_emb.transpose(0, 1)
-        )  # [B, n_items]
+        scores = torch.matmul(seq_output, test_items_emb.transpose(0, 1))  # [B, n_items]
         return scores

@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time    : 2023/10/27
 # @Author  : Kesha Ou
 # @Email   : keishaou@gmail.com
 
-r"""
-FEARec
+r"""FEARec
 ################################################
 
 Reference:
@@ -16,26 +14,23 @@ Reference code:
 
 """
 
-
+import math
 import random
 
 import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
-import math
-
 import torch.nn.functional as fn
+from torch import nn
 
-
+from hopwise.data.interaction import Interaction
 from hopwise.model.abstract_recommender import SequentialRecommender
 from hopwise.model.loss import BPRLoss
-from hopwise.data.interaction import Interaction
 
 
 class FEARec(SequentialRecommender):
     def __init__(self, config, dataset):
-        super(FEARec, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.dataset = dataset
@@ -43,9 +38,7 @@ class FEARec(SequentialRecommender):
         self.n_layers = config["n_layers"]
         self.n_heads = config["n_heads"]
         self.hidden_size = config["hidden_size"]  # same as embedding_size
-        self.inner_size = config[
-            "inner_size"
-        ]  # the dimensionality in feed-forward layer
+        self.inner_size = config["inner_size"]  # the dimensionality in feed-forward layer
         self.hidden_dropout_prob = config["hidden_dropout_prob"]
         self.attn_dropout_prob = config["attn_dropout_prob"]
         self.hidden_act = config["hidden_act"]
@@ -59,9 +52,7 @@ class FEARec(SequentialRecommender):
         self.same_item_index = self.get_same_item_index(dataset)
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.hidden_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.hidden_size, padding_idx=0)
         self.position_embedding = nn.Embedding(self.max_seq_length, self.hidden_size)
         self.item_encoder = FEAEncoder(
             n_layers=self.n_layers,
@@ -114,7 +105,7 @@ class FEARec(SequentialRecommender):
             # Slightly different from the TF version which uses truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=self.initializer_range)
-            # module.weight.data = self.truncated_normal_(tensor=module.weight.data, mean=0, std=self.initializer_range)
+            # module.weight.data = self.truncated_normal_(tensor=module.weight.data, mean=0, std=self.initializer_range)  # noqa: E501
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
@@ -125,7 +116,7 @@ class FEARec(SequentialRecommender):
         with torch.no_grad():
             size = tensor.shape
             tmp = tensor.new_empty(size + (4,)).normal_()
-            valid = (tmp < 2) & (tmp > -2)
+            valid = (tmp < 2) & (tmp > -2)  # noqa: PLR2004
             ind = valid.max(-1, keepdim=True)[1]
             tensor.data.copy_(tmp.gather(-1, ind).squeeze(-1))
             tensor.data.mul_(std).add_(mean)
@@ -134,9 +125,7 @@ class FEARec(SequentialRecommender):
     def get_attention_mask(self, item_seq):
         """Generate left-to-right uni-directional attention mask for multi-head attention."""
         attention_mask = (item_seq > 0).long()
-        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(
-            2
-        )  # torch.int64
+        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)  # torch.int64
         # mask for left-to-right unidirectional
         max_len = attention_mask.size(-1)
         attn_shape = (1, max_len, max_len)
@@ -145,29 +134,21 @@ class FEARec(SequentialRecommender):
         subsequent_mask = subsequent_mask.long().to(item_seq.device)
 
         extended_attention_mask = extended_attention_mask * subsequent_mask
-        extended_attention_mask = extended_attention_mask.to(
-            dtype=next(self.parameters()).dtype
-        )  # fp16 compatibility
+        extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
         return extended_attention_mask
 
     def get_bi_attention_mask(self, item_seq):
         """Generate bidirectional attention mask for multi-head attention."""
         attention_mask = (item_seq > 0).long()
-        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(
-            2
-        )  # torch.int64
+        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)  # torch.int64
         # bidirectional mask
-        extended_attention_mask = extended_attention_mask.to(
-            dtype=next(self.parameters()).dtype
-        )  # fp16 compatibility
+        extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
         return extended_attention_mask
 
     def forward(self, item_seq, item_seq_len):
-        position_ids = torch.arange(
-            item_seq.size(1), dtype=torch.long, device=item_seq.device
-        )
+        position_ids = torch.arange(item_seq.size(1), dtype=torch.long, device=item_seq.device)
         position_ids = position_ids.unsqueeze(0).expand_as(item_seq)
         position_embedding = self.position_embedding(position_ids)
 
@@ -179,9 +160,7 @@ class FEARec(SequentialRecommender):
         extended_attention_mask = self.get_attention_mask(item_seq)
         # extended_attention_mask = self.get_bi_attention_mask(item_seq)
 
-        trm_output = self.item_encoder(
-            input_emb, extended_attention_mask, output_all_encoded_layers=True
-        )
+        trm_output = self.item_encoder(input_emb, extended_attention_mask, output_all_encoded_layers=True)
         output = trm_output[-1]
         output = self.gather_indexes(output, item_seq_len - 1)
 
@@ -204,8 +183,8 @@ class FEARec(SequentialRecommender):
         sem_pos_seqs = []
         dataset = self.dataset
         target_items = interaction[self.ITEM_ID]
-        for i, item_id in enumerate(target_items):
-            item_id = item_id.item()
+        for i, target_item_id in enumerate(target_items):
+            item_id = target_item_id.item()
             targets_index = same_item_index[item_id]
             lens = len(targets_index)
             if lens == 0:
@@ -227,9 +206,7 @@ class FEARec(SequentialRecommender):
         sem_pos_lengths = torch.stack(sem_pos_lengths).to(self.device)
         sem_pos_seqs = torch.stack(sem_pos_seqs).to(self.device)
 
-        interaction.update(
-            Interaction({"sem_aug": sem_pos_seqs, "sem_aug_lengths": sem_pos_lengths})
-        )
+        interaction.update(Interaction({"sem_aug": sem_pos_seqs, "sem_aug_lengths": sem_pos_lengths}))
 
         item_seq = interaction[self.ITEM_SEQ]
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
@@ -300,20 +277,13 @@ class FEARec(SequentialRecommender):
             if self.fredom:
                 seq_output_f = torch.fft.rfft(seq_output, dim=1, norm="ortho")
                 aug_seq_output_f = torch.fft.rfft(aug_seq_output, dim=1, norm="ortho")
-                sem_aug_seq_output_f = torch.fft.rfft(
-                    sem_aug_seq_output, dim=1, norm="ortho"
-                )
+                sem_aug_seq_output_f = torch.fft.rfft(sem_aug_seq_output, dim=1, norm="ortho")
                 if self.fredom_type in ["us", "un"]:
                     loss += 0.1 * abs(seq_output_f - aug_seq_output_f).flatten().mean()
                 if self.fredom_type in ["us", "su"]:
-                    loss += (
-                        0.1 * abs(seq_output_f - sem_aug_seq_output_f).flatten().mean()
-                    )
+                    loss += 0.1 * abs(seq_output_f - sem_aug_seq_output_f).flatten().mean()
                 if self.fredom_type == "us_x":
-                    loss += (
-                        0.1
-                        * abs(aug_seq_output_f - sem_aug_seq_output_f).flatten().mean()
-                    )
+                    loss += 0.1 * abs(aug_seq_output_f - sem_aug_seq_output_f).flatten().mean()
 
         return loss
 
@@ -327,19 +297,15 @@ class FEARec(SequentialRecommender):
         return mask
 
     def info_nce(self, z_i, z_j, temp, batch_size, sim="dot"):
-        """
-        We do not sample negative examples explicitly.
+        """We do not sample negative examples explicitly.
         Instead, given a positive pair, similar to (Chen et al., 2017), we treat the other 2(N − 1) augmented examples within a minibatch as negative examples.
-        """
+        """  # noqa: E501
         N = 2 * batch_size
 
         z = torch.cat((z_i, z_j), dim=0)
 
         if sim == "cos":
-            sim = (
-                nn.functional.cosine_similarity(z.unsqueeze(1), z.unsqueeze(0), dim=2)
-                / temp
-            )
+            sim = nn.functional.cosine_similarity(z.unsqueeze(1), z.unsqueeze(0), dim=2) / temp
         elif sim == "dot":
             sim = torch.mm(z, z.T) / temp
 
@@ -358,10 +324,9 @@ class FEARec(SequentialRecommender):
         return logits, labels
 
     def decompose(self, z_i, z_j, origin_z, batch_size):
-        """
-        We do not sample negative examples explicitly.
+        """We do not sample negative examples explicitly.
         Instead, given a positive pair, similar to (Chen et al., 2017), we treat the other 2(N − 1) augmented examples within a minibatch as negative examples.
-        """
+        """  # noqa: E501
         N = 2 * batch_size
 
         z = torch.cat((z_i, z_j), dim=0)
@@ -403,8 +368,7 @@ class FEARec(SequentialRecommender):
 
 
 class HybridAttention(nn.Module):
-    """
-    Hybrid Attention layer: combine time domain self-attention layer and frequency domain attention layer.
+    """Hybrid Attention layer: combine time domain self-attention layer and frequency domain attention layer.
 
     Args:
         input_tensor (torch.Tensor): the input of the multi-head Hybrid Attention layer
@@ -425,7 +389,7 @@ class HybridAttention(nn.Module):
         i,
         config,
     ):
-        super(HybridAttention, self).__init__()
+        super().__init__()
         if hidden_size % n_heads != 0:
             raise ValueError(
                 "The hidden size (%d) is not a multiple of the number of attention "
@@ -452,28 +416,14 @@ class HybridAttention(nn.Module):
         self.global_ratio = config["global_ratio"]
         self.n_layers = config["n_layers"]
         if self.global_ratio > (1 / self.n_layers):
-            print(
-                "{}>{}:{}".format(
-                    self.global_ratio,
-                    1 / self.n_layers,
-                    self.global_ratio > (1 / self.n_layers),
-                )
-            )
+            print(f"{self.global_ratio}>{1 / self.n_layers}:{self.global_ratio > (1 / self.n_layers)}")
             self.filter_mixer = "G"
         else:
-            print(
-                "{}>{}:{}".format(
-                    self.global_ratio,
-                    1 / self.n_layers,
-                    self.global_ratio > (1 / self.n_layers),
-                )
-            )
+            print(f"{self.global_ratio}>{1 / self.n_layers}:{self.global_ratio > (1 / self.n_layers)}")
             self.filter_mixer = "L"
         self.max_item_list_length = config["MAX_ITEM_LIST_LENGTH"]
         self.dual_domain = config["dual_domain"]
-        self.slide_step = (
-            (self.max_item_list_length // 2 + 1) * (1 - self.global_ratio)
-        ) // (self.n_layers - 1)
+        self.slide_step = ((self.max_item_list_length // 2 + 1) * (1 - self.global_ratio)) // (self.n_layers - 1)
         self.local_ratio = 1 / self.n_layers
         self.filter_size = self.local_ratio * (self.max_item_list_length // 2 + 1)
 
@@ -485,9 +435,7 @@ class HybridAttention(nn.Module):
             self.w = self.local_ratio
             self.s = self.filter_size
 
-        self.left = int(
-            ((self.max_item_list_length // 2 + 1) * (1 - self.w)) - (i * self.s)
-        )
+        self.left = int(((self.max_item_list_length // 2 + 1) * (1 - self.w)) - (i * self.s))
         self.right = int((self.max_item_list_length // 2 + 1) - i * self.s)
 
         self.q_index = list(range(self.left, self.right))
@@ -504,9 +452,9 @@ class HybridAttention(nn.Module):
             self.time_k_index = list(range(self.max_item_list_length // 2 + 1))
             self.time_v_index = list(range(self.max_item_list_length // 2 + 1))
 
-        print("modes_q={}, index_q={}".format(len(self.q_index), self.q_index))
-        print("modes_k={}, index_k={}".format(len(self.k_index), self.k_index))
-        print("modes_v={}, index_v={}".format(len(self.v_index), self.v_index))
+        print(f"modes_q={len(self.q_index)}, index_q={self.q_index}")
+        print(f"modes_k={len(self.k_index)}, index_k={self.k_index}")
+        print(f"modes_v={len(self.v_index)}, index_v={self.v_index}")
 
         if self.config["dual_domain"]:
             self.spatial_ratio = self.config["spatial_ratio"]
@@ -521,8 +469,7 @@ class HybridAttention(nn.Module):
         return x
 
     def time_delay_agg_training(self, values, corr):
-        """
-        SpeedUp version of Autocorrelation (a batch-normalization style design)
+        """SpeedUp version of Autocorrelation (a batch-normalization style design)
         This is for the training phase.
         """
         head = values.shape[1]
@@ -541,17 +488,12 @@ class HybridAttention(nn.Module):
         for i in range(top_k):
             pattern = torch.roll(tmp_values, -int(index[i]), -1)
             delays_agg = delays_agg + pattern * (
-                tmp_corr[:, i]
-                .unsqueeze(1)
-                .unsqueeze(1)
-                .unsqueeze(1)
-                .repeat(1, head, channel, length)
+                tmp_corr[:, i].unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1, head, channel, length)
             )
         return delays_agg
 
     def time_delay_agg_inference(self, values, corr):
-        """
-        SpeedUp version of Autocorrelation (a batch-normalization style design)
+        """SpeedUp version of Autocorrelation (a batch-normalization style design)
         This is for the inference phase.
         """
         batch = values.shape[0]
@@ -577,16 +519,12 @@ class HybridAttention(nn.Module):
         tmp_values = values.repeat(1, 1, 1, 2)
         delays_agg = torch.zeros_like(values).float()
         for i in range(top_k):
-            tmp_delay = init_index + delay[:, i].unsqueeze(1).unsqueeze(1).unsqueeze(
-                1
-            ).repeat(1, head, channel, length)
+            tmp_delay = init_index + delay[:, i].unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(
+                1, head, channel, length
+            )
             pattern = torch.gather(tmp_values, dim=-1, index=tmp_delay)
             delays_agg = delays_agg + pattern * (
-                tmp_corr[:, i]
-                .unsqueeze(1)
-                .unsqueeze(1)
-                .unsqueeze(1)
-                .repeat(1, head, channel, length)
+                tmp_corr[:, i].unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1, head, channel, length)
             )
         return delays_agg
 
@@ -616,14 +554,10 @@ class HybridAttention(nn.Module):
         k_fft = torch.fft.rfft(keys.permute(0, 2, 3, 1).contiguous(), dim=-1)
 
         # put into an empty box for sampling
-        q_fft_box = torch.zeros(
-            B, H, E, len(self.q_index), device=q_fft.device, dtype=torch.cfloat
-        )
+        q_fft_box = torch.zeros(B, H, E, len(self.q_index), device=q_fft.device, dtype=torch.cfloat)
         q_fft_box = q_fft[:, :, :, self.q_index]
 
-        k_fft_box = torch.zeros(
-            B, H, E, len(self.k_index), device=q_fft.device, dtype=torch.cfloat
-        )
+        k_fft_box = torch.zeros(B, H, E, len(self.k_index), device=q_fft.device, dtype=torch.cfloat)
         k_fft_box = k_fft[:, :, :, self.q_index]
         res = q_fft_box * torch.conj(k_fft_box)
 
@@ -632,22 +566,16 @@ class HybridAttention(nn.Module):
             weight = torch.view_as_complex(self.complex_weight)
             res = res * weight
 
-        box_res = torch.zeros(
-            B, H, E, L // 2 + 1, device=q_fft.device, dtype=torch.cfloat
-        )
+        box_res = torch.zeros(B, H, E, L // 2 + 1, device=q_fft.device, dtype=torch.cfloat)
         box_res[:, :, :, self.q_index] = res
 
         corr = torch.fft.irfft(box_res, dim=-1)
 
         # time delay agg
         if self.training:
-            V = self.time_delay_agg_training(
-                values.permute(0, 2, 3, 1).contiguous(), corr
-            ).permute(0, 3, 1, 2)
+            V = self.time_delay_agg_training(values.permute(0, 2, 3, 1).contiguous(), corr).permute(0, 3, 1, 2)
         else:
-            V = self.time_delay_agg_inference(
-                values.permute(0, 2, 3, 1).contiguous(), corr
-            ).permute(0, 3, 1, 2)
+            V = self.time_delay_agg_inference(values.permute(0, 2, 3, 1).contiguous(), corr).permute(0, 3, 1, 2)
 
         new_context_layer_shape = V.size()[:-2] + (self.all_head_size,)
         context_layer = V.view(*new_context_layer_shape)
@@ -655,35 +583,23 @@ class HybridAttention(nn.Module):
         if self.dual_domain:
             # put into an empty box for sampling
             # q
-            q_fft_box = torch.zeros(
-                B, H, E, len(self.time_q_index), device=q_fft.device, dtype=torch.cfloat
-            )
+            q_fft_box = torch.zeros(B, H, E, len(self.time_q_index), device=q_fft.device, dtype=torch.cfloat)
             q_fft_box = q_fft[:, :, :, self.time_q_index]
-            spatial_q = torch.zeros(
-                B, H, E, L // 2 + 1, device=q_fft.device, dtype=torch.cfloat
-            )
+            spatial_q = torch.zeros(B, H, E, L // 2 + 1, device=q_fft.device, dtype=torch.cfloat)
             spatial_q[:, :, :, self.time_q_index] = q_fft_box
 
             # k
-            k_fft_box = torch.zeros(
-                B, H, E, len(self.time_k_index), device=q_fft.device, dtype=torch.cfloat
-            )
+            k_fft_box = torch.zeros(B, H, E, len(self.time_k_index), device=q_fft.device, dtype=torch.cfloat)
             k_fft_box = k_fft[:, :, :, self.time_k_index]
-            spatial_k = torch.zeros(
-                B, H, E, L // 2 + 1, device=k_fft.device, dtype=torch.cfloat
-            )
+            spatial_k = torch.zeros(B, H, E, L // 2 + 1, device=k_fft.device, dtype=torch.cfloat)
             spatial_k[:, :, :, self.time_k_index] = k_fft_box
 
             # v
             v_fft = torch.fft.rfft(values.permute(0, 2, 3, 1).contiguous(), dim=-1)
             # put into an empty box for sampling
-            v_fft_box = torch.zeros(
-                B, H, E, len(self.time_v_index), device=v_fft.device, dtype=torch.cfloat
-            )
+            v_fft_box = torch.zeros(B, H, E, len(self.time_v_index), device=v_fft.device, dtype=torch.cfloat)
             v_fft_box = v_fft[:, :, :, self.time_v_index]
-            spatial_v = torch.zeros(
-                B, H, E, L // 2 + 1, device=v_fft.device, dtype=torch.cfloat
-            )
+            spatial_v = torch.zeros(B, H, E, L // 2 + 1, device=v_fft.device, dtype=torch.cfloat)
             spatial_v[:, :, :, self.time_v_index] = v_fft_box
 
             queries = torch.fft.irfft(spatial_q, dim=-1)
@@ -702,13 +618,9 @@ class HybridAttention(nn.Module):
             attention_probs = self.attn_dropout(attention_probs)
             qkv = torch.matmul(attention_probs, values)
             context_layer_spatial = qkv.permute(0, 2, 1, 3).contiguous()
-            new_context_layer_shape = context_layer_spatial.size()[:-2] + (
-                self.all_head_size,
-            )
+            new_context_layer_shape = context_layer_spatial.size()[:-2] + (self.all_head_size,)
             context_layer_spatial = context_layer_spatial.view(*new_context_layer_shape)
-            context_layer = (
-                1 - self.spatial_ratio
-            ) * context_layer + self.spatial_ratio * context_layer_spatial
+            context_layer = (1 - self.spatial_ratio) * context_layer + self.spatial_ratio * context_layer_spatial
 
         hidden_states = self.dense(context_layer)
         hidden_states = self.out_dropout(hidden_states)
@@ -717,8 +629,7 @@ class HybridAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    """
-    Point-wise feed-forward layer is implemented by two dense layers.
+    """Point-wise feed-forward layer is implemented by two dense layers.
 
     Args:
         input_tensor (torch.Tensor): the input of the point-wise feed-forward layer
@@ -728,10 +639,8 @@ class FeedForward(nn.Module):
 
     """
 
-    def __init__(
-        self, hidden_size, inner_size, hidden_dropout_prob, hidden_act, layer_norm_eps
-    ):
-        super(FeedForward, self).__init__()
+    def __init__(self, hidden_size, inner_size, hidden_dropout_prob, hidden_act, layer_norm_eps):
+        super().__init__()
         self.dense_1 = nn.Linear(hidden_size, inner_size)
         self.intermediate_act_fn = self.get_hidden_act(hidden_act)
 
@@ -775,8 +684,7 @@ class FeedForward(nn.Module):
 
 
 class FEABlock(nn.Module):
-    """
-    One transformer layer consists of a multi-head self-attention layer and a point-wise feed-forward layer.
+    """One transformer layer consists of a multi-head self-attention layer and a point-wise feed-forward layer.
 
     Args:
         hidden_states (torch.Tensor): the input of the multi-head self-attention sublayer
@@ -800,7 +708,7 @@ class FEABlock(nn.Module):
         n,
         config,
     ):
-        super(FEABlock, self).__init__()
+        super().__init__()
         self.hybrid_attention = HybridAttention(
             n_heads,
             hidden_size,
@@ -852,7 +760,7 @@ class FEAEncoder(nn.Module):
         layer_norm_eps=1e-12,
         config=None,
     ):
-        super(FEAEncoder, self).__init__()
+        super().__init__()
         self.n_layers = n_layers
         self.layer = nn.ModuleList()
         for n in range(self.n_layers):
@@ -870,8 +778,7 @@ class FEAEncoder(nn.Module):
             self.layer.append(self.layer_ramp)
 
     def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True):
-        """
-        Args:
+        """Args:
             hidden_states (torch.Tensor): the input of the TransformerEncoder
             attention_mask (torch.Tensor): the attention mask for the input hidden_states
             output_all_encoded_layers (Bool): whether output all transformer layers' output

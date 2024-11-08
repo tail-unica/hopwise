@@ -1,5 +1,4 @@
-r"""
-SLIMElastic
+r"""SLIMElastic
 ################################################
 Reference:
     Xia Ning et al. "SLIM: Sparse Linear Methods for Top-N Recommender Systems." in ICDM 2011.
@@ -8,16 +7,16 @@ Reference code:
     https://github.com/MaurizioFD/RecSys2019_DeepLearning_Evaluation/blob/master/SLIM_ElasticNet/SLIMElasticNetRecommender.py
 """
 
-import torch
 import warnings
+
 import numpy as np
 import scipy.sparse as sp
-
-from sklearn.linear_model import ElasticNet
+import torch
 from sklearn.exceptions import ConvergenceWarning
+from sklearn.linear_model import ElasticNet
 
-from hopwise.utils import InputType, ModelType
 from hopwise.model.abstract_recommender import GeneralRecommender
+from hopwise.utils import InputType, ModelType
 
 
 class SLIMElastic(GeneralRecommender):
@@ -97,9 +96,7 @@ class SLIMElastic(GeneralRecommender):
         item = interaction[self.ITEM_ID].cpu().numpy()
 
         r = torch.from_numpy(
-            (self.interaction_matrix[user, :].multiply(self.item_similarity[:, item].T))
-            .sum(axis=1)
-            .getA1()
+            (self.interaction_matrix[user, :].multiply(self.item_similarity[:, item].T)).sum(axis=1).getA1()
         ).to(self.device)
 
         return r

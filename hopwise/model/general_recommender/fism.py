@@ -1,10 +1,8 @@
-# -*- encoding: utf-8 -*-
 # @Time    :   2020/09/28
 # @Author  :   Kaiyuan Li
 # @email   :   tsotfsk@outlook.com
 
-"""
-FISM
+"""FISM
 #######################################
 Reference:
     S. Kabbur et al. "FISM: Factored item similarity models for top-n recommender systems" in KDD 2013
@@ -14,7 +12,7 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.nn.init import normal_
 
 from hopwise.model.abstract_recommender import GeneralRecommender
@@ -32,7 +30,7 @@ class FISM(GeneralRecommender):
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
-        super(FISM, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load dataset info
         self.LABEL = config["LABEL_FIELD"]
@@ -52,9 +50,7 @@ class FISM(GeneralRecommender):
 
         # split the too large dataset into the specified pieces
         if self.split_to > 0:
-            self.group = torch.chunk(
-                torch.arange(self.n_items).to(self.device), self.split_to
-            )
+            self.group = torch.chunk(torch.arange(self.n_items).to(self.device), self.split_to)
         else:
             self.logger.warning(
                 "Pay Attetion!! the `split_to` is set to 0. If you catch a OMM error in this case, "
@@ -64,12 +60,8 @@ class FISM(GeneralRecommender):
 
         # define layers and loss
         # construct source and destination item embedding matrix
-        self.item_src_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
-        self.item_dst_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_src_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
+        self.item_dst_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.user_bias = nn.Parameter(torch.zeros(self.n_users))
         self.item_bias = nn.Parameter(torch.zeros(self.n_items))
         self.bceloss = nn.BCEWithLogitsLoss()
@@ -78,7 +70,7 @@ class FISM(GeneralRecommender):
         self.apply(self._init_weights)
 
     def get_history_info(self, dataset):
-        """get the user history interaction information
+        """Get the user history interaction information
 
         Args:
             dataset (DataSet): train dataset
@@ -95,7 +87,7 @@ class FISM(GeneralRecommender):
         return history_item_matrix, history_lens, mask_mat
 
     def reg_loss(self):
-        """calculate the reg loss for embedding layers
+        """Calculate the reg loss for embedding layers
 
         Returns:
             torch.Tensor: reg loss
@@ -119,30 +111,22 @@ class FISM(GeneralRecommender):
             normal_(module.weight.data, 0, 0.01)
 
     def inter_forward(self, user, item):
-        """forward the model by interaction"""
+        """Forward the model by interaction"""
         user_inter = self.history_item_matrix[user]
         item_num = self.history_lens[user].unsqueeze(1)
         batch_mask_mat = self.mask_mat[user]
-        user_history = self.item_src_embedding(
-            user_inter
-        )  # batch_size x max_len x embedding_size
+        user_history = self.item_src_embedding(user_inter)  # batch_size x max_len x embedding_size
         target = self.item_dst_embedding(item)  # batch_size x embedding_size
         user_bias = self.user_bias[user]  # batch_size x 1
         item_bias = self.item_bias[item]
-        similarity = torch.bmm(user_history, target.unsqueeze(2)).squeeze(
-            2
-        )  # batch_size x max_len
+        similarity = torch.bmm(user_history, target.unsqueeze(2)).squeeze(2)  # batch_size x max_len
         similarity = batch_mask_mat * similarity
         coeff = torch.pow(item_num.squeeze(1), -self.alpha)
-        scores = torch.sigmoid(
-            coeff.float() * torch.sum(similarity, dim=1) + user_bias + item_bias
-        )
+        scores = torch.sigmoid(coeff.float() * torch.sum(similarity, dim=1) + user_bias + item_bias)
         return scores
 
-    def user_forward(
-        self, user_input, item_num, user_bias, repeats=None, pred_slc=None
-    ):
-        """forward the model by user
+    def user_forward(self, user_input, item_num, user_bias, repeats=None, pred_slc=None):
+        """Forward the model by user
 
         Args:
             user_input (torch.Tensor): user input tensor
@@ -157,18 +141,14 @@ class FISM(GeneralRecommender):
         """
         item_num = item_num.repeat(repeats, 1)
         user_history = self.item_src_embedding(user_input)  # inter_num x embedding_size
-        user_history = user_history.repeat(
-            repeats, 1, 1
-        )  # target_items x inter_num x embedding_size
+        user_history = user_history.repeat(repeats, 1, 1)  # target_items x inter_num x embedding_size
         if pred_slc is None:
             targets = self.item_dst_embedding.weight  # target_items x embedding_size
             item_bias = self.item_bias
         else:
             targets = self.item_dst_embedding(pred_slc)
             item_bias = self.item_bias[pred_slc]
-        similarity = torch.bmm(user_history, targets.unsqueeze(2)).squeeze(
-            2
-        )  # inter_num x target_items
+        similarity = torch.bmm(user_history, targets.unsqueeze(2)).squeeze(2)  # inter_num x target_items
         coeff = torch.pow(item_num.squeeze(1), -self.alpha)
         scores = coeff.float() * torch.sum(similarity, dim=1) + user_bias + item_bias
         return scores
@@ -192,13 +172,9 @@ class FISM(GeneralRecommender):
         scores = []
 
         # test users one by one, if the number of items is too large, we will split it to some pieces
-        for user_input, item_num, user_bias in zip(
-            user_inters, item_nums.unsqueeze(1), batch_user_bias
-        ):
+        for user_input, item_num, user_bias in zip(user_inters, item_nums.unsqueeze(1), batch_user_bias):
             if self.split_to <= 0:
-                output = self.user_forward(
-                    user_input[:item_num], item_num, user_bias, repeats=self.n_items
-                )
+                output = self.user_forward(user_input[:item_num], item_num, user_bias, repeats=self.n_items)
             else:
                 output = []
                 for mask in self.group:

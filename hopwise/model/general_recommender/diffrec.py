@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2023/10/6
 # @Author : Enze Liu
 # @Email  : enzeeliu@foxmail.com
 
-r"""
-DiffRec
+r"""DiffRec
 ################################################
 Reference:
     Wenjie Wang et al. "Diffusion Recommender Model." in SIGIR 2023.
@@ -13,18 +11,20 @@ Reference code:
     https://github.com/YiyanXu/DiffRec
 """
 
+import copy
 import enum
 import math
-import copy
+import typing
+
 import numpy as np
 import torch
 import torch.nn.functional as F
-import torch.nn as nn
-from hopwise.model.init import xavier_normal_initialization
-from hopwise.utils.enum_type import InputType
+from torch import nn
+
 from hopwise.model.abstract_recommender import AutoEncoderMixin, GeneralRecommender
+from hopwise.model.init import xavier_normal_initialization
 from hopwise.model.layers import MLPLayers
-import typing
+from hopwise.utils.enum_type import InputType
 
 
 class ModelMeanType(enum.Enum):
@@ -33,9 +33,7 @@ class ModelMeanType(enum.Enum):
 
 
 class DNN(nn.Module):
-    r"""
-    A deep neural network for the reverse diffusion preocess.
-    """
+    r"""A deep neural network for the reverse diffusion preocess."""
 
     def __init__(
         self,
@@ -46,7 +44,7 @@ class DNN(nn.Module):
         norm=False,
         dropout=0.5,
     ):
-        super(DNN, self).__init__()
+        super().__init__()
         self.dims = dims
         self.time_type = time_type
         self.time_emb_dim = emb_size
@@ -58,13 +56,9 @@ class DNN(nn.Module):
             # Concatenate timestep embedding with input
             self.dims[0] += self.time_emb_dim
         else:
-            raise ValueError(
-                "Unimplemented timestep embedding type %s" % self.time_type
-            )
+            raise ValueError("Unimplemented timestep embedding type %s" % self.time_type)
 
-        self.mlp_layers = MLPLayers(
-            layers=self.dims, dropout=0, activation=act_func, last_activation=False
-        )
+        self.mlp_layers = MLPLayers(layers=self.dims, dropout=0, activation=act_func, last_activation=False)
         self.drop = nn.Dropout(dropout)
 
         self.apply(xavier_normal_initialization)
@@ -81,8 +75,7 @@ class DNN(nn.Module):
 
 
 class DiffRec(GeneralRecommender, AutoEncoderMixin):
-    r"""
-    DiffRec is a generative recommender model which infers users' interaction probabilities in a denoising manner.
+    r"""DiffRec is a generative recommender model which infers users' interaction probabilities in a denoising manner.
     Note that DiffRec simultaneously ranks all items for each user.
     We implement the the DiffRec model with only user dataloader.
     """
@@ -90,7 +83,7 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
     input_type = InputType.LISTWISE
 
     def __init__(self, config, dataset):
-        super(DiffRec, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         if config["mean_type"] == "x0":
             self.mean_type = ModelMeanType.START_X
@@ -114,17 +107,13 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
         self.reweight = config["reweight"]  # reweight the loss for different timesteps
         if self.noise_scale == 0.0:
             self.reweight = False
-        self.sampling_noise = config[
-            "sampling_noise"
-        ]  # whether sample noise during predict
+        self.sampling_noise = config["sampling_noise"]  # whether sample noise during predict
         self.sampling_steps = config["sampling_steps"]
         self.mlp_act_func = config["mlp_act_func"]
         assert self.sampling_steps <= self.steps, "Too much steps in inference."
 
         self.history_num_per_term = config["history_num_per_term"]
-        self.Lt_history = torch.zeros(
-            self.steps, self.history_num_per_term, dtype=torch.float64
-        ).to(self.device)
+        self.Lt_history = torch.zeros(self.steps, self.history_num_per_term, dtype=torch.float64).to(self.device)
         self.Lt_count = torch.zeros(self.steps, dtype=int).to(self.device)
 
         dims = [self.n_items] + config["dims_dnn"] + [self.n_items]
@@ -138,28 +127,18 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
         ).to(self.device)
 
         if self.noise_scale != 0.0:
-            self.betas = torch.tensor(self.get_betas(), dtype=torch.float64).to(
-                self.device
-            )
+            self.betas = torch.tensor(self.get_betas(), dtype=torch.float64).to(self.device)
             if self.beta_fixed:
-                self.betas[0] = (
-                    0.00001  # Deep Unsupervised Learning using Noneequilibrium Thermodynamics 2.4.1
-                )
+                self.betas[0] = 0.00001  # Deep Unsupervised Learning using Noneequilibrium Thermodynamics 2.4.1
                 # The variance \beta_1 of the first step is fixed to a small constant to prevent overfitting.
             assert len(self.betas.shape) == 1, "betas must be 1-D"
-            assert (
-                len(self.betas) == self.steps
-            ), "num of betas must equal to diffusion steps"
-            assert (self.betas > 0).all() and (
-                self.betas <= 1
-            ).all(), "betas out of range"
+            assert len(self.betas) == self.steps, "num of betas must equal to diffusion steps"
+            assert (self.betas > 0).all() and (self.betas <= 1).all(), "betas out of range"
 
             self.calculate_for_diffusion()
 
     def build_histroy_items(self, dataset):
-        r"""
-        Add time-aware reweighting to the original user-item interaction matrix when config['time-aware'] is True.
-        """
+        r"""Add time-aware reweighting to the original user-item interaction matrix when config['time-aware'] is True."""  # noqa: E501
         if not self.time_aware:
             super().build_histroy_items(dataset)
         else:
@@ -207,22 +186,16 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
             self.history_item_value = self.history_item_value.to(self.device)
 
     def get_betas(self):
-        r"""
-        Given the schedule name, create the betas for the diffusion process.
-        """
-        if self.noise_schedule == "linear" or self.noise_schedule == "linear-var":
+        r"""Given the schedule name, create the betas for the diffusion process."""
+        if self.noise_schedule in ("linear", "linear-var"):
             start = self.noise_scale * self.noise_min
             end = self.noise_scale * self.noise_max
             if self.noise_schedule == "linear":
                 return np.linspace(start, end, self.steps, dtype=np.float64)
             else:
-                return betas_from_linear_variance(
-                    self.steps, np.linspace(start, end, self.steps, dtype=np.float64)
-                )
+                return betas_from_linear_variance(self.steps, np.linspace(start, end, self.steps, dtype=np.float64))
         elif self.noise_schedule == "cosine":
-            return betas_for_alpha_bar(
-                self.steps, lambda t: math.cos((t + 0.008) / 1.008 * math.pi / 2) ** 2
-            )
+            return betas_for_alpha_bar(self.steps, lambda t: math.cos((t + 0.008) / 1.008 * math.pi / 2) ** 2)
         # Deep Unsupervised Learning using Noneequilibrium Thermodynamics 2.4.1
         elif self.noise_schedule == "binomial":
             ts = np.arange(self.steps)
@@ -232,20 +205,18 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
             raise NotImplementedError(f"unknown beta schedule: {self.noise_schedule}!")
 
     def calculate_for_diffusion(self):
-        r"""
-        Calculate the coefficients for the diffusion process.
-        """
+        r"""Calculate the coefficients for the diffusion process."""
         alphas = 1.0 - self.betas
         # [alpha_{1}, ..., alpha_{1}*...*alpha_{T}] shape (steps,)
         self.alphas_cumprod = torch.cumprod(alphas, axis=0).to(self.device)
         # alpha_{t-1}
-        self.alphas_cumprod_prev = torch.cat(
-            [torch.tensor([1.0]).to(self.device), self.alphas_cumprod[:-1]]
-        ).to(self.device)
+        self.alphas_cumprod_prev = torch.cat([torch.tensor([1.0]).to(self.device), self.alphas_cumprod[:-1]]).to(
+            self.device
+        )
         # alpha_{t+1}
-        self.alphas_cumprod_next = torch.cat(
-            [self.alphas_cumprod[1:], torch.tensor([0.0]).to(self.device)]
-        ).to(self.device)
+        self.alphas_cumprod_next = torch.cat([self.alphas_cumprod[1:], torch.tensor([0.0]).to(self.device)]).to(
+            self.device
+        )
         assert self.alphas_cumprod_prev.shape == (self.steps,)
 
         self.sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
@@ -254,35 +225,24 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
         self.sqrt_recip_alphas_cumprod = torch.sqrt(1.0 / self.alphas_cumprod)
         self.sqrt_recipm1_alphas_cumprod = torch.sqrt(1.0 / self.alphas_cumprod - 1)
 
-        self.posterior_variance = (
-            self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
-        )
+        self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
 
         self.posterior_log_variance_clipped = torch.log(
-            torch.cat(
-                [self.posterior_variance[1].unsqueeze(0), self.posterior_variance[1:]]
-            )
+            torch.cat([self.posterior_variance[1].unsqueeze(0), self.posterior_variance[1:]])
         )
         # Eq.10 coef for x_theta
-        self.posterior_mean_coef1 = (
-            self.betas
-            * torch.sqrt(self.alphas_cumprod_prev)
-            / (1.0 - self.alphas_cumprod)
-        )
+        self.posterior_mean_coef1 = self.betas * torch.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         # Eq.10 coef for x_t
-        self.posterior_mean_coef2 = (
-            (1.0 - self.alphas_cumprod_prev)
-            * torch.sqrt(alphas)
-            / (1.0 - self.alphas_cumprod)
-        )
+        self.posterior_mean_coef2 = (1.0 - self.alphas_cumprod_prev) * torch.sqrt(alphas) / (1.0 - self.alphas_cumprod)
 
     def p_sample(self, x_start):
-        r"""
-        Generate users' interaction probabilities in a denoising manner.
+        r"""Generate users' interaction probabilities in a denoising manner.
+
         Args:
             x_start (torch.FloatTensor): the input tensor that contains user's history interaction matrix,
                                          for DiffRec shape: [batch_size, n_items]
                                          for LDiffRec shape: [batch_size, hidden_size]
+
         Returns:
             torch.FloatTensor: the interaction probabilities,
                                for DiffRec shape: [batch_size, n_items]
@@ -308,13 +268,8 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
             out = self.p_mean_variance(x_t, t)
             if self.sampling_noise:
                 noise = torch.randn_like(x_t)
-                nonzero_mask = (
-                    (t != 0).float().view(-1, *([1] * (len(x_t.shape) - 1)))
-                )  # no noise when t == 0
-                x_t = (
-                    out["mean"]
-                    + nonzero_mask * torch.exp(0.5 * out["log_variance"]) * noise
-                )
+                nonzero_mask = (t != 0).float().view(-1, *([1] * (len(x_t.shape) - 1)))  # no noise when t == 0
+                x_t = out["mean"] + nonzero_mask * torch.exp(0.5 * out["log_variance"]) * noise
             else:
                 x_t = out["mean"]
         return x_t
@@ -374,11 +329,7 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
                     (1 - self.alphas_cumprod_prev[ts]) ** 2 * (1 - self.betas[ts])
                 )
                 weight = torch.where((ts == 0), 1.0, weight)
-                likelihood = mean_flat(
-                    (x_start - self._predict_xstart_from_eps(x_t, ts, model_output))
-                    ** 2
-                    / 2.0
-                )
+                likelihood = mean_flat((x_start - self._predict_xstart_from_eps(x_t, ts, model_output)) ** 2 / 2.0)
                 loss = torch.where((ts == 0), likelihood, mse)
         else:
             weight = torch.tensor([1.0] * len(target)).to(device)
@@ -397,15 +348,13 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
                 try:
                     self.Lt_history[t, self.Lt_count[t]] = loss.detach()
                     self.Lt_count[t] += 1
-                except:
+                except Exception:
                     print(t)
                     print(self.Lt_count[t])
                     print(loss)
                     raise ValueError
 
-    def sample_timesteps(
-        self, batch_size, device, method="uniform", uniform_prob=0.001
-    ):
+    def sample_timesteps(self, batch_size, device, method="uniform", uniform_prob=0.001):
         if method == "importance":  # importance sampling
             if not (self.Lt_count == self.history_num_per_term).all():
                 return self.sample_timesteps(batch_size, device, method="uniform")
@@ -415,7 +364,7 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
             pt_all *= 1 - uniform_prob
             pt_all += uniform_prob / len(pt_all)  # ensure the least prob > uniform_prob
 
-            assert pt_all.sum(-1) - 1.0 < 1e-5
+            assert pt_all.sum(-1) - 1.0 < 1e-5  # noqa: PLR2004
 
             t = torch.multinomial(pt_all, num_samples=batch_size, replacement=True)
             pt = pt_all.gather(dim=0, index=t) * len(pt_all)
@@ -436,30 +385,21 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
             noise = torch.randn_like(x_start)
         assert noise.shape == x_start.shape
         return (
-            self._extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape)
-            * x_start
-            + self._extract_into_tensor(
-                self.sqrt_one_minus_alphas_cumprod, t, x_start.shape
-            )
-            * noise
+            self._extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
+            + self._extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
 
     def q_posterior_mean_variance(self, x_start, x_t, t):
-        r"""
-        Compute the mean and variance of the diffusion posterior:
-            q(x_{t-1} | x_t, x_0)
+        r"""Compute the mean and variance of the diffusion posterior:
+        q(x_{t-1} | x_t, x_0)
         """
         assert x_start.shape == x_t.shape
         posterior_mean = (
             self._extract_into_tensor(self.posterior_mean_coef1, t, x_t.shape) * x_start
             + self._extract_into_tensor(self.posterior_mean_coef2, t, x_t.shape) * x_t
         )
-        posterior_variance = self._extract_into_tensor(
-            self.posterior_variance, t, x_t.shape
-        )
-        posterior_log_variance_clipped = self._extract_into_tensor(
-            self.posterior_log_variance_clipped, t, x_t.shape
-        )
+        posterior_variance = self._extract_into_tensor(self.posterior_variance, t, x_t.shape)
+        posterior_log_variance_clipped = self._extract_into_tensor(self.posterior_log_variance_clipped, t, x_t.shape)
         assert (
             posterior_mean.shape[0]
             == posterior_variance.shape[0]
@@ -469,8 +409,7 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     def p_mean_variance(self, x, t):
-        r"""
-        Apply the model to get p(x_{t-1} | x_t), as well as a prediction of
+        r"""Apply the model to get p(x_{t-1} | x_t), as well as a prediction of
         the initial x, x_0.
         """
         B, C = x.shape[:2]
@@ -490,13 +429,9 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
         else:
             raise NotImplementedError(self.mean_type)
 
-        model_mean, _, _ = self.q_posterior_mean_variance(
-            x_start=pred_xstart, x_t=x, t=t
-        )
+        model_mean, _, _ = self.q_posterior_mean_variance(x_start=pred_xstart, x_t=x, t=t)
 
-        assert (
-            model_mean.shape == model_log_variance.shape == pred_xstart.shape == x.shape
-        )
+        assert model_mean.shape == model_log_variance.shape == pred_xstart.shape == x.shape
 
         return {
             "mean": model_mean,
@@ -508,28 +443,24 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
     def _predict_xstart_from_eps(self, x_t, t, eps):
         assert x_t.shape == eps.shape
         return (
-            self._extract_into_tensor(self.sqrt_recip_alphas_cumprod, t, x_t.shape)
-            * x_t
-            - self._extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape)
-            * eps
+            self._extract_into_tensor(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t
+            - self._extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * eps
         )
 
     def SNR(self, t):
-        r"""
-        Compute the signal-to-noise ratio for a single timestep.
-        """
+        r"""Compute the signal-to-noise ratio for a single timestep."""
         self.alphas_cumprod = self.alphas_cumprod.to(t.device)
         return self.alphas_cumprod[t] / (1 - self.alphas_cumprod[t])
 
     def _extract_into_tensor(self, arr, timesteps, broadcast_shape):
-        r"""
-        Extract values from a 1-D torch tensor for a batch of indices.
+        r"""Extract values from a 1-D torch tensor for a batch of indices.
 
         Args:
             arr (torch.Tensor): the 1-D torch tensor.
             timesteps (torch.Tensor): a tensor of indices into the array to extract.
             broadcast_shape (torch.Size): a larger shape of K dimensions with the batch
                                 dimension equal to the length of timesteps.
+
         Returns:
             torch.Tensor: a tensor of shape [batch_size, 1, ...] where the shape has K dims.
         """
@@ -551,8 +482,7 @@ def betas_from_linear_variance(steps, variance, max_beta=0.999):
 
 
 def betas_for_alpha_bar(num_diffusion_timesteps, alpha_bar, max_beta=0.999):
-    r"""
-    Create a beta schedule that discretizes the given alpha_t_bar function,
+    r"""Create a beta schedule that discretizes the given alpha_t_bar function,
     which defines the cumulative product of (1-beta) over time from t = [0,1].
 
     Args:
@@ -562,6 +492,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, alpha_bar, max_beta=0.999):
                    part of the diffusion process.
         max_beta (int): the maximum beta to use; use values lower than 1 to
                   prevent singularities.
+
     Returns:
         np.ndarray: a 1-D array of beta values.
     """
@@ -574,8 +505,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, alpha_bar, max_beta=0.999):
 
 
 def normal_kl(mean1, logvar1, mean2, logvar2):
-    r"""
-    Compute the KL divergence between two gaussians.
+    r"""Compute the KL divergence between two gaussians.
 
     Shapes are automatically broadcasted, so batches can be compared to
     scalars, among other use cases.
@@ -589,30 +519,20 @@ def normal_kl(mean1, logvar1, mean2, logvar2):
 
     # Force variances to be Tensors. Broadcasting helps convert scalars to
     # Tensors, but it does not work for torch.exp().
-    logvar1, logvar2 = [
-        x if isinstance(x, torch.Tensor) else torch.tensor(x).to(tensor)
-        for x in (logvar1, logvar2)
-    ]
+    logvar1, logvar2 = (x if isinstance(x, torch.Tensor) else torch.tensor(x).to(tensor) for x in (logvar1, logvar2))
 
     return 0.5 * (
-        -1.0
-        + logvar2
-        - logvar1
-        + torch.exp(logvar1 - logvar2)
-        + ((mean1 - mean2) ** 2) * torch.exp(-logvar2)
+        -1.0 + logvar2 - logvar1 + torch.exp(logvar1 - logvar2) + ((mean1 - mean2) ** 2) * torch.exp(-logvar2)
     )
 
 
 def mean_flat(tensor):
-    r"""
-    Take the mean over all non-batch dimensions.
-    """
+    r"""Take the mean over all non-batch dimensions."""
     return tensor.mean(dim=list(range(1, len(tensor.shape))))
 
 
 def timestep_embedding(timesteps, dim, max_period=10000):
-    r"""
-    Create sinusoidal timestep embeddings.
+    r"""Create sinusoidal timestep embeddings.
 
     :param timesteps: a 1-D Tensor of N indices, one per batch element.
                       These may be fractional. (N,)
@@ -620,13 +540,8 @@ def timestep_embedding(timesteps, dim, max_period=10000):
     :param max_period: controls the minimum frequency of the embeddings.
     :return: an [N x dim] Tensor of positional embeddings.
     """
-
     half = dim // 2
-    freqs = torch.exp(
-        -math.log(max_period)
-        * torch.arange(start=0, end=half, dtype=torch.float32)
-        / half
-    ).to(
+    freqs = torch.exp(-math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half).to(
         timesteps.device
     )  # shape (dim//2,)
     args = timesteps[:, None].float() * freqs[None]  # (N, dim//2)

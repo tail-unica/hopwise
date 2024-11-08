@@ -1,11 +1,9 @@
-# -*- encoding: utf-8 -*-
 # @Time    :   2022/02/19
 # @Author  :   Gaowei Zhang
 # @email   :   1462034631@qq.com
 
 
-"""
-NCE-PLRec
+"""NCE-PLRec
 ######################################
 Reference:
     Ga Wu, et al. "Noise Contrastive Estimation for One-Class Collaborative Filtering" in SIGIR 2019.
@@ -13,9 +11,9 @@ Reference code:
     https://github.com/wuga214/NCE_Projected_LRec
 """
 
-import torch
 import numpy as np
 import scipy.sparse as sp
+import torch
 from sklearn.utils.extmath import randomized_svd
 
 from hopwise.model.abstract_recommender import GeneralRecommender
@@ -52,11 +50,7 @@ class NCEPLRec(GeneralRecommender):
                 # note this is a slight variation of what's in the paper, for convenience
                 # see https://github.com/wuga214/NCE_Projected_LRec/issues/38
                 values = np.maximum(np.log(num_users / np.power(values, beta)), 0)
-                D_rows.append(
-                    sp.coo_matrix(
-                        (values, (row_index, col_index)), shape=(1, num_items)
-                    )
-                )
+                D_rows.append(sp.coo_matrix((values, (row_index, col_index)), shape=(1, num_items)))
             else:
                 D_rows.append(sp.coo_matrix((1, num_items)))
 
@@ -92,9 +86,7 @@ class NCEPLRec(GeneralRecommender):
     def predict(self, interaction):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
-        result = (self.user_embeddings[user, :] * self.item_embeddings[:, item].T).sum(
-            axis=1
-        )
+        result = (self.user_embeddings[user, :] * self.item_embeddings[:, item].T).sum(axis=1)
         return result.float()
 
     def full_sort_predict(self, interaction):

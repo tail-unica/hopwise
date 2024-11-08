@@ -1,15 +1,14 @@
-"""
-hopwise.utils.url
+"""hopwise.utils.url
 ################################
 Reference code:
     https://github.com/snap-stanford/ogb/blob/master/ogb/utils/url.py
 """
 
-import urllib.request as ur
-import zipfile
+import errno
 import os
 import os.path as osp
-import errno
+import urllib.request as ur
+import zipfile
 from logging import getLogger
 
 from tqdm import tqdm
@@ -23,12 +22,7 @@ def decide_download(url):
 
     ### confirm if larger than 1GB
     if size > 1:
-        return (
-            input(
-                "This will download %.2fGB. Will you proceed? (y/N)\n" % (size)
-            ).lower()
-            == "y"
-        )
+        return input("This will download %.2fGB. Will you proceed? (y/N)\n" % (size)).lower() == "y"
     else:
         return True
 
@@ -48,7 +42,6 @@ def download_url(url, folder):
         url (string): The url.
         folder (string): The folder.
     """
-
     filename = url.rpartition("/")[2]
     path = osp.join(folder, filename)
     logger = getLogger()
@@ -75,11 +68,9 @@ def download_url(url, folder):
             for i in pbar:
                 chunk = data.read(chunk_size)
                 downloaded_size += len(chunk)
-                pbar.set_description(
-                    "Downloaded {:.2f} GB".format(float(downloaded_size) / GBFACTOR)
-                )
+                pbar.set_description(f"Downloaded {float(downloaded_size) / GBFACTOR:.2f} GB")
                 f.write(chunk)
-    except:
+    except Exception:
         if os.path.exists(path):
             os.remove(path)
         raise RuntimeError("Stopped downloading due to interruption.")
@@ -111,7 +102,7 @@ def rename_atomic_files(folder, old_name, new_name):
     files = os.listdir(folder)
     for f in files:
         base, suf = os.path.splitext(f)
-        if not old_name in base:
+        if old_name not in base:
             continue
         if suf not in {".inter", ".user", ".item"}:
             logger = getLogger()

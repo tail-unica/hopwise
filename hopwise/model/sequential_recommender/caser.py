@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/9/21
 # @Author : Jingsen Zhang
 # @Email  : zhangjingsen@ruc.edu.cn
@@ -8,8 +7,7 @@
 # @Author : Jingsen Zhang
 # @Email  : zhangjingsen@ruc.edu.cn
 
-r"""
-Caser
+r"""Caser
 ################################################
 
 Reference:
@@ -18,15 +16,15 @@ Reference:
 Reference code:
     https://github.com/graytowne/caser_pytorch
 
-"""
+"""  # noqa: E501
 
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.nn.init import normal_, xavier_normal_, constant_
+from torch.nn.init import constant_, normal_, xavier_normal_
 
 from hopwise.model.abstract_recommender import SequentialRecommender
-from hopwise.model.loss import RegLoss, BPRLoss
+from hopwise.model.loss import BPRLoss, RegLoss
 
 
 class Caser(SequentialRecommender):
@@ -37,10 +35,10 @@ class Caser(SequentialRecommender):
         the generation method we used is common to other sequential models.
         For comparison with other models, we set the parameter T in the paper as 1.
         In addition, to prevent excessive CNN layers (ValueError: Training loss is nan), please make sure the parameters MAX_ITEM_LIST_LENGTH small, such as 10.
-    """
+    """  # noqa: E501
 
     def __init__(self, config, dataset):
-        super(Caser, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
@@ -54,17 +52,11 @@ class Caser(SequentialRecommender):
         self.n_users = dataset.user_num
 
         # define layers and loss
-        self.user_embedding = nn.Embedding(
-            self.n_users, self.embedding_size, padding_idx=0
-        )
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.user_embedding = nn.Embedding(self.n_users, self.embedding_size, padding_idx=0)
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
 
         # vertical conv layer
-        self.conv_v = nn.Conv2d(
-            in_channels=1, out_channels=self.n_v, kernel_size=(self.max_seq_length, 1)
-        )
+        self.conv_v = nn.Conv2d(in_channels=1, out_channels=self.n_v, kernel_size=(self.max_seq_length, 1))
 
         # horizontal conv layer
         lengths = [i + 1 for i in range(self.max_seq_length)]
@@ -84,9 +76,7 @@ class Caser(SequentialRecommender):
         self.fc1_dim_h = self.n_h * len(lengths)
         fc1_dim_in = self.fc1_dim_v + self.fc1_dim_h
         self.fc1 = nn.Linear(fc1_dim_in, self.embedding_size)
-        self.fc2 = nn.Linear(
-            self.embedding_size + self.embedding_size, self.embedding_size
-        )
+        self.fc2 = nn.Linear(self.embedding_size + self.embedding_size, self.embedding_size)
 
         self.dropout = nn.Dropout(self.dropout_prob)
         self.ac_conv = nn.ReLU()
@@ -145,9 +135,7 @@ class Caser(SequentialRecommender):
         return seq_output
 
     def reg_loss_conv_h(self):
-        r"""
-        L2 loss on conv_h
-        """
+        r"""L2 loss on conv_h"""
         loss_conv_h = 0
         for name, parm in self.conv_h.named_parameters():
             if name.endswith("weight"):
@@ -198,7 +186,5 @@ class Caser(SequentialRecommender):
         user = interaction[self.USER_ID]
         seq_output = self.forward(user, item_seq)
         test_items_emb = self.item_embedding.weight
-        scores = torch.matmul(
-            seq_output, test_items_emb.transpose(0, 1)
-        )  # [B, n_items]
+        scores = torch.matmul(seq_output, test_items_emb.transpose(0, 1))  # [B, n_items]
         return scores
