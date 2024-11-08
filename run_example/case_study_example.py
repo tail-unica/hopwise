@@ -3,17 +3,13 @@
 # @Email  : chenyushuo@ruc.edu.cn
 
 
-"""
-Case study example
+"""Case study example
 ===================
 Here is the sample code for the case study in RecBole.
 """
 
-
-import torch
-from hopwise.utils.case_study import full_sort_topk, full_sort_scores
 from hopwise.quick_start import load_data_and_model
-
+from hopwise.utils.case_study import full_sort_scores, full_sort_topk
 
 if __name__ == "__main__":
     config, model, dataset, train_data, valid_data, test_data = load_data_and_model(
@@ -24,9 +20,7 @@ if __name__ == "__main__":
     # or you can use dataset.token2id to transfer external user token to internal user id
     uid_series = dataset.token2id(dataset.uid_field, ["196", "186"])
 
-    topk_score, topk_iid_list = full_sort_topk(
-        uid_series, model, test_data, k=10, device=config["device"]
-    )
+    topk_score, topk_iid_list = full_sort_topk(uid_series, model, test_data, k=10, device=config["device"])
     print(topk_score)  # scores of top 10 items
     print(topk_iid_list)  # internal id of top 10 items
     external_item_list = dataset.id2token(dataset.iid_field, topk_iid_list.cpu())

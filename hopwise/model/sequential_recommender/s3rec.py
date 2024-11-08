@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time    : 2020/9/19 21:49
 # @Author  : Hui Wang
 # @Email   : hui.wang@ruc.edu.cn
 
-r"""
-S3Rec
+r"""S3Rec
 ################################################
 
 Reference:
@@ -28,25 +26,22 @@ from hopwise.model.loss import BPRLoss
 
 
 class S3Rec(SequentialRecommender):
-    r"""
-    S3Rec is the first work to incorporate self-supervised learning in
+    r"""S3Rec is the first work to incorporate self-supervised learning in
     sequential recommendation.
 
-    NOTE:
+    Note:
         Under this framework, we need reconstruct the pretraining data,
         which would affect the pre-training speed.
     """
 
     def __init__(self, config, dataset):
-        super(S3Rec, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.n_layers = config["n_layers"]
         self.n_heads = config["n_heads"]
         self.hidden_size = config["hidden_size"]  # same as embedding_size
-        self.inner_size = config[
-            "inner_size"
-        ]  # the dimensionality in feed-forward layer
+        self.inner_size = config["inner_size"]  # the dimensionality in feed-forward layer
         self.hidden_dropout_prob = config["hidden_dropout_prob"]
         self.attn_dropout_prob = config["attn_dropout_prob"]
         self.hidden_act = config["hidden_act"]
@@ -73,13 +68,9 @@ class S3Rec(SequentialRecommender):
 
         # define layers and loss
         # modules shared by pre-training stage and fine-tuning stage
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.hidden_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.hidden_size, padding_idx=0)
         self.position_embedding = nn.Embedding(self.max_seq_length, self.hidden_size)
-        self.feature_embedding = nn.Embedding(
-            self.n_features, self.hidden_size, padding_idx=0
-        )
+        self.feature_embedding = nn.Embedding(self.n_features, self.hidden_size, padding_idx=0)
 
         self.trm_encoder = TransformerEncoder(
             n_layers=self.n_layers,
@@ -135,28 +126,20 @@ class S3Rec(SequentialRecommender):
 
     def _associated_attribute_prediction(self, sequence_output, feature_embedding):
         sequence_output = self.aap_norm(sequence_output)  # [B L H]
-        sequence_output = sequence_output.view(
-            [-1, sequence_output.size(-1), 1]
-        )  # [B*L H 1]
+        sequence_output = sequence_output.view([-1, sequence_output.size(-1), 1])  # [B*L H 1]
         # [feature_num H] [B*L H 1] -> [B*L feature_num 1]
         score = torch.matmul(feature_embedding, sequence_output)
         return score.squeeze(-1)  # [B*L feature_num]
 
     def _masked_item_prediction(self, sequence_output, target_item_emb):
-        sequence_output = self.mip_norm(
-            sequence_output.view([-1, sequence_output.size(-1)])
-        )  # [B*L H]
-        target_item_emb = target_item_emb.view(
-            [-1, sequence_output.size(-1)]
-        )  # [B*L H]
+        sequence_output = self.mip_norm(sequence_output.view([-1, sequence_output.size(-1)]))  # [B*L H]
+        target_item_emb = target_item_emb.view([-1, sequence_output.size(-1)])  # [B*L H]
         score = torch.mul(sequence_output, target_item_emb)  # [B*L H]
         return torch.sigmoid(torch.sum(score, -1))  # [B*L]
 
     def _masked_attribute_prediction(self, sequence_output, feature_embedding):
         sequence_output = self.map_norm(sequence_output)  # [B L H]
-        sequence_output = sequence_output.view(
-            [-1, sequence_output.size(-1), 1]
-        )  # [B*L H 1]
+        sequence_output = sequence_output.view([-1, sequence_output.size(-1), 1])  # [B*L H 1]
         # [feature_num H] [B*L H 1] -> [B*L feature_num 1]
         score = torch.matmul(feature_embedding, sequence_output)
         return score.squeeze(-1)  # [B*L feature_num]
@@ -167,9 +150,7 @@ class S3Rec(SequentialRecommender):
         return torch.sigmoid(torch.sum(score, dim=-1))  # [B]
 
     def forward(self, item_seq, bidirectional=True):
-        position_ids = torch.arange(
-            item_seq.size(1), dtype=torch.long, device=item_seq.device
-        )
+        position_ids = torch.arange(item_seq.size(1), dtype=torch.long, device=item_seq.device)
         position_ids = position_ids.unsqueeze(0).expand_as(item_seq)
         position_embedding = self.position_embedding(position_ids)
 
@@ -178,9 +159,7 @@ class S3Rec(SequentialRecommender):
         input_emb = self.LayerNorm(input_emb)
         input_emb = self.dropout(input_emb)
         attention_mask = self.get_attention_mask(item_seq, bidirectional=bidirectional)
-        trm_output = self.trm_encoder(
-            input_emb, attention_mask, output_all_encoded_layers=True
-        )
+        trm_output = self.trm_encoder(input_emb, attention_mask, output_all_encoded_layers=True)
         seq_output = trm_output[-1]  # [B L H]
         return seq_output
 
@@ -209,14 +188,10 @@ class S3Rec(SequentialRecommender):
 
         feature_embedding = self.feature_embedding.weight
         # AAP
-        aap_score = self._associated_attribute_prediction(
-            sequence_output, feature_embedding
-        )
+        aap_score = self._associated_attribute_prediction(sequence_output, feature_embedding)
         aap_loss = self.loss_fct(aap_score, features.view(-1, self.n_features).float())
         # only compute loss at non-masked position
-        aap_mask = (masked_item_sequence != self.mask_token).float() * (
-            masked_item_sequence != 0
-        ).float()
+        aap_mask = (masked_item_sequence != self.mask_token).float() * (masked_item_sequence != 0).float()
         aap_loss = torch.sum(aap_loss * aap_mask.flatten().unsqueeze(-1))
 
         # MIP
@@ -225,16 +200,12 @@ class S3Rec(SequentialRecommender):
         pos_score = self._masked_item_prediction(sequence_output, pos_item_embs)
         neg_score = self._masked_item_prediction(sequence_output, neg_item_embs)
         mip_distance = pos_score - neg_score
-        mip_loss = self.loss_fct(
-            mip_distance, torch.ones_like(mip_distance, dtype=torch.float32)
-        )
+        mip_loss = self.loss_fct(mip_distance, torch.ones_like(mip_distance, dtype=torch.float32))
         mip_mask = (masked_item_sequence == self.mask_token).float()
         mip_loss = torch.sum(mip_loss * mip_mask.flatten())
 
         # MAP
-        map_score = self._masked_attribute_prediction(
-            sequence_output, feature_embedding
-        )
+        map_score = self._masked_attribute_prediction(sequence_output, feature_embedding)
         map_loss = self.loss_fct(map_score, features.view(-1, self.n_features).float())
         map_mask = (masked_item_sequence == self.mask_token).float()
         map_loss = torch.sum(map_loss * map_mask.flatten().unsqueeze(-1))
@@ -248,11 +219,7 @@ class S3Rec(SequentialRecommender):
         pos_segment_score = self._segment_prediction(segment_context, pos_segment_emb)
         neg_segment_score = self._segment_prediction(segment_context, neg_segment_emb)
         sp_distance = pos_segment_score - neg_segment_score
-        sp_loss = torch.sum(
-            self.loss_fct(
-                sp_distance, torch.ones_like(sp_distance, dtype=torch.float32)
-            )
-        )
+        sp_loss = torch.sum(self.loss_fct(sp_distance, torch.ones_like(sp_distance, dtype=torch.float32)))
 
         pretrain_loss = (
             self.aap_weight * aap_loss
@@ -290,17 +257,13 @@ class S3Rec(SequentialRecommender):
         # we will padding zeros at the left side
         # these will be train_instances, after will be reshaped to batch
         sequence_instances = []
-        associated_features = (
-            []
-        )  # For Associated Attribute Prediction and Masked Attribute Prediction
+        associated_features = []  # For Associated Attribute Prediction and Masked Attribute Prediction
         long_sequence = []
         for i, end_i in enumerate(end_index):
             sequence_instances.append(item_seq[i][:end_i])
             long_sequence.extend(item_seq[i][:end_i])
             # padding feature at the left side
-            associated_features.extend(
-                [[0] * self.n_features] * (self.max_seq_length - end_i)
-            )
+            associated_features.extend([[0] * self.n_features] * (self.max_seq_length - end_i))
             for indexes in item_feature_seq[i][:end_i]:
                 features = [0] * self.n_features
                 try:
@@ -308,7 +271,7 @@ class S3Rec(SequentialRecommender):
                     for index in indexes:
                         if index >= 0:
                             features[index] = 1
-                except:
+                except Exception:
                     # single class
                     features[indexes] = 1
                 associated_features.append(features)
@@ -336,7 +299,7 @@ class S3Rec(SequentialRecommender):
         pos_segment_list = []
         neg_segment_list = []
         for instance in sequence_instances:
-            if len(instance) < 2:
+            if len(instance) < 2:  # noqa: PLR2004
                 masked_segment = instance.copy()
                 pos_segment = instance.copy()
                 neg_segment = instance.copy()
@@ -347,9 +310,7 @@ class S3Rec(SequentialRecommender):
                 pos_segment = instance[start_id : start_id + sample_length]
                 neg_segment = long_sequence[neg_start_id : neg_start_id + sample_length]
                 masked_segment = (
-                    instance[:start_id]
-                    + [self.mask_token] * sample_length
-                    + instance[start_id + sample_length :]
+                    instance[:start_id] + [self.mask_token] * sample_length + instance[start_id + sample_length :]
                 )
                 pos_segment = (
                     [self.mask_token] * start_id
@@ -365,31 +326,15 @@ class S3Rec(SequentialRecommender):
             pos_segment_list.append(self._padding_zero_at_left(pos_segment))
             neg_segment_list.append(self._padding_zero_at_left(neg_segment))
 
-        associated_features = torch.tensor(
-            associated_features, dtype=torch.long, device=device
-        )
-        associated_features = associated_features.view(
-            -1, self.max_seq_length, self.n_features
-        )
+        associated_features = torch.tensor(associated_features, dtype=torch.long, device=device)
+        associated_features = associated_features.view(-1, self.max_seq_length, self.n_features)
 
-        masked_item_sequence = torch.tensor(
-            masked_item_sequence, dtype=torch.long, device=device
-        ).view(batch_size, -1)
-        pos_items = torch.tensor(pos_items, dtype=torch.long, device=device).view(
-            batch_size, -1
-        )
-        neg_items = torch.tensor(neg_items, dtype=torch.long, device=device).view(
-            batch_size, -1
-        )
-        masked_segment_list = torch.tensor(
-            masked_segment_list, dtype=torch.long, device=device
-        ).view(batch_size, -1)
-        pos_segment_list = torch.tensor(
-            pos_segment_list, dtype=torch.long, device=device
-        ).view(batch_size, -1)
-        neg_segment_list = torch.tensor(
-            neg_segment_list, dtype=torch.long, device=device
-        ).view(batch_size, -1)
+        masked_item_sequence = torch.tensor(masked_item_sequence, dtype=torch.long, device=device).view(batch_size, -1)
+        pos_items = torch.tensor(pos_items, dtype=torch.long, device=device).view(batch_size, -1)
+        neg_items = torch.tensor(neg_items, dtype=torch.long, device=device).view(batch_size, -1)
+        masked_segment_list = torch.tensor(masked_segment_list, dtype=torch.long, device=device).view(batch_size, -1)
+        pos_segment_list = torch.tensor(pos_segment_list, dtype=torch.long, device=device).view(batch_size, -1)
+        neg_segment_list = torch.tensor(neg_segment_list, dtype=torch.long, device=device).view(batch_size, -1)
 
         return (
             associated_features,
@@ -460,10 +405,6 @@ class S3Rec(SequentialRecommender):
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
         seq_output = self.forward(item_seq, bidirectional=False)
         seq_output = self.gather_indexes(seq_output, item_seq_len - 1)
-        test_items_emb = self.item_embedding.weight[
-            : self.n_items - 1
-        ]  # delete masked token
-        scores = torch.matmul(
-            seq_output, test_items_emb.transpose(0, 1)
-        )  # [B, n_items]
+        test_items_emb = self.item_embedding.weight[: self.n_items - 1]  # delete masked token
+        scores = torch.matmul(seq_output, test_items_emb.transpose(0, 1))  # [B, n_items]
         return scores

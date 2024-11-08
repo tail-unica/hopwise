@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2022/10/27
 # @Author : Yuyan Zhang
 # @Email  : 2019308160102@cau.edu.cn
 # @File   : fignn.py
 
-r"""
-FiGNN
+r"""FiGNN
 ################################################
 Reference:
     Li, Zekun, et al.  "Fi-GNN: Modeling Feature Interactions via Graph Neural Networks for CTR Prediction"
@@ -16,29 +14,24 @@ Reference code:
     - https://github.com/xue-pai/FuxiCTR
 """
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn.init import xavier_uniform_, xavier_normal_, constant_
 from itertools import product
 
-from hopwise.utils import InputType
+import torch
+import torch.nn.functional as F
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_, xavier_uniform_
+
 from hopwise.model.abstract_recommender import ContextRecommender
+from hopwise.utils import InputType
 
 
 class GraphLayer(nn.Module):
-    """
-    The implementations of the GraphLayer part and the Attentional Edge Weights part are adapted from https://github.com/xue-pai/FuxiCTR.
-    """
+    """The implementations of the GraphLayer part and the Attentional Edge Weights part are adapted from https://github.com/xue-pai/FuxiCTR."""
 
     def __init__(self, num_fields, embedding_size):
-        super(GraphLayer, self).__init__()
-        self.W_in = nn.Parameter(
-            torch.Tensor(num_fields, embedding_size, embedding_size)
-        )
-        self.W_out = nn.Parameter(
-            torch.Tensor(num_fields, embedding_size, embedding_size)
-        )
+        super().__init__()
+        self.W_in = nn.Parameter(torch.Tensor(num_fields, embedding_size, embedding_size))
+        self.W_out = nn.Parameter(torch.Tensor(num_fields, embedding_size, embedding_size))
         xavier_normal_(self.W_in)
         xavier_normal_(self.W_out)
         self.bias_p = nn.Parameter(torch.zeros(embedding_size))
@@ -58,7 +51,7 @@ class FiGNN(ContextRecommender):
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
-        super(FiGNN, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.attention_size = config["attention_size"]
@@ -79,14 +72,9 @@ class FiGNN(ContextRecommender):
         )
         self.v_res_embedding = torch.nn.Linear(self.embedding_size, self.attention_size)
         # FiGNN
-        self.src_nodes, self.dst_nodes = zip(
-            *list(product(range(self.num_feature_field), repeat=2))
-        )
+        self.src_nodes, self.dst_nodes = zip(*list(product(range(self.num_feature_field), repeat=2)))
         self.gnn = nn.ModuleList(
-            [
-                GraphLayer(self.num_feature_field, self.attention_size)
-                for _ in range(self.n_layers - 1)
-            ]
+            [GraphLayer(self.num_feature_field, self.attention_size) for _ in range(self.n_layers - 1)]
         )
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.01)
         self.W_attn = nn.Linear(self.attention_size * 2, 1, bias=False)
@@ -108,9 +96,7 @@ class FiGNN(ContextRecommender):
         emb_feature = self.att_embedding(in_feature)
         emb_feature = self.dropout_layer(emb_feature)
         # multi-head self-attention network
-        att_feature, _ = self.self_attn(
-            emb_feature, emb_feature, emb_feature
-        )  # [batch_size, num_field, att_dim]
+        att_feature, _ = self.self_attn(emb_feature, emb_feature, emb_feature)  # [batch_size, num_field, att_dim]
         # Residual connection
         v_res = self.v_res_embedding(in_feature)
         att_feature += v_res
@@ -155,9 +141,7 @@ class FiGNN(ContextRecommender):
             xavier_uniform_(module.weight_ih_l0)
 
     def forward(self, interaction):
-        fignn_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
+        fignn_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
         output = self.fignn_layer(fignn_all_embeddings)
         return output.squeeze(1)
 

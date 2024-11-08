@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/10/4 16:55
 # @Author : Yujie Lu
 # @Email  : yujielu1998@gmail.com
 
-r"""
-GCSAN
+r"""GCSAN
 ################################################
 
 Reference:
@@ -22,7 +20,7 @@ from torch.nn import functional as F
 
 from hopwise.model.abstract_recommender import SequentialRecommender
 from hopwise.model.layers import TransformerEncoder
-from hopwise.model.loss import EmbLoss, BPRLoss
+from hopwise.model.loss import BPRLoss, EmbLoss
 
 
 class GNN(nn.Module):
@@ -31,7 +29,7 @@ class GNN(nn.Module):
     """
 
     def __init__(self, embedding_size, step=1):
-        super(GNN, self).__init__()
+        super().__init__()
         self.step = step
         self.embedding_size = embedding_size
         self.input_size = embedding_size * 2
@@ -41,12 +39,8 @@ class GNN(nn.Module):
         self.b_ih = Parameter(torch.Tensor(self.gate_size))
         self.b_hh = Parameter(torch.Tensor(self.gate_size))
 
-        self.linear_edge_in = nn.Linear(
-            self.embedding_size, self.embedding_size, bias=True
-        )
-        self.linear_edge_out = nn.Linear(
-            self.embedding_size, self.embedding_size, bias=True
-        )
+        self.linear_edge_in = nn.Linear(self.embedding_size, self.embedding_size, bias=True)
+        self.linear_edge_out = nn.Linear(self.embedding_size, self.embedding_size, bias=True)
 
         # parameters initialization
         self._reset_parameters()
@@ -69,11 +63,8 @@ class GNN(nn.Module):
             torch.FloatTensor: Latent vectors of nodes,shape of [batch_size, max_session_len, embedding_size]
 
         """
-
         input_in = torch.matmul(A[:, :, : A.size(1)], self.linear_edge_in(hidden))
-        input_out = torch.matmul(
-            A[:, :, A.size(1) : 2 * A.size(1)], self.linear_edge_out(hidden)
-        )
+        input_out = torch.matmul(A[:, :, A.size(1) : 2 * A.size(1)], self.linear_edge_out(hidden))
         # [batch_size, max_session_len, embedding_size * 2]
         inputs = torch.cat([input_in, input_out], 2)
 
@@ -100,22 +91,19 @@ class GCSAN(SequentialRecommender):
      and learns long-range dependencies by applying the self-attention mechanism.
 
     Note:
-
         In the original paper, the attention mechanism in the self-attention layer is a single head,
         for the reusability of the project code, we use a unified transformer component.
         According to the experimental results, we only applied regularization to embedding.
     """
 
     def __init__(self, config, dataset):
-        super(GCSAN, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.n_layers = config["n_layers"]
         self.n_heads = config["n_heads"]
         self.hidden_size = config["hidden_size"]  # same as embedding_size
-        self.inner_size = config[
-            "inner_size"
-        ]  # the dimensionality in feed-forward layer
+        self.inner_size = config["inner_size"]  # the dimensionality in feed-forward layer
         self.hidden_dropout_prob = config["hidden_dropout_prob"]
         self.attn_dropout_prob = config["attn_dropout_prob"]
         self.hidden_act = config["hidden_act"]
@@ -129,9 +117,7 @@ class GCSAN(SequentialRecommender):
         self.initializer_range = config["initializer_range"]
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.hidden_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.hidden_size, padding_idx=0)
         self.gnn = GNN(self.hidden_size, self.step)
         self.self_attention = TransformerEncoder(
             n_layers=self.n_layers,
@@ -167,7 +153,7 @@ class GCSAN(SequentialRecommender):
             module.bias.data.zero_()
 
     def _get_slice(self, item_seq):
-        items, n_node, A, alias_inputs = [], [], [], []
+        items, A, alias_inputs = [], [], []
         max_n_node = item_seq.size(1)
         item_seq = item_seq.cpu().numpy()
 
@@ -205,9 +191,7 @@ class GCSAN(SequentialRecommender):
         alias_inputs, A, items = self._get_slice(item_seq)
         hidden = self.item_embedding(items)
         hidden = self.gnn(A, hidden)
-        alias_inputs = alias_inputs.view(-1, alias_inputs.size(1), 1).expand(
-            -1, -1, self.hidden_size
-        )
+        alias_inputs = alias_inputs.view(-1, alias_inputs.size(1), 1).expand(-1, -1, self.hidden_size)
         seq_hidden = torch.gather(hidden, dim=1, index=alias_inputs)
         # fetch the last hidden state of last timestamp
         ht = self.gather_indexes(seq_hidden, item_seq_len - 1)
@@ -255,7 +239,5 @@ class GCSAN(SequentialRecommender):
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
         seq_output = self.forward(item_seq, item_seq_len)
         test_items_emb = self.item_embedding.weight
-        scores = torch.matmul(
-            seq_output, test_items_emb.transpose(0, 1)
-        )  # [B, n_items]
+        scores = torch.matmul(seq_output, test_items_emb.transpose(0, 1))  # [B, n_items]
         return scores

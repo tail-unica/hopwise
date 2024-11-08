@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time    : 2020/9/14 17:01
 # @Author  : Hui Wang
 # @Email   : hui.wang@ruc.edu.cn
 
-r"""
-TransRec
+r"""TransRec
 ################################################
 
 Reference:
@@ -22,8 +20,7 @@ from hopwise.utils import InputType
 
 
 class TransRec(SequentialRecommender):
-    r"""
-    TransRec is translation-based model for sequential recommendation.
+    r"""TransRec is translation-based model for sequential recommendation.
     It assumes that the `prev. item` + `user`  = `next item`.
     We use the Euclidean Distance to calculate the similarity in this implementation.
     """
@@ -31,7 +28,7 @@ class TransRec(SequentialRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(TransRec, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
@@ -39,16 +36,10 @@ class TransRec(SequentialRecommender):
         # load dataset info
         self.n_users = dataset.user_num
 
-        self.user_embedding = nn.Embedding(
-            self.n_users, self.embedding_size, padding_idx=0
-        )
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.user_embedding = nn.Embedding(self.n_users, self.embedding_size, padding_idx=0)
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.bias = nn.Embedding(self.n_items, 1, padding_idx=0)  # Beta popularity bias
-        self.T = nn.Parameter(
-            torch.zeros(self.embedding_size)
-        )  # average user representation 'global'
+        self.T = nn.Parameter(torch.zeros(self.embedding_size))  # average user representation 'global'
 
         self.bpr_loss = BPRLoss()
         self.emb_loss = EmbLoss()
@@ -124,18 +115,12 @@ class TransRec(SequentialRecommender):
         seq_output = self.forward(user, item_seq, item_seq_len)  # [B H]
 
         test_items_emb = self.item_embedding.weight  # [item_num H]
-        test_items_emb = test_items_emb.repeat(
-            seq_output.size(0), 1, 1
-        )  # [user_num item_num H]
+        test_items_emb = test_items_emb.repeat(seq_output.size(0), 1, 1)  # [user_num item_num H]
 
-        user_hidden = seq_output.unsqueeze(1).expand_as(
-            test_items_emb
-        )  # [user_num item_num H]
+        user_hidden = seq_output.unsqueeze(1).expand_as(test_items_emb)  # [user_num item_num H]
         test_bias = self.bias.weight  # [item_num 1]
         test_bias = test_bias.repeat(user_hidden.size(0), 1, 1)  # [user_num item_num 1]
 
-        scores = test_bias - self._l2_distance(
-            user_hidden, test_items_emb
-        )  # [user_num item_num 1]
+        scores = test_bias - self._l2_distance(user_hidden, test_items_emb)  # [user_num item_num 1]
         scores = scores.squeeze(-1)  # [B n_items]
         return scores

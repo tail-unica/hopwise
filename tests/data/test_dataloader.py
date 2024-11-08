@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2021/1/5
 # @Author : Yushuo Chen
 # @Email  : chenyushuo@ruc.edu.cn
@@ -12,13 +11,13 @@ import logging
 import os
 
 import pytest
-from hopwise.data.dataloader.general_dataloader import (
-    NegSampleEvalDataLoader,
-    FullSortEvalDataLoader,
-)
 
 from hopwise.config import Config
 from hopwise.data import create_dataset, data_preparation
+from hopwise.data.dataloader.general_dataloader import (
+    FullSortEvalDataLoader,
+    NegSampleEvalDataLoader,
+)
 from hopwise.utils import init_seed
 
 current_path = os.path.dirname(os.path.realpath(__file__))
@@ -158,9 +157,7 @@ class TestGeneralDataloader:
                 user_df, history_index, positive_u, positive_i = batch_data
                 history_row, history_col = history_index
                 assert len(user_df) == result[i]["len_user_df"]
-                assert (
-                    user_df["user_id"].numpy() == result[i]["user_df_user_id"]
-                ).all()
+                assert (user_df["user_id"].numpy() == result[i]["user_df_user_id"]).all()
                 assert len(history_row) == len(history_col) == result[i]["history_len"]
                 assert (history_row.numpy() == result[i]["history_row"]).all()
                 assert (history_col.numpy() == result[i]["history_col"]).all()
@@ -260,9 +257,7 @@ class TestGeneralDataloader:
 
         valid_result = [
             {
-                "item_id_check": lambda data: data[0] == 9
-                and (8 < data[1:]).all()
-                and (data[1:] <= 100).all(),
+                "item_id_check": lambda data: data[0] == 9 and (8 < data[1:]).all() and (data[1:] <= 100).all(),
                 "row_idx": [0] * 101,
                 "positive_u": [0],
                 "positive_i": [9],
@@ -286,9 +281,7 @@ class TestGeneralDataloader:
 
         test_result = [
             {
-                "item_id_check": lambda data: data[0] == 10
-                and (9 < data[1:]).all()
-                and (data[1:] <= 100).all(),
+                "item_id_check": lambda data: data[0] == 10 and (9 < data[1:]).all() and (data[1:] <= 100).all(),
                 "row_idx": [0] * 101,
                 "positive_u": [0],
                 "positive_i": [10],

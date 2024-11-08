@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/9/22 10:57
 # @Author : Zihan Lin
 # @Email  : zhlin@ruc.edu.cn
 # @File   : pnn.py
 
-r"""
-PNN
+r"""PNN
 ################################################
 Reference:
     Qu Y et al. "Product-based neural networks for user response prediction." in ICDM 2016
@@ -17,8 +15,8 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import ContextRecommender
 from hopwise.model.layers import MLPLayers
@@ -31,7 +29,7 @@ class PNN(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(PNN, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.mlp_hidden_size = config["mlp_hidden_size"]
@@ -46,15 +44,11 @@ class PNN(ContextRecommender):
         product_out_dim = self.num_feature_field * self.embedding_size
         if self.use_inner:
             product_out_dim += self.num_pair
-            self.inner_product = InnerProductLayer(
-                self.num_feature_field, device=self.device
-            )
+            self.inner_product = InnerProductLayer(self.num_feature_field, device=self.device)
 
         if self.use_outer:
             product_out_dim += self.num_pair
-            self.outer_product = OuterProductLayer(
-                self.num_feature_field, self.embedding_size, device=self.device
-            )
+            self.outer_product = OuterProductLayer(self.num_feature_field, self.embedding_size, device=self.device)
         size_list = [product_out_dim] + self.mlp_hidden_size
         self.mlp_layers = MLPLayers(size_list, self.dropout_prob, bn=False)
         self.predict_layer = nn.Linear(self.mlp_hidden_size[-1], 1)
@@ -87,25 +81,17 @@ class PNN(ContextRecommender):
                 constant_(module.bias.data, 0)
 
     def forward(self, interaction):
-        pnn_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
+        pnn_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
         batch_size = pnn_all_embeddings.shape[0]
         # linear part
-        linear_part = pnn_all_embeddings.view(
-            batch_size, -1
-        )  # [batch_size,num_field*embed_dim]
+        linear_part = pnn_all_embeddings.view(batch_size, -1)  # [batch_size,num_field*embed_dim]
         output = [linear_part]
         # second order part
         if self.use_inner:
-            inner_product = self.inner_product(pnn_all_embeddings).view(
-                batch_size, -1
-            )  # [batch_size,num_pairs]
+            inner_product = self.inner_product(pnn_all_embeddings).view(batch_size, -1)  # [batch_size,num_pairs]
             output.append(inner_product)
         if self.use_outer:
-            outer_product = self.outer_product(pnn_all_embeddings).view(
-                batch_size, -1
-            )  # [batch_size,num_pairs]
+            outer_product = self.outer_product(pnn_all_embeddings).view(batch_size, -1)  # [batch_size,num_pairs]
             output.append(outer_product)
         output = torch.cat(output, dim=1)  # [batch_size,d]
 
@@ -129,18 +115,16 @@ class InnerProductLayer(nn.Module):
     """
 
     def __init__(self, num_feature_field, device):
+        """Args:
+        num_feature_field(int) :number of feature fields.
+        device(torch.device) : device object of the model.
         """
-        Args:
-            num_feature_field(int) :number of feature fields.
-            device(torch.device) : device object of the model.
-        """
-        super(InnerProductLayer, self).__init__()
+        super().__init__()
         self.num_feature_field = num_feature_field
         self.to(device)
 
     def forward(self, feat_emb):
-        """
-        Args:
+        """Args:
             feat_emb(torch.FloatTensor) :3D tensor with shape: [batch_size,num_pairs,embedding_size].
 
         Returns:
@@ -167,28 +151,24 @@ class OuterProductLayer(nn.Module):
     """
 
     def __init__(self, num_feature_field, embedding_size, device):
+        """Args:
+        num_feature_field(int) :number of feature fields.
+        embedding_size(int) :number of embedding size.
+        device(torch.device) : device object of the model.
         """
-        Args:
-            num_feature_field(int) :number of feature fields.
-            embedding_size(int) :number of embedding size.
-            device(torch.device) : device object of the model.
-        """
-        super(OuterProductLayer, self).__init__()
+        super().__init__()
 
         self.num_feature_field = num_feature_field
         num_pairs = int(num_feature_field * (num_feature_field - 1) / 2)
         embed_size = embedding_size
 
-        self.kernel = nn.Parameter(
-            torch.rand(embed_size, num_pairs, embed_size), requires_grad=True
-        )
+        self.kernel = nn.Parameter(torch.rand(embed_size, num_pairs, embed_size), requires_grad=True)
         nn.init.xavier_uniform_(self.kernel)
 
         self.to(device)
 
     def forward(self, feat_emb):
-        """
-        Args:
+        """Args:
             feat_emb(torch.FloatTensor) :3D tensor with shape: [batch_size,num_pairs,embedding_size].
 
         Returns:
@@ -207,9 +187,7 @@ class OuterProductLayer(nn.Module):
 
         p.unsqueeze_(dim=1)  # [batch_size, 1, num_pairs, emb_dim]
 
-        p = torch.mul(
-            p, self.kernel.unsqueeze(0)
-        )  # [batch_size,emb_dim,num_pairs,emb_dim]
+        p = torch.mul(p, self.kernel.unsqueeze(0))  # [batch_size,emb_dim,num_pairs,emb_dim]
         p = torch.sum(p, dim=-1)  # [batch_size,emb_dim,num_pairs]
         p = torch.transpose(p, 2, 1)  # [batch_size,num_pairs,emb_dim]
 

@@ -7,12 +7,12 @@
 # @Author : Yupeng Hou, Xingyu Pan, Yushuo Chen, Lanling Xu
 # @Email  : houyupeng@ruc.edu.cn, panxy@ruc.edu.cn, chenyushuo@ruc.edu.cn, xulanling_sherry@163.com
 
-"""
-hopwise.data.kg_dataset
+"""hopwise.data.kg_dataset
 ##########################
 """
 
 import os
+import sys
 from collections import Counter
 
 import numpy as np
@@ -77,16 +77,10 @@ class KnowledgeBasedDataset(Dataset):
         self.kg_reverse_r = self.config["kg_reverse_r"]
         self.entity_kg_num_interval = self.config["entity_kg_num_interval"]
         self.relation_kg_num_interval = self.config["relation_kg_num_interval"]
-        self._check_field(
-            "head_entity_field", "tail_entity_field", "relation_field", "entity_field"
-        )
-        self.set_field_property(
-            self.entity_field, FeatureType.TOKEN, FeatureSource.KG, 1
-        )
+        self._check_field("head_entity_field", "tail_entity_field", "relation_field", "entity_field")
+        self.set_field_property(self.entity_field, FeatureType.TOKEN, FeatureSource.KG, 1)
 
-        self.logger.debug(
-            set_color("relation_field", "blue") + f": {self.relation_field}"
-        )
+        self.logger.debug(set_color("relation_field", "blue") + f": {self.relation_field}")
         self.logger.debug(set_color("entity_field", "blue") + f": {self.entity_field}")
 
     def _data_filtering(self):
@@ -105,12 +99,8 @@ class KnowledgeBasedDataset(Dataset):
             Lower bound of the interval is also called k-core filtering, which means this method
             will filter loops until all the entities and relations has at least k triples.
         """
-        entity_kg_num_interval = self._parse_intervals_str(
-            self.config["entity_kg_num_interval"]
-        )
-        relation_kg_num_interval = self._parse_intervals_str(
-            self.config["relation_kg_num_interval"]
-        )
+        entity_kg_num_interval = self._parse_intervals_str(self.config["entity_kg_num_interval"])
+        relation_kg_num_interval = self._parse_intervals_str(self.config["relation_kg_num_interval"])
 
         if entity_kg_num_interval is None and relation_kg_num_interval is None:
             return
@@ -120,11 +110,7 @@ class KnowledgeBasedDataset(Dataset):
             head_entity_kg_num = Counter(self.kg_feat[self.head_entity_field].values)
             tail_entity_kg_num = Counter(self.kg_feat[self.tail_entity_field].values)
             entity_kg_num = head_entity_kg_num + tail_entity_kg_num
-        relation_kg_num = (
-            Counter(self.kg_feat[self.relation_field].values)
-            if relation_kg_num_interval
-            else Counter()
-        )
+        relation_kg_num = Counter(self.kg_feat[self.relation_field].values) if relation_kg_num_interval else Counter()
 
         while True:
             ban_head_entities = self._get_illegal_ids_by_inter_num(
@@ -203,21 +189,19 @@ class KnowledgeBasedDataset(Dataset):
             self.logger.info(
                 f"\nLinked KG for [{self.dataset_name}] requires additional conversion "
                 f"to atomic files (.kg and .link).\n"
-                f"Please refer to https://github.com/RUCAIBox/RecSysDatasets/tree/master/conversion_tools#knowledge-aware-datasets "
+                f"Please refer to https://github.com/RUCAIBox/RecSysDatasets/tree/master/conversion_tools#knowledge-aware-datasets "  # noqa: E501
                 f"for detailed instructions.\n"
                 f"You can run RecBole after the conversion, see you soon."
             )
-            exit(0)
+            sys.exit(0)
         else:
             self.logger.info("Stop download.")
-            exit(-1)
+            sys.exit(-1)
 
     def _load_data(self, token, dataset_path):
         super()._load_data(token, dataset_path)
         self.kg_feat = self._load_kg(self.dataset_name, self.dataset_path)
-        self.item2entity, self.entity2item = self._load_link(
-            self.dataset_name, self.dataset_path
-        )
+        self.item2entity, self.entity2item = self._load_link(self.dataset_name, self.dataset_path)
 
     def __str__(self):
         info = [
@@ -246,12 +230,8 @@ class KnowledgeBasedDataset(Dataset):
 
     def _check_kg(self, kg):
         kg_warn_message = "kg data requires field [{}]"
-        assert self.head_entity_field in kg, kg_warn_message.format(
-            self.head_entity_field
-        )
-        assert self.tail_entity_field in kg, kg_warn_message.format(
-            self.tail_entity_field
-        )
+        assert self.head_entity_field in kg, kg_warn_message.format(self.head_entity_field)
+        assert self.tail_entity_field in kg, kg_warn_message.format(self.tail_entity_field)
         assert self.relation_field in kg, kg_warn_message.format(self.relation_field)
 
     def _load_link(self, token, dataset_path):
@@ -263,9 +243,7 @@ class KnowledgeBasedDataset(Dataset):
         self._check_link(df)
 
         item2entity, entity2item = {}, {}
-        for item_id, entity_id in zip(
-            df[self.iid_field].values, df[self.entity_field].values
-        ):
+        for item_id, entity_id in zip(df[self.iid_field].values, df[self.entity_field].values):
             item2entity[item_id] = entity_id
             entity2item[entity_id] = item_id
         return item2entity, entity2item
@@ -282,9 +260,7 @@ class KnowledgeBasedDataset(Dataset):
 
         super()._init_alias()
 
-        self._rest_fields = np.setdiff1d(
-            self._rest_fields, [self.entity_field], assume_unique=True
-        )
+        self._rest_fields = np.setdiff1d(self._rest_fields, [self.entity_field], assume_unique=True)
 
     def _get_rec_item_token(self):
         """Get set of entity tokens from fields in ``rec`` level."""
@@ -332,34 +308,21 @@ class KnowledgeBasedDataset(Dataset):
         new_item_id2token = item_token[item_order]
         new_item_token2id = {t: i for i, t in enumerate(new_item_id2token)}
         for field in self.alias["item_id"]:
-            self._reset_ent_remapID(
-                field, item_id_map, new_item_id2token, new_item_token2id
-            )
+            self._reset_ent_remapID(field, item_id_map, new_item_id2token, new_item_token2id)
 
         # reset entity id
-        entity_priority = np.array(
-            [
-                token != "[PAD]" and token not in self.entity2item
-                for token in entity_token
-            ]
-        )
+        entity_priority = np.array([token != "[PAD]" and token not in self.entity2item for token in entity_token])
         entity_order = np.argsort(entity_priority, kind="stable")
         entity_id_map = np.zeros_like(entity_order)
         for i in entity_order[1 : link_num + 1]:
             entity_id_map[i] = new_item_token2id[self.entity2item[entity_token[i]]]
-        entity_id_map[entity_order[link_num + 1 :]] = np.arange(
-            item_num, item_num + entity_num - link_num - 1
-        )
-        new_entity_id2token = np.concatenate(
-            [new_item_id2token, entity_token[entity_order[link_num + 1 :]]]
-        )
+        entity_id_map[entity_order[link_num + 1 :]] = np.arange(item_num, item_num + entity_num - link_num - 1)
+        new_entity_id2token = np.concatenate([new_item_id2token, entity_token[entity_order[link_num + 1 :]]])
         for i in range(item_num - link_num, item_num):
             new_entity_id2token[i] = self.item2entity[new_entity_id2token[i]]
         new_entity_token2id = {t: i for i, t in enumerate(new_entity_id2token)}
         for field in self.alias["entity_id"]:
-            self._reset_ent_remapID(
-                field, entity_id_map, new_entity_id2token, new_entity_token2id
-            )
+            self._reset_ent_remapID(field, entity_id_map, new_entity_id2token, new_entity_token2id)
         self.field2id_token[self.entity_field] = new_entity_id2token
         self.field2token_id[self.entity_field] = new_entity_token2id
 
@@ -379,9 +342,7 @@ class KnowledgeBasedDataset(Dataset):
             for i in range(1, original_rel_num + 1):
                 original_token = self.field2id_token[self.relation_field][i]
                 reverse_token = original_token + "_r"
-                self.field2token_id[self.relation_field][reverse_token] = (
-                    i + original_rel_num
-                )
+                self.field2token_id[self.relation_field][reverse_token] = i + original_rel_num
                 self.field2id_token[self.relation_field] = np.append(
                     self.field2id_token[self.relation_field], reverse_token
                 )
@@ -398,9 +359,7 @@ class KnowledgeBasedDataset(Dataset):
         # Add UI-relation pairs in the relation field
         kg_rel_num = len(self.field2id_token[self.relation_field])
         self.field2token_id[self.relation_field]["[UI-Relation]"] = kg_rel_num
-        self.field2id_token[self.relation_field] = np.append(
-            self.field2id_token[self.relation_field], "[UI-Relation]"
-        )
+        self.field2id_token[self.relation_field] = np.append(self.field2id_token[self.relation_field], "[UI-Relation]")
 
     def _remap_ID_all(self):
         super()._remap_ID_all()
@@ -427,33 +386,29 @@ class KnowledgeBasedDataset(Dataset):
 
     @property
     def head_entities(self):
-        """
-        Returns:
-            numpy.ndarray: List of head entities of kg triplets.
+        """Returns:
+        numpy.ndarray: List of head entities of kg triplets.
         """
         return self.kg_feat[self.head_entity_field].numpy()
 
     @property
     def tail_entities(self):
-        """
-        Returns:
-            numpy.ndarray: List of tail entities of kg triplets.
+        """Returns:
+        numpy.ndarray: List of tail entities of kg triplets.
         """
         return self.kg_feat[self.tail_entity_field].numpy()
 
     @property
     def relations(self):
-        """
-        Returns:
-            numpy.ndarray: List of relations of kg triplets.
+        """Returns:
+        numpy.ndarray: List of relations of kg triplets.
         """
         return self.kg_feat[self.relation_field].numpy()
 
     @property
     def entities(self):
-        """
-        Returns:
-            numpy.ndarray: List of entity id, including virtual entities.
+        """Returns:
+        numpy.ndarray: List of entity id, including virtual entities.
         """
         return np.arange(self.entity_num)
 
@@ -524,9 +479,7 @@ class KnowledgeBasedDataset(Dataset):
         elif form == "csr":
             return mat.tocsr()
         else:
-            raise NotImplementedError(
-                f"Sparse matrix format [{form}] has not been implemented."
-            )
+            raise NotImplementedError(f"Sparse matrix format [{form}] has not been implemented.")
 
     def _create_ckg_graph(self, form="dgl", show_relation=False):
         user_num = self.user_num
@@ -546,9 +499,7 @@ class KnowledgeBasedDataset(Dataset):
         if show_relation:
             ui_rel_num = user.shape[0]
             ui_rel_id = self.relation_num - 1
-            assert (
-                self.field2id_token[self.relation_field][ui_rel_id] == "[UI-Relation]"
-            )
+            assert self.field2id_token[self.relation_field][ui_rel_id] == "[UI-Relation]"
             kg_rel = kg_tensor[self.relation_field]
             ui_rel = torch.full((2 * ui_rel_num,), ui_rel_id, dtype=kg_rel.dtype)
             edge = torch.cat([ui_rel, kg_rel])
@@ -567,9 +518,7 @@ class KnowledgeBasedDataset(Dataset):
             graph = Data(edge_index=torch.stack([src, tgt]), edge_attr=edge_attr)
             return graph
         else:
-            raise NotImplementedError(
-                f"Graph format [{form}] has not been implemented."
-            )
+            raise NotImplementedError(f"Graph format [{form}] has not been implemented.")
 
     def ckg_graph(self, form="coo", value_field=None):
         """Get graph or sparse matrix that describe relations of CKG,
@@ -600,9 +549,7 @@ class KnowledgeBasedDataset(Dataset):
             https://github.com/rusty1s/pytorch_geometric
         """
         if value_field is not None and value_field != self.relation_field:
-            raise ValueError(
-                f"Value_field [{value_field}] can only be [{self.relation_field}] in ckg_graph."
-            )
+            raise ValueError(f"Value_field [{value_field}] can only be [{self.relation_field}] in ckg_graph.")
         show_relation = value_field is not None
 
         if form in ["coo", "csr"]:

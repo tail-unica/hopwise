@@ -7,7 +7,7 @@ state: INFO                     # (str) Logging level.
 reproducibility: True           # (bool) Whether or not to make results reproducible.
 data_path: 'dataset/'           # (str) The path of input dataset.
 checkpoint_dir: 'saved'         # (str) The path to save checkpoint file.
-show_progress: True             # (bool) Whether or not to show the progress bar of every epoch. 
+show_progress: True             # (bool) Whether or not to show the progress bar of every epoch.
 save_dataset: False             # (bool) Whether or not to save filtered dataset.
 dataset_save_path: ~            # (str) The path of saved dataset.
 save_dataloaders: False         # (bool) Whether or not save split dataloaders.
@@ -29,7 +29,7 @@ train_neg_sample_args:          # (dict) Negative sampling configuration for mod
   candidate_num: 0              # (int) The number of candidate negative items when dynamic negative sampling.
 eval_step: 1                    # (int) The number of training epochs before an evaluation on the valid dataset.
 stopping_step: 10               # (int) The threshold for validation-based early stopping.
-clip_grad_norm: ~               # (dict) The args of clip_grad_norm_ which will clip gradient norm of model. 
+clip_grad_norm: ~               # (dict) The args of clip_grad_norm_ which will clip gradient norm of model.
 weight_decay: 0.0               # (float) The weight decay value (L2 penalty) for optimizers.
 loss_decimal_place: 4           # (int) The decimal place of training loss.
 require_pow: False              # (bool) Whether or not to perform power operation in EmbLoss.
@@ -43,10 +43,10 @@ eval_args:                      # (dict) 4 keys: group_by, order, split, and mod
   group_by: user                # (str) The grouping strategy ranging in ['user', 'none'].
   order: RO                     # (str) The ordering strategy ranging in ['RO', 'TO'].
   mode: full                    # (str) The evaluation mode ranging in ['full','unixxx','popxxx','labeled'].
-repeatable: False               # (bool) Whether to evaluate results with a repeatable recommendation scene. 
+repeatable: False               # (bool) Whether to evaluate results with a repeatable recommendation scene.
 metrics: ["Recall","MRR","NDCG","Hit","Precision"]  # (list or str) Evaluation metrics.
 topk: [10]                      # (list or int or None) The value of k for topk evaluation metrics.
-valid_metric: MRR@10            # (str) The evaluation metric for early stopping. 
+valid_metric: MRR@10            # (str) The evaluation metric for early stopping.
 valid_metric_bigger: True       # (bool) Whether to take a bigger valid metric value as a better result.
 eval_batch_size: 4096           # (int) The evaluation batch size.
 metric_decimal_place: 4         # (int) The decimal place of metric scores.

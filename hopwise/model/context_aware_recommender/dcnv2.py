@@ -1,10 +1,8 @@
-# _*_ coding: utf-8 _*_
 # @Time   : 2022/8/29
 # @Author : Yifan Li
 # @Email  : 295435096@qq.com
 
-r"""
-DCN V2
+r"""DCN V2
 ################################################
 Reference:
     Ruoxi Wang at al. "Dcn v2: Improved deep & cross network and practical lessons for web-scale
@@ -16,7 +14,7 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from hopwise.model.abstract_recommender import ContextRecommender
 from hopwise.model.init import xavier_normal_initialization
@@ -31,7 +29,7 @@ class DCNV2(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(DCNV2, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load and compute parameters info
         self.mixed = config["mixed"]
@@ -52,16 +50,12 @@ class DCNV2(ContextRecommender):
         if self.mixed:
             # U: (in_feature_num, low_rank)
             self.cross_layer_u = nn.ParameterList(
-                nn.Parameter(
-                    torch.randn(self.expert_num, self.in_feature_num, self.low_rank)
-                )
+                nn.Parameter(torch.randn(self.expert_num, self.in_feature_num, self.low_rank))
                 for _ in range(self.cross_layer_num)
             )
             # V: (in_feature_num, low_rank)
             self.cross_layer_v = nn.ParameterList(
-                nn.Parameter(
-                    torch.randn(self.expert_num, self.in_feature_num, self.low_rank)
-                )
+                nn.Parameter(torch.randn(self.expert_num, self.in_feature_num, self.low_rank))
                 for _ in range(self.cross_layer_num)
             )
             # C: (low_rank, low_rank)
@@ -69,9 +63,7 @@ class DCNV2(ContextRecommender):
                 nn.Parameter(torch.randn(self.expert_num, self.low_rank, self.low_rank))
                 for _ in range(self.cross_layer_num)
             )
-            self.gating = nn.ModuleList(
-                nn.Linear(self.in_feature_num, 1) for _ in range(self.expert_num)
-            )
+            self.gating = nn.ModuleList(nn.Linear(self.in_feature_num, 1) for _ in range(self.expert_num))
         else:
             # W: (in_feature_num, in_feature_num)
             self.cross_layer_w = nn.ParameterList(
@@ -80,17 +72,14 @@ class DCNV2(ContextRecommender):
             )
         # bias: (in_feature_num, 1)
         self.bias = nn.ParameterList(
-            nn.Parameter(torch.zeros(self.in_feature_num, 1))
-            for _ in range(self.cross_layer_num)
+            nn.Parameter(torch.zeros(self.in_feature_num, 1)) for _ in range(self.cross_layer_num)
         )
 
         # define deep and predict layers
         mlp_size_list = [self.in_feature_num] + self.mlp_hidden_size
         self.mlp_layers = MLPLayers(mlp_size_list, dropout=self.dropout_prob, bn=True)
         if self.structure == "parallel":
-            self.predict_layer = nn.Linear(
-                self.in_feature_num + self.mlp_hidden_size[-1], 1
-            )
+            self.predict_layer = nn.Linear(self.in_feature_num + self.mlp_hidden_size[-1], 1)
         elif self.structure == "stacked":
             self.predict_layer = nn.Linear(self.mlp_hidden_size[-1], 1)
 
@@ -155,80 +144,52 @@ class DCNV2(ContextRecommender):
             gating_output_list = []
             for expert in range(self.expert_num):
                 # compute gating output
-                gating_output_list.append(
-                    self.gating[expert](x_l.squeeze(dim=2))
-                )  # (batch_size, 1)
+                gating_output_list.append(self.gating[expert](x_l.squeeze(dim=2)))  # (batch_size, 1)
 
                 # project to low-rank subspace
-                xl_v = torch.matmul(
-                    self.cross_layer_v[i][expert].T, x_l
-                )  # (batch_size, low_rank, 1)
+                xl_v = torch.matmul(self.cross_layer_v[i][expert].T, x_l)  # (batch_size, low_rank, 1)
 
                 # nonlinear activation in subspace
                 xl_c = self.tanh(xl_v)
-                xl_c = torch.matmul(
-                    self.cross_layer_c[i][expert], xl_c
-                )  # (batch_size, low_rank, 1)
+                xl_c = torch.matmul(self.cross_layer_c[i][expert], xl_c)  # (batch_size, low_rank, 1)
                 xl_c = self.tanh(xl_c)
 
                 # project back feature space
-                xl_u = torch.matmul(
-                    self.cross_layer_u[i][expert], xl_c
-                )  # (batch_size, in_feature_num, 1)
+                xl_u = torch.matmul(self.cross_layer_u[i][expert], xl_c)  # (batch_size, in_feature_num, 1)
 
                 # dot with x_0
                 xl_dot = xl_u + self.bias[i]
                 xl_dot = torch.mul(x_0, xl_dot)
 
-                expert_output_list.append(
-                    xl_dot.squeeze(dim=2)
-                )  # (batch_size, in_feature_num)
+                expert_output_list.append(xl_dot.squeeze(dim=2))  # (batch_size, in_feature_num)
 
-            expert_output = torch.stack(
-                expert_output_list, dim=2
-            )  # (batch_size, in_feature_num, expert_num)
-            gating_output = torch.stack(
-                gating_output_list, dim=1
-            )  # (batch_size, expert_num, 1)
-            moe_output = torch.matmul(
-                expert_output, self.softmax(gating_output)
-            )  # (batch_size, in_feature_num, 1)
+            expert_output = torch.stack(expert_output_list, dim=2)  # (batch_size, in_feature_num, expert_num)
+            gating_output = torch.stack(gating_output_list, dim=1)  # (batch_size, expert_num, 1)
+            moe_output = torch.matmul(expert_output, self.softmax(gating_output))  # (batch_size, in_feature_num, 1)
             x_l = x_l + moe_output
 
         x_l = x_l.squeeze(dim=2)  # (batch_size, in_feature_num)
         return x_l
 
     def forward(self, interaction):
-        dcn_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # (batch_size, num_field, embed_dim)
+        dcn_all_embeddings = self.concat_embed_input_fields(interaction)  # (batch_size, num_field, embed_dim)
         batch_size = dcn_all_embeddings.shape[0]
-        dcn_all_embeddings = dcn_all_embeddings.view(
-            batch_size, -1
-        )  # (batch_size, in_feature_num)
+        dcn_all_embeddings = dcn_all_embeddings.view(batch_size, -1)  # (batch_size, in_feature_num)
 
         if self.structure == "parallel":
-            deep_output = self.mlp_layers(
-                dcn_all_embeddings
-            )  # (batch_size, mlp_hidden_size)
+            deep_output = self.mlp_layers(dcn_all_embeddings)  # (batch_size, mlp_hidden_size)
             if self.mixed:
-                cross_output = self.cross_network_mix(
-                    dcn_all_embeddings
-                )  # (batch_size, in_feature_num)
+                cross_output = self.cross_network_mix(dcn_all_embeddings)  # (batch_size, in_feature_num)
             else:
                 cross_output = self.cross_network(dcn_all_embeddings)
-            concat_output = torch.cat(
-                [cross_output, deep_output], dim=-1
-            )  # (batch_size, in_num + mlp_size)
+            concat_output = torch.cat([cross_output, deep_output], dim=-1)  # (batch_size, in_num + mlp_size)
             output = self.sigmoid(self.predict_layer(concat_output))
 
             return output.squeeze(dim=1)
 
         elif self.structure == "stacked":
             if self.mixed:
-                cross_output = self.cross_network_mix(
-                    dcn_all_embeddings
-                )  # (batch_size, in_feature_num)
+                cross_output = self.cross_network_mix(dcn_all_embeddings)  # (batch_size, in_feature_num)
             else:
                 cross_output = self.cross_network(dcn_all_embeddings)
             deep_output = self.mlp_layers(cross_output)  # (batch_size, mlp_hidden_size)

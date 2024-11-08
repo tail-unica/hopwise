@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2023/4/21 12:00
 # @Author : Zhen Tian
 # @Email  : chenyuwuxinn@gmail.com
 # @File   : eulernet.py
 
-r"""
-EulerNet
+r"""EulerNet
 ################################################
 Reference:
     Zhen Tian et al. "EulerNet: Adaptive Feature Interaction Learning via Euler's Formula for CTR Prediction." in SIGIR 2023.
@@ -13,11 +11,12 @@ Reference:
 Reference code:
     https://github.com/chenyuwuxin/EulerNet
 
-"""
+"""  # noqa: E501
 
 import torch
-import torch.nn as nn
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
+
 from hopwise.model.abstract_recommender import ContextRecommender
 from hopwise.model.loss import RegLoss
 
@@ -30,7 +29,7 @@ class EulerNet(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(EulerNet, self).__init__(config, dataset)
+        super().__init__(config, dataset)
         field_num = self.field_num = self.num_feature_field
         shape_list = [config.embedding_size * field_num] + [
             num_neurons * config.embedding_size for num_neurons in config.order_list
@@ -58,11 +57,10 @@ class EulerNet(ContextRecommender):
                 constant_(module.bias.data, 0)
 
     def forward(self, interaction):
-        fm_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
-        r, p = self.mu * torch.cos(fm_all_embeddings), self.mu * torch.sin(
-            fm_all_embeddings
+        fm_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
+        r, p = (
+            self.mu * torch.cos(fm_all_embeddings),
+            self.mu * torch.sin(fm_all_embeddings),
         )
         o_r, o_p = self.Euler_interaction_layers((r, p))
         o_r, o_p = o_r.reshape(o_r.shape[0], -1), o_p.reshape(o_p.shape[0], -1)
@@ -105,19 +103,14 @@ class EulerInteractionLayer(nn.Module):
         self.apply_norm = config.apply_norm
 
         init_orders = torch.softmax(
-            torch.randn(inshape // self.feature_dim, outshape // self.feature_dim)
-            / 0.01,
+            torch.randn(inshape // self.feature_dim, outshape // self.feature_dim) / 0.01,
             dim=0,
         )
         self.inter_orders = nn.Parameter(init_orders)
         self.im = nn.Linear(inshape, outshape)
 
-        self.bias_lam = nn.Parameter(
-            torch.randn(1, self.feature_dim, outshape // self.feature_dim) * 0.01
-        )
-        self.bias_theta = nn.Parameter(
-            torch.randn(1, self.feature_dim, outshape // self.feature_dim) * 0.01
-        )
+        self.bias_lam = nn.Parameter(torch.randn(1, self.feature_dim, outshape // self.feature_dim) * 0.01)
+        self.bias_theta = nn.Parameter(torch.randn(1, self.feature_dim, outshape // self.feature_dim) * 0.01)
         nn.init.normal_(self.im.weight, mean=0, std=0.1)
 
         self.drop_ex = nn.Dropout(p=config.drop_ex)
@@ -130,8 +123,9 @@ class EulerInteractionLayer(nn.Module):
 
         lam = r**2 + p**2 + 1e-8
         theta = torch.atan2(p, r)
-        lam, theta = lam.reshape(lam.shape[0], -1, self.feature_dim), theta.reshape(
-            theta.shape[0], -1, self.feature_dim
+        lam, theta = (
+            lam.reshape(lam.shape[0], -1, self.feature_dim),
+            theta.reshape(theta.shape[0], -1, self.feature_dim),
         )
         r, p = self.drop_im(r), self.drop_im(p)
 
@@ -148,13 +142,15 @@ class EulerInteractionLayer(nn.Module):
         r, p = r.reshape(r.shape[0], -1), p.reshape(p.shape[0], -1)
         r, p = self.im(r), self.im(p)
         r, p = torch.relu(r), torch.relu(p)
-        r, p = r.reshape(r.shape[0], -1, self.feature_dim), p.reshape(
-            p.shape[0], -1, self.feature_dim
+        r, p = (
+            r.reshape(r.shape[0], -1, self.feature_dim),
+            p.reshape(p.shape[0], -1, self.feature_dim),
         )
 
         o_r, o_p = r + lam * torch.cos(theta), p + lam * torch.sin(theta)
-        o_r, o_p = o_r.reshape(o_r.shape[0], -1, self.feature_dim), o_p.reshape(
-            o_p.shape[0], -1, self.feature_dim
+        o_r, o_p = (
+            o_r.reshape(o_r.shape[0], -1, self.feature_dim),
+            o_p.reshape(o_p.shape[0], -1, self.feature_dim),
         )
         if self.apply_norm:
             o_r, o_p = self.norm_r(o_r), self.norm_p(o_p)

@@ -1,4 +1,3 @@
-# -*- encoding: utf-8 -*-
 # @Time    :   2020/12/21
 # @Author  :   Zhichao Feng
 # @email   :   fzcbupt@gmail.com
@@ -14,8 +13,9 @@ import unittest
 
 sys.path.append(os.getcwd())
 import numpy as np
+
 from hopwise.config import Config
-from hopwise.evaluator import metrics_dict, Collector
+from hopwise.evaluator import metrics_dict
 
 parameters_dict = {
     "model": "BPR",
@@ -26,7 +26,7 @@ parameters_dict = {
 config = Config("BPR", "ml-1m", config_dict=parameters_dict)
 
 
-class MetricsTestCases(object):
+class MetricsTestCases:
     user_len_list0 = np.array([2, 3, 5])
     pos_len_list0 = np.array([1, 2, 3])
     pos_rank_sum0 = np.array([1, 4, 9])

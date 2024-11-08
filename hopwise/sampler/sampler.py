@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Author : Yupeng Hou
 # @Email  : houyupeng@ruc.edu.cn
 # @File   : sampler.py
@@ -8,23 +7,21 @@
 # @Author : Xingyu Pan, Kaiyuan Li, Yupeng Hou, Yushuo Chen, Zhichao Feng
 # @email  : xy_pan@foxmail.com, tsotfsk@outlook.com, houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, fzcbupt@gmail.com
 
-"""
-hopwise.sampler
+"""hopwise.sampler
 ########################
 """
 
 import copy
-
-import numpy as np
-from numpy.random import sample
-import torch
 from collections import Counter
 
+import numpy as np
+import torch
 
-class AbstractSampler(object):
-    """:class:`AbstractSampler` is a abstract class, all sampler should inherit from it. This sampler supports returning
-    a certain number of random value_ids according to the input key_id, and it also supports to prohibit
-    certain key-value pairs by setting used_ids.
+
+class AbstractSampler:
+    """:class:`AbstractSampler` is a abstract class, all sampler should inherit from it. This sampler supports
+    returning a certain number of random value_ids according to the input key_id, and it also supports
+    to prohibit certain key-value pairs by setting used_ids.
 
     Args:
         distribution (str): The string of distribution, which is used for subclass.
@@ -87,14 +84,14 @@ class AbstractSampler(object):
             elif self.prob[i] < 1:
                 small_q.append(i)
         while len(large_q) != 0 and len(small_q) != 0:
-            l = large_q.pop(0)
-            s = small_q.pop(0)
-            self.alias[s] = l
-            self.prob[l] = self.prob[l] - (1 - self.prob[s])
-            if self.prob[l] < 1:
-                small_q.append(l)
-            elif self.prob[l] > 1:
-                large_q.append(l)
+            lq_el = large_q.pop(0)
+            sq_el = small_q.pop(0)
+            self.alias[sq_el] = lq_el
+            self.prob[lq_el] = self.prob[lq_el] - (1 - self.prob[sq_el])
+            if self.prob[lq_el] < 1:
+                small_q.append(lq_el)
+            elif self.prob[lq_el] > 1:
+                large_q.append(lq_el)
 
     def _pop_sampling(self, sample_num):
         """Sample [sample_num] items in the popularity-biased distribution.
@@ -105,7 +102,6 @@ class AbstractSampler(object):
         Returns:
             sample_list (np.array): a list of samples.
         """
-
         keys = list(self.prob.keys())
         random_index_list = np.random.randint(0, len(keys), sample_num)
         random_prob_list = np.random.random(sample_num)
@@ -133,14 +129,11 @@ class AbstractSampler(object):
         elif self.distribution == "popularity":
             return self._pop_sampling(sample_num)
         else:
-            raise NotImplementedError(
-                f"The sampling distribution [{self.distribution}] is not implemented."
-            )
+            raise NotImplementedError(f"The sampling distribution [{self.distribution}] is not implemented.")
 
     def get_used_ids(self):
-        """
-        Returns:
-            numpy.ndarray: Used ids. Index is key_id, and element is a set of value_ids.
+        """Returns:
+        numpy.ndarray: Used ids. Index is key_id, and element is a set of value_ids.
         """
         raise NotImplementedError("Method [get_used_ids] should be implemented")
 
@@ -211,9 +204,7 @@ class Sampler(AbstractSampler):
         if not isinstance(datasets, list):
             datasets = [datasets]
         if len(phases) != len(datasets):
-            raise ValueError(
-                f"Phases {phases} and datasets {datasets} should have the same length."
-            )
+            raise ValueError(f"Phases {phases} and datasets {datasets} should have the same length.")
 
         self.phases = phases
         self.datasets = datasets
@@ -236,10 +227,9 @@ class Sampler(AbstractSampler):
         return np.random.randint(1, self.item_num, sample_num)
 
     def get_used_ids(self):
-        """
-        Returns:
-            dict: Used item_ids is the same as positive item_ids.
-            Key is phase, and value is a numpy.ndarray which index is user_id, and element is a set of item_ids.
+        """Returns:
+        dict: Used item_ids is the same as positive item_ids.
+        Key is phase, and value is a numpy.ndarray which index is user_id, and element is a set of item_ids.
         """
         used_item_id = dict()
         last = [set() for _ in range(self.user_num)]
@@ -329,10 +319,9 @@ class KGSampler(AbstractSampler):
         return list(self.hid_list) + list(self.tid_list)
 
     def get_used_ids(self):
-        """
-        Returns:
-            numpy.ndarray: Used entity_ids is the same as tail_entity_ids in knowledge graph.
-            Index is head_entity_id, and element is a set of tail_entity_ids.
+        """Returns:
+        numpy.ndarray: Used entity_ids is the same as tail_entity_ids in knowledge graph.
+        Index is head_entity_id, and element is a set of tail_entity_ids.
         """
         used_tail_entity_id = np.array([set() for _ in range(self.entity_num)])
         for hid, tid in zip(self.hid_list, self.tid_list):
@@ -400,10 +389,9 @@ class RepeatableSampler(AbstractSampler):
         return list(self.dataset.inter_feat[self.iid_field].numpy())
 
     def get_used_ids(self):
-        """
-        Returns:
-            numpy.ndarray: Used item_ids is the same as positive item_ids.
-            Index is user_id, and element is a set of item_ids.
+        """Returns:
+        numpy.ndarray: Used item_ids is the same as positive item_ids.
+        Index is user_id, and element is a set of item_ids.
         """
         return np.array([set() for _ in range(self.user_num)])
 

@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/10/08
 # @Author : Xinyan Fan
 # @Email  : xinyan.fan@ruc.edu.cn
 
-r"""
-MKR
+r"""MKR
 #####################################################
 Reference:
     Hongwei Wang et al. "Multi-Task Feature Learning for Knowledge Graph Enhanced Recommendation." in WWW 2019.
@@ -14,7 +12,7 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
 from hopwise.model.init import xavier_normal_initialization
@@ -32,7 +30,7 @@ class MKR(KnowledgeRecommender):
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
-        super(MKR, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.LABEL = config["LABEL_FIELD"]
@@ -47,12 +45,8 @@ class MKR(KnowledgeRecommender):
         # init embeddings
         self.user_embeddings_lookup = nn.Embedding(self.n_users, self.embedding_size)
         self.item_embeddings_lookup = nn.Embedding(self.n_entities, self.embedding_size)
-        self.entity_embeddings_lookup = nn.Embedding(
-            self.n_entities, self.embedding_size
-        )
-        self.relation_embeddings_lookup = nn.Embedding(
-            self.n_relations, self.embedding_size
-        )
+        self.entity_embeddings_lookup = nn.Embedding(self.n_entities, self.embedding_size)
+        self.relation_embeddings_lookup = nn.Embedding(self.n_relations, self.embedding_size)
 
         # define layers
         lower_mlp_layers = []
@@ -66,17 +60,11 @@ class MKR(KnowledgeRecommender):
         self.tail_mlp = MLPLayers(lower_mlp_layers, self.dropout_prob, "sigmoid")
         self.cc_unit = nn.Sequential()
         for i_cnt in range(self.L):
-            self.cc_unit.add_module(
-                "cc_unit{}".format(i_cnt), CrossCompressUnit(self.embedding_size)
-            )
+            self.cc_unit.add_module(f"cc_unit{i_cnt}", CrossCompressUnit(self.embedding_size))
         self.kge_mlp = MLPLayers(high_mlp_layers, self.dropout_prob, "sigmoid")
-        self.kge_pred_mlp = MLPLayers(
-            [self.embedding_size * 2, self.embedding_size], self.dropout_prob, "sigmoid"
-        )
+        self.kge_pred_mlp = MLPLayers([self.embedding_size * 2, self.embedding_size], self.dropout_prob, "sigmoid")
         if not self.use_inner_product:
-            self.rs_pred_mlp = MLPLayers(
-                [self.embedding_size * 2, 1], self.dropout_prob, "sigmoid"
-            )
+            self.rs_pred_mlp = MLPLayers([self.embedding_size * 2, 1], self.dropout_prob, "sigmoid")
             self.rs_mlp = MLPLayers(high_mlp_layers, self.dropout_prob, "sigmoid")
 
         # loss
@@ -105,18 +93,14 @@ class MKR(KnowledgeRecommender):
             self.user_embeddings = self.user_mlp(self.user_embeddings)
 
             if self.use_inner_product:  # get scores by inner product.
-                self.scores = torch.sum(
-                    self.user_embeddings * self.item_embeddings, 1
-                )  # [batch_size]
+                self.scores = torch.sum(self.user_embeddings * self.item_embeddings, 1)  # [batch_size]
             else:  # get scores by mlp layers
                 self.user_item_concat = torch.cat(
                     [self.user_embeddings, self.item_embeddings], 1
                 )  # [batch_size, emb_dim*2]
                 self.user_item_concat = self.rs_mlp(self.user_item_concat)
 
-                self.scores = torch.squeeze(
-                    self.rs_pred_mlp(self.user_item_concat)
-                )  # [batch_size]
+                self.scores = torch.squeeze(self.rs_pred_mlp(self.user_item_concat))  # [batch_size]
             self.scores_normalized = torch.sigmoid(self.scores)
             outputs = [
                 self.user_embeddings,
@@ -136,18 +120,11 @@ class MKR(KnowledgeRecommender):
             )  # [batch_size, emb_dim*2]
             self.head_relation_concat = self.kge_mlp(self.head_relation_concat)
 
-            self.tail_pred = self.kge_pred_mlp(
-                self.head_relation_concat
-            )  # [batch_size, 1]
+            self.tail_pred = self.kge_pred_mlp(self.head_relation_concat)  # [batch_size, 1]
             self.tail_pred = torch.sigmoid(self.tail_pred)
-            self.scores_kge = torch.sigmoid(
-                torch.sum(self.tail_embeddings * self.tail_pred, 1)
-            )
+            self.scores_kge = torch.sigmoid(torch.sum(self.tail_embeddings * self.tail_pred, 1))
             self.rmse = torch.mean(
-                torch.sqrt(
-                    torch.sum(torch.pow(self.tail_embeddings - self.tail_pred, 2), 1)
-                    / self.embedding_size
-                )
+                torch.sqrt(torch.sum(torch.pow(self.tail_embeddings - self.tail_pred, 2), 1) / self.embedding_size)
             )
             outputs = [
                 self.head_embeddings,
@@ -220,7 +197,7 @@ class CrossCompressUnit(nn.Module):
     r"""This is Cross&Compress Unit for MKR model to model feature interactions between items and entities."""
 
     def __init__(self, dim):
-        super(CrossCompressUnit, self).__init__()
+        super().__init__()
         self.dim = dim
         self.fc_vv = nn.Linear(dim, 1, bias=True)
         self.fc_ev = nn.Linear(dim, 1, bias=True)

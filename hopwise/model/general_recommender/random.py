@@ -1,17 +1,14 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2023/03/01
 # @Author : João Felipe Guedes
 # @Email  : guedes.joaofelipe@poli.ufrj.br
 # UPDATE
 
-r"""
-Random
+r"""Random
 ################################################
 
 """
 
 import torch
-import random
 
 from hopwise.model.abstract_recommender import GeneralRecommender
 from hopwise.utils import InputType, ModelType
@@ -24,7 +21,7 @@ class Random(GeneralRecommender):
     type = ModelType.TRADITIONAL
 
     def __init__(self, config, dataset):
-        super(Random, self).__init__(config, dataset)
+        super().__init__(config, dataset)
         torch.manual_seed(config["seed"] + self.n_users + self.n_items)
         self.fake_loss = torch.nn.Parameter(torch.zeros(1))
 

@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/8/9
 # @Author : Yupeng Hou
 # @Email  : houyupeng@ruc.edu.cn
 
-"""
-hopwise.utils.enum_type
+"""hopwise.utils.enum_type
 #######################
 """
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/10/27
 # @Author : Shanlei Mu
 # @Email  : slmu@ruc.edu.cn
@@ -26,9 +25,7 @@ class TestGeneralRecommender(unittest.TestCase):
             },
             "model": "BPR",
         }
-        objective_function(
-            config_dict=config_dict, config_file_list=config_file_list, saved=False
-        )
+        objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
     def test_tols_full(self):
         config_dict = {
@@ -39,9 +36,7 @@ class TestGeneralRecommender(unittest.TestCase):
             },
             "model": "BPR",
         }
-        objective_function(
-            config_dict=config_dict, config_file_list=config_file_list, saved=False
-        )
+        objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
     def test_tors_full(self):
         config_dict = {
@@ -52,9 +47,7 @@ class TestGeneralRecommender(unittest.TestCase):
             },
             "model": "BPR",
         }
-        objective_function(
-            config_dict=config_dict, config_file_list=config_file_list, saved=False
-        )
+        objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
     def test_rors_uni100(self):
         config_dict = {
@@ -65,9 +58,7 @@ class TestGeneralRecommender(unittest.TestCase):
             },
             "model": "BPR",
         }
-        objective_function(
-            config_dict=config_dict, config_file_list=config_file_list, saved=False
-        )
+        objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
     def test_tols_uni100(self):
         config_dict = {
@@ -79,9 +70,7 @@ class TestGeneralRecommender(unittest.TestCase):
             },
             "model": "BPR",
         }
-        objective_function(
-            config_dict=config_dict, config_file_list=config_file_list, saved=False
-        )
+        objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
     def test_rols_uni100(self):
         config_dict = {
@@ -92,9 +81,7 @@ class TestGeneralRecommender(unittest.TestCase):
             },
             "model": "BPR",
         }
-        objective_function(
-            config_dict=config_dict, config_file_list=config_file_list, saved=False
-        )
+        objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
     def test_tors_uni100(self):
         config_dict = {
@@ -105,9 +92,7 @@ class TestGeneralRecommender(unittest.TestCase):
             },
             "model": "BPR",
         }
-        objective_function(
-            config_dict=config_dict, config_file_list=config_file_list, saved=False
-        )
+        objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
 
 class TestContextRecommender(unittest.TestCase):
@@ -121,9 +106,7 @@ class TestContextRecommender(unittest.TestCase):
             "threshold": {"rating": 4},
             "model": "FM",
         }
-        objective_function(
-            config_dict=config_dict, config_file_list=config_file_list, saved=False
-        )
+        objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
 
 class TestSequentialRecommender(unittest.TestCase):
@@ -136,9 +119,7 @@ class TestSequentialRecommender(unittest.TestCase):
             },
             "model": "FPMC",
         }
-        objective_function(
-            config_dict=config_dict, config_file_list=config_file_list, saved=False
-        )
+        objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
 
 if __name__ == "__main__":

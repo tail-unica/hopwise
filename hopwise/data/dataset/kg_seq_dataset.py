@@ -2,12 +2,11 @@
 # @Author : Xingyu Pan
 # @Email  : panxingyu@ruc.edu.cn
 
-"""
-hopwise.data.kg_seq_dataset
+"""hopwise.data.kg_seq_dataset
 #############################
 """
 
-from hopwise.data.dataset import SequentialDataset, KnowledgeBasedDataset
+from hopwise.data.dataset import KnowledgeBasedDataset, SequentialDataset
 
 
 class KGSeqDataset(SequentialDataset, KnowledgeBasedDataset):

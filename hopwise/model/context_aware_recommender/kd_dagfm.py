@@ -1,10 +1,8 @@
-# _*_ coding: utf-8 _*_
 # @Time   : 2023/1/20
 # @Author : Wanli Yang
 # @Email  : 2013774@mail.nankai.edu.cn
 
-r"""
-KD_DAGFM
+r"""KD_DAGFM
 ################################################
 Reference:
     Zhen Tian et al. "Directed Acyclic Graph Factorization Machines for CTR Prediction via Knowledge Distillation."
@@ -13,13 +11,14 @@ Reference code:
     https://github.com/chenyuwuxin/DAGFM
 """
 
+from copy import deepcopy
+
 import torch
 from torch import nn
 from torch.nn.init import xavier_normal_
-from copy import deepcopy
 
-from hopwise.model.init import xavier_normal_initialization
 from hopwise.model.abstract_recommender import ContextRecommender
+from hopwise.model.init import xavier_normal_initialization
 
 
 class KD_DAGFM(ContextRecommender):
@@ -29,7 +28,7 @@ class KD_DAGFM(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(KD_DAGFM, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.phase = config["phase"]
@@ -41,9 +40,7 @@ class KD_DAGFM(ContextRecommender):
 
         # initialize teacher&student network
         self.student_network = DAGFM(config)
-        self.teacher_network = eval(f"{config['teacher']}")(
-            self.get_teacher_config(config)
-        )
+        self.teacher_network = eval(f"{config['teacher']}")(self.get_teacher_config(config))
 
         # initialize loss function
         self.loss_fn = nn.BCELoss()
@@ -69,16 +66,14 @@ class KD_DAGFM(ContextRecommender):
     def FeatureInteraction(self, feature):
         if self.phase == "teacher_training":
             return self.teacher_network.FeatureInteraction(feature)
-        elif self.phase == "distillation" or self.phase == "finetuning":
+        elif self.phase in ("distillation", "finetuning"):
             return self.student_network.FeatureInteraction(feature)
         else:
             return ValueError("Phase invalid!")
 
     def forward(self, interaction):
-        dagfm_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
-        if self.phase == "teacher_training" or self.phase == "finetuning":
+        dagfm_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
+        if self.phase in ("teacher_training", "finetuning"):
             return self.FeatureInteraction(dagfm_all_embeddings)
         elif self.phase == "distillation":
             dagfm_all_embeddings = dagfm_all_embeddings.data
@@ -89,7 +84,7 @@ class KD_DAGFM(ContextRecommender):
             raise ValueError("Phase invalid!")
 
     def calculate_loss(self, interaction):
-        if self.phase == "teacher_training" or self.phase == "finetuning":
+        if self.phase in ("teacher_training", "finetuning"):
             prediction = self.forward(interaction)
             loss = self.loss_fn(
                 prediction.squeeze(-1),
@@ -98,12 +93,8 @@ class KD_DAGFM(ContextRecommender):
         elif self.phase == "distillation":
             self.teacher_network.eval()
             s_pred = self.forward(interaction)
-            ctr_loss = self.loss_fn(
-                s_pred.squeeze(-1), interaction[self.LABEL].squeeze(-1).to(self.device)
-            )
-            kd_loss = torch.mean(
-                (self.teacher_network.logits.data - self.student_network.logits) ** 2
-            )
+            ctr_loss = self.loss_fn(s_pred.squeeze(-1), interaction[self.LABEL].squeeze(-1).to(self.device))
+            kd_loss = torch.mean((self.teacher_network.logits.data - self.student_network.logits) ** 2)
             loss = self.alpha * ctr_loss + self.beta * kd_loss
         else:
             raise ValueError("Phase invalid!")
@@ -115,7 +106,7 @@ class KD_DAGFM(ContextRecommender):
 
 class DAGFM(nn.Module):
     def __init__(self, config):
-        super(DAGFM, self).__init__()
+        super().__init__()
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
         else:
@@ -130,32 +121,21 @@ class DAGFM(nn.Module):
         # initialize parameters according to the type
         if self.type == "inner":
             self.p = nn.ParameterList(
-                [
-                    nn.Parameter(torch.randn(field_num, field_num, embedding_size))
-                    for _ in range(self.depth)
-                ]
+                [nn.Parameter(torch.randn(field_num, field_num, embedding_size)) for _ in range(self.depth)]
             )
             for _ in range(self.depth):
                 xavier_normal_(self.p[_], gain=1.414)
         elif self.type == "outer":
             self.p = nn.ParameterList(
-                [
-                    nn.Parameter(torch.randn(field_num, field_num, embedding_size))
-                    for _ in range(self.depth)
-                ]
+                [nn.Parameter(torch.randn(field_num, field_num, embedding_size)) for _ in range(self.depth)]
             )
             self.q = nn.ParameterList(
-                [
-                    nn.Parameter(torch.randn(field_num, field_num, embedding_size))
-                    for _ in range(self.depth)
-                ]
+                [nn.Parameter(torch.randn(field_num, field_num, embedding_size)) for _ in range(self.depth)]
             )
             for _ in range(self.depth):
                 xavier_normal_(self.p[_], gain=1.414)
                 xavier_normal_(self.q[_], gain=1.414)
-        self.adj_matrix = torch.zeros(field_num, field_num, embedding_size).to(
-            self.device
-        )
+        self.adj_matrix = torch.zeros(field_num, field_num, embedding_size).to(self.device)
         for i in range(field_num):
             for j in range(i, field_num):
                 self.adj_matrix[i, j, :] += 1
@@ -185,7 +165,7 @@ class DAGFM(nn.Module):
 # teacher network CrossNet
 class CrossNet(nn.Module):
     def __init__(self, config):
-        super(CrossNet, self).__init__()
+        super().__init__()
 
         # load parameters info
         self.depth = config["depth"]
@@ -193,12 +173,9 @@ class CrossNet(nn.Module):
         self.feature_num = config["feature_num"]
         self.in_feature_num = self.feature_num * self.embedding_size
         self.cross_layer_w = nn.ParameterList(
-            nn.Parameter(torch.randn(self.in_feature_num, self.in_feature_num))
-            for _ in range(self.depth)
+            nn.Parameter(torch.randn(self.in_feature_num, self.in_feature_num)) for _ in range(self.depth)
         )
-        self.bias = nn.ParameterList(
-            nn.Parameter(torch.zeros(self.in_feature_num, 1)) for _ in range(self.depth)
-        )
+        self.bias = nn.ParameterList(nn.Parameter(torch.zeros(self.in_feature_num, 1)) for _ in range(self.depth))
         self.linear = nn.Linear(self.in_feature_num, 1)
         nn.init.normal_(self.linear.weight)
 
@@ -222,7 +199,7 @@ class CrossNet(nn.Module):
 
 class CINComp(nn.Module):
     def __init__(self, indim, outdim, config):
-        super(CINComp, self).__init__()
+        super().__init__()
         basedim = config["feature_num"]
         self.conv = nn.Conv1d(indim * basedim, outdim, 1)
 
@@ -240,10 +217,7 @@ class CIN(nn.Module):
         super().__init__()
         self.cinlist = [config["feature_num"]] + config["cin"]
         self.cin = nn.ModuleList(
-            [
-                CINComp(self.cinlist[i], self.cinlist[i + 1], config)
-                for i in range(0, len(self.cinlist) - 1)
-            ]
+            [CINComp(self.cinlist[i], self.cinlist[i + 1], config) for i in range(0, len(self.cinlist) - 1)]
         )
         self.linear = nn.Parameter(torch.zeros(sum(self.cinlist) - self.cinlist[0], 1))
         nn.init.normal_(self.linear, mean=0, std=0.01)

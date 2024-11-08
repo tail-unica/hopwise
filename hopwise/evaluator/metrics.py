@@ -1,4 +1,3 @@
-# -*- encoding: utf-8 -*-
 # @Time    :   2020/08/04
 # @Author  :   Kaiyuan Li
 # @email   :   tsotfsk@outlook.com
@@ -8,8 +7,7 @@
 # @Author  :   Kaiyuan Li, Zhichao Feng, Xingyu Pan, Zihan Lin
 # @email   :   tsotfsk@outlook.com, fzcbupt@gmail.com, panxy@ruc.edu.cn, zhlin@ruc.edu.cn
 
-r"""
-hopwise.evaluator.metrics
+r"""hopwise.evaluator.metrics
 ############################
 
 Suppose there is a set of :math:`n` items to be ranked. Given a user :math:`u` in the user set :math:`U`,
@@ -22,15 +20,15 @@ set of user(u)-item(i) pairs, :math:`\hat r_{u i}` represents the score predicte
 
 """
 
+from collections import Counter
 from logging import getLogger
 
 import numpy as np
-from collections import Counter
 from sklearn.metrics import auc as sk_auc
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
+from hopwise.evaluator.base_metric import AbstractMetric, LossMetric, TopkMetric
 from hopwise.evaluator.utils import _binary_clf_curve
-from hopwise.evaluator.base_metric import AbstractMetric, TopkMetric, LossMetric
 from hopwise.utils import EvaluatorType
 
 # TopK Metrics
@@ -111,7 +109,7 @@ class MAP(TopkMetric):
        \mathrm{MAP@K} = \frac{1}{|U|}\sum_{u \in U} (\frac{1}{min(|\hat R(u)|, K)} \sum_{j=1}^{|\hat{R}(u)|} I\left(\hat{R}_{j}(u) \in R(u)\right) \cdot  Precision@j)
 
     :math:`\hat{R}_{j}(u)` is the j-th item in the recommendation list of \hat R (u)).
-    """
+    """  # noqa: E501
 
     def __init__(self, config):
         super().__init__(config)
@@ -252,7 +250,7 @@ class GAUC(AbstractMetric):
         \end{align*}
 
     :math:`rank_i` is the descending rank of the i-th items in :math:`R(u)`.
-    """
+    """  # noqa: E501
 
     metric_type = EvaluatorType.RANKING
     metric_need = ["rec.meanrank"]
@@ -263,8 +261,9 @@ class GAUC(AbstractMetric):
     def calculate_metric(self, dataobject):
         mean_rank = dataobject.get("rec.meanrank").numpy()
         pos_rank_sum, user_len_list, pos_len_list = np.split(mean_rank, 3, axis=1)
-        user_len_list, pos_len_list = user_len_list.squeeze(-1), pos_len_list.squeeze(
-            -1
+        user_len_list, pos_len_list = (
+            user_len_list.squeeze(-1),
+            pos_len_list.squeeze(-1),
         )
         result = self.metric_info(pos_rank_sum, user_len_list, pos_len_list)
         return {"gauc": round(result, self.decimal_place)}
@@ -303,14 +302,10 @@ class GAUC(AbstractMetric):
             non_zero_idx *= neg_len_list != 0
         if any_without_pos or any_without_neg:
             item_list = user_len_list, neg_len_list, pos_len_list, pos_rank_sum
-            user_len_list, neg_len_list, pos_len_list, pos_rank_sum = map(
-                lambda x: x[non_zero_idx], item_list
-            )
+            user_len_list, neg_len_list, pos_len_list, pos_rank_sum = map(lambda x: x[non_zero_idx], item_list)
 
         pair_num = (
-            (user_len_list + 1) * pos_len_list
-            - pos_len_list * (pos_len_list + 1) / 2
-            - np.squeeze(pos_rank_sum)
+            (user_len_list + 1) * pos_len_list - pos_len_list * (pos_len_list + 1) / 2 - np.squeeze(pos_rank_sum)
         )
         user_auc = pair_num / (neg_len_list * pos_len_list)
         result = (user_auc * pos_len_list).sum() / pos_len_list.sum()
@@ -346,10 +341,8 @@ class AUC(LossMetric):
 
     def metric_info(self, preds, trues):
         fps, tps = _binary_clf_curve(trues, preds)
-        if len(fps) > 2:
-            optimal_idxs = np.where(
-                np.r_[True, np.logical_or(np.diff(fps, 2), np.diff(tps, 2)), True]
-            )[0]
+        if len(fps) > 2:  # noqa: PLR2004
+            optimal_idxs = np.where(np.r_[True, np.logical_or(np.diff(fps, 2), np.diff(tps, 2)), True])[0]
             fps = fps[optimal_idxs]
             tps = tps[optimal_idxs]
 
@@ -358,20 +351,14 @@ class AUC(LossMetric):
 
         if fps[-1] <= 0:
             logger = getLogger()
-            logger.warning(
-                "No negative samples in y_true, "
-                "false positive value should be meaningless"
-            )
+            logger.warning("No negative samples in y_true, " "false positive value should be meaningless")
             fpr = np.repeat(np.nan, fps.shape)
         else:
             fpr = fps / fps[-1]
 
         if tps[-1] <= 0:
             logger = getLogger()
-            logger.warning(
-                "No positive samples in y_true, "
-                "true positive value should be meaningless"
-            )
+            logger.warning("No positive samples in y_true, " "true positive value should be meaningless")
             tpr = np.repeat(np.nan, tps.shape)
         else:
             tpr = tps / tps[-1]
@@ -436,7 +423,7 @@ class LogLoss(LossMetric):
 
     .. math::
         LogLoss = \frac{1}{|S|} \sum_{(u,i) \in S}(-((r_{u i} \ \log{\hat{r}_{u i}}) + {(1 - r_{u i})}\ \log{(1 - \hat{r}_{u i})}))
-    """
+    """  # noqa: E501
 
     smaller = True
 
@@ -484,9 +471,7 @@ class ItemCoverage(AbstractMetric):
         metric_dict = {}
         for k in self.topk:
             key = "{}@{}".format("itemcoverage", k)
-            metric_dict[key] = round(
-                self.get_coverage(item_matrix[:, :k], num_items), self.decimal_place
-            )
+            metric_dict[key] = round(self.get_coverage(item_matrix[:, :k], num_items), self.decimal_place)
         return metric_dict
 
     def get_coverage(self, item_matrix, num_items):
@@ -568,7 +553,7 @@ class AveragePopularity(AbstractMetric):
         metric_dict = {}
         avg_result = value.mean(axis=0)
         for k in self.topk:
-            key = "{}@{}".format(metric, k)
+            key = f"{metric}@{k}"
             metric_dict[key] = round(avg_result[k - 1], self.decimal_place)
         return metric_dict
 
@@ -606,9 +591,7 @@ class ShannonEntropy(AbstractMetric):
         metric_dict = {}
         for k in self.topk:
             key = "{}@{}".format("shannonentropy", k)
-            metric_dict[key] = round(
-                self.get_entropy(item_matrix[:, :k]), self.decimal_place
-            )
+            metric_dict[key] = round(self.get_entropy(item_matrix[:, :k]), self.decimal_place)
         return metric_dict
 
     def get_entropy(self, item_matrix):
@@ -620,7 +603,6 @@ class ShannonEntropy(AbstractMetric):
         Returns:
             float: the shannon entropy.
         """
-
         item_count = dict(Counter(item_matrix.flatten()))
         total_num = item_matrix.shape[0] * item_matrix.shape[1]
         result = 0.0
@@ -664,9 +646,7 @@ class GiniIndex(AbstractMetric):
         metric_dict = {}
         for k in self.topk:
             key = "{}@{}".format("giniindex", k)
-            metric_dict[key] = round(
-                self.get_gini(item_matrix[:, :k], num_items), self.decimal_place
-            )
+            metric_dict[key] = round(self.get_gini(item_matrix[:, :k], num_items), self.decimal_place)
         return metric_dict
 
     def get_gini(self, item_matrix, num_items):
@@ -770,6 +750,6 @@ class TailPercentage(AbstractMetric):
         metric_dict = {}
         avg_result = value.mean(axis=0)
         for k in self.topk:
-            key = "{}@{}".format(metric, k)
+            key = f"{metric}@{k}"
             metric_dict[key] = round(avg_result[k - 1], self.decimal_place)
         return metric_dict

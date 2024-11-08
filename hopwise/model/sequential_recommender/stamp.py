@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/9/8 19:24
 # @Author : Yujie Lu
 # @Email  : yujielu1998@gmail.com
@@ -8,8 +7,7 @@
 # @Author : Yujie Lu
 # @Email  : yujielu1998@gmail.com
 
-r"""
-STAMP
+r"""STAMP
 ################################################
 
 Reference:
@@ -31,22 +29,19 @@ class STAMP(SequentialRecommender):
 
 
     Note:
-
         According to the test results, we made a little modification to the score function mentioned in the paper,
         and did not use the final sigmoid activation function.
 
     """
 
     def __init__(self, config, dataset):
-        super(STAMP, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.w1 = nn.Linear(self.embedding_size, self.embedding_size, bias=False)
         self.w2 = nn.Linear(self.embedding_size, self.embedding_size, bias=False)
         self.w3 = nn.Linear(self.embedding_size, self.embedding_size, bias=False)
@@ -100,12 +95,8 @@ class STAMP(SequentialRecommender):
             torch.Tensor:attention weights, shape of [batch_size, time_steps]
         """
         timesteps = context.size(1)
-        aspect_3dim = aspect.repeat(1, timesteps).view(
-            -1, timesteps, self.embedding_size
-        )
-        output_3dim = output.repeat(1, timesteps).view(
-            -1, timesteps, self.embedding_size
-        )
+        aspect_3dim = aspect.repeat(1, timesteps).view(-1, timesteps, self.embedding_size)
+        output_3dim = output.repeat(1, timesteps).view(-1, timesteps, self.embedding_size)
         res_ctx = self.w1(context)
         res_asp = self.w2(aspect_3dim)
         res_output = self.w3(output_3dim)

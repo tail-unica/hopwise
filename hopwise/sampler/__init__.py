@@ -1,1 +1,1 @@
-from hopwise.sampler.sampler import Sampler, KGSampler, RepeatableSampler, SeqSampler
+from hopwise.sampler.sampler import KGSampler, RepeatableSampler, Sampler, SeqSampler

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/9/1 14:00
 # @Author : Changxin Tian
 # @Email  : cx.tian@outlook.com
@@ -8,8 +7,7 @@
 # @Author : Changxin Tian
 # @Email  : cx.tian@outlook.com
 
-r"""
-GCMC
+r"""GCMC
 ################################################
 
 Reference:
@@ -24,7 +22,7 @@ import math
 import numpy as np
 import scipy.sparse as sp
 import torch
-import torch.nn as nn
+from torch import nn
 
 from hopwise.model.abstract_recommender import GeneralRecommender
 from hopwise.model.layers import SparseDropout
@@ -52,13 +50,11 @@ class GCMC(GeneralRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(GCMC, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load dataset info
         self.num_all = self.n_users + self.n_items
-        self.interaction_matrix = dataset.inter_matrix(form="coo").astype(
-            np.float32
-        )  # csr
+        self.interaction_matrix = dataset.inter_matrix(form="coo").astype(np.float32)  # csr
 
         # load parameters info
         self.dropout_prob = config["dropout_prob"]
@@ -85,9 +81,7 @@ class GCMC(GeneralRecommender):
             ).to(self.device)
         else:
             features = torch.eye(self.num_all).to(self.device)
-            self.user_features, self.item_features = torch.split(
-                features, [self.n_users, self.n_items]
-            )
+            self.user_features, self.item_features = torch.split(features, [self.n_users, self.n_items])
         self.input_dim = self.user_features.shape[1]
 
         # adj matrices for each relation are stored in self.support
@@ -155,14 +149,10 @@ class GCMC(GeneralRecommender):
             Sparse tensor of the normalized interaction matrix.
         """
         # build adj matrix
-        A = sp.dok_matrix(
-            (self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32
-        )
+        A = sp.dok_matrix((self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32)
         inter_M = self.interaction_matrix
         inter_M_t = self.interaction_matrix.transpose()
-        data_dict = dict(
-            zip(zip(inter_M.row, inter_M.col + self.n_users), [1] * inter_M.nnz)
-        )
+        data_dict = dict(zip(zip(inter_M.row, inter_M.col + self.n_users), [1] * inter_M.nnz))
         data_dict.update(
             dict(
                 zip(
@@ -254,7 +244,7 @@ class GcEncoder(nn.Module):
         share_user_item_weights=True,
         bias=False,
     ):
-        super(GcEncoder, self).__init__()
+        super().__init__()
         self.num_users = num_user
         self.num_items = num_item
         self.input_dim = input_dim
@@ -284,9 +274,7 @@ class GcEncoder(nn.Module):
             self.weights_u = nn.ParameterList(
                 [
                     nn.Parameter(
-                        torch.FloatTensor(self.input_dim, self.gcn_output_dim).to(
-                            self.device
-                        ),
+                        torch.FloatTensor(self.input_dim, self.gcn_output_dim).to(self.device),
                         requires_grad=True,
                     )
                     for _ in range(self.num_support)
@@ -298,9 +286,7 @@ class GcEncoder(nn.Module):
                 self.weights_v = nn.ParameterList(
                     [
                         nn.Parameter(
-                            torch.FloatTensor(self.input_dim, self.gcn_output_dim).to(
-                                self.device
-                            ),
+                            torch.FloatTensor(self.input_dim, self.gcn_output_dim).to(self.device),
                             requires_grad=True,
                         )
                         for _ in range(self.num_support)
@@ -315,9 +301,7 @@ class GcEncoder(nn.Module):
             self.weights_u = nn.ParameterList(
                 [
                     nn.Parameter(
-                        torch.FloatTensor(self.input_dim, self.sub_hidden_dim).to(
-                            self.device
-                        ),
+                        torch.FloatTensor(self.input_dim, self.sub_hidden_dim).to(self.device),
                         requires_grad=True,
                     )
                     for _ in range(self.num_support)
@@ -329,9 +313,7 @@ class GcEncoder(nn.Module):
                 self.weights_v = nn.ParameterList(
                     [
                         nn.Parameter(
-                            torch.FloatTensor(self.input_dim, self.sub_hidden_dim).to(
-                                self.device
-                            ),
+                            torch.FloatTensor(self.input_dim, self.sub_hidden_dim).to(self.device),
                             requires_grad=True,
                         )
                         for _ in range(self.num_support)
@@ -339,31 +321,23 @@ class GcEncoder(nn.Module):
                 )
 
         # dense layer
-        self.dense_layer_u = nn.Linear(
-            self.gcn_output_dim, self.dense_output_dim, bias=self.bias
-        )
+        self.dense_layer_u = nn.Linear(self.gcn_output_dim, self.dense_output_dim, bias=self.bias)
         if share_user_item_weights:
             self.dense_layer_v = self.dense_layer_u
         else:
-            self.dense_layer_v = nn.Linear(
-                self.gcn_output_dim, self.dense_output_dim, bias=self.bias
-            )
+            self.dense_layer_v = nn.Linear(self.gcn_output_dim, self.dense_output_dim, bias=self.bias)
 
         self._init_weights()
 
     def _init_weights(self):
-        init_range = math.sqrt(
-            (self.num_support + 1) / (self.input_dim + self.gcn_output_dim)
-        )
+        init_range = math.sqrt((self.num_support + 1) / (self.input_dim + self.gcn_output_dim))
         for w in range(self.num_support):
             self.weights_u[w].data.uniform_(-init_range, init_range)
         if not self.share_weights:
             for w in range(self.num_support):
                 self.weights_v[w].data.uniform_(-init_range, init_range)
 
-        dense_init_range = math.sqrt(
-            (self.num_support + 1) / (self.dense_output_dim + self.gcn_output_dim)
-        )
+        dense_init_range = math.sqrt((self.num_support + 1) / (self.dense_output_dim + self.gcn_output_dim))
         self.dense_layer_u.weight.data.uniform_(-dense_init_range, dense_init_range)
         if not self.share_weights:
             self.dense_layer_v.weight.data.uniform_(-dense_init_range, dense_init_range)
@@ -446,10 +420,8 @@ class BiDecoder(nn.Module):
     BiDecoder takes pairs of node embeddings and predicts respective entries in the adjacency matrix.
     """
 
-    def __init__(
-        self, input_dim, output_dim, drop_prob, device, num_weights=3, act=lambda x: x
-    ):
-        super(BiDecoder, self).__init__()
+    def __init__(self, input_dim, output_dim, drop_prob, device, num_weights=3, act=lambda x: x):
+        super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.num_weights = num_weights
@@ -461,9 +433,7 @@ class BiDecoder(nn.Module):
 
         self.weights = nn.ParameterList(
             [
-                nn.Parameter(
-                    orthogonal([self.input_dim, self.input_dim]).to(self.device)
-                )
+                nn.Parameter(orthogonal([self.input_dim, self.input_dim]).to(self.device))
                 for _ in range(self.num_weights)
             ]
         )
@@ -471,9 +441,7 @@ class BiDecoder(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        dense_init_range = math.sqrt(
-            self.output_dim / (self.num_weights + self.output_dim)
-        )
+        dense_init_range = math.sqrt(self.output_dim / (self.num_weights + self.output_dim))
         self.dense_layer.weight.data.uniform_(-dense_init_range, dense_init_range)
 
     def forward(self, u_inputs, i_inputs, users, items=None):
@@ -508,8 +476,7 @@ class BiDecoder(nn.Module):
 
 
 def orthogonal(shape, scale=1.1):
-    """
-    Initialization function for weights in class GCMC.
+    """Initialization function for weights in class GCMC.
     From Lasagne. Reference: Saxe et al., http://arxiv.org/abs/1312.6120
     """
     flat_shape = (shape[0], np.prod(shape[1:]))

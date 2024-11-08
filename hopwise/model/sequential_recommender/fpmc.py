@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/8/28 14:32
 # @Author : Yujie Lu
 # @Email  : yujielu1998@gmail.com
@@ -8,14 +7,14 @@
 # @Author : Yujie Lu
 # @Email  : yujielu1998@gmail.com
 
-r"""
-FPMC
+r"""FPMC
 ################################################
 
 Reference:
     Steffen Rendle et al. "Factorizing Personalized Markov Chains for Next-Basket Recommendation." in WWW 2010.
 
 """
+
 import torch
 from torch import nn
 from torch.nn.init import xavier_normal_
@@ -30,7 +29,6 @@ class FPMC(SequentialRecommender):
     unknown items arousing user interest, and to discharge the item recommendation list.
 
     Note:
-
         In order that the generation method we used is common to other sequential models,
         We set the size of the basket mentioned in the paper equal to 1.
         For comparison with other models, the loss function used is BPR.
@@ -40,7 +38,7 @@ class FPMC(SequentialRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(FPMC, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
@@ -73,9 +71,7 @@ class FPMC(SequentialRecommender):
 
     def forward(self, user, item_seq, item_seq_len, next_item):
         item_last_click_index = item_seq_len - 1
-        item_last_click = torch.gather(
-            item_seq, dim=1, index=item_last_click_index.unsqueeze(1)
-        )
+        item_last_click = torch.gather(item_seq, dim=1, index=item_last_click_index.unsqueeze(1))
         item_seq_emb = self.LI_emb(item_last_click)  # [b,1,emb]
 
         user_emb = self.UI_emb(user)
@@ -130,9 +126,7 @@ class FPMC(SequentialRecommender):
         all_il_emb = self.IL_emb.weight
 
         item_last_click_index = item_seq_len - 1
-        item_last_click = torch.gather(
-            item_seq, dim=1, index=item_last_click_index.unsqueeze(1)
-        )
+        item_last_click = torch.gather(item_seq, dim=1, index=item_last_click_index.unsqueeze(1))
         item_seq_emb = self.LI_emb(item_last_click)  # [b,1,emb]
         fmc = torch.matmul(item_seq_emb, all_il_emb.transpose(0, 1))
         fmc = torch.squeeze(fmc, dim=1)

@@ -1,20 +1,19 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2022/7/19
 # @Author : Gaowei Zhang
 # @Email  : zgw15630559577@163.com
 
 import math
-import numpy as np
 import random
-import torch
 from copy import deepcopy
-from hopwise.data.interaction import Interaction, cat_interactions
+
+import numpy as np
+import torch
+
+from hopwise.data.interaction import Interaction
 
 
 def construct_transform(config):
-    """
-    Transformation for batch data.
-    """
+    """Transformation for batch data."""
     if config["transform"] is None:
         return Equal(config)
     else:
@@ -26,9 +25,7 @@ def construct_transform(config):
             "user_defined": UserDefinedTransform,
         }
         if config["transform"] not in str2transform:
-            raise NotImplementedError(
-                f"There is no transform named '{config['transform']}'"
-            )
+            raise NotImplementedError(f"There is no transform named '{config['transform']}'")
 
         return str2transform[config["transform"]](config)
 
@@ -42,9 +39,7 @@ class Equal:
 
 
 class MaskItemSequence:
-    """
-    Mask item sequence for training.
-    """
+    """Mask item sequence for training."""
 
     def __init__(self, config):
         self.ITEM_SEQ = config["ITEM_ID_FIELD"] + config["LIST_SUFFIX"]
@@ -87,30 +82,16 @@ class MaskItemSequence:
             mask_seq[lens - 1] = n_items
             masked_item_sequence.append(mask_seq)
             pos_items.append(self._padding_sequence([ext], self.mask_item_length))
-            neg_items.append(
-                self._padding_sequence(
-                    [self._neg_sample(instance, n_items)], self.mask_item_length
-                )
-            )
-            masked_index.append(
-                self._padding_sequence([lens - 1], self.mask_item_length)
-            )
+            neg_items.append(self._padding_sequence([self._neg_sample(instance, n_items)], self.mask_item_length))
+            masked_index.append(self._padding_sequence([lens - 1], self.mask_item_length))
         # [B Len]
-        masked_item_sequence = torch.tensor(
-            masked_item_sequence, dtype=torch.long, device=device
-        ).view(batch_size, -1)
+        masked_item_sequence = torch.tensor(masked_item_sequence, dtype=torch.long, device=device).view(batch_size, -1)
         # [B mask_len]
-        pos_items = torch.tensor(pos_items, dtype=torch.long, device=device).view(
-            batch_size, -1
-        )
+        pos_items = torch.tensor(pos_items, dtype=torch.long, device=device).view(batch_size, -1)
         # [B mask_len]
-        neg_items = torch.tensor(neg_items, dtype=torch.long, device=device).view(
-            batch_size, -1
-        )
+        neg_items = torch.tensor(neg_items, dtype=torch.long, device=device).view(batch_size, -1)
         # [B mask_len]
-        masked_index = torch.tensor(masked_index, dtype=torch.long, device=device).view(
-            batch_size, -1
-        )
+        masked_index = torch.tensor(masked_index, dtype=torch.long, device=device).view(batch_size, -1)
         new_dict = {
             self.MASK_ITEM_SEQ: masked_item_sequence,
             self.POS_ITEMS: pos_items,
@@ -156,32 +137,20 @@ class MaskItemSequence:
                         index_ids.append(index_id)
 
                 masked_item_sequence.append(masked_sequence)
-                pos_items.append(
-                    self._padding_sequence(pos_item, self.mask_item_length)
-                )
-                neg_items.append(
-                    self._padding_sequence(neg_item, self.mask_item_length)
-                )
-                masked_index.append(
-                    self._padding_sequence(index_ids, self.mask_item_length)
-                )
+                pos_items.append(self._padding_sequence(pos_item, self.mask_item_length))
+                neg_items.append(self._padding_sequence(neg_item, self.mask_item_length))
+                masked_index.append(self._padding_sequence(index_ids, self.mask_item_length))
 
             # [B Len]
-            masked_item_sequence = torch.tensor(
-                masked_item_sequence, dtype=torch.long, device=device
-            ).view(batch_size, -1)
-            # [B mask_len]
-            pos_items = torch.tensor(pos_items, dtype=torch.long, device=device).view(
+            masked_item_sequence = torch.tensor(masked_item_sequence, dtype=torch.long, device=device).view(
                 batch_size, -1
             )
             # [B mask_len]
-            neg_items = torch.tensor(neg_items, dtype=torch.long, device=device).view(
-                batch_size, -1
-            )
+            pos_items = torch.tensor(pos_items, dtype=torch.long, device=device).view(batch_size, -1)
             # [B mask_len]
-            masked_index = torch.tensor(
-                masked_index, dtype=torch.long, device=device
-            ).view(batch_size, -1)
+            neg_items = torch.tensor(neg_items, dtype=torch.long, device=device).view(batch_size, -1)
+            # [B mask_len]
+            masked_index = torch.tensor(masked_index, dtype=torch.long, device=device).view(batch_size, -1)
             new_dict = {
                 self.MASK_ITEM_SEQ: masked_item_sequence,
                 self.POS_ITEMS: pos_items,
@@ -193,9 +162,8 @@ class MaskItemSequence:
 
 
 class InverseItemSequence:
-    """
-    inverse the seq_item, like this
-        [1,2,3,0,0,0,0] -- after inverse -->> [0,0,0,0,1,2,3]
+    """inverse the seq_item, like this
+    [1,2,3,0,0,0,0] -- after inverse -->> [0,0,0,0,1,2,3]
     """
 
     def __init__(self, config):
@@ -223,9 +191,7 @@ class InverseItemSequence:
 
 
 class CropItemSequence:
-    """
-    Random crop for item sequence.
-    """
+    """Random crop for item sequence."""
 
     def __init__(self, config):
         self.ITEM_SEQ = config["ITEM_ID_FIELD"] + config["LIST_SUFFIX"]
@@ -250,12 +216,8 @@ class CropItemSequence:
                 crop_item_seq[:crop_len] = seq[crop_begin : crop_begin + crop_len]
             else:
                 crop_item_seq[:crop_len] = seq[crop_begin:]
-            crop_item_seq_list.append(
-                torch.tensor(crop_item_seq, dtype=torch.long, device=device)
-            )
-            crop_item_seqlen_list.append(
-                torch.tensor(crop_len, dtype=torch.long, device=device)
-            )
+            crop_item_seq_list.append(torch.tensor(crop_item_seq, dtype=torch.long, device=device))
+            crop_item_seqlen_list.append(torch.tensor(crop_len, dtype=torch.long, device=device))
         new_dict = {
             self.CROP_ITEM_SEQ: torch.stack(crop_item_seq_list),
             self.CROP_ITEM_SEQ_LEN: torch.stack(crop_item_seqlen_list),
@@ -265,9 +227,7 @@ class CropItemSequence:
 
 
 class ReorderItemSequence:
-    """
-    Reorder operation for item sequence.
-    """
+    """Reorder operation for item sequence."""
 
     def __init__(self, config):
         self.ITEM_SEQ = config["ITEM_ID_FIELD"] + config["LIST_SUFFIX"]
@@ -289,13 +249,9 @@ class ReorderItemSequence:
 
             shuffle_index = list(range(reorder_begin, reorder_begin + reorder_len))
             random.shuffle(shuffle_index)
-            reorder_item_seq[reorder_begin : reorder_begin + reorder_len] = (
-                reorder_item_seq[shuffle_index]
-            )
+            reorder_item_seq[reorder_begin : reorder_begin + reorder_len] = reorder_item_seq[shuffle_index]
 
-            reorder_seq_list.append(
-                torch.tensor(reorder_item_seq, dtype=torch.long, device=device)
-            )
+            reorder_seq_list.append(torch.tensor(reorder_item_seq, dtype=torch.long, device=device))
         new_dict = {self.REORDER_ITEM_SEQ: torch.stack(reorder_seq_list)}
         interaction.update(Interaction(new_dict))
         return interaction

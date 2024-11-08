@@ -7,8 +7,7 @@
 # @Author : Yupeng Hou
 # @Email  : houyupeng@ruc.edu.cn
 
-r"""
-GRU4RecKG
+r"""GRU4RecKG
 ################################################
 """
 
@@ -27,7 +26,7 @@ class GRU4RecKG(SequentialRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(GRU4RecKG, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load dataset info
         self.entity_embedding_matrix = dataset.get_preload_weight("ent_id")
@@ -41,12 +40,8 @@ class GRU4RecKG(SequentialRecommender):
         self.loss_type = config["loss_type"]
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
-        self.entity_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
+        self.entity_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.item_emb_dropout = nn.Dropout(self.dropout)
         self.entity_emb_dropout = nn.Dropout(self.dropout)
         self.entity_embedding.weight.requires_grad = not self.freeze_kg
@@ -74,9 +69,7 @@ class GRU4RecKG(SequentialRecommender):
 
         # parameters initialization
         self.apply(xavier_normal_initialization)
-        self.entity_embedding.weight.data.copy_(
-            torch.from_numpy(self.entity_embedding_matrix[: self.n_items])
-        )
+        self.entity_embedding.weight.data.copy_(torch.from_numpy(self.entity_embedding_matrix[: self.n_items]))
 
     def forward(self, item_seq, item_seq_len):
         item_emb = self.item_embedding(item_seq)
@@ -87,9 +80,7 @@ class GRU4RecKG(SequentialRecommender):
         item_gru_output, _ = self.item_gru_layers(item_emb)  # [B Len H]
         entity_gru_output, _ = self.entity_gru_layers(entity_emb)
 
-        output_concat = torch.cat(
-            (item_gru_output, entity_gru_output), -1
-        )  # [B Len 2*H]
+        output_concat = torch.cat((item_gru_output, entity_gru_output), -1)  # [B Len 2*H]
         output = self.dense_layer(output_concat)
         output = self.gather_indexes(output, item_seq_len - 1)  # [B H]
         return output

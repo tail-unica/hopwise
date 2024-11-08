@@ -7,8 +7,7 @@
 # @Author : Yupeng Hou
 # @Email  : houyupeng@ruc.edu.cn
 
-"""
-hopwise.data.customized_dataset
+"""hopwise.data.customized_dataset
 ##################################
 
 We only recommend building customized datasets by inheriting.
@@ -49,7 +48,7 @@ class DIENDataset(SequentialDataset):
         seq_sample (hopwise.sampler.SeqSampler): A sampler used to sample negative item sequence.
         neg_item_list_field (str): Field name for negative item sequence.
         neg_item_list (torch.tensor): all users' negative item history sequence.
-    """
+    """  # noqa: E501
 
     def __init__(self, config):
         super().__init__(config)
@@ -58,9 +57,7 @@ class DIENDataset(SequentialDataset):
         neg_prefix = config["NEG_PREFIX"]
         self.seq_sampler = SeqSampler(self)
         self.neg_item_list_field = neg_prefix + self.iid_field + list_suffix
-        self.neg_item_list = self.seq_sampler.sample_neg_sequence(
-            self.inter_feat[self.iid_field]
-        )
+        self.neg_item_list = self.seq_sampler.sample_neg_sequence(self.inter_feat[self.iid_field])
 
     def data_augmentation(self):
         """Augmentation processing for sequential dataset.
@@ -116,39 +113,25 @@ class DIENDataset(SequentialDataset):
             if field != self.uid_field:
                 list_field = getattr(self, f"{field}_list_field")
                 list_len = self.field2seqlen[list_field]
-                shape = (
-                    (new_length, list_len)
-                    if isinstance(list_len, int)
-                    else (new_length,) + list_len
-                )
+                shape = (new_length, list_len) if isinstance(list_len, int) else (new_length,) + list_len
                 if (
                     self.field2type[field] in [FeatureType.FLOAT, FeatureType.FLOAT_SEQ]
                     and field in self.config["numerical_features"]
                 ):
                     shape += (2,)
                 list_ftype = self.field2type[list_field]
-                dtype = (
-                    torch.int64
-                    if list_ftype in [FeatureType.TOKEN, FeatureType.TOKEN_SEQ]
-                    else torch.float64
-                )
+                dtype = torch.int64 if list_ftype in [FeatureType.TOKEN, FeatureType.TOKEN_SEQ] else torch.float64
                 new_dict[list_field] = torch.zeros(shape, dtype=dtype)
 
                 value = self.inter_feat[field]
-                for i, (index, length) in enumerate(
-                    zip(item_list_index, item_list_length)
-                ):
+                for i, (index, length) in enumerate(zip(item_list_index, item_list_length)):
                     new_dict[list_field][i][:length] = value[index]
 
                 # DIEN
                 if field == self.iid_field:
                     new_dict[self.neg_item_list_field] = torch.zeros(shape, dtype=dtype)
-                    for i, (index, length) in enumerate(
-                        zip(item_list_index, item_list_length)
-                    ):
-                        new_dict[self.neg_item_list_field][i][:length] = (
-                            self.neg_item_list[index]
-                        )
+                    for i, (index, length) in enumerate(zip(item_list_index, item_list_length)):
+                        new_dict[self.neg_item_list_field][i][:length] = self.neg_item_list[index]
 
         new_data.update(Interaction(new_dict))
         self.inter_feat = new_data

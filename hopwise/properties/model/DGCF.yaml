@@ -1,4 +1,4 @@
-embedding_size: 64              # (int) The embedding size of users and items. 
+embedding_size: 64              # (int) The embedding size of users and items.
 n_factors: 4                    # (int) The number of factors for disentanglement.
 n_iterations: 2                 # (int) The number of iterations for each layer.
 n_layers: 1                     # (int) The number of reasoning layers.

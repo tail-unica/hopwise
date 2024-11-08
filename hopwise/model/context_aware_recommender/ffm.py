@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/10/04
 # @Author : Xinyan Fan
 # @Email  : xinyan.fan@ruc.edu.cn
@@ -9,8 +8,7 @@
 # @Author : Zhen Tian
 # @Email  : chenyuwuxinn@gmail.com
 
-r"""
-FFM
+r"""FFM
 #####################################################
 Reference:
     Yuchin Juan et al. "Field-aware Factorization Machines for CTR Prediction" in RecSys 2016.
@@ -21,8 +19,8 @@ Reference code:
 
 import numpy as np
 import torch
-import torch.nn as nn
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import ContextRecommender
 
@@ -39,7 +37,7 @@ class FFM(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(FFM, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.fields = config["fields"]  # a dict; key: field_id; value: feature_list
@@ -105,7 +103,7 @@ class FFM(ContextRecommender):
                 for v in value:
                     try:
                         self.feature2field[self.feature2id[v]] = key
-                    except:
+                    except IndexError:
                         pass
 
     def get_ffm_input(self, interaction):
@@ -115,17 +113,13 @@ class FFM(ContextRecommender):
             for tn in self.token_field_names:
                 token_ffm_input.append(torch.unsqueeze(interaction[tn], 1))
             if len(token_ffm_input) > 0:
-                token_ffm_input = torch.cat(
-                    token_ffm_input, dim=1
-                )  # [batch_size, num_token_features]
+                token_ffm_input = torch.cat(token_ffm_input, dim=1)  # [batch_size, num_token_features]
         float_ffm_input = []
         if self.float_field_names is not None:
             for fn in self.float_field_names:
                 float_ffm_input.append(torch.unsqueeze(interaction[fn], 1))
             if len(float_ffm_input) > 0:
-                float_ffm_input = torch.cat(
-                    float_ffm_input, dim=1
-                )  # [batch_size, num_float_features]
+                float_ffm_input = torch.cat(float_ffm_input, dim=1)  # [batch_size, num_float_features]
         token_seq_ffm_input = []
         if self.token_seq_field_names is not None:
             for tsn in self.token_seq_field_names:
@@ -144,9 +138,7 @@ class FFM(ContextRecommender):
 
     def forward(self, interaction):
         ffm_input = self.get_ffm_input(interaction)
-        ffm_output = torch.sum(
-            torch.sum(self.ffm(ffm_input), dim=1), dim=1, keepdim=True
-        )
+        ffm_output = torch.sum(torch.sum(self.ffm(ffm_input), dim=1), dim=1, keepdim=True)
         output = self.first_order_linear(interaction) + ffm_output
 
         return output.squeeze(-1)
@@ -174,7 +166,7 @@ class FieldAwareFactorizationMachine(nn.Module):
         embed_dim,
         device,
     ):
-        super(FieldAwareFactorizationMachine, self).__init__()
+        super().__init__()
 
         self.token_feature_names = feature_names[0]
         self.float_feature_names = feature_names[1]
@@ -201,27 +193,17 @@ class FieldAwareFactorizationMachine(nn.Module):
         if len(self.token_feature_names) > 0:
             self.num_token_features = len(self.token_feature_names)
             self.token_embeddings = torch.nn.ModuleList(
-                [
-                    nn.Embedding(sum(self.token_feature_dims), self.embed_dim)
-                    for _ in range(self.num_fields)
-                ]
+                [nn.Embedding(sum(self.token_feature_dims), self.embed_dim) for _ in range(self.num_fields)]
             )
-            self.token_offsets = np.array(
-                (0, *np.cumsum(self.token_feature_dims)[:-1]), dtype=np.long
-            )
+            self.token_offsets = np.array((0, *np.cumsum(self.token_feature_dims)[:-1]), dtype=np.long)
             for embedding in self.token_embeddings:
                 nn.init.xavier_uniform_(embedding.weight.data)
         # init float field-aware embeddings if there is float type of features.
         if len(self.float_feature_names) > 0:
             self.num_float_features = len(self.float_feature_names)
-            self.float_offsets = np.array(
-                (0, *np.cumsum(self.float_feature_dims)[:-1]), dtype=np.long
-            )
+            self.float_offsets = np.array((0, *np.cumsum(self.float_feature_dims)[:-1]), dtype=np.long)
             self.float_embeddings = torch.nn.ModuleList(
-                [
-                    nn.Embedding(sum(self.float_feature_dims), self.embed_dim)
-                    for _ in range(self.num_fields)
-                ]
+                [nn.Embedding(sum(self.float_feature_dims), self.embed_dim) for _ in range(self.num_fields)]
             )
             for embedding in self.float_embeddings:
                 nn.init.xavier_uniform_(embedding.weight.data)
@@ -232,9 +214,7 @@ class FieldAwareFactorizationMachine(nn.Module):
             self.token_seq_embedding = torch.nn.ModuleList()
             for i in range(self.num_fields):
                 for token_seq_feature_dim in self.token_seq_feature_dims:
-                    self.token_seq_embedding.append(
-                        nn.Embedding(token_seq_feature_dim, self.embed_dim)
-                    )
+                    self.token_seq_embedding.append(nn.Embedding(token_seq_feature_dim, self.embed_dim))
                 for embedding in self.token_seq_embedding:
                     nn.init.xavier_uniform_(embedding.weight.data)
                 self.token_seq_embeddings.append(self.token_seq_embedding)
@@ -244,16 +224,13 @@ class FieldAwareFactorizationMachine(nn.Module):
             self.float_seq_embedding = torch.nn.ModuleList()
             for i in range(self.num_fields):
                 for float_seq_feature_dim in self.float_seq_feature_dims:
-                    self.float_seq_embedding.append(
-                        nn.Embedding(float_seq_feature_dim, self.embed_dim)
-                    )
+                    self.float_seq_embedding.append(nn.Embedding(float_seq_feature_dim, self.embed_dim))
                 for embedding in self.float_seq_embedding:
                     nn.init.xavier_uniform_(embedding.weight.data)
                 self.float_seq_embeddings.append(self.float_seq_embedding)
 
     def forward(self, input_x):
         r"""Model the different interaction strengths of different field pairs.
-
 
         Args:
             input_x (a tuple): (token_ffm_input, float_ffm_input, token_seq_ffm_input)
@@ -290,10 +267,7 @@ class FieldAwareFactorizationMachine(nn.Module):
         output = list()
         for i in range(self.num_features - 1):
             for j in range(i + 1, self.num_features):
-                output.append(
-                    input_x_emb[self.feature2field[j]][:, i]
-                    * input_x_emb[self.feature2field[i]][:, j]
-                )
+                output.append(input_x_emb[self.feature2field[j]][:, i] * input_x_emb[self.feature2field[i]][:, j])
         output = torch.stack(output, dim=1)  # [batch_size, num_fields, emb_dim]
 
         return output
@@ -327,9 +301,7 @@ class FieldAwareFactorizationMachine(nn.Module):
         # get token field-aware embeddings
         token_input_x_emb = []
         if len(self.token_feature_names) > 0:
-            token_input_x = token_ffm_input + token_ffm_input.new_tensor(
-                self.token_offsets
-            ).unsqueeze(0)
+            token_input_x = token_ffm_input + token_ffm_input.new_tensor(self.token_offsets).unsqueeze(0)
             token_input_x_emb = [
                 self.token_embeddings[i](token_input_x) for i in range(self.num_fields)
             ]  # [num_fields: [batch_size, num_token_features, emb_dim]]
@@ -361,21 +333,13 @@ class FieldAwareFactorizationMachine(nn.Module):
                     mask = mask.float()
                     value_cnt = torch.sum(mask, dim=1, keepdim=True)  # [batch_size, 1]
 
-                    token_seq_embedding = embedding_table(
-                        token_seq
-                    )  # [batch_size, seq_len, embed_dim]
-                    mask = mask.unsqueeze(2).expand_as(
-                        token_seq_embedding
-                    )  # [batch_size, seq_len, embed_dim]
+                    token_seq_embedding = embedding_table(token_seq)  # [batch_size, seq_len, embed_dim]
+                    mask = mask.unsqueeze(2).expand_as(token_seq_embedding)  # [batch_size, seq_len, embed_dim]
                     # mean
                     masked_token_seq_embedding = token_seq_embedding * mask.float()
-                    result = torch.sum(
-                        masked_token_seq_embedding, dim=1
-                    )  # [batch_size, embed_dim]
+                    result = torch.sum(masked_token_seq_embedding, dim=1)  # [batch_size, embed_dim]
                     eps = torch.FloatTensor([1e-8]).to(self.device)
-                    result = torch.div(
-                        result, value_cnt + eps
-                    )  # [batch_size, embed_dim]
+                    result = torch.div(result, value_cnt + eps)  # [batch_size, embed_dim]
                     result = result.unsqueeze(1)  # [batch_size, 1, embed_dim]
 
                     token_seq_result.append(result)
@@ -399,21 +363,13 @@ class FieldAwareFactorizationMachine(nn.Module):
                     mask = mask.float()
                     value_cnt = torch.sum(mask, dim=1, keepdim=True)  # [batch_size, 1]
 
-                    float_seq_embedding = base * embedding_table(
-                        index.long()
-                    )  # [batch_size, seq_len, embed_dim]
-                    mask = mask.unsqueeze(2).expand_as(
-                        float_seq_embedding
-                    )  # [batch_size, seq_len, embed_dim]
+                    float_seq_embedding = base * embedding_table(index.long())  # [batch_size, seq_len, embed_dim]
+                    mask = mask.unsqueeze(2).expand_as(float_seq_embedding)  # [batch_size, seq_len, embed_dim]
                     # mean
                     masked_float_seq_embedding = float_seq_embedding * mask.float()
-                    result = torch.sum(
-                        masked_float_seq_embedding, dim=1
-                    )  # [batch_size, embed_dim]
+                    result = torch.sum(masked_float_seq_embedding, dim=1)  # [batch_size, embed_dim]
                     eps = torch.FloatTensor([1e-8]).to(self.device)
-                    result = torch.div(
-                        result, value_cnt + eps
-                    )  # [batch_size, embed_dim]
+                    result = torch.div(result, value_cnt + eps)  # [batch_size, embed_dim]
                     result = result.unsqueeze(1)  # [batch_size, 1, embed_dim]
 
                     float_seq_result.append(result)

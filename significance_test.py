@@ -47,39 +47,21 @@ def run_test(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model_ours", type=str, default="BPR", help="name of our models"
-    )
-    parser.add_argument(
-        "--model_baseline", type=str, default="NeuMF", help="name of baseline models"
-    )
-    parser.add_argument(
-        "--dataset", "-d", type=str, default="ml-100k", help="name of datasets"
-    )
+    parser.add_argument("--model_ours", type=str, default="BPR", help="name of our models")
+    parser.add_argument("--model_baseline", type=str, default="NeuMF", help="name of baseline models")
+    parser.add_argument("--dataset", "-d", type=str, default="ml-100k", help="name of datasets")
     parser.add_argument(
         "--config_files",
         type=str,
         default=None,
         help="config files: 1st is our model and 2ed is baseline",
     )
-    parser.add_argument(
-        "--st_seed", type=int, default=2023, help="st_seed for generating random seeds"
-    )
-    parser.add_argument(
-        "--run_times", type=int, default=10, help="run times for each model"
-    )
-    parser.add_argument(
-        "--nproc", type=int, default=1, help="the number of process in this group"
-    )
-    parser.add_argument(
-        "--ip", type=str, default="localhost", help="the ip of master node"
-    )
-    parser.add_argument(
-        "--port", type=str, default="5678", help="the port of master node"
-    )
-    parser.add_argument(
-        "--world_size", type=int, default=-1, help="total number of jobs"
-    )
+    parser.add_argument("--st_seed", type=int, default=2023, help="st_seed for generating random seeds")
+    parser.add_argument("--run_times", type=int, default=10, help="run times for each model")
+    parser.add_argument("--nproc", type=int, default=1, help="the number of process in this group")
+    parser.add_argument("--ip", type=str, default="localhost", help="the ip of master node")
+    parser.add_argument("--port", type=str, default="5678", help="the port of master node")
+    parser.add_argument("--world_size", type=int, default=-1, help="total number of jobs")
     parser.add_argument(
         "--group_offset",
         type=int,
@@ -89,9 +71,7 @@ if __name__ == "__main__":
 
     args, _ = parser.parse_known_args()
 
-    config_file_list = (
-        args.config_files.strip().split(" ") if args.config_files else None
-    )
+    config_file_list = args.config_files.strip().split(" ") if args.config_files else None
 
     if len(config_file_list) != 2:
         raise ValueError("You have to specify 2 config files")

@@ -1,4 +1,3 @@
-# _*_ coding: utf-8 _*_
 # @Time : 2020/10/13
 # @Author : Zhichao Feng
 # @Email  : fzcbupt@gmail.com
@@ -8,8 +7,7 @@
 # @Author : Zhichao Feng
 # @email  : fzcbupt@gmail.com
 
-r"""
-xDeepFM
+r"""xDeepFM
 ################################################
 Reference:
     Jianxun Lian at al. "xDeepFM: Combining Explicit and Implicit Feature Interactions for Recommender Systems."
@@ -21,8 +19,8 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import ContextRecommender
 from hopwise.model.layers import MLPLayers, activation_layer
@@ -35,7 +33,7 @@ class xDeepFM(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(xDeepFM, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.mlp_hidden_size = config["mlp_hidden_size"]
@@ -50,7 +48,7 @@ class xDeepFM(ContextRecommender):
             if self.cin_layer_size[:-1] != temp_cin_size[:-1]:
                 self.logger.warning(
                     "Layer size of CIN should be even except for the last layer when direct is True."
-                    "It is changed to {}".format(self.cin_layer_size)
+                    f"It is changed to {self.cin_layer_size}"
                 )
 
         # Create a convolutional layer for each CIN layer
@@ -65,18 +63,14 @@ class xDeepFM(ContextRecommender):
                 self.field_nums.append(layer_size // 2)
 
         # Create MLP layer
-        size_list = (
-            [self.embedding_size * self.num_feature_field] + self.mlp_hidden_size + [1]
-        )
+        size_list = [self.embedding_size * self.num_feature_field] + self.mlp_hidden_size + [1]
         self.mlp_layers = MLPLayers(size_list, dropout=self.dropout_prob)
 
         # Get the output size of CIN
         if self.direct:
             self.final_len = sum(self.cin_layer_size)
         else:
-            self.final_len = (
-                sum(self.cin_layer_size[:-1]) // 2 + self.cin_layer_size[-1]
-            )
+            self.final_len = sum(self.cin_layer_size[:-1]) // 2 + self.cin_layer_size[-1]
 
         self.cin_linear = nn.Linear(self.final_len, 1)
         self.sigmoid = nn.Sigmoid()
@@ -141,12 +135,8 @@ class xDeepFM(ContextRecommender):
         hidden_nn_layers = [input_features]
         final_result = []
         for i, layer_size in enumerate(self.cin_layer_size):
-            z_i = torch.einsum(
-                "bhd,bmd->bhmd", hidden_nn_layers[-1], hidden_nn_layers[0]
-            )
-            z_i = z_i.view(
-                batch_size, self.field_nums[0] * self.field_nums[i], embedding_size
-            )
+            z_i = torch.einsum("bhd,bmd->bhmd", hidden_nn_layers[-1], hidden_nn_layers[0])
+            z_i = z_i.view(batch_size, self.field_nums[0] * self.field_nums[i], embedding_size)
             z_i = self.conv1d_list[i](z_i)
 
             # Pass the CIN intermediate result through the activation function.
@@ -163,14 +153,11 @@ class xDeepFM(ContextRecommender):
             if self.direct:
                 direct_connect = output
                 next_hidden = output
+            elif i != len(self.cin_layer_size) - 1:
+                next_hidden, direct_connect = torch.split(output, 2 * [layer_size // 2], 1)
             else:
-                if i != len(self.cin_layer_size) - 1:
-                    next_hidden, direct_connect = torch.split(
-                        output, 2 * [layer_size // 2], 1
-                    )
-                else:
-                    direct_connect = output
-                    next_hidden = 0
+                direct_connect = output
+                next_hidden = 0
 
             final_result.append(direct_connect)
             hidden_nn_layers.append(next_hidden)
@@ -180,9 +167,7 @@ class xDeepFM(ContextRecommender):
 
     def forward(self, interaction):
         # Get the output of CIN.
-        xdeepfm_input = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
+        xdeepfm_input = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
         cin_output = self.compressed_interaction_network(xdeepfm_input)
         cin_output = self.cin_linear(cin_output)
 

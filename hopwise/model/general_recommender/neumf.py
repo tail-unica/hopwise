@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/6/27
 # @Author : Shanlei Mu
 # @Email  : slmu@ruc.edu.cn
@@ -8,15 +7,14 @@
 # @Author : Zihan Lin
 # @Email  : linzihan.super@foxmain.com
 
-r"""
-NeuMF
+r"""NeuMF
 ################################################
 Reference:
     Xiangnan He et al. "Neural Collaborative Filtering." in WWW 2017.
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.nn.init import normal_
 
 from hopwise.model.abstract_recommender import GeneralRecommender
@@ -29,7 +27,6 @@ class NeuMF(GeneralRecommender):
     It replace the dot product to mlp for a more precise user-item interaction.
 
     Note:
-
         Our implementation only contains a rough pretraining function.
 
     """
@@ -37,7 +34,7 @@ class NeuMF(GeneralRecommender):
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
-        super(NeuMF, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load dataset info
         self.LABEL = config["LABEL_FIELD"]
@@ -58,14 +55,10 @@ class NeuMF(GeneralRecommender):
         self.item_mf_embedding = nn.Embedding(self.n_items, self.mf_embedding_size)
         self.user_mlp_embedding = nn.Embedding(self.n_users, self.mlp_embedding_size)
         self.item_mlp_embedding = nn.Embedding(self.n_items, self.mlp_embedding_size)
-        self.mlp_layers = MLPLayers(
-            [2 * self.mlp_embedding_size] + self.mlp_hidden_size, self.dropout_prob
-        )
+        self.mlp_layers = MLPLayers([2 * self.mlp_embedding_size] + self.mlp_hidden_size, self.dropout_prob)
         self.mlp_layers.logger = None  # remove logger to use torch.save()
         if self.mf_train and self.mlp_train:
-            self.predict_layer = nn.Linear(
-                self.mf_embedding_size + self.mlp_hidden_size[-1], 1
-            )
+            self.predict_layer = nn.Linear(self.mf_embedding_size + self.mlp_hidden_size[-1], 1)
         elif self.mf_train:
             self.predict_layer = nn.Linear(self.mf_embedding_size, 1)
         elif self.mlp_train:
@@ -96,19 +89,13 @@ class NeuMF(GeneralRecommender):
             if isinstance(layer, nn.Linear):
                 weight_key = "mlp_layers." + mlp_layers[index]
                 bias_key = "mlp_layers." + mlp_layers[index + 1]
-                assert (
-                    layer.weight.shape == mlp[weight_key].shape
-                ), f"mlp layer parameter shape mismatch"
-                assert (
-                    layer.bias.shape == mlp[bias_key].shape
-                ), f"mlp layer parameter shape mismatch"
+                assert layer.weight.shape == mlp[weight_key].shape, "mlp layer parameter shape mismatch"
+                assert layer.bias.shape == mlp[bias_key].shape, "mlp layer parameter shape mismatch"
                 layer.weight.data.copy_(mlp[weight_key])
                 layer.bias.data.copy_(mlp[bias_key])
                 index += 2
 
-        predict_weight = torch.cat(
-            [mf["predict_layer.weight"], mlp["predict_layer.weight"]], dim=1
-        )
+        predict_weight = torch.cat([mf["predict_layer.weight"], mlp["predict_layer.weight"]], dim=1)
         predict_bias = mf["predict_layer.bias"] + mlp["predict_layer.bias"]
 
         self.predict_layer.weight.data.copy_(predict_weight)
@@ -126,9 +113,7 @@ class NeuMF(GeneralRecommender):
         if self.mf_train:
             mf_output = torch.mul(user_mf_e, item_mf_e)  # [batch_size, embedding_size]
         if self.mlp_train:
-            mlp_output = self.mlp_layers(
-                torch.cat((user_mlp_e, item_mlp_e), -1)
-            )  # [batch_size, layers[-1]]
+            mlp_output = self.mlp_layers(torch.cat((user_mlp_e, item_mlp_e), -1))  # [batch_size, layers[-1]]
         if self.mf_train and self.mlp_train:
             output = self.predict_layer(torch.cat((mf_output, mlp_output), -1))
         elif self.mf_train:
@@ -136,9 +121,7 @@ class NeuMF(GeneralRecommender):
         elif self.mlp_train:
             output = self.predict_layer(mlp_output)
         else:
-            raise RuntimeError(
-                "mf_train and mlp_train can not be False at the same time"
-            )
+            raise RuntimeError("mf_train and mlp_train can not be False at the same time")
         return output.squeeze(-1)
 
     def calculate_loss(self, interaction):

@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/10/2
 # @Author : Jingsen Zhang
 # @Email  : zhangjingsen@ruc.edu.cn
 
-r"""
-NextItNet
+r"""NextItNet
 ################################################
 
 Reference:
@@ -15,14 +13,15 @@ Reference code:
     - https://github.com/initlisk/nextitnet_pytorch
 
 """
+
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.nn.init import uniform_, xavier_normal_, constant_
+from torch.nn.init import constant_, uniform_, xavier_normal_
 
 from hopwise.model.abstract_recommender import SequentialRecommender
-from hopwise.model.loss import RegLoss, BPRLoss
+from hopwise.model.loss import BPRLoss, RegLoss
 
 
 class NextItNet(SequentialRecommender):
@@ -36,10 +35,10 @@ class NextItNet(SequentialRecommender):
         than it in residual block (b), the performance of b is better than a.
         So in our model, we use residual block (b).
         In addition, when dilations is not equal to 1, the training may be slow. To  speed up the efficiency, please set the parameters "reproducibility" False.
-    """
+    """  # noqa: E501
 
     def __init__(self, config, dataset):
-        super(NextItNet, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
@@ -51,9 +50,7 @@ class NextItNet(SequentialRecommender):
         self.loss_type = config["loss_type"]
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
 
         # residual blocks    dilations in blocks:[1,2,4,8,1,2,4,8,...]
         rb = [
@@ -91,21 +88,15 @@ class NextItNet(SequentialRecommender):
                 constant_(module.bias.data, 0.1)
 
     def forward(self, item_seq):
-        item_seq_emb = self.item_embedding(
-            item_seq
-        )  # [batch_size, seq_len, embed_size]
+        item_seq_emb = self.item_embedding(item_seq)  # [batch_size, seq_len, embed_size]
         # Residual locks
         dilate_outputs = self.residual_blocks(item_seq_emb)
-        hidden = dilate_outputs[:, -1, :].view(
-            -1, self.residual_channels
-        )  # [batch_size, embed_size]
+        hidden = dilate_outputs[:, -1, :].view(-1, self.residual_channels)  # [batch_size, embed_size]
         seq_output = self.final_layer(hidden)  # [batch_size, embedding_size]
         return seq_output
 
     def reg_loss_rb(self):
-        r"""
-        L2 loss on residual blocks
-        """
+        r"""L2 loss on residual blocks"""
         loss_rb = 0
         if self.reg_weight > 0.0:
             for name, parm in self.residual_blocks.named_parameters():
@@ -146,19 +137,15 @@ class NextItNet(SequentialRecommender):
         # item_seq_len = interaction[self.ITEM_SEQ_LEN]
         seq_output = self.forward(item_seq)
         test_items_emb = self.item_embedding.weight
-        scores = torch.matmul(
-            seq_output, test_items_emb.transpose(0, 1)
-        )  # [B, item_num]
+        scores = torch.matmul(seq_output, test_items_emb.transpose(0, 1))  # [B, item_num]
         return scores
 
 
 class ResidualBlock_a(nn.Module):
-    r"""
-    Residual block (a) in the paper
-    """
+    r"""Residual block (a) in the paper"""
 
     def __init__(self, in_channel, out_channel, kernel_size=3, dilation=None):
-        super(ResidualBlock_a, self).__init__()
+        super().__init__()
 
         half_channel = out_channel // 2
         self.ln1 = nn.LayerNorm(out_channel, eps=1e-8)
@@ -202,19 +189,15 @@ class ResidualBlock_a(nn.Module):
         inputs_pad = inputs_pad.unsqueeze(2)  # [batch_size, embed_size, 1, seq_len]
         pad = nn.ZeroPad2d(((self.kernel_size - 1) * dilation, 0, 0, 0))
         # padding operation  args：(left,right,top,bottom)
-        inputs_pad = pad(
-            inputs_pad
-        )  # [batch_size, embed_size, 1, seq_len+(self.kernel_size-1)*dilations]
+        inputs_pad = pad(inputs_pad)  # [batch_size, embed_size, 1, seq_len+(self.kernel_size-1)*dilations]
         return inputs_pad
 
 
 class ResidualBlock_b(nn.Module):
-    r"""
-    Residual block (b) in the paper
-    """
+    r"""Residual block (b) in the paper"""
 
     def __init__(self, in_channel, out_channel, kernel_size=3, dilation=None):
-        super(ResidualBlock_b, self).__init__()
+        super().__init__()
 
         self.conv1 = nn.Conv2d(
             in_channel,
@@ -237,9 +220,7 @@ class ResidualBlock_b(nn.Module):
         self.kernel_size = kernel_size
 
     def forward(self, x):  # x: [batch_size, seq_len, embed_size]
-        x_pad = self.conv_pad(
-            x, self.dilation
-        )  # [batch_size, embed_size, 1, seq_len+(self.kernel_size-1)*dilations]
+        x_pad = self.conv_pad(x, self.dilation)  # [batch_size, embed_size, 1, seq_len+(self.kernel_size-1)*dilations]
         out = self.conv1(x_pad).squeeze(2).permute(0, 2, 1)
         # [batch_size, seq_len+(self.kernel_size-1)*dilations-kernel_size+1, embed_size]
         out = F.relu(self.ln1(out))

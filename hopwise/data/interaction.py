@@ -7,8 +7,7 @@
 # @Author  : Zhen Tian, Yupeng Hou, Yushuo Chen, Xingyu Pan
 # @email   : chenyuwuxinn@gmail.com, houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, panxy@ruc.edu.cn
 
-"""
-hopwise.data.interaction
+"""hopwise.data.interaction
 ############################
 """
 
@@ -26,7 +25,7 @@ def _convert_to_tensor(data):
 
     Returns:
         torch.Tensor: Converted tensor from `data`.
-    """
+    """  # noqa: E501
     elem = data[0]
     if isinstance(elem, (float, int, np.float, np.int64)):
         new_data = torch.as_tensor(data)
@@ -40,7 +39,7 @@ def _convert_to_tensor(data):
     return new_data
 
 
-class Interaction(object):
+class Interaction:
     """The basic class representing a batch of interaction records.
 
     Note:
@@ -105,17 +104,13 @@ class Interaction(object):
                 elif isinstance(value, torch.Tensor):
                     self.interaction[key] = value
                 else:
-                    raise ValueError(
-                        f"The type of {key}[{type(value)}] is not supported!"
-                    )
+                    raise ValueError(f"The type of {key}[{type(value)}] is not supported!")
         elif isinstance(interaction, pd.DataFrame):
             for key in interaction:
                 value = interaction[key].values
                 self.interaction[key] = _convert_to_tensor(value)
         else:
-            raise ValueError(
-                f"[{type(interaction)}] is not supported for initialize `Interaction`!"
-            )
+            raise ValueError(f"[{type(interaction)}] is not supported for initialize `Interaction`!")
         self.length = -1
         for k in self.interaction:
             self.length = max(self.length, self.interaction[k].unsqueeze(-1).shape[0])
@@ -125,7 +120,7 @@ class Interaction(object):
 
     def __getattr__(self, item):
         if "interaction" not in self.__dict__:
-            raise AttributeError(f"'Interaction' object has no attribute 'interaction'")
+            raise AttributeError("'Interaction' object has no attribute 'interaction'")
         if item in self.interaction:
             return self.interaction[item]
         raise AttributeError(f"'Interaction' object has no attribute '{item}'")
@@ -171,9 +166,8 @@ class Interaction(object):
 
     @property
     def columns(self):
-        """
-        Returns:
-            list of str: The columns of interaction.
+        """Returns:
+        list of str: The columns of interaction.
         """
         return list(self.interaction.keys())
 
@@ -250,9 +244,7 @@ class Interaction(object):
         """
         ret = {}
         for k in self.interaction:
-            ret[k] = self.interaction[k].repeat(
-                [sizes] + [1] * (len(self.interaction[k].shape) - 1)
-            )
+            ret[k] = self.interaction[k].repeat([sizes] + [1] * (len(self.interaction[k].shape) - 1))
         return Interaction(ret)
 
     def repeat_interleave(self, repeats, dim=0):
@@ -335,9 +327,7 @@ class Interaction(object):
             if len(ascending) == 1:
                 ascending = ascending * len(by)
             else:
-                raise ValueError(
-                    f"by [{by}] and ascending [{ascending}] should have same length."
-                )
+                raise ValueError(f"by [{by}] and ascending [{ascending}] should have same length.")
 
         for b, a in zip(by[::-1], ascending[::-1]):
             if len(self.interaction[b].shape) == 1:
@@ -355,9 +345,7 @@ class Interaction(object):
         Args:
             prefix (str): The prefix to be added.
         """
-        self.interaction = {
-            prefix + key: value for key, value in self.interaction.items()
-        }
+        self.interaction = {prefix + key: value for key, value in self.interaction.items()}
 
 
 def cat_interactions(interactions):
@@ -372,18 +360,12 @@ def cat_interactions(interactions):
     if not isinstance(interactions, (list, tuple)):
         raise TypeError(f"Interactions [{interactions}] should be list or tuple.")
     if len(interactions) == 0:
-        raise ValueError(
-            f"Interactions [{interactions}] should have some interactions."
-        )
+        raise ValueError(f"Interactions [{interactions}] should have some interactions.")
 
     columns_set = set(interactions[0].columns)
     for inter in interactions:
         if columns_set != set(inter.columns):
-            raise ValueError(
-                f"Interactions [{interactions}] should have some interactions."
-            )
+            raise ValueError(f"Interactions [{interactions}] should have some interactions.")
 
-    new_inter = {
-        col: torch.cat([inter[col] for inter in interactions]) for col in columns_set
-    }
+    new_inter = {col: torch.cat([inter[col] for inter in interactions]) for col in columns_set}
     return Interaction(new_inter)

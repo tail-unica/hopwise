@@ -5,9 +5,9 @@ inner_size: 256                   # (int) The inner hidden size in feed-forward 
 hidden_dropout_prob: 0            # (float) The probability of an element to be zeroed.
 attn_dropout_prob: 0.1            # (float) The probability of an attention score to be zeroed.
 hidden_act: 'gelu'                # (str) The activation function in feed-forward layer.
-layer_norm_eps: 1e-12             # (float) A value added to the denominator for numerical stability. 
+layer_norm_eps: 1e-12             # (float) A value added to the denominator for numerical stability.
 initializer_range: 0.02           # (float) The standard deviation for normal initialization.
-loss_type: 'CE'                   # (str) The type of loss function. This value can only be 'CE'. 
+loss_type: 'CE'                   # (str) The type of loss function. This value can only be 'CE'.
 
 #Please see https://github.com/iesl/softmax_CPR_recommend/blob/master/run_hyper_loop.sh and [1] to see some common configuration of the following hyperparameters
 n_facet_all: 5                    # (int) Number of linear layers for context partition, reranker partition, pointer network, and most items in the vocabulary. Notice that n_facet_all = n_facet + n_facet_context + n_facet_reranker*len(reranker_CAN_NUM_arr) + n_facet_emb

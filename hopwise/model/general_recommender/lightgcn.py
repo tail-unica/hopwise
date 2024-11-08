@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/8/31
 # @Author : Changxin Tian
 # @Email  : cx.tian@outlook.com
@@ -8,8 +7,7 @@
 # @Author : Shanlei Mu, Gaowei Zhang
 # @Email  : slmu@ruc.edu.cn, 1462034631@qq.com
 
-r"""
-LightGCN
+r"""LightGCN
 ################################################
 
 Reference:
@@ -17,7 +15,7 @@ Reference:
 
 Reference code:
     https://github.com/kuandeng/LightGCN
-"""
+"""  # noqa: E501
 
 import numpy as np
 import scipy.sparse as sp
@@ -43,28 +41,20 @@ class LightGCN(GeneralRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(LightGCN, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load dataset info
         self.interaction_matrix = dataset.inter_matrix(form="coo").astype(np.float32)
 
         # load parameters info
-        self.latent_dim = config[
-            "embedding_size"
-        ]  # int type:the embedding size of lightGCN
+        self.latent_dim = config["embedding_size"]  # int type:the embedding size of lightGCN
         self.n_layers = config["n_layers"]  # int type:the layer num of lightGCN
-        self.reg_weight = config[
-            "reg_weight"
-        ]  # float32 type: the weight decay for l2 normalization
+        self.reg_weight = config["reg_weight"]  # float32 type: the weight decay for l2 normalization
         self.require_pow = config["require_pow"]
 
         # define layers and loss
-        self.user_embedding = torch.nn.Embedding(
-            num_embeddings=self.n_users, embedding_dim=self.latent_dim
-        )
-        self.item_embedding = torch.nn.Embedding(
-            num_embeddings=self.n_items, embedding_dim=self.latent_dim
-        )
+        self.user_embedding = torch.nn.Embedding(num_embeddings=self.n_users, embedding_dim=self.latent_dim)
+        self.item_embedding = torch.nn.Embedding(num_embeddings=self.n_items, embedding_dim=self.latent_dim)
         self.mf_loss = BPRLoss()
         self.reg_loss = EmbLoss()
 
@@ -92,14 +82,10 @@ class LightGCN(GeneralRecommender):
             Sparse tensor of the normalized interaction matrix.
         """
         # build adj matrix
-        A = sp.dok_matrix(
-            (self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32
-        )
+        A = sp.dok_matrix((self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32)
         inter_M = self.interaction_matrix
         inter_M_t = self.interaction_matrix.transpose()
-        data_dict = dict(
-            zip(zip(inter_M.row, inter_M.col + self.n_users), [1] * inter_M.nnz)
-        )
+        data_dict = dict(zip(zip(inter_M.row, inter_M.col + self.n_users), [1] * inter_M.nnz))
         data_dict.update(
             dict(
                 zip(
@@ -146,9 +132,7 @@ class LightGCN(GeneralRecommender):
         lightgcn_all_embeddings = torch.stack(embeddings_list, dim=1)
         lightgcn_all_embeddings = torch.mean(lightgcn_all_embeddings, dim=1)
 
-        user_all_embeddings, item_all_embeddings = torch.split(
-            lightgcn_all_embeddings, [self.n_users, self.n_items]
-        )
+        user_all_embeddings, item_all_embeddings = torch.split(lightgcn_all_embeddings, [self.n_users, self.n_items])
         return user_all_embeddings, item_all_embeddings
 
     def calculate_loss(self, interaction):

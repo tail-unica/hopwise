@@ -1,15 +1,14 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/1/17
 # @Author : Chen Yang
 # @Email  : 254170321@qq.com
 
-r"""
-hopwise.model.exlib_recommender.lightgbm
+r"""hopwise.model.exlib_recommender.lightgbm
 ##########################################
 """
 
 import lightgbm as lgb
-from hopwise.utils import ModelType, InputType
+
+from hopwise.utils import InputType, ModelType
 
 
 class LightGBM(lgb.Booster):
@@ -31,7 +30,7 @@ class LightGBM(lgb.Booster):
             model_file (str): file path of saved model
 
         """
-        self = lgb.Booster(model_file=model_file)
+        self = lgb.Booster(model_file=model_file)  # noqa: F841, PLW0642
 
     def load_other_parameter(self, other_parameter):
         r"""Load other parameters"""

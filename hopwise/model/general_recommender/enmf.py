@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/12/31
 # @Author : Zihan Lin
 # @Email  : zhlin@ruc.edu.cn
 
-r"""
-ENMF
+r"""ENMF
 ################################################
 Reference:
     Chong Chen et al. "Efficient Neural Matrix Factorization without Sampling for Recommendation." in TOIS 2020.
@@ -14,10 +12,11 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
+
+from hopwise.model.abstract_recommender import GeneralRecommender
 from hopwise.model.init import xavier_normal_initialization
 from hopwise.utils import InputType
-from hopwise.model.abstract_recommender import GeneralRecommender
 
 
 class ENMF(GeneralRecommender):
@@ -29,7 +28,7 @@ class ENMF(GeneralRecommender):
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
-        super(ENMF, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         self.embedding_size = config["embedding_size"]
         self.dropout_prob = config["dropout_prob"]
@@ -41,19 +40,15 @@ class ENMF(GeneralRecommender):
         self.history_item_matrix, _, self.history_lens = dataset.history_item_matrix()
         self.history_item_matrix = self.history_item_matrix.to(self.device)
 
-        self.user_embedding = nn.Embedding(
-            self.n_users, self.embedding_size, padding_idx=0
-        )
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.user_embedding = nn.Embedding(self.n_users, self.embedding_size, padding_idx=0)
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.H_i = nn.Linear(self.embedding_size, 1, bias=False)
         self.dropout = nn.Dropout(self.dropout_prob)
 
         self.apply(xavier_normal_initialization)
 
     def reg_loss(self):
-        """calculate the reg loss for embedding layers and mlp layers
+        """Calculate the reg loss for embedding layers and mlp layers
 
         Returns:
             torch.Tensor: reg loss
@@ -69,12 +64,8 @@ class ENMF(GeneralRecommender):
         user_embedding = self.dropout(user_embedding)  # shape:[B, embedding_size]
 
         user_inter = self.history_item_matrix[user]  # shape :[B, max_len]
-        item_embedding = self.item_embedding(
-            user_inter
-        )  # shape: [B, max_len, embedding_size]
-        score = torch.mul(
-            user_embedding.unsqueeze(1), item_embedding
-        )  # shape: [B, max_len, embedding_size]
+        item_embedding = self.item_embedding(user_inter)  # shape: [B, max_len, embedding_size]
+        score = torch.mul(user_embedding.unsqueeze(1), item_embedding)  # shape: [B, max_len, embedding_size]
         score = self.H_i(score)  # shape: [B,max_len,1]
         score = score.squeeze(-1)  # shape:[B,max_len]
 
@@ -93,9 +84,7 @@ class ENMF(GeneralRecommender):
 
         # shape: [embedding_size, embedding_size]
         batch_user = self.user_embedding(user)
-        user_sum = torch.bmm(batch_user.unsqueeze(2), batch_user.unsqueeze(1)).sum(
-            dim=0
-        )
+        user_sum = torch.bmm(batch_user.unsqueeze(2), batch_user.unsqueeze(1)).sum(dim=0)
 
         # shape: [embedding_size, embedding_size]
         H_sum = torch.matmul(self.H_i.weight.t(), self.H_i.weight)
@@ -104,9 +93,7 @@ class ENMF(GeneralRecommender):
 
         loss = self.negative_weight * t
 
-        loss = loss + torch.sum(
-            (1 - self.negative_weight) * torch.square(pos_score) - 2 * pos_score
-        )
+        loss = loss + torch.sum((1 - self.negative_weight) * torch.square(pos_score) - 2 * pos_score)
 
         loss = loss + self.reg_loss()
 
@@ -131,9 +118,7 @@ class ENMF(GeneralRecommender):
 
         all_i_e = self.item_embedding.weight  # shape: [n_item,embedding_dim]
 
-        score = torch.mul(
-            u_e.unsqueeze(1), all_i_e.unsqueeze(0)
-        )  # shape: [B, n_item, embedding_dim]
+        score = torch.mul(u_e.unsqueeze(1), all_i_e.unsqueeze(0))  # shape: [B, n_item, embedding_dim]
 
         score = self.H_i(score).squeeze(2)  # shape: [B, n_item]
 

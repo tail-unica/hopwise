@@ -1,21 +1,21 @@
+from hopwise.utils.argument_list import *
+from hopwise.utils.enum_type import *
 from hopwise.utils.logger import init_logger, set_color
 from hopwise.utils.utils import (
-    get_local_time,
-    ensure_dir,
-    get_model,
-    get_trainer,
-    get_environment,
-    early_stopping,
     calculate_valid_score,
     dict2str,
-    init_seed,
-    get_tensorboard,
-    get_gpu_usage,
+    early_stopping,
+    ensure_dir,
+    get_environment,
     get_flops,
+    get_gpu_usage,
+    get_local_time,
+    get_model,
+    get_tensorboard,
+    get_trainer,
+    init_seed,
     list_to_latex,
 )
-from hopwise.utils.enum_type import *
-from hopwise.utils.argument_list import *
 from hopwise.utils.wandblogger import WandbLogger
 
 __all__ = [

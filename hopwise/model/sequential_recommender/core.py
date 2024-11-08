@@ -1,18 +1,15 @@
-# -*- coding: utf-8 -*-
-
-r"""
-CORE
+r"""CORE
 ################################################
 Reference:
     Yupeng Hou, Binbin Hu, Zhiqiang Zhang, Wayne Xin Zhao. "CORE: Simple and Effective Session-based Recommendation within Consistent Representation Space." in SIGIR 2022.
 
     https://github.com/RUCAIBox/CORE
-"""
+"""  # noqa: E501
 
 import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 from hopwise.model.abstract_recommender import SequentialRecommender
 from hopwise.model.layers import TransformerEncoder
@@ -58,18 +55,14 @@ class TransNet(nn.Module):
         attention_mask = item_seq != 0
         extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)  # torch.bool
         if not bidirectional:
-            extended_attention_mask = torch.tril(
-                extended_attention_mask.expand((-1, -1, item_seq.size(-1), -1))
-            )
+            extended_attention_mask = torch.tril(extended_attention_mask.expand((-1, -1, item_seq.size(-1), -1)))
         extended_attention_mask = torch.where(extended_attention_mask, 0.0, -10000.0)
         return extended_attention_mask
 
     def forward(self, item_seq, item_emb):
         mask = item_seq.gt(0)
 
-        position_ids = torch.arange(
-            item_seq.size(1), dtype=torch.long, device=item_seq.device
-        )
+        position_ids = torch.arange(item_seq.size(1), dtype=torch.long, device=item_seq.device)
         position_ids = position_ids.unsqueeze(0).expand_as(item_seq)
         position_embedding = self.position_embedding(position_ids)
 
@@ -79,9 +72,7 @@ class TransNet(nn.Module):
 
         extended_attention_mask = self.get_attention_mask(item_seq)
 
-        trm_output = self.trm_encoder(
-            input_emb, extended_attention_mask, output_all_encoded_layers=True
-        )
+        trm_output = self.trm_encoder(input_emb, extended_attention_mask, output_all_encoded_layers=True)
         output = trm_output[-1]
 
         alpha = self.fn(output).to(torch.double)
@@ -108,7 +99,7 @@ class CORE(SequentialRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(CORE, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
@@ -120,9 +111,7 @@ class CORE(SequentialRecommender):
         self.temperature = config["temperature"]
 
         # item embedding
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
 
         # DNN
         if self.dnn_type == "trm":
@@ -130,9 +119,7 @@ class CORE(SequentialRecommender):
         elif self.dnn_type == "ave":
             self.net = self.ave_net
         else:
-            raise ValueError(
-                f"dnn_type should be either trm or ave, but have [{self.dnn_type}]."
-            )
+            raise ValueError(f"dnn_type should be either trm or ave, but have [{self.dnn_type}].")
 
         if self.loss_type == "CE":
             self.loss_fct = nn.CrossEntropyLoss()
@@ -171,15 +158,12 @@ class CORE(SequentialRecommender):
         all_item_emb = self.item_dropout(all_item_emb)
         # Robust Distance Measuring (RDM)
         all_item_emb = F.normalize(all_item_emb, dim=-1)
-        logits = (
-            torch.matmul(seq_output, all_item_emb.transpose(0, 1)) / self.temperature
-        )
+        logits = torch.matmul(seq_output, all_item_emb.transpose(0, 1)) / self.temperature
         loss = self.loss_fct(logits, pos_items)
         return loss
 
     def predict(self, interaction):
         item_seq = interaction[self.ITEM_SEQ]
-        item_seq_len = interaction[self.ITEM_SEQ_LEN]
         test_item = interaction[self.ITEM_ID]
         seq_output = self.forward(item_seq)
         test_item_emb = self.item_embedding(test_item)
@@ -192,7 +176,5 @@ class CORE(SequentialRecommender):
         test_item_emb = self.item_embedding.weight
         # no dropout for evaluation
         test_item_emb = F.normalize(test_item_emb, dim=-1)
-        scores = (
-            torch.matmul(seq_output, test_item_emb.transpose(0, 1)) / self.temperature
-        )
+        scores = torch.matmul(seq_output, test_item_emb.transpose(0, 1)) / self.temperature
         return scores

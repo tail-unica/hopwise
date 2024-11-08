@@ -7,17 +7,18 @@
 # @Author : Zhichao Feng
 # @email  : fzcbupt@gmail.com
 
-"""
-hopwise.evaluator.collector
+"""hopwise.evaluator.collector
 ################################################
 """
 
-from hopwise.evaluator.register import Register
-import torch
 import copy
 
+import torch
 
-class DataStruct(object):
+from hopwise.evaluator.register import Register
+
+
+class DataStruct:
     def __init__(self):
         self._data_dict = {}
 
@@ -46,10 +47,8 @@ class DataStruct(object):
             self._data_dict[name] = value.clone().detach()
         else:
             if not isinstance(self._data_dict[name], torch.Tensor):
-                raise ValueError("{} is not a tensor.".format(name))
-            self._data_dict[name] = torch.cat(
-                (self._data_dict[name], value.clone().detach()), dim=0
-            )
+                raise ValueError(f"{name} is not a tensor.")
+            self._data_dict[name] = torch.cat((self._data_dict[name], value.clone().detach()), dim=0)
 
     def __str__(self):
         data_info = "\nContaining:\n"
@@ -58,7 +57,7 @@ class DataStruct(object):
         return data_info
 
 
-class Collector(object):
+class Collector:
     """The collector is used to collect the resource for evaluator.
     As the evaluation metrics are various, the needed resource not only contain the recommended result
     but also other resource from data and model. They all can be collected by the collector during the training
@@ -78,6 +77,7 @@ class Collector(object):
 
     def data_collect(self, train_data):
         """Collect the evaluation resource from training data.
+
         Args:
             train_data (AbstractDataLoader): the training dataloader which contains the training data.
 
@@ -112,19 +112,11 @@ class Collector(object):
 
         """
         length, width = scores.shape
-        true_tensor = torch.full(
-            (length, 1), True, dtype=torch.bool, device=self.device
-        )
+        true_tensor = torch.full((length, 1), True, dtype=torch.bool, device=self.device)
 
         obs = torch.cat([true_tensor, scores[:, 1:] != scores[:, :-1]], dim=1)
         # bias added to dense
-        bias = (
-            torch.arange(0, length, device=self.device)
-            .repeat(width)
-            .reshape(width, -1)
-            .transpose(1, 0)
-            .reshape(-1)
-        )
+        bias = torch.arange(0, length, device=self.device).repeat(width).reshape(width, -1).transpose(1, 0).reshape(-1)
         dense = obs.view(-1).cumsum(0) + bias
 
         # cumulative counts of each unique value
@@ -142,6 +134,7 @@ class Collector(object):
         positive_i: torch.Tensor,
     ):
         """Collect the evaluation resource from batched eval data and batched model output.
+
         Args:
             scores_tensor (Torch.Tensor): the output tensor of model with the shape of `(N, )`
             interaction(Interaction): batched eval data.
@@ -149,18 +142,12 @@ class Collector(object):
             positive_i(Torch.Tensor): the positive item id for each user.
         """
         if self.register.need("rec.items"):
-
             # get topk
-            _, topk_idx = torch.topk(
-                scores_tensor, max(self.topk), dim=-1
-            )  # n_users x k
+            _, topk_idx = torch.topk(scores_tensor, max(self.topk), dim=-1)  # n_users x k
             self.data_struct.update_tensor("rec.items", topk_idx)
 
         if self.register.need("rec.topk"):
-
-            _, topk_idx = torch.topk(
-                scores_tensor, max(self.topk), dim=-1
-            )  # n_users x k
+            _, topk_idx = torch.topk(scores_tensor, max(self.topk), dim=-1)  # n_users x k
             pos_matrix = torch.zeros_like(scores_tensor, dtype=torch.int)
             pos_matrix[positive_u, positive_i] = 1
             pos_len_list = pos_matrix.sum(dim=1, keepdim=True)
@@ -169,7 +156,6 @@ class Collector(object):
             self.data_struct.update_tensor("rec.topk", result)
 
         if self.register.need("rec.meanrank"):
-
             desc_scores, desc_index = torch.sort(scores_tensor, dim=-1, descending=True)
 
             # get the index of positive items in the ranking list
@@ -178,9 +164,7 @@ class Collector(object):
             pos_index = torch.gather(pos_matrix, dim=1, index=desc_index)
 
             avg_rank = self._average_rank(desc_scores)
-            pos_rank_sum = torch.where(
-                pos_index == 1, avg_rank, torch.zeros_like(avg_rank)
-            ).sum(dim=-1, keepdim=True)
+            pos_rank_sum = torch.where(pos_index == 1, avg_rank, torch.zeros_like(avg_rank)).sum(dim=-1, keepdim=True)
 
             pos_len_list = pos_matrix.sum(dim=1, keepdim=True)
             user_len_list = desc_scores.argmin(dim=1, keepdim=True)
@@ -188,17 +172,15 @@ class Collector(object):
             self.data_struct.update_tensor("rec.meanrank", result)
 
         if self.register.need("rec.score"):
-
             self.data_struct.update_tensor("rec.score", scores_tensor)
 
         if self.register.need("data.label"):
             self.label_field = self.config["LABEL_FIELD"]
-            self.data_struct.update_tensor(
-                "data.label", interaction[self.label_field].to(self.device)
-            )
+            self.data_struct.update_tensor("data.label", interaction[self.label_field].to(self.device))
 
     def model_collect(self, model: torch.nn.Module):
         """Collect the evaluation resource from model.
+
         Args:
             model (nn.Module): the trained recommendation model.
         """
@@ -208,6 +190,7 @@ class Collector(object):
     def eval_collect(self, eval_pred: torch.Tensor, data_label: torch.Tensor):
         """Collect the evaluation resource from total output and label.
         It was designed for those models that can not predict with batch.
+
         Args:
             eval_pred (torch.Tensor): the output score tensor of model.
             data_label (torch.Tensor): the label tensor.

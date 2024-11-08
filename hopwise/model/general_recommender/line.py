@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/12/8
 # @Author : Yihong Guo
 # @Email  : gyihong@hotmail.com
 
-r"""
-LINE
+r"""LINE
 ################################################
 Reference:
     Jian Tang et al. "LINE: Large-scale Information Network Embedding." in WWW 2015.
@@ -17,7 +15,7 @@ import random
 
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
 from hopwise.model.abstract_recommender import GeneralRecommender
 from hopwise.model.init import xavier_normal_initialization
@@ -26,7 +24,7 @@ from hopwise.utils import InputType
 
 class NegSamplingLoss(nn.Module):
     def __init__(self):
-        super(NegSamplingLoss, self).__init__()
+        super().__init__()
 
     def forward(self, sign, score):
         return -torch.mean(torch.log(torch.sigmoid(sign * score)))
@@ -41,7 +39,7 @@ class LINE(GeneralRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(LINE, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         self.embedding_size = config["embedding_size"]
         self.order = config["order"]
@@ -52,13 +50,9 @@ class LINE(GeneralRecommender):
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
 
-        if self.order == 2:
-            self.user_context_embedding = nn.Embedding(
-                self.n_users, self.embedding_size
-            )
-            self.item_context_embedding = nn.Embedding(
-                self.n_items, self.embedding_size
-            )
+        if self.order == 2:  # noqa: PLR2004
+            self.user_context_embedding = nn.Embedding(self.n_users, self.embedding_size)
+            self.item_context_embedding = nn.Embedding(self.n_items, self.embedding_size)
 
         self.loss_fct = NegSamplingLoss()
 
@@ -146,7 +140,7 @@ class LINE(GeneralRecommender):
         ones = torch.ones(len(score_pos), device=self.device)
 
         if self.order == 1:
-            if random.random() < 0.5:
+            if random.random() < 0.5:  # noqa: PLR2004
                 score_neg = self.forward(user, neg_item)
             else:
                 neg_user = self.sampler(pos_item)
@@ -155,7 +149,7 @@ class LINE(GeneralRecommender):
 
         else:
             # randomly train i-i relation and u-u relation with u-i relation
-            if random.random() < 0.5:
+            if random.random() < 0.5:  # noqa: PLR2004
                 score_neg = self.forward(user, neg_item)
                 score_pos_con = self.context_forward(user, pos_item, "uu")
                 score_neg_con = self.context_forward(user, neg_item, "uu")
@@ -170,8 +164,7 @@ class LINE(GeneralRecommender):
                 self.loss_fct(ones, score_pos)
                 + self.loss_fct(-1 * ones, score_neg)
                 + self.loss_fct(ones, score_pos_con) * self.second_order_loss_weight
-                + self.loss_fct(-1 * ones, score_neg_con)
-                * self.second_order_loss_weight
+                + self.loss_fct(-1 * ones, score_neg_con) * self.second_order_loss_weight
             )
 
     def predict(self, interaction):

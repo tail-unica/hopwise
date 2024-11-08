@@ -7,16 +7,18 @@
 # @Author : Zhen Tian, Yupeng Hou, Yushuo Chen, Kaiyuan Li
 # @email  : chenyuwuxinn@gmail.com, houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, tsotfsk@outlook.com
 
-"""
-hopwise.data.dataloader.knowledge_dataloader
+"""hopwise.data.dataloader.knowledge_dataloader
 ################################################
 """
+
 from logging import getLogger
+
+import numpy as np
+
 from hopwise.data.dataloader.abstract_dataloader import AbstractDataLoader
 from hopwise.data.dataloader.general_dataloader import TrainDataLoader
 from hopwise.data.interaction import Interaction
-from hopwise.utils import InputType, KGDataLoaderState
-import numpy as np
+from hopwise.utils import KGDataLoaderState
 
 
 class KGDataLoader(AbstractDataLoader):
@@ -92,14 +94,12 @@ class KnowledgeBasedDataLoader:
             In the second state, this dataloader would only return the user-item interaction.
             In the last state, this dataloader would return both knowledge graph information
             and user-item interaction information.
-    """
+    """  # noqa: E501
 
     def __init__(self, config, dataset, sampler, kg_sampler, shuffle=False):
         self.logger = getLogger()
         # using sampler
-        self.general_dataloader = TrainDataLoader(
-            config, dataset, sampler, shuffle=shuffle
-        )
+        self.general_dataloader = TrainDataLoader(config, dataset, sampler, shuffle=shuffle)
 
         # using kg_sampler
         self.kg_dataloader = KGDataLoader(config, dataset, kg_sampler, shuffle=True)
@@ -156,9 +156,7 @@ class KnowledgeBasedDataLoader:
             state (KGDataLoaderState): the state of :class:`KnowledgeBasedDataLoader`.
         """
         if state not in set(KGDataLoaderState):
-            raise NotImplementedError(
-                f"Kg data loader has no state named [{self.state}]."
-            )
+            raise NotImplementedError(f"Kg data loader has no state named [{self.state}].")
         self.state = state
 
     def get_model(self, model):

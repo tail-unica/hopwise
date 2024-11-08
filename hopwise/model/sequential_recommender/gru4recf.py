@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time    : 2020/9/14 16:57
 # @Author  : Hui Wang
 # @Email   : hui.wang@ruc.edu.cn
 
-r"""
-GRU4RecF
+r"""GRU4RecF
 ################################################
 
 Reference:
@@ -23,8 +21,7 @@ from hopwise.model.loss import BPRLoss
 
 
 class GRU4RecF(SequentialRecommender):
-    r"""
-    In the original paper, the authors proposed several architectures. We compared 3 different
+    r"""In the original paper, the authors proposed several architectures. We compared 3 different
     architectures:
 
         (1)  Concatenate item input and feature input and use single RNN,
@@ -39,7 +36,7 @@ class GRU4RecF(SequentialRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(GRU4RecF, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
@@ -55,9 +52,7 @@ class GRU4RecF(SequentialRecommender):
         self.loss_type = config["loss_type"]
 
         # define layers and loss
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.feature_embed_layer = FeatureSeqEmbLayer(
             dataset,
             self.embedding_size,
@@ -113,14 +108,10 @@ class GRU4RecF(SequentialRecommender):
         table_shape = feature_table.shape
 
         feat_num, embedding_size = table_shape[-2], table_shape[-1]
-        feature_emb = feature_table.view(
-            table_shape[:-2] + (feat_num * embedding_size,)
-        )
+        feature_emb = feature_table.view(table_shape[:-2] + (feat_num * embedding_size,))
         feature_gru_output, _ = self.feature_gru_layers(feature_emb)  # [B Len H]
 
-        output_concat = torch.cat(
-            (item_gru_output, feature_gru_output), -1
-        )  # [B Len 2*H]
+        output_concat = torch.cat((item_gru_output, feature_gru_output), -1)  # [B Len 2*H]
         output = self.dense_layer(output_concat)
         output = self.gather_indexes(output, item_seq_len - 1)  # [B H]
         return output  # [B H]

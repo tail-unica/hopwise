@@ -7,15 +7,17 @@
 # @Author : Zhen Tian, Yushuo Chen, Xingyu Pan
 # @email  : chenyuwuxinn@gmail.com, chenyushuo@ruc.edu.cn, panxy@ruc.edu.cn
 
-"""
-hopwise.data.dataloader.user_dataloader
+"""hopwise.data.dataloader.user_dataloader
 ################################################
 """
-import torch
+
 from logging import getLogger
+
+import numpy as np
+import torch
+
 from hopwise.data.dataloader.abstract_dataloader import AbstractDataLoader
 from hopwise.data.interaction import Interaction
-import numpy as np
 
 
 class UserDataLoader(AbstractDataLoader):

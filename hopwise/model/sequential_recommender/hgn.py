@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 # @Time     : 2020/11/21 16:36
 # @Author   : Shao Weiqi
 # @Reviewer : Lin Kun
 # @Email    : shaoweiqi@ruc.edu.cn
 
-r"""
-HGN
+r"""HGN
 ################################################
 
 Reference:
@@ -15,21 +13,18 @@ Reference:
 """
 
 import torch
-import torch.nn as nn
-from torch.nn.init import xavier_uniform_, constant_, normal_
+from torch import nn
+from torch.nn.init import constant_, normal_, xavier_uniform_
 
 from hopwise.model.abstract_recommender import SequentialRecommender
 from hopwise.model.loss import BPRLoss
 
 
 class HGN(SequentialRecommender):
-    r"""
-    HGN sets feature gating and instance gating to get the important feature and item for predicting the next item
-
-    """
+    r"""HGN sets feature gating and instance gating to get the important feature and item for predicting the next item"""  # noqa: E501
 
     def __init__(self, config, dataset):
-        super(HGN, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load the dataset information
         self.n_user = dataset.num(self.USER_ID)
@@ -44,9 +39,7 @@ class HGN(SequentialRecommender):
             raise NotImplementedError("Make sure 'loss_type' in ['max', 'average']!")
 
         # define the layers and loss function
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.user_embedding = nn.Embedding(self.n_user, self.embedding_size)
 
         # define the module feature gating need
@@ -59,9 +52,7 @@ class HGN(SequentialRecommender):
         self.w4 = nn.Linear(self.embedding_size, self.max_seq_length, bias=False)
 
         # define item_embedding for prediction
-        self.item_embedding_for_prediction = nn.Embedding(
-            self.n_items, self.embedding_size
-        )
+        self.item_embedding_for_prediction = nn.Embedding(self.n_items, self.embedding_size)
 
         self.sigmoid = nn.Sigmoid()
 
@@ -100,11 +91,7 @@ class HGN(SequentialRecommender):
                 constant_(module.bias.data, 0)
 
     def feature_gating(self, seq_item_embedding, user_embedding):
-        """
-
-        choose the features that will be sent to the next stage(more important feature, more focus)
-        """
-
+        """Choose the features that will be sent to the next stage(more important feature, more focus)"""
         batch_size, seq_len, embedding_size = seq_item_embedding.size()
         seq_item_embedding_value = seq_item_embedding
 
@@ -124,11 +111,7 @@ class HGN(SequentialRecommender):
         return user_item
 
     def instance_gating(self, user_item, user_embedding):
-        """
-
-        choose the last click items that will influence the prediction( more important more chance to get attention)
-        """
-
+        """Choose the last click items that will influence the prediction( more important more chance to get attention)"""  # noqa: E501
         user_embedding_value = user_item
 
         user_item = self.w3(user_item)
@@ -143,9 +126,7 @@ class HGN(SequentialRecommender):
         # batch_size * seq_len * embedding_size
 
         if self.pool_type == "average":
-            output = torch.div(
-                output.sum(dim=1), instance_score.sum(dim=1).unsqueeze(1)
-            )
+            output = torch.div(output.sum(dim=1), instance_score.sum(dim=1).unsqueeze(1))
             # batch_size * embedding_size
         else:
             # for max_pooling
@@ -181,16 +162,12 @@ class HGN(SequentialRecommender):
             pos_score = torch.sum(seq_output * pos_items_emb, dim=-1)
             neg_score = torch.sum(seq_output * neg_items_emb, dim=-1)
             loss = self.loss_fct(pos_score, neg_score)
-            return loss + self.reg_loss(
-                user_embedding, pos_items_emb, seq_item_embedding
-            )
+            return loss + self.reg_loss(user_embedding, pos_items_emb, seq_item_embedding)
         else:  # self.loss_type = 'CE'
             test_item_emb = self.item_embedding_for_prediction.weight
             logits = torch.matmul(seq_output, test_item_emb.transpose(0, 1))
             loss = self.loss_fct(logits, pos_items)
-            return loss + self.reg_loss(
-                user_embedding, pos_items_emb, seq_item_embedding
-            )
+            return loss + self.reg_loss(user_embedding, pos_items_emb, seq_item_embedding)
 
     def predict(self, interaction):
         item_seq = interaction[self.ITEM_SEQ]

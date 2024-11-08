@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/8/11 9:57
 # @Author : Zihan Lin
 # @Email  : linzihan.super@foxmail.com
@@ -11,8 +10,7 @@
 # @Author : Kesha Ou
 # @Email  :1582706091@qq.com
 
-r"""
-Pop
+r"""Pop
 ################################################
 
 """
@@ -30,11 +28,9 @@ class Pop(GeneralRecommender):
     type = ModelType.TRADITIONAL
 
     def __init__(self, config, dataset):
-        super(Pop, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
-        self.item_cnt = torch.zeros(
-            self.n_items, 1, dtype=torch.long, device=self.device, requires_grad=False
-        )
+        self.item_cnt = torch.zeros(self.n_items, 1, dtype=torch.long, device=self.device, requires_grad=False)
         self.max_cnt = None
         self.fake_loss = torch.nn.Parameter(torch.zeros(1))
         self.other_parameter_name = ["item_cnt", "max_cnt"]

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/9/21
 # @Author : Zhichao Feng
 # @Email  : fzcbupt@gmail.com
@@ -8,8 +7,7 @@
 # @Author : Zhichao Feng
 # @email  : fzcbupt@gmail.com
 
-r"""
-DIN
+r"""DIN
 ##############################################
 Reference:
     Guorui Zhou et al. "Deep Interest Network for Click-Through Rate Prediction" in ACM SIGKDD 2018
@@ -21,12 +19,12 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import SequentialRecommender
-from hopwise.model.layers import MLPLayers, SequenceAttLayer, ContextSeqEmbLayer
-from hopwise.utils import InputType, FeatureType
+from hopwise.model.layers import ContextSeqEmbLayer, MLPLayers, SequenceAttLayer
+from hopwise.utils import FeatureType, InputType
 
 
 class DIN(SequentialRecommender):
@@ -44,7 +42,7 @@ class DIN(SequentialRecommender):
     input_type = InputType.POINTWISE
 
     def __init__(self, config, dataset):
-        super(DIN, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # get field names and parameter value from config
         self.LABEL_FIELD = config["LABEL_FIELD"]
@@ -64,23 +62,16 @@ class DIN(SequentialRecommender):
         num_item_feature = sum(
             (
                 1
-                if dataset.field2type[field]
-                not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT]
+                if dataset.field2type[field] not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT]
                 or field in config["numerical_features"]
                 else 0
             )
             for field in self.item_feat.interaction.keys()
         )
-        self.dnn_list = [
-            3 * num_item_feature * self.embedding_size
-        ] + self.mlp_hidden_size
-        self.att_list = [
-            4 * num_item_feature * self.embedding_size
-        ] + self.mlp_hidden_size
+        self.dnn_list = [3 * num_item_feature * self.embedding_size] + self.mlp_hidden_size
+        self.att_list = [4 * num_item_feature * self.embedding_size] + self.mlp_hidden_size
 
-        mask_mat = (
-            torch.arange(self.max_seq_length).to(self.device).view(1, -1)
-        )  # init mask
+        mask_mat = torch.arange(self.max_seq_length).to(self.device).view(1, -1)  # init mask
         self.attention = SequenceAttLayer(
             mask_mat,
             self.att_list,
@@ -88,13 +79,9 @@ class DIN(SequentialRecommender):
             softmax_stag=False,
             return_seq_weight=False,
         )
-        self.dnn_mlp_layers = MLPLayers(
-            self.dnn_list, activation="Dice", dropout=self.dropout_prob, bn=True
-        )
+        self.dnn_mlp_layers = MLPLayers(self.dnn_list, activation="Dice", dropout=self.dropout_prob, bn=True)
 
-        self.embedding_layer = ContextSeqEmbLayer(
-            dataset, self.embedding_size, self.pooling_mode, self.device
-        )
+        self.embedding_layer = ContextSeqEmbLayer(dataset, self.embedding_size, self.pooling_mode, self.device)
         self.dnn_predict_layers = nn.Linear(self.mlp_hidden_size[-1], 1)
         self.sigmoid = nn.Sigmoid()
         self.loss = nn.BCEWithLogitsLoss()
@@ -115,9 +102,7 @@ class DIN(SequentialRecommender):
         max_length = item_seq.shape[1]
         # concatenate the history item seq with the target item to get embedding together
         item_seq_next_item = torch.cat((item_seq, next_items.unsqueeze(1)), dim=-1)
-        sparse_embedding, dense_embedding = self.embedding_layer(
-            user, item_seq_next_item
-        )
+        sparse_embedding, dense_embedding = self.embedding_layer(user, item_seq_next_item)
         # concat the sparse embedding and float embedding
         feature_table = {}
         for type in self.types:
@@ -130,14 +115,9 @@ class DIN(SequentialRecommender):
             feature_table[type] = torch.cat(feature_table[type], dim=-2)
             table_shape = feature_table[type].shape
             feat_num, embedding_size = table_shape[-2], table_shape[-1]
-            feature_table[type] = feature_table[type].view(
-                table_shape[:-2] + (feat_num * embedding_size,)
-            )
+            feature_table[type] = feature_table[type].view(table_shape[:-2] + (feat_num * embedding_size,))
 
-        user_feat_list = feature_table["user"]
-        item_feat_list, target_item_feat_emb = feature_table["item"].split(
-            [max_length, 1], dim=1
-        )
+        item_feat_list, target_item_feat_emb = feature_table["item"].split([max_length, 1], dim=1)
         target_item_feat_emb = target_item_feat_emb.squeeze(1)
 
         # attention
@@ -145,9 +125,7 @@ class DIN(SequentialRecommender):
         user_emb = user_emb.squeeze(1)
 
         # input the DNN to get the prediction score
-        din_in = torch.cat(
-            [user_emb, target_item_feat_emb, user_emb * target_item_feat_emb], dim=-1
-        )
+        din_in = torch.cat([user_emb, target_item_feat_emb, user_emb * target_item_feat_emb], dim=-1)
         din_out = self.dnn_mlp_layers(din_in)
         preds = self.dnn_predict_layers(din_out)
 

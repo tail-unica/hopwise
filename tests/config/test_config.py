@@ -12,7 +12,6 @@ import unittest
 
 from hopwise.config import Config
 
-
 parameters_dict = {
     "model": "SASRec",
     "learning_rate": 0.2,
@@ -84,9 +83,7 @@ class TestConfigClass(unittest.TestCase):
         self.assertEqual(config["eval_args"]["group_by"], "user")
 
     def test_config_file_list(self):
-        config = Config(
-            model="BPR", dataset="ml-100k", config_file_list=config_file_list
-        )
+        config = Config(model="BPR", dataset="ml-100k", config_file_list=config_file_list)
 
         self.assertEqual(config["model"], "BPR")
         self.assertEqual(config["learning_rate"], 0.1)

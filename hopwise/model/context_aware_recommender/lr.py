@@ -1,17 +1,15 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/08/30
 # @Author : Xinyan Fan
 # @Email  : xinyan.fan@ruc.edu.cn
 # @File   : lr.py
 
-r"""
-LR
+r"""LR
 #####################################################
 Reference:
     Matthew Richardson et al. "Predicting Clicks Estimating the Click-Through Rate for New Ads." in WWW 2007.
 """
 
-import torch.nn as nn
+from torch import nn
 from torch.nn.init import xavier_normal_
 
 from hopwise.model.abstract_recommender import ContextRecommender
@@ -29,7 +27,7 @@ class LR(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(LR, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         self.sigmoid = nn.Sigmoid()
         self.loss = nn.BCEWithLogitsLoss()

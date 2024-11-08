@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/7/21
 # @Author : Zihan Lin
 # @Email  : linzihan.super@foxmail.com
 # @File   : afm.py
 
-r"""
-AFM
+r"""AFM
 ################################################
 Reference:
     Jun Xiao et al. "Attentional Factorization Machines: Learning the Weight of Feature Interactions via
@@ -13,8 +11,8 @@ Reference:
 """
 
 import torch
-import torch.nn as nn
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import ContextRecommender
 from hopwise.model.layers import AttLayer
@@ -24,7 +22,7 @@ class AFM(ContextRecommender):
     """AFM is a attention based FM model that predict the final score with the attention of input feature."""
 
     def __init__(self, config, dataset):
-        super(AFM, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.attention_size = config["attention_size"]
@@ -80,16 +78,14 @@ class AFM(ContextRecommender):
 
         Returns:
             torch.FloatTensor: Result of score. shape of [batch_size, 1].
-        """
+        """  # noqa: E501
         p, q = self.build_cross(infeature)
         pair_wise_inter = torch.mul(p, q)  # [batch_size, num_pairs, emb_dim]
 
         # [batch_size, num_pairs, 1]
         att_signal = self.attlayer(pair_wise_inter).unsqueeze(dim=2)
 
-        att_inter = torch.mul(
-            att_signal, pair_wise_inter
-        )  # [batch_size, num_pairs, emb_dim]
+        att_inter = torch.mul(att_signal, pair_wise_inter)  # [batch_size, num_pairs, emb_dim]
         att_pooling = torch.sum(att_inter, dim=1)  # [batch_size, emb_dim]
         att_pooling = self.dropout_layer(att_pooling)  # [batch_size, emb_dim]
 
@@ -99,13 +95,9 @@ class AFM(ContextRecommender):
         return att_pooling
 
     def forward(self, interaction):
-        afm_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
+        afm_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
 
-        output = self.first_order_linear(interaction) + self.afm_layer(
-            afm_all_embeddings
-        )
+        output = self.first_order_linear(interaction) + self.afm_layer(afm_all_embeddings)
         return output.squeeze(-1)
 
     def calculate_loss(self, interaction):

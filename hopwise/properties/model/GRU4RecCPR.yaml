@@ -9,7 +9,7 @@ use_out_emb: False                # (bool) If False, we share the output item em
 n_facet_all: 5                    # (int) Number of linear layers for context partition, reranker partition, pointer network, and most items in the vocabulary. Notice that n_facet_all = n_facet + n_facet_context + n_facet_reranker*len(reranker_CAN_NUM_arr) + n_facet_emb
 n_facet: 1                        # (int) Number of the output hidden states for most items in the vocabulary. If n_facet > 1, we will use mixture of softmax (MoS)
 n_facet_context: 1                # (int) Number of the output hidden states for the context partition. This number should be either 0, 1 or n_facet (If you use MoS).
-n_facet_reranker: 1               # (int) Number of the output hidden states for a single reranker partition. This number should be either 0, 1 or n_facet (If you use MoS). 
+n_facet_reranker: 1               # (int) Number of the output hidden states for a single reranker partition. This number should be either 0, 1 or n_facet (If you use MoS).
 reranker_CAN_NUM: 100             # (str) The size of reranker partitions. If you want to use 3 reranker partitions with size 500, 100, and 20, set "500,100,20". Notice that the number should have a descent order (e.g., setting it to 20,100,500 is incorrect).
 n_facet_emb: 2                    # (int) Number of the output hidden states for pointer network. This number should be either 0 or 2.
 n_facet_hidden: 1                 # (int) min(n_facet_hidden, num_layers) = H hyperparameter in multiple input hidden states (Mi) [3]. If not using Mi, set this number to 1.

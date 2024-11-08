@@ -1,21 +1,18 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2022/8/2
 # @Author : Ayush Thakur
 # @Email  : ayusht@wandb.com
 
-r"""
-hopwise.utils.wandblogger
+r"""hopwise.utils.wandblogger
 ################################
 """
 
 
-class WandbLogger(object):
+class WandbLogger:
     """WandbLogger to log metrics to Weights and Biases."""
 
     def __init__(self, config):
-        """
-        Args:
-            config (dict): A dictionary of parameters used by RecBole.
+        """Args:
+        config (dict): A dictionary of parameters used by RecBole.
         """
         self.config = config
         self.log_wandb = config.log_wandb

@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time    : 2021/11/23 11:10
 # @Author  : Jingqi Gao
 # @Email   : jgaoaz@connect.ust.hk
 
-r"""
-SINE
+r"""SINE
 ################################################
 
 Reference:
@@ -14,8 +12,8 @@ Reference:
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 from torch.nn.init import xavier_normal_
 
 from hopwise.model.abstract_recommender import SequentialRecommender
@@ -29,7 +27,7 @@ class SINE(SequentialRecommender):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(SINE, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load dataset info
         self.n_users = dataset.user_num
@@ -155,9 +153,7 @@ class SINE(SequentialRecommender):
         # attention weighting
         a_k = x_u.unsqueeze(1).repeat(1, self.k, 1, 1).matmul(self.w_k_1)
         P_t_k = F.softmax(
-            torch.tanh(a_k)
-            .matmul(self.w_k_2.reshape(self.k, self.embedding_size, 1))
-            .squeeze(3),
+            torch.tanh(a_k).matmul(self.w_k_2.reshape(self.k, self.embedding_size, 1)).squeeze(3),
             dim=2,
         )
 
@@ -186,7 +182,5 @@ class SINE(SequentialRecommender):
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
         seq_output = self.forward(item_seq, item_seq_len)
         test_items_emb = self.item_embedding.weight
-        scores = torch.matmul(
-            seq_output, test_items_emb.transpose(0, 1)
-        )  # [B, n_items]
+        scores = torch.matmul(seq_output, test_items_emb.transpose(0, 1))  # [B, n_items]
         return scores

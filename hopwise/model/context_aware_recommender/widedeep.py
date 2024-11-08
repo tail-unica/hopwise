@@ -1,18 +1,16 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/08/30
 # @Author : Xinyan Fan
 # @Email  : xinyan.fan@ruc.edu.cn
 # @File   : widedeep.py
 
-r"""
-WideDeep
+r"""WideDeep
 #####################################################
 Reference:
     Heng-Tze Cheng et al. "Wide & Deep Learning for Recommender Systems." in RecSys 2016.
 """
 
-import torch.nn as nn
-from torch.nn.init import xavier_normal_, constant_
+from torch import nn
+from torch.nn.init import constant_, xavier_normal_
 
 from hopwise.model.abstract_recommender import ContextRecommender
 from hopwise.model.layers import MLPLayers
@@ -28,16 +26,14 @@ class WideDeep(ContextRecommender):
     """
 
     def __init__(self, config, dataset):
-        super(WideDeep, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load parameters info
         self.mlp_hidden_size = config["mlp_hidden_size"]
         self.dropout_prob = config["dropout_prob"]
 
         # define layers and loss
-        size_list = [
-            self.embedding_size * self.num_feature_field
-        ] + self.mlp_hidden_size
+        size_list = [self.embedding_size * self.num_feature_field] + self.mlp_hidden_size
         self.mlp_layers = MLPLayers(size_list, self.dropout_prob)
         self.deep_predict_layer = nn.Linear(self.mlp_hidden_size[-1], 1)
         self.sigmoid = nn.Sigmoid()
@@ -55,15 +51,11 @@ class WideDeep(ContextRecommender):
                 constant_(module.bias.data, 0)
 
     def forward(self, interaction):
-        widedeep_all_embeddings = self.concat_embed_input_fields(
-            interaction
-        )  # [batch_size, num_field, embed_dim]
+        widedeep_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]
         batch_size = widedeep_all_embeddings.shape[0]
         fm_output = self.first_order_linear(interaction)
 
-        deep_output = self.deep_predict_layer(
-            self.mlp_layers(widedeep_all_embeddings.view(batch_size, -1))
-        )
+        deep_output = self.deep_predict_layer(self.mlp_layers(widedeep_all_embeddings.view(batch_size, -1)))
         output = fm_output + deep_output
         return output.squeeze(-1)
 

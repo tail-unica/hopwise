@@ -7,34 +7,34 @@
 # @Author : Shanlei Mu, Yupeng Hou, Jiawei Guan, Xingyu Pan, Gaowei Zhang
 # @Email  : slmu@ruc.edu.cn, houyupeng@ruc.edu.cn, Guanjw@ruc.edu.cn, xy_pan@foxmail.com, zgw15630559577@163.com
 
-"""
-hopwise.config.configurator
+"""hopwise.config.configurator
 ################################
 """
 
-import re
 import os
+import re
 import sys
-import yaml
 from logging import getLogger
 from typing import Literal
 
+import yaml
+
 from hopwise.evaluator import metric_types, smaller_metrics
 from hopwise.utils import (
-    get_model,
     Enum,
     EvaluatorType,
-    ModelType,
     InputType,
-    general_arguments,
-    training_arguments,
-    evaluation_arguments,
+    ModelType,
     dataset_arguments,
+    evaluation_arguments,
+    general_arguments,
+    get_model,
     set_color,
+    training_arguments,
 )
 
 
-class Config(object):
+class Config:
     """Configurator module that load the defined parameters.
 
     Configurator module will first load the default parameters from the fixed properties in RecBole and then
@@ -65,17 +65,14 @@ class Config(object):
     Finally the learning_rate is equal to 0.02.
     """
 
-    def __init__(
-        self, model=None, dataset=None, config_file_list=None, config_dict=None
-    ):
-        """
-        Args:
-            model (str/AbstractRecommender): the model name or the model class, default is None, if it is None, config
-            will search the parameter 'model' from the external input as the model name or model class.
-            dataset (str): the dataset name, default is None, if it is None, config will search the parameter 'dataset'
-            from the external input as the dataset name.
-            config_file_list (list of str): the external config file, it allows multiple config files, default is None.
-            config_dict (dict): the external parameter dictionaries, default is None.
+    def __init__(self, model=None, dataset=None, config_file_list=None, config_dict=None):
+        """Args:
+        model (str/AbstractRecommender): the model name or the model class, default is None, if it is None, config
+        will search the parameter 'model' from the external input as the model name or model class.
+        dataset (str): the dataset name, default is None, if it is None, config will search the parameter 'dataset'
+        from the external input as the dataset name.
+        config_file_list (list of str): the external config file, it allows multiple config files, default is None.
+        config_dict (dict): the external parameter dictionaries, default is None.
         """
         self.compatibility_settings()
         self._init_parameters_category()
@@ -85,9 +82,7 @@ class Config(object):
         self.cmd_config_dict = self._load_cmd_line()
         self._merge_external_config_dict()
 
-        self.model, self.model_class, self.dataset = self._get_model_and_dataset(
-            model, dataset
-        )
+        self.model, self.model_class, self.dataset = self._get_model_and_dataset(model, dataset)
         self._load_internal_config_dict(self.model, self.model_class, self.dataset)
         self.final_config_dict = self._get_final_config_dict()
         self._set_default_parameters()
@@ -129,9 +124,7 @@ class Config(object):
                 continue
             try:
                 value = eval(param)
-                if value is not None and not isinstance(
-                    value, (str, int, float, list, tuple, dict, bool, Enum)
-                ):
+                if value is not None and not isinstance(value, (str, int, float, list, tuple, dict, bool, Enum)):
                     value = param
             except (NameError, SyntaxError, TypeError):
                 if isinstance(param, str):
@@ -150,10 +143,8 @@ class Config(object):
         file_config_dict = dict()
         if file_list:
             for file in file_list:
-                with open(file, "r", encoding="utf-8") as f:
-                    file_config_dict.update(
-                        yaml.load(f.read(), Loader=self.yaml_loader)
-                    )
+                with open(file, encoding="utf-8") as f:
+                    file_config_dict.update(yaml.load(f.read(), Loader=self.yaml_loader))
         return file_config_dict
 
     def _load_variable_config_dict(self, config_dict):
@@ -168,27 +159,17 @@ class Config(object):
         unrecognized_args = []
         if "ipykernel_launcher" not in sys.argv[0]:
             for arg in sys.argv[1:]:
-                if not arg.startswith("--") or len(arg[2:].split("=")) != 2:
+                if not arg.startswith("--") or len(arg[2:].split("=")) != 2:  # noqa: PLR2004
                     unrecognized_args.append(arg)
                     continue
                 cmd_arg_name, cmd_arg_value = arg[2:].split("=")
-                if (
-                    cmd_arg_name in cmd_config_dict
-                    and cmd_arg_value != cmd_config_dict[cmd_arg_name]
-                ):
-                    raise SyntaxError(
-                        "There are duplicate commend arg '%s' with different value."
-                        % arg
-                    )
+                if cmd_arg_name in cmd_config_dict and cmd_arg_value != cmd_config_dict[cmd_arg_name]:
+                    raise SyntaxError("There are duplicate commend arg '%s' with different value." % arg)
                 else:
                     cmd_config_dict[cmd_arg_name] = cmd_arg_value
         if len(unrecognized_args) > 0:
             logger = getLogger()
-            logger.warning(
-                "command line args [{}] will not be used in RecBole".format(
-                    " ".join(unrecognized_args)
-                )
-            )
+            logger.warning("command line args [{}] will not be used in RecBole".format(" ".join(unrecognized_args)))
         cmd_config_dict = self._convert_config_dict(cmd_config_dict)
         return cmd_config_dict
 
@@ -229,7 +210,7 @@ class Config(object):
         return final_model, final_model_class, final_dataset
 
     def _update_internal_config_dict(self, file):
-        with open(file, "r", encoding="utf-8") as f:
+        with open(file, encoding="utf-8") as f:
             config_dict = yaml.load(f.read(), Loader=self.yaml_loader)
             if config_dict is not None:
                 self.internal_config_dict.update(config_dict)
@@ -238,37 +219,21 @@ class Config(object):
     def _load_internal_config_dict(self, model, model_class, dataset):
         current_path = os.path.dirname(os.path.realpath(__file__))
         overall_init_file = os.path.join(current_path, "../properties/overall.yaml")
-        model_init_file = os.path.join(
-            current_path, "../properties/model/" + model + ".yaml"
-        )
-        sample_init_file = os.path.join(
-            current_path, "../properties/dataset/sample.yaml"
-        )
-        dataset_init_file = os.path.join(
-            current_path, "../properties/dataset/" + dataset + ".yaml"
-        )
+        model_init_file = os.path.join(current_path, "../properties/model/" + model + ".yaml")
+        sample_init_file = os.path.join(current_path, "../properties/dataset/sample.yaml")
+        dataset_init_file = os.path.join(current_path, "../properties/dataset/" + dataset + ".yaml")
 
-        quick_start_config_path = os.path.join(
-            current_path, "../properties/quick_start_config/"
-        )
+        quick_start_config_path = os.path.join(current_path, "../properties/quick_start_config/")
         context_aware_init = os.path.join(quick_start_config_path, "context-aware.yaml")
-        context_aware_on_ml_100k_init = os.path.join(
-            quick_start_config_path, "context-aware_ml-100k.yaml"
-        )
+        context_aware_on_ml_100k_init = os.path.join(quick_start_config_path, "context-aware_ml-100k.yaml")
         DIN_init = os.path.join(quick_start_config_path, "sequential_DIN.yaml")
-        DIN_on_ml_100k_init = os.path.join(
-            quick_start_config_path, "sequential_DIN_on_ml-100k.yaml"
-        )
+        DIN_on_ml_100k_init = os.path.join(quick_start_config_path, "sequential_DIN_on_ml-100k.yaml")
         sequential_init = os.path.join(quick_start_config_path, "sequential.yaml")
         special_sequential_on_ml_100k_init = os.path.join(
             quick_start_config_path, "special_sequential_on_ml-100k.yaml"
         )
-        sequential_embedding_model_init = os.path.join(
-            quick_start_config_path, "sequential_embedding_model.yaml"
-        )
-        knowledge_base_init = os.path.join(
-            quick_start_config_path, "knowledge_base.yaml"
-        )
+        sequential_embedding_model_init = os.path.join(quick_start_config_path, "sequential_embedding_model.yaml")
+        knowledge_base_init = os.path.join(quick_start_config_path, "knowledge_base.yaml")
 
         self.internal_config_dict = dict()
         for file in [
@@ -281,9 +246,7 @@ class Config(object):
                 config_dict = self._update_internal_config_dict(file)
                 if file == dataset_init_file:
                     self.parameters["Dataset"] += [
-                        key
-                        for key in config_dict.keys()
-                        if key not in self.parameters["Dataset"]
+                        key for key in config_dict.keys() if key not in self.parameters["Dataset"]
                     ]
 
         self.internal_config_dict["MODEL_TYPE"] = model_class.type
@@ -311,9 +274,7 @@ class Config(object):
                     "FDSA",
                     "S3Rec",
                 ]:
-                    self._update_internal_config_dict(
-                        special_sequential_on_ml_100k_init
-                    )
+                    self._update_internal_config_dict(special_sequential_on_ml_100k_init)
 
         elif self.internal_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE:
             self._update_internal_config_dict(knowledge_base_init)
@@ -329,13 +290,9 @@ class Config(object):
         self.final_config_dict["model"] = self.model
         if self.dataset == "ml-100k":
             current_path = os.path.dirname(os.path.realpath(__file__))
-            self.final_config_dict["data_path"] = os.path.join(
-                current_path, "../dataset_example/" + self.dataset
-            )
+            self.final_config_dict["data_path"] = os.path.join(current_path, "../dataset_example/" + self.dataset)
         else:
-            self.final_config_dict["data_path"] = os.path.join(
-                self.final_config_dict["data_path"], self.dataset
-            )
+            self.final_config_dict["data_path"] = os.path.join(self.final_config_dict["data_path"], self.dataset)
 
         if hasattr(self.model_class, "input_type"):
             self.final_config_dict["MODEL_INPUT_TYPE"] = self.model_class.input_type
@@ -343,8 +300,7 @@ class Config(object):
             if self.final_config_dict["loss_type"] in ["CE"]:
                 if (
                     self.final_config_dict["MODEL_TYPE"] == ModelType.SEQUENTIAL
-                    and self.final_config_dict.get("train_neg_sample_args", None)
-                    is not None
+                    and self.final_config_dict.get("train_neg_sample_args", None) is not None
                 ):
                     raise ValueError(
                         f"train_neg_sample_args [{self.final_config_dict['train_neg_sample_args']}] should be None "
@@ -354,10 +310,7 @@ class Config(object):
             elif self.final_config_dict["loss_type"] in ["BPR"]:
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
         else:
-            raise ValueError(
-                "Either Model has attr 'input_type',"
-                "or arg 'loss_type' should exist in config."
-            )
+            raise ValueError("Either Model has attr 'input_type'," "or arg 'loss_type' should exist in config.")
 
         metrics = self.final_config_dict["metrics"]
         if isinstance(metrics, str):
@@ -370,24 +323,17 @@ class Config(object):
             else:
                 raise NotImplementedError(f"There is no metric named '{metric}'")
         if len(eval_type) > 1:
-            raise RuntimeError(
-                "Ranking metrics and value metrics can not be used at the same time."
-            )
+            raise RuntimeError("Ranking metrics and value metrics can not be used at the same time.")
         self.final_config_dict["eval_type"] = eval_type.pop()
 
-        if (
-            self.final_config_dict["MODEL_TYPE"] == ModelType.SEQUENTIAL
-            and not self.final_config_dict["repeatable"]
-        ):
+        if self.final_config_dict["MODEL_TYPE"] == ModelType.SEQUENTIAL and not self.final_config_dict["repeatable"]:
             raise ValueError(
                 "Sequential models currently only support repeatable recommendation, "
                 "please set `repeatable` as `True`."
             )
 
         valid_metric = self.final_config_dict["valid_metric"].split("@")[0]
-        self.final_config_dict["valid_metric_bigger"] = (
-            False if valid_metric.lower() in smaller_metrics else True
-        )
+        self.final_config_dict["valid_metric_bigger"] = False if valid_metric.lower() in smaller_metrics else True
 
         topk = self.final_config_dict["topk"]
         if isinstance(topk, (int, list)):
@@ -395,9 +341,7 @@ class Config(object):
                 topk = [topk]
             for k in topk:
                 if k <= 0:
-                    raise ValueError(
-                        f"topk must be a positive integer or a list of positive integers, but get `{k}`"
-                    )
+                    raise ValueError(f"topk must be a positive integer or a list of positive integers, but get `{k}`")
             self.final_config_dict["topk"] = topk
         else:
             raise TypeError(f"The topk [{topk}] must be a integer, list")
@@ -422,7 +366,7 @@ class Config(object):
         ):
             logger = getLogger()
             logger.warning(
-                "Warning: Parameter 'neg_sampling' or 'training_neg_sample_num' has been deprecated in the new version, "
+                "Warning: Parameter 'neg_sampling' or 'training_neg_sample_num' has been deprecated in the new version, "  # noqa: E501
                 "please use 'train_neg_sample_args' instead and check the API documentation for proper usage."
             )
 
@@ -433,9 +377,7 @@ class Config(object):
                 )
             for op_args in default_train_neg_sample_args:
                 if op_args not in self.final_config_dict["train_neg_sample_args"]:
-                    self.final_config_dict["train_neg_sample_args"][op_args] = (
-                        default_train_neg_sample_args[op_args]
-                    )
+                    self.final_config_dict["train_neg_sample_args"][op_args] = default_train_neg_sample_args[op_args]
 
         # eval_args checking
         default_eval_args = {
@@ -445,9 +387,7 @@ class Config(object):
             "mode": {"valid": "full", "test": "full"},
         }
         if not isinstance(self.final_config_dict["eval_args"], dict):
-            raise ValueError(
-                f"eval_args:[{self.final_config_dict['eval_args']}] should be a dict."
-            )
+            raise ValueError(f"eval_args:[{self.final_config_dict['eval_args']}] should be a dict.")
 
         default_eval_args.update(self.final_config_dict["eval_args"])
 
@@ -469,15 +409,11 @@ class Config(object):
             self.final_config_dict["eval_type"] == EvaluatorType.VALUE
             and "full" in self.final_config_dict["eval_args"]["mode"].values()
         ):
-            raise NotImplementedError(
-                "Full sort evaluation do not match value-based metrics!"
-            )
+            raise NotImplementedError("Full sort evaluation do not match value-based metrics!")
 
     def _init_device(self):
         if isinstance(self.final_config_dict["gpu_id"], tuple):
-            self.final_config_dict["gpu_id"] = ",".join(
-                map(str, list(self.final_config_dict["gpu_id"]))
-            )
+            self.final_config_dict["gpu_id"] = ",".join(map(str, list(self.final_config_dict["gpu_id"])))
         else:
             self.final_config_dict["gpu_id"] = str(self.final_config_dict["gpu_id"])
         gpu_id = self.final_config_dict["gpu_id"]
@@ -488,25 +424,17 @@ class Config(object):
             self.final_config_dict["single_spec"] = True
             self.final_config_dict["local_rank"] = 0
             self.final_config_dict["device"] = (
-                torch.device("cpu")
-                if len(gpu_id) == 0 or not torch.cuda.is_available()
-                else torch.device("cuda")
+                torch.device("cpu") if len(gpu_id) == 0 or not torch.cuda.is_available() else torch.device("cuda")
             )
         else:
             assert len(gpu_id.split(",")) >= self.final_config_dict["nproc"]
             torch.distributed.init_process_group(
                 backend="nccl",
-                rank=self.final_config_dict["local_rank"]
-                + self.final_config_dict["offset"],
+                rank=self.final_config_dict["local_rank"] + self.final_config_dict["offset"],
                 world_size=self.final_config_dict["world_size"],
-                init_method="tcp://"
-                + self.final_config_dict["ip"]
-                + ":"
-                + str(self.final_config_dict["port"]),
+                init_method="tcp://" + self.final_config_dict["ip"] + ":" + str(self.final_config_dict["port"]),
             )
-            self.final_config_dict["device"] = torch.device(
-                "cuda", self.final_config_dict["local_rank"]
-            )
+            self.final_config_dict["device"] = torch.device("cuda", self.final_config_dict["local_rank"])
             self.final_config_dict["single_spec"] = False
             torch.cuda.set_device(self.final_config_dict["local_rank"])
             if self.final_config_dict["local_rank"] != 0:
@@ -526,9 +454,7 @@ class Config(object):
             }
         else:
             if not isinstance(train_neg_sample_args, dict):
-                raise ValueError(
-                    f"train_neg_sample_args:[{train_neg_sample_args}] should be a dict."
-                )
+                raise ValueError(f"train_neg_sample_args:[{train_neg_sample_args}] should be a dict.")
 
             distribution = train_neg_sample_args["distribution"]
             if distribution is None or distribution == "None":
@@ -573,9 +499,7 @@ class Config(object):
 
     def __getattr__(self, item):
         if "final_config_dict" not in self.__dict__:
-            raise AttributeError(
-                f"'Config' object has no attribute 'final_config_dict'"
-            )
+            raise AttributeError("'Config' object has no attribute 'final_config_dict'")
         if item in self.final_config_dict:
             return self.final_config_dict[item]
         raise AttributeError(f"'Config' object has no attribute '{item}'")
@@ -594,9 +518,7 @@ class Config(object):
             args_info += set_color(category + " Hyper Parameters:\n", "pink")
             args_info += "\n".join(
                 [
-                    (
-                        set_color("{}", "cyan") + " =" + set_color(" {}", "yellow")
-                    ).format(arg, value)
+                    (set_color("{}", "cyan") + " =" + set_color(" {}", "yellow")).format(arg, value)
                     for arg, value in self.final_config_dict.items()
                     if arg in self.parameters[category]
                 ]
@@ -606,9 +528,7 @@ class Config(object):
         args_info += set_color("Other Hyper Parameters: \n", "pink")
         args_info += "\n".join(
             [
-                (set_color("{}", "cyan") + " = " + set_color("{}", "yellow")).format(
-                    arg, value
-                )
+                (set_color("{}", "cyan") + " = " + set_color("{}", "yellow")).format(arg, value)
                 for arg, value in self.final_config_dict.items()
                 if arg
                 not in {_ for args in self.parameters.values() for _ in args}.union(

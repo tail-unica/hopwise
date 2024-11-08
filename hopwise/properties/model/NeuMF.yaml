@@ -1,7 +1,7 @@
-mf_embedding_size: 64           # (int) The MF embedding size of user and item. 
+mf_embedding_size: 64           # (int) The MF embedding size of user and item.
 mlp_embedding_size: 64          # (int) The MLP embedding size of user and item.
 mlp_hidden_size: [128,64]       # (list of int) The hidden size of each layer in MLP.
-dropout_prob: 0.1               # (float) The dropout rate in MLP layers. 
+dropout_prob: 0.1               # (float) The dropout rate in MLP layers.
 mf_train: True                  # (bool) Whether to train the MF part of the model.
 mlp_train: True                 # (bool) Whether to train the MLP part of the model.
 

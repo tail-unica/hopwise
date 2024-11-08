@@ -7,16 +7,16 @@
 # @Author : Zhen Tian, Junjie Zhang, Gaowei Zhang
 # @Email  : chenyuwuxinn@gmail.com, zjj001128@163.com, zgw15630559577@163.com
 
-"""
-hopwise.quick_start
+"""hopwise.quick_start
 ########################
 """
+
 import logging
 import sys
-import torch.distributed as dist
 from collections.abc import MutableMapping
 from logging import getLogger
 
+import torch.distributed as dist
 from ray import tune
 
 from hopwise.config import Config
@@ -26,13 +26,13 @@ from hopwise.data import (
 )
 from hopwise.data.transform import construct_transform
 from hopwise.utils import (
-    init_logger,
+    get_environment,
+    get_flops,
     get_model,
     get_trainer,
+    init_logger,
     init_seed,
     set_color,
-    get_flops,
-    get_environment,
 )
 
 
@@ -110,7 +110,7 @@ def run_hopwise(
         config_dict (dict, optional): Parameters dictionary used to modify experiment parameters. Defaults to ``None``.
         saved (bool, optional): Whether to save the model. Defaults to ``True``.
         queue (torch.multiprocessing.Queue, optional): The queue used to pass the result to the main process. Defaults to ``None``.
-    """
+    """  # noqa: E501
     # configurations initialization
     config = Config(
         model=model,
@@ -150,15 +150,10 @@ def run_hopwise(
     )
 
     # model evaluation
-    test_result = trainer.evaluate(
-        test_data, load_best_model=saved, show_progress=config["show_progress"]
-    )
+    test_result = trainer.evaluate(test_data, load_best_model=saved, show_progress=config["show_progress"])
 
     environment_tb = get_environment(config)
-    logger.info(
-        "The running environment of this training is as follows:\n"
-        + environment_tb.draw()
-    )
+    logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
 
     logger.info(set_color("best valid ", "yellow") + f": {best_valid_result}")
     logger.info(set_color("test result", "yellow") + f": {test_result}")
@@ -182,9 +177,7 @@ def run_hopwise(
 def run_hopwises(rank, *args):
     kwargs = args[-1]
     if not isinstance(kwargs, MutableMapping):
-        raise ValueError(
-            f"The last argument of run_hopwises should be a dict, but got {type(kwargs)}"
-        )
+        raise ValueError(f"The last argument of run_hopwises should be a dict, but got {type(kwargs)}")
     kwargs["config_dict"] = kwargs.get("config_dict", {})
     kwargs["config_dict"]["local_rank"] = rank
     run_hopwise(
@@ -201,7 +194,6 @@ def objective_function(config_dict=None, config_file_list=None, saved=True):
         config_file_list (list, optional): Config files used to modify experiment parameters. Defaults to ``None``.
         saved (bool, optional): Whether to save the model. Defaults to ``True``.
     """
-
     config = Config(config_dict=config_dict, config_file_list=config_file_list)
     init_seed(config["seed"], config["reproducibility"])
     logger = getLogger()
@@ -215,9 +207,7 @@ def objective_function(config_dict=None, config_file_list=None, saved=True):
     model_name = config["model"]
     model = get_model(model_name)(config, train_data._dataset).to(config["device"])
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
-    best_valid_score, best_valid_result = trainer.fit(
-        train_data, valid_data, verbose=False, saved=saved
-    )
+    best_valid_score, best_valid_result = trainer.fit(train_data, valid_data, verbose=False, saved=saved)
     test_result = trainer.evaluate(test_data, load_best_model=saved)
 
     tune.report(**test_result)

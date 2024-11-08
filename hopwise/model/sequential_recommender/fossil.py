@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 # @Time    : 2020/11/21 20:00
 # @Author  : Shao Weiqi
 # @Reviewer : Lin Kun
 # @Email   : shaoweiqi@ruc.edu.cn
 
-r"""
-FOSSIL
+r"""FOSSIL
 ################################################
 
 Reference:
@@ -15,7 +13,7 @@ Reference:
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.nn.init import xavier_normal_
 
 from hopwise.model.abstract_recommender import SequentialRecommender
@@ -23,14 +21,13 @@ from hopwise.model.loss import BPRLoss
 
 
 class FOSSIL(SequentialRecommender):
-    r"""
-    FOSSIL uses similarity of the items as main purpose and uses high MC as a way of sequential preference improve of
+    r"""FOSSIL uses similarity of the items as main purpose and uses high MC as a way of sequential preference improve of
     ability of sequential recommendation
 
-    """
+    """  # noqa: E501
 
     def __init__(self, config, dataset):
-        super(FOSSIL, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         # load the dataset information
         self.n_users = dataset.num(self.USER_ID)
@@ -39,16 +36,12 @@ class FOSSIL(SequentialRecommender):
         # load the parameters
         self.embedding_size = config["embedding_size"]
         self.order_len = config["order_len"]
-        assert (
-            self.order_len <= self.max_seq_length
-        ), "order_len can't longer than the max_seq_length"
+        assert self.order_len <= self.max_seq_length, "order_len can't longer than the max_seq_length"
         self.reg_weight = config["reg_weight"]
         self.alpha = config["alpha"]
 
         # define the layers and loss type
-        self.item_embedding = nn.Embedding(
-            self.n_items, self.embedding_size, padding_idx=0
-        )
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.user_lambda = nn.Embedding(self.n_users, self.order_len)
         self.lambda_ = nn.Parameter(torch.zeros(self.order_len))
 
@@ -64,8 +57,7 @@ class FOSSIL(SequentialRecommender):
         self.apply(self.init_weights)
 
     def inverse_seq_item_embedding(self, seq_item_embedding, seq_item_len):
-        """
-        inverse seq_item_embedding like this (simple to 2-dim):
+        """Inverse seq_item_embedding like this (simple to 2-dim):
 
         [1,2,3,0,0,0] -- ??? -- >> [0,0,0,1,2,3]
 
@@ -108,9 +100,7 @@ class FOSSIL(SequentialRecommender):
     def forward(self, seq_item, seq_item_len, user):
         seq_item_embedding = self.item_embedding(seq_item)
 
-        high_order_seq_item_embedding = self.inverse_seq_item_embedding(
-            seq_item_embedding, seq_item_len
-        )
+        high_order_seq_item_embedding = self.inverse_seq_item_embedding(seq_item_embedding, seq_item_len)
         # batch_size * order_len * embedding
 
         high_order = self.get_high_order_Markov(high_order_seq_item_embedding, user)
@@ -119,11 +109,7 @@ class FOSSIL(SequentialRecommender):
         return high_order + similarity
 
     def get_high_order_Markov(self, high_order_item_embedding, user):
-        """
-
-        in order to get the inference of past items and the user's taste to the current predict item
-        """
-
+        """In order to get the inference of past items and the user's taste to the current predict item"""
         user_lambda = self.user_lambda(user).unsqueeze(dim=2)
         # batch_size * order_len * 1
         lambda_ = self.lambda_.unsqueeze(dim=0).unsqueeze(dim=2)
@@ -138,9 +124,7 @@ class FOSSIL(SequentialRecommender):
         return high_order_item_embedding
 
     def get_similarity(self, seq_item_embedding, seq_item_len):
-        """
-        in order to get the inference of past items to the current predict item
-        """
+        """In order to get the inference of past items to the current predict item"""
         coeff = torch.pow(seq_item_len.unsqueeze(1), -self.alpha).float()
         # batch_size * 1
         similarity = torch.mul(coeff, seq_item_embedding.sum(dim=1))

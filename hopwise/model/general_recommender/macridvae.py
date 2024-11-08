@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/12/23
 # @Author : Yihong Guo
 # @Email  : gyihong@hotmail.com
@@ -8,8 +7,7 @@
 # @Author  : Xingyu Pan
 # @email   : xy_pan@foxmail.com
 
-r"""
-MacridVAE
+r"""MacridVAE
 ################################################
 Reference:
     Jianxin Ma et al. "Learning Disentangled Representations for Recommendation." in NeurIPS 2019.
@@ -19,8 +17,8 @@ Reference code:
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from hopwise.model.abstract_recommender import AutoEncoderMixin, GeneralRecommender
 from hopwise.model.init import xavier_normal_initialization
@@ -38,7 +36,7 @@ class MacridVAE(GeneralRecommender, AutoEncoderMixin):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(MacridVAE, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         self.layers = config["encoder_hidden_size"]
         self.embedding_size = config["embedding_size"]
@@ -53,9 +51,7 @@ class MacridVAE(GeneralRecommender, AutoEncoderMixin):
 
         self.update = 0
         self.build_histroy_items(dataset)
-        self.encode_layer_dims = (
-            [self.n_items] + self.layers + [self.embedding_size * 2]
-        )
+        self.encode_layer_dims = [self.n_items] + self.layers + [self.embedding_size * 2]
 
         self.encoder = self.mlp_layers(self.encode_layer_dims)
 

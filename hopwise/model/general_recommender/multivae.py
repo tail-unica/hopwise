@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # @Time   : 2020/12/14
 # @Author : Yihong Guo
 # @Email  : gyihong@hotmail.com
 
-r"""
-MultiVAE
+r"""MultiVAE
 ################################################
 Reference:
     Dawen Liang et al. "Variational Autoencoders for Collaborative Filtering." in WWW 2018.
@@ -12,8 +10,8 @@ Reference:
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from hopwise.model.abstract_recommender import AutoEncoderMixin, GeneralRecommender
 from hopwise.model.init import xavier_normal_initialization
@@ -29,7 +27,7 @@ class MultiVAE(GeneralRecommender, AutoEncoderMixin):
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
-        super(MultiVAE, self).__init__(config, dataset)
+        super().__init__(config, dataset)
 
         self.layers = config["mlp_hidden_size"]
         self.lat_dim = config["latent_dimension"]
@@ -42,9 +40,7 @@ class MultiVAE(GeneralRecommender, AutoEncoderMixin):
         self.update = 0
 
         self.encode_layer_dims = [self.n_items] + self.layers + [self.lat_dim]
-        self.decode_layer_dims = [int(self.lat_dim / 2)] + self.encode_layer_dims[::-1][
-            1:
-        ]
+        self.decode_layer_dims = [int(self.lat_dim / 2)] + self.encode_layer_dims[::-1][1:]
 
         self.encoder = self.mlp_layers(self.encode_layer_dims)
         self.decoder = self.mlp_layers(self.decode_layer_dims)
@@ -95,11 +91,7 @@ class MultiVAE(GeneralRecommender, AutoEncoderMixin):
         z, mu, logvar = self.forward(rating_matrix)
 
         # KL loss
-        kl_loss = (
-            -0.5
-            * torch.mean(torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
-            * anneal
-        )
+        kl_loss = -0.5 * torch.mean(torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)) * anneal
 
         # CE loss
         ce_loss = -(F.log_softmax(z, 1) * rating_matrix).sum(1).mean()
