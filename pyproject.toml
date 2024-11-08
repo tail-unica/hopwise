@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hopwise"
+description = """
+_hopwise_ is an advanced extension of the Recbole library, designed to enhance recommendation systems with the power of knowledge graphs.
+By integrating knowledge embedding models, path-based reasoning methods, and path language modeling apporaches, hopwise supports both recommendation and link prediction tasks with a focus on interpretability and self-explanation.
+"""
+authors = [
+    { name = "Giacomo Balloccu", email = "gballoccu@gmail.com" },
+    { name = "Ludovico Boratto", email = "ludovico.boratto@acm.org" },
+    { name = "Mirko Marras", email = "mirko.marras@acm.org" },
+    { name = "Alessandro Soccol", email = "alessandrosoccol@gmail.com" },
+    { name = "Giacomo Medda", email = "jackm.medda@gmail.com" },
+]
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+dynamic = ["version"]
+keywords = [
+  "recommender systems",
+  "knowledge graph",
+  "language models",
+  "path modeling",
+  "explainability"
+]
+dependencies = [
+    "torch",
+    "transformers",
+    "datasets",
+    "pandas",
+    "numpy",
+    "tqdm",
+    "wandb",
+    "igraph",
+    "colorlog>=4.7.2",
+    "colorama>=0.4.4",
+    "scipy",
+    "thop",
+    "tabulate",
+    "tensorboard",
+    "scikit_learn>=0.23.2"
+]
+classifiers = [
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+
+[tool.ruff]
+line-length = 119
+
+[tool.ruff.lint]
+select = [
+  # Pylint
+  "PL",
+  # pycodestyle
+  "E",
+  # Pyflakes
+  "F",
+  # isort
+  "I",
+  # pyupgrade
+  "UP",
+  # pydocstyle
+  # "D",
+  # pandas-vet
+  # "PD"  Not working well. Confuses torch.values as df.values and suggests using .to_numpy()
+]
+ignore = [
+    "PLR0913", # Too many arguments in function definition
+    "UP031", # TEMPORARY: Use format specifiers instead of percent format
+    "PLR0915", # TEMPORARY: Too many statements
+    "PLR0912", # TEMPORARY: Too many branches
+]
+fixable = ["ALL"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "F403", "F405"]
+"**/{tests,docs,run_example}/*" = ["D", "PLR2004"]
+"**/{significance_test.py,run_hyper.py}" = ["D", "PLR2004"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
