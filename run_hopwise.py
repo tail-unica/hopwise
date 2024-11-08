@@ -9,7 +9,7 @@
 
 import argparse
 
-from recbole.quick_start import run
+from hopwise.quick_start import run
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
