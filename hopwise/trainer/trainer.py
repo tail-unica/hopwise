@@ -215,7 +215,7 @@ class Trainer(AbstractTrainer):
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
 
-        scaler = amp.GradScaler(enabled=self.enable_scaler)
+        scaler = amp.GradScaler(self.device, enabled=self.enable_scaler)
         for batch_idx, batch_interaction in enumerate(iter_data):
             interaction = batch_interaction.to(self.device)
             self.optimizer.zero_grad()
@@ -1323,7 +1323,7 @@ class NCLTrainer(Trainer):
                 self.set_reduce_hook()
                 sync_loss = self.sync_grad_loss()
 
-            with amp.autocast(enabled=self.enable_amp):
+            with amp.autocast(device_type=self.device.type, enabled=self.enable_amp):
                 losses = loss_func(interaction)
 
             if isinstance(losses, tuple):
