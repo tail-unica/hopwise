@@ -7,9 +7,12 @@
 *.pyc
 *.log
 log_tensorboard
-saved/
+saved*/
 *.lprof
 *.egg-info/
 docs/build/
 wandb/*
 /ray_log*
+config/
+.venv/
+venv/
