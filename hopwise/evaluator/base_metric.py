@@ -11,6 +11,7 @@
 #####################################
 """
 
+import numpy as np
 import torch
 
 from hopwise.utils import EvaluatorType
@@ -132,3 +133,78 @@ class LossMetric(AbstractMetric):
             float: The value of the metric.
         """
         raise NotImplementedError("Method [metric_info] of loss-based metric should be implemented.")
+
+
+class ConsumerTopKMetric(AbstractMetric):
+    """:class:`ConsumerTopKMetric` is a base object of consumer-based metrics. If you want to
+    implement a consumer-based metric, you can inherit this class.
+    The consumer-based metrics are based on a binary partition of users and on the demographic parity notion,
+    commonly measured as the absolute difference between the two groups in terms of a ranking metric.
+
+    Args:
+        config (Config): The config of evaluator.
+    """
+
+    metric_type = EvaluatorType.RANKING
+    metric_need = ["eval_data.user_feat", "rec.users"]
+    smaller = True
+    USER_GROUP_1 = 1
+    USER_GROUP_2 = 2
+
+    def __init__(self, config):
+        super().__init__(config)
+        self._ranking_metric = None
+        self.sensitive_attribute = config["sensitive_attribute"]
+
+    @property
+    def ranking_metric(self):
+        if self._ranking_metric is None:
+            raise NotImplementedError("Use a subclass of ConsumerTopKMetric to calculate a specific ranking metric")
+        return self._ranking_metric
+
+    @ranking_metric.setter
+    def ranking_metric(self, value):
+        if not isinstance(value, TopkMetric):
+            raise TypeError(f"The type of ranking_metric [{type(value)}] is not supported for ConsumerTopKMetric.")
+
+        self._ranking_metric = value
+
+    def get_group_mask(self, user_feat, interaction_users):
+        # 0 is the padding sensitive attribute
+        group1_mask = user_feat[self.sensitive_attribute][interaction_users] == self.USER_GROUP_1
+        group2_mask = user_feat[self.sensitive_attribute][interaction_users] == self.USER_GROUP_2
+
+        return group1_mask, group2_mask
+
+    def used_info(self, dataobject):
+        """Get the users features and the users in the interaction batch."""
+        user_feat = dataobject.get("eval_data.user_feat")
+        interaction_users = dataobject.get("rec.users")
+
+        return self.get_group_mask(user_feat, interaction_users)
+
+    def get_dp(self, result, group1_mask, group2_mask):
+        """Get the absolute difference between the two groups in terms of a ranking metric.
+
+        Args:
+            group1_result (torch.Tensor): the result of the first group.
+            group2_result (torch.Tensor): the result of the second group.
+
+        Returns:
+            torch.Tensor: the difference between the two groups in terms of a ranking metric.
+        """
+        group1_result = result[group1_mask, :].mean(axis=0, keepdims=True)
+        group2_result = result[group2_mask, :].mean(axis=0, keepdims=True)
+
+        return np.abs(group1_result - group2_result)
+
+    def ranking_metric_info(self, pos_index, pos_len):
+        raise NotImplementedError("Use a subclass of ConsumerTopKMetric to calculate a specific ranking metric")
+
+    def calculate_metric(self, dataobject):
+        group_mask1, group_mask2 = self.used_info(dataobject)
+        pos_index, pos_len = self.ranking_metric.used_info(dataobject)
+        ranking_result = self.ranking_metric_info(pos_index, pos_len)
+        result = self.get_dp(ranking_result, group_mask1, group_mask2)
+        metric_dict = self.topk_result(self.__class__.__name__.lower(), result)
+        return metric_dict

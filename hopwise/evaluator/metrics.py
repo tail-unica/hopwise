@@ -20,6 +20,8 @@ set of user(u)-item(i) pairs, :math:`\hat r_{u i}` represents the score predicte
 
 """
 
+import inspect
+import sys
 from collections import Counter
 from logging import getLogger
 
@@ -27,7 +29,7 @@ import numpy as np
 from sklearn.metrics import auc as sk_auc
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from hopwise.evaluator.base_metric import AbstractMetric, LossMetric, TopkMetric
+from hopwise.evaluator.base_metric import AbstractMetric, ConsumerTopKMetric, LossMetric, TopkMetric
 from hopwise.evaluator.utils import _binary_clf_curve
 from hopwise.utils import EvaluatorType
 
@@ -753,3 +755,43 @@ class TailPercentage(AbstractMetric):
             key = f"{metric}@{k}"
             metric_dict[key] = round(avg_result[k - 1], self.decimal_place)
         return metric_dict
+
+
+# Consumer Metrics dynamic creation
+
+
+def create_consumer_metric_class(topk_metric):
+    """Dynamically creates and returns a new consumer class with the given name, base classes, and attributes."""
+    topk_metric_class = getattr(sys.modules[__name__], topk_metric)
+    signature = inspect.signature(topk_metric_class.metric_info)
+    parameters = signature.parameters
+
+    if "pos_len" in parameters:
+
+        def ranking_metric_info(self, pos_index, pos_len):
+            return self.ranking_metric.metric_info(pos_index, pos_len)
+    else:
+
+        def ranking_metric_info(self, pos_index):
+            return self.ranking_metric.metric_info(pos_index)
+
+    consumer_metric_class_name = f"Delta{topk_metric}"
+    consumer_metric_class = type(
+        consumer_metric_class_name, (ConsumerTopKMetric,), {"ranking_metric_info": ranking_metric_info}
+    )
+
+    def factory_init(self, config):
+        super(consumer_metric_class, self).__init__(config)
+        self.ranking_metric = topk_metric_class(config)
+
+    consumer_metric_class.__init__ = factory_init
+
+    return consumer_metric_class
+
+
+DeltaHit = create_consumer_metric_class("Hit")
+DeltaMRR = create_consumer_metric_class("MRR")
+DeltaMAP = create_consumer_metric_class("MAP")
+DeltaNDCG = create_consumer_metric_class("NDCG")
+DeltaPrecision = create_consumer_metric_class("Precision")
+DeltaRecall = create_consumer_metric_class("Recall")
