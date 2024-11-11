@@ -176,7 +176,7 @@ class NegSampleDataLoader(AbstractDataLoader):
             neg_item_feat = Interaction({self.iid_field: neg_candidate_ids.to(self.model.device)})
             interaction.update(neg_item_feat)
             scores = self.model.predict(interaction).reshape(candidate_num, -1)
-            indices = torch.max(scores, dim=0)[1].detach().cpu()
+            indices = torch.max(scores, dim=0)[1].detach()
             neg_candidate_ids = neg_candidate_ids.reshape(candidate_num, -1)
             neg_item_ids = neg_candidate_ids[indices, [i for i in range(neg_candidate_ids.shape[1])]].view(-1)
             self.model.train()

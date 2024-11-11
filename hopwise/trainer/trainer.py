@@ -22,7 +22,8 @@ from time import time
 
 import numpy as np
 import torch
-from torch import amp, optim
+from torch import optim
+from torch.cuda import amp
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from tqdm import tqdm
@@ -1322,7 +1323,7 @@ class NCLTrainer(Trainer):
                 self.set_reduce_hook()
                 sync_loss = self.sync_grad_loss()
 
-            with amp.autocast(device_type="cuda" if self.device.type == "cuda" else "cpu", enabled=self.enable_amp):
+            with amp.autocast(device_type=self.device.type, enabled=self.enable_amp):
                 losses = loss_func(interaction)
 
             if isinstance(losses, tuple):
