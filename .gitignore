@@ -1,6 +1,7 @@
 # Saved models
 /saved*
 *.pth
+
 .vscode/
 .idea/
 *.pyc
@@ -12,8 +13,3 @@ saved/
 docs/build/
 wandb/*
 /ray_log*
-.venv/
-venv/
-.DS_Store
-config/
-testingModules.py
