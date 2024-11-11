@@ -27,20 +27,37 @@ keywords = [
   "explainability"
 ]
 dependencies = [
-    "torch",
+    "torch>=1.10.0",
+    "torchdata",
     "transformers",
+    "pydantic",
     "datasets",
-    "pandas",
-    "numpy",
+    "community",
+    "numpy==1.23.5",
+    "pandas>=1.3.0",
     "tqdm",
+    "xgboost",
     "wandb",
     "igraph",
     "colorlog>=4.7.2",
     "colorama>=0.4.4",
-    "scipy",
+    "scipy==1.12.0",
+    "protobuf==3.19.0",
+    "hyperopt==0.2.5",
+    "faiss-cpu",
+    "lightgbm",
+    "plotly",
     "thop",
+    "pytest",
+    "python-louvain",
+    "ray==2.6.3",
+    "hyperopt==0.2.5",
     "tabulate",
-    "tensorboard",
+    "tensorboard>=2.5.0",
+    "dgl==0.9.1",
+    "psutil",
+    "texttable",
+    "kmeans-pytorch",
     "scikit_learn>=0.23.2"
 ]
 classifiers = [
@@ -90,6 +107,7 @@ fixable = ["ALL"]
 "__init__.py" = ["F401", "F403", "F405"]
 "**/{tests,docs,run_example}/*" = ["D", "PLR2004"]
 "**/{significance_test.py,run_hyper.py}" = ["D", "PLR2004"]
+"**/hopwise/evaluator/__init__.py" = ["I"]
 
 [tool.ruff.format]
 quote-style = "double"
