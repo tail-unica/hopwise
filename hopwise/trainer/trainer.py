@@ -214,7 +214,7 @@ class Trainer(AbstractTrainer):
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
 
-        scaler = amp.GradScaler("cuda", enabled=self.enable_scaler)
+        scaler = amp.GradScaler(self.device, enabled=self.enable_scaler)
         for batch_idx, batch_interaction in enumerate(iter_data):
             interaction = batch_interaction.to(self.device)
             self.optimizer.zero_grad()
@@ -1309,7 +1309,7 @@ class NCLTrainer(Trainer):
             if show_progress
             else train_data
         )
-        scaler = amp.GradScaler("cuda", enabled=self.enable_scaler)
+        scaler = amp.GradScaler(enabled=self.enable_scaler)
 
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
@@ -1322,7 +1322,7 @@ class NCLTrainer(Trainer):
                 self.set_reduce_hook()
                 sync_loss = self.sync_grad_loss()
 
-            with amp.autocast("cuda", enabled=self.enable_amp):
+            with amp.autocast(device_type="cuda" if self.device.type == "cuda" else "cpu", enabled=self.enable_amp):
                 losses = loss_func(interaction)
 
             if isinstance(losses, tuple):
@@ -1344,25 +1344,3 @@ class NCLTrainer(Trainer):
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
         return total_loss
-
-
-class KGETrainer(Trainer):
-    r"""KGETrainer is designed for KGE, which is a Knowledge-Completion method."""
-
-    def __init__(self, config, model):
-        super().__init__(config, model)
-
-    def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
-        kg_total_loss = 0.0
-
-        # train kg
-        self.logger.info("Train KG")
-        train_data.set_mode(KGDataLoaderState.KG)
-        kg_total_loss = super()._train_epoch(
-            train_data,
-            epoch_idx,
-            loss_func=self.model.calculate_kg_loss,
-            show_progress=show_progress,
-        )
-
-        return kg_total_loss
