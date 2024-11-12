@@ -102,3 +102,13 @@ class TransE(KnowledgeRecommender):
         item = interaction[self.ITEM_ID]
         return self.forward(user, item)
 
+    def full_sort_predict(self, interaction):
+        user = interaction[self.USER_ID]
+        user_e = self.user_embedding(user)
+
+        rec_r_e = self.relation_embedding.weight[-1]
+        rec_r_e = rec_r_e.expand_as(user_e)
+        
+        all_item_e = self.item_embedding.weight
+        scores = torch.matmul(user_e+rec_r_e, all_item_e.transpose(0, 1))
+        return scores

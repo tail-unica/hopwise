@@ -1,1 +1,0 @@
-from hopwise.model.knowledge_graph_embedding.transe import TransE
