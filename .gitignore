@@ -16,3 +16,4 @@ wandb/*
 config/
 .venv/
 venv/
+testModules.py

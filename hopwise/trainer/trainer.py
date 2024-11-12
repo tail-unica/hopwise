@@ -23,7 +23,7 @@ from time import time
 import numpy as np
 import torch
 from torch import optim
-from torch.cuda import amp
+from torch import amp
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from tqdm import tqdm
