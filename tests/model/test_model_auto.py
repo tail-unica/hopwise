@@ -17,7 +17,8 @@ config_file_list = [os.path.join(current_path, "test_model.yaml")]
 
 
 def quick_test(config_dict):
-    objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
+    objective_function(config_dict=config_dict,
+                       config_file_list=config_file_list, saved=False)
 
 
 class TestGeneralRecommender(unittest.TestCase):
@@ -538,11 +539,13 @@ class TestSequentialRecommender(unittest.TestCase):
         quick_test(config_dict)
 
     def test_sasrec_with_BPR_loss_and_relu(self):
-        config_dict = {"model": "SASRec", "loss_type": "BPR", "hidden_act": "relu"}
+        config_dict = {"model": "SASRec",
+                       "loss_type": "BPR", "hidden_act": "relu"}
         quick_test(config_dict)
 
     def test_sasrec_with_BPR_loss_and_sigmoid(self):
-        config_dict = {"model": "SASRec", "loss_type": "BPR", "hidden_act": "sigmoid"}
+        config_dict = {"model": "SASRec",
+                       "loss_type": "BPR", "hidden_act": "sigmoid"}
         quick_test(config_dict)
 
     def test_srgnn(self):
@@ -914,6 +917,16 @@ class TestKnowledgeRecommender(unittest.TestCase):
     def test_kgin(self):
         config_dict = {
             "model": "KGIN",
+        }
+        quick_test(config_dict)
+
+
+class TestKnowledgeGraphEmbedding(unittest.TestCase):
+    def test_transe(self):
+        config_dict = {
+            "model": "TransE",
+            "embedding_size": 64,
+            "margin": 1.0
         }
         quick_test(config_dict)
 
