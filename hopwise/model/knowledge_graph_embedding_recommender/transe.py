@@ -115,4 +115,7 @@ class TransE(KnowledgeRecommender):
 
         all_item_e = self.entity_embedding.weight[self.items_indexes]
         
-        return -torch.norm((user_e+rec_r_e).unsqueeze(1).expand(-1, all_item_e.shape[0],-1) - all_item_e.unsqueeze(0), p=2, dim=2)
+        h_r = (user_e+rec_r_e).unsqueeze(1).h_r.expand(-1,all_item_e.shape[0], -1)
+        t = all_item_e.unsqueeze(0)
+
+        return -torch.norm(h_r-t, p=2, dim=2)
