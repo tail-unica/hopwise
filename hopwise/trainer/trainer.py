@@ -215,7 +215,7 @@ class Trainer(AbstractTrainer):
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
 
-        scaler = amp.GradScaler(self.device, enabled=self.enable_scaler)
+        scaler = torch.GradScaler(self.device, enabled=self.enable_scaler)
         for batch_idx, batch_interaction in enumerate(iter_data):
             interaction = batch_interaction.to(self.device)
             self.optimizer.zero_grad()
