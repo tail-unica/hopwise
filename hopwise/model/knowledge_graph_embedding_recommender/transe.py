@@ -35,12 +35,16 @@ class TransE(KnowledgeRecommender):
         # load parameters info
         self.embedding_size = config["embedding_size"]
         self.margin = config["margin"]
+        self.device = config["device"]
 
         # define layers and loss
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
         self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
         self.rec_loss = nn.TripletMarginLoss(margin=self.margin, p=2, reduction="mean")
+        
+        # items mapping
+        self.items_indexes = torch.tensor(list(dataset.field2token_id['item_id'].values()), device=self.device)
 
         # parameters initialization
         self.apply(xavier_normal_initialization)
@@ -108,7 +112,7 @@ class TransE(KnowledgeRecommender):
 
         rec_r_e = self.relation_embedding.weight[-1]
         rec_r_e = rec_r_e.expand_as(user_e)
+
+        all_item_e = self.entity_embedding.weight[self.items_indexes]
         
-        all_item_e = self.item_embedding.weight
-        scores = torch.matmul(user_e+rec_r_e, all_item_e.transpose(0, 1))
-        return scores
+        return -torch.norm((user_e+rec_r_e).unsqueeze(1).expand(-1, all_item_e.shape[0],-1) - all_item_e.unsqueeze(0), p=2, dim=2)
