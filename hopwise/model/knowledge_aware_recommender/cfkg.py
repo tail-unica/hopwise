@@ -39,18 +39,13 @@ class CFKG(KnowledgeRecommender):
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
-        self.loss_function = config["loss_function"]
         self.margin = config["margin"]
-        assert self.loss_function in ["inner_product", "transe"]
 
         # define layers and loss
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
         self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
-        if self.loss_function == "transe":
-            self.rec_loss = nn.TripletMarginLoss(margin=self.margin, p=2, reduction="mean")
-        else:
-            self.rec_loss = InnerProductLoss()
+        self.rec_loss = InnerProductLoss()
 
         # parameters initialization
         self.apply(xavier_normal_initialization)
@@ -80,10 +75,7 @@ class CFKG(KnowledgeRecommender):
         return head_e, pos_tail_e, neg_tail_e, relation_e
 
     def _get_score(self, h_e, t_e, r_e):
-        if self.loss_function == "transe":
-            return -torch.norm(h_e + r_e - t_e, p=2, dim=1)
-        else:
-            return torch.mul(h_e + r_e, t_e).sum(dim=1)
+        return torch.mul(h_e + r_e, t_e).sum(dim=1)
 
     def calculate_loss(self, interaction):
         user = interaction[self.USER_ID]
