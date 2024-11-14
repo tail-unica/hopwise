@@ -1,3 +1,4 @@
 from hopwise.model.knowledge_graph_embedding_recommender.transe import TransE
 from hopwise.model.knowledge_graph_embedding_recommender.transh import TransH
+from hopwise.model.knowledge_graph_embedding_recommender.transr import TransR
 from hopwise.model.knowledge_graph_embedding_recommender.transd import TransD

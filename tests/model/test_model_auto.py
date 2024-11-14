@@ -946,5 +946,14 @@ class TestKnowledgeGraphEmbedding(unittest.TestCase):
         }
         quick_test(config_dict)
 
+    def test_transr(self):
+        config_dict = {
+            "model": "TransR",
+            "embedding_size": 64,
+            "margin": 1.0
+        }
+        quick_test(config_dict)
+
+
 if __name__ == "__main__":
     unittest.main()
