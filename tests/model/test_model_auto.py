@@ -945,7 +945,7 @@ class TestKnowledgeGraphEmbedding(unittest.TestCase):
             "margin": 1.0
         }
         quick_test(config_dict)
-    
+
     def test_transr(self):
         config_dict = {
             "model": "TransR",
