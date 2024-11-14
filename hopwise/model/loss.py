@@ -15,6 +15,7 @@ Common Loss in recommender system
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 
 class BPRLoss(nn.Module):
@@ -101,3 +102,15 @@ class EmbMarginLoss(nn.Module):
             norm_e = torch.sum(embedding**self.power, dim=1, keepdim=True)
             emb_loss += torch.sum(torch.max(norm_e - cache_one, cache_zero))
         return emb_loss
+
+
+class InnerProductLoss(nn.Module):
+    r"""This is the inner-product loss used in CFKG for optimization."""
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, anchor, positive, negative):
+        pos_score = torch.mul(anchor, positive).sum(dim=1)
+        neg_score = torch.mul(anchor, negative).sum(dim=1)
+        return (F.softplus(-pos_score) + F.softplus(neg_score)).mean()
