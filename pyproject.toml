@@ -78,7 +78,7 @@ docs = [
   "sphinx"
 ]
 test = [
-  "pytest",
+  "pytest-xdist",
   "pre-commit"
 ]
 
