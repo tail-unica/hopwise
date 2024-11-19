@@ -962,5 +962,13 @@ class TestKnowledgeGraphEmbedding(unittest.TestCase):
         }
         quick_test(config_dict)
 
+    def test_analogy(self):
+        config_dict = {
+            "model": "Analogy",
+            "embedding_size": 64,
+            "scalar_share": 0.5
+        }
+        quick_test(config_dict)
+
 if __name__ == "__main__":
     unittest.main()
