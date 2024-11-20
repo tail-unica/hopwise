@@ -17,8 +17,7 @@ config_file_list = [os.path.join(current_path, "test_model.yaml")]
 
 
 def quick_test(config_dict):
-    objective_function(config_dict=config_dict,
-                       config_file_list=config_file_list, saved=False)
+    objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
 
 
 class TestGeneralRecommender(unittest.TestCase):
@@ -539,13 +538,11 @@ class TestSequentialRecommender(unittest.TestCase):
         quick_test(config_dict)
 
     def test_sasrec_with_BPR_loss_and_relu(self):
-        config_dict = {"model": "SASRec",
-                       "loss_type": "BPR", "hidden_act": "relu"}
+        config_dict = {"model": "SASRec", "loss_type": "BPR", "hidden_act": "relu"}
         quick_test(config_dict)
 
     def test_sasrec_with_BPR_loss_and_sigmoid(self):
-        config_dict = {"model": "SASRec",
-                       "loss_type": "BPR", "hidden_act": "sigmoid"}
+        config_dict = {"model": "SASRec", "loss_type": "BPR", "hidden_act": "sigmoid"}
         quick_test(config_dict)
 
     def test_srgnn(self):
@@ -923,74 +920,43 @@ class TestKnowledgeRecommender(unittest.TestCase):
 
 class TestKnowledgeGraphEmbedding(unittest.TestCase):
     def test_transe(self):
-        config_dict = {
-            "model": "TransE",
-            "embedding_size": 64,
-            "margin": 1.0
-        }
+        config_dict = {"model": "TransE", "embedding_size": 64, "margin": 1.0}
         quick_test(config_dict)
 
     def test_transh(self):
-        config_dict = {
-            "model": "TransH",
-            "embedding_size": 64,
-            "margin": 1.0
-        }
+        config_dict = {"model": "TransH", "embedding_size": 64, "margin": 1.0}
         quick_test(config_dict)
 
     def test_transd(self):
-        config_dict = {
-            "model": "TransD",
-            "embedding_size": 64,
-            "margin": 1.0
-        }
+        config_dict = {"model": "TransD", "embedding_size": 64, "margin": 1.0}
         quick_test(config_dict)
 
     def test_transr(self):
-        config_dict = {
-            "model": "TransR",
-            "embedding_size": 64,
-            "margin": 1.0
-        }
+        config_dict = {"model": "TransR", "embedding_size": 64, "margin": 1.0}
         quick_test(config_dict)
 
     def test_toruse(self):
-        config_dict = {
-            "model": "TorusE",
-            "embedding_size": 64,
-            "margin": 1.0
-        }
+        config_dict = {"model": "TorusE", "embedding_size": 64, "margin": 1.0}
         quick_test(config_dict)
 
     def test_analogy(self):
-        config_dict = {
-            "model": "Analogy",
-            "embedding_size": 64,
-            "scalar_share": 0.5
-        }
+        config_dict = {"model": "Analogy", "embedding_size": 64, "scalar_share": 0.5}
         quick_test(config_dict)
 
     def test_complex(self):
-        config_dict = {
-            "model": "ComplEx",
-            "embedding_size": 64
-        }
+        config_dict = {"model": "ComplEx", "embedding_size": 64}
         quick_test(config_dict)
 
     def test_distmult(self):
-        config_dict = {
-            "model": "DistMult",
-            "embedding_size": 64,
-            "margin": 1.0
-        }
+        config_dict = {"model": "DistMult", "embedding_size": 64, "margin": 1.0}
         quick_test(config_dict)
 
     def test_rescal(self):
-        config_dict = {
-            "model": "RESCAL",
-            "embedding_size": 64,
-            "margin": 1.0
-        }
+        config_dict = {"model": "RESCAL", "embedding_size": 64, "margin": 1.0}
+        quick_test(config_dict)
+
+    def test_rotate(self):
+        config_dict = {"model": "RotatE", "embedding_size": 64, "margin": 1.0}
         quick_test(config_dict)
 
 
