@@ -5,3 +5,4 @@ from hopwise.model.knowledge_graph_embedding_recommender.transd import TransD
 from hopwise.model.knowledge_graph_embedding_recommender.toruse import TorusE
 from hopwise.model.knowledge_graph_embedding_recommender.analogy import Analogy
 from hopwise.model.knowledge_graph_embedding_recommender.complex import ComplEx
+from hopwise.model.knowledge_graph_embedding_recommender.distmult import DistMult
