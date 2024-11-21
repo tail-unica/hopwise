@@ -963,6 +963,18 @@ class TestKnowledgeGraphEmbedding(unittest.TestCase):
         config_dict = {"model": "HolE", "embedding_size": 64, "margin": 1.0}
         quick_test(config_dict)
 
+    def test_tucker(self):
+        config_dict = {
+            "model": "TuckER",
+            "embedding_size": 64,
+            "input_dropout": 0.3,
+            "input_dropout1": 0.4,
+            "input_dropout2": 0.5,
+            "label_smoothing": 0.1,
+            "train_neg_sample_args": {"sample_size": "none"},
+        }
+        quick_test(config_dict)
+
 
 if __name__ == "__main__":
     unittest.main()
