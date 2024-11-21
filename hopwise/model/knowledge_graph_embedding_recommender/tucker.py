@@ -2,7 +2,7 @@
 # @Author : Alessandro Soccol
 # @Email  : alessandro.soccol@unica.it
 
-"""TransE
+"""TuckER
 ##################################################
 Reference:
     TuckER: Tensor Factorization for Knowledge Graph Completion (Balazevic et al., EMNLP-IJCNLP 2019)
