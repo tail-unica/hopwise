@@ -959,6 +959,10 @@ class TestKnowledgeGraphEmbedding(unittest.TestCase):
         config_dict = {"model": "RotatE", "embedding_size": 64, "margin": 1.0}
         quick_test(config_dict)
 
+    def test_hole(self):
+        config_dict = {"model": "HolE", "embedding_size": 64, "margin": 1.0}
+        quick_test(config_dict)
+
 
 if __name__ == "__main__":
     unittest.main()
