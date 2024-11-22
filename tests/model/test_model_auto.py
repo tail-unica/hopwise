@@ -975,6 +975,21 @@ class TestKnowledgeGraphEmbedding(unittest.TestCase):
         }
         quick_test(config_dict)
 
+    def test_conve(self):
+        config_dict = {
+            "model": "ConvE",
+            "embedding_size": 200,
+            "train_neg_sample_args": {"sample_size": "none"},
+            "use_bias": True,
+            "input_dropout": 0.2,
+            "hidden_dropout": 0.3,
+            "feature_dropout": 0.2,
+            "hidden_size": 9728,
+            "embedding_shape": 20,
+            "label_smoothing": 0.1,
+        }
+        quick_test(config_dict)
+
 
 if __name__ == "__main__":
     unittest.main()
