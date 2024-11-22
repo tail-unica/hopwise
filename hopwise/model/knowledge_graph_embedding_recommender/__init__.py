@@ -1,5 +1,6 @@
 from hopwise.model.knowledge_graph_embedding_recommender.analogy import Analogy
 from hopwise.model.knowledge_graph_embedding_recommender.complex import ComplEx
+from hopwise.model.knowledge_graph_embedding_recommender.conve import ConvE
 from hopwise.model.knowledge_graph_embedding_recommender.distmult import DistMult
 from hopwise.model.knowledge_graph_embedding_recommender.hole import HolE
 from hopwise.model.knowledge_graph_embedding_recommender.rescal import RESCAL
