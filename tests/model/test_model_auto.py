@@ -990,6 +990,19 @@ class TestKnowledgeGraphEmbedding(unittest.TestCase):
         }
         quick_test(config_dict)
 
+    def test_convkb(self):
+        config_dict = {
+            "model": "ConvKB",
+            "embedding_size": 50,
+            "train_batch_size": 512,
+            "dropout_prob": 0,
+            "kernel_size": 1,
+            "lambda": 0.2,
+            "out_channels": 64,
+            "epochs": 5,
+        }
+        quick_test(config_dict)
+
 
 if __name__ == "__main__":
     unittest.main()
