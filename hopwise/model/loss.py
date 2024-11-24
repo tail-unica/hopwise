@@ -14,8 +14,8 @@ Common Loss in recommender system
 """
 
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 
 class BPRLoss(nn.Module):
@@ -53,8 +53,7 @@ class RegLoss(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, parameters):
-        reg_loss = None
+    def forward(self, parameters, reg_loss=None):
         for W in parameters:
             if reg_loss is None:
                 reg_loss = W.norm(2)
@@ -114,3 +113,24 @@ class InnerProductLoss(nn.Module):
         pos_score = torch.mul(anchor, positive).sum(dim=1)
         neg_score = torch.mul(anchor, negative).sum(dim=1)
         return (F.softplus(-pos_score) + F.softplus(neg_score)).mean()
+
+
+class LogisticLoss(nn.Module):
+    """This is the logistic loss"""
+
+    def __init__(self):
+        super().__init__()
+        self.softplus = nn.Softplus()
+
+    def forward(self, positive_score, negative_score, pos_regularization=None, neg_regularization=None):
+        positive_labels = torch.ones_like(positive_score)
+        negative_labels = torch.ones_like(negative_score)
+
+        positive_score = torch.mean(self.softplus(positive_score * positive_labels))
+        negative_score = torch.mean(self.softplus(negative_score * negative_labels))
+
+        if pos_regularization and neg_regularization:
+            positive_score = positive_score + pos_regularization
+            negative_score = negative_score + neg_regularization
+
+        return torch.mean(positive_score + negative_score)
