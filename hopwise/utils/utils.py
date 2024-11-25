@@ -64,6 +64,7 @@ def get_model(model_name):
         "sequential_recommender",
         "knowledge_aware_recommender",
         "knowledge_graph_embedding_recommender",
+        "path_language_modeling_recommender",
         "exlib_recommender",
     ]
 

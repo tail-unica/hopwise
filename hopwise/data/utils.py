@@ -49,6 +49,7 @@ def create_dataset(config):
             ModelType.KNOWLEDGE: "KnowledgeBasedDataset",
             ModelType.TRADITIONAL: "Dataset",
             ModelType.DECISIONTREE: "Dataset",
+            ModelType.PATH_LANGUAGE_MODELING: "KnowledgePathDataset",
         }
         dataset_class = getattr(dataset_module, type2class[model_type])
 
@@ -162,11 +163,7 @@ def data_preparation(config, dataset):
         train_dataset, valid_dataset, test_dataset = built_datasets
         train_sampler, valid_sampler, test_sampler = create_samplers(config, dataset, built_datasets)
 
-        if model_type != ModelType.KNOWLEDGE:
-            train_data = get_dataloader(config, "train")(
-                config, train_dataset, train_sampler, shuffle=config["shuffle"]
-            )
-        else:
+        if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]:
             kg_sampler = KGSampler(
                 dataset,
                 config["train_neg_sample_args"]["distribution"],
@@ -174,6 +171,10 @@ def data_preparation(config, dataset):
             )
             train_data = get_dataloader(config, "train")(
                 config, train_dataset, train_sampler, kg_sampler, shuffle=True
+            )
+        else:
+            train_data = get_dataloader(config, "train")(
+                config, train_dataset, train_sampler, shuffle=config["shuffle"]
             )
 
         valid_data = get_dataloader(config, "valid")(config, valid_dataset, valid_sampler, shuffle=False)
@@ -240,10 +241,12 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
 
     model_type = config["MODEL_TYPE"]
     if phase == "train":
-        if model_type != ModelType.KNOWLEDGE:
-            return TrainDataLoader
-        else:
+        if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
+        elif model_type == ModelType.PATH_LANGUAGE_MODELING:
+            return KnowledgePathDataLoader
+        else:
+            return TrainDataLoader
     else:
         eval_mode = config["eval_args"]["mode"][phase]
         if eval_mode == "full":

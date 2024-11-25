@@ -49,9 +49,35 @@ HEAD_ENTITY_ID_FIELD: head_id   # (str) Field name of the head entity ID feature
 TAIL_ENTITY_ID_FIELD: tail_id   # (str) Field name of the tail entity ID feature.
 RELATION_ID_FIELD: relation_id  # (str) Field name of the relation ID feature.
 ENTITY_ID_FIELD: entity_id      # (str) Field name of the entity ID.
+ui_relation: "[UI-Relation]"    # (str) Name assigned to the interaction relation between users and items.
 kg_reverse_r: False             # (bool) Whether to reverse relations of triples for bidirectional edges.
 entity_kg_num_interval: "[0,inf)"       # (str) Entity interval for filtering kg.
 relation_kg_num_interval: "[0,inf)"     # (str) Relation interval for filtering kg.
+
+# Knowledge Path Sampling-based Model Needed
+path_hop_length: 3              # (int) Number of hops in the knowledge path.
+max_paths_per_user: 250         # (int) Maximum number of kg sampled paths per user.
+temporal_causality: True        # (bool) Whether to use temporal causality.
+collaborative_path: False       # (bool) Whether to include users in sampled paths.
+path_sampling_strategy: weighted-rw      # (str) Strategy for sampling paths.
+reasoning_path_template: "{user} {pos_iid} {entity_list} {rec_iid}"  # (str) Template used to format reasoning pahts.
+random_walk_args:               # (dict) Args for random walk path sampling
+    MAX_TRIES_PER_IID: 50       # (int) Maximum number of tries per positive item.
+    MAX_TRIES_PER_USER: 50      # (int) Maximum number of tries per user.
+    MAX_VISITED_DUPLICATES_PER_IID: 3    # (int) Maximum number of duplicated paths visited per positive item.
+    MAX_PATHS_PER_HOP: 1        # (int) Maximum number of paths sampled at each hop for constrained random walk.
+tokenizer:                      # (dict) Tokenizer parameters.
+    model: WordLevel            # (str) Tokenizer model.
+    context_length: 24          # (int) Maximum length of the context.
+    special_tokens:             # (dict) Special tokens.
+        mask_token: "[MASK]"    # (str) Mask token.
+        unk_token: "[UNK]"      # (str) Unknown token.
+        pad_token: "[PAD]"      # (str) Padding token.
+        eos_token: "[EOS]"      # (str) End of sequence token.
+        bos_token: "[BOS]"      # (str) Beginning of sequence token.
+        sep_token: "[SEP]"      # (str) Separator token.
+        cls_token: "[CLS]"      # (str) Classification token.
+    template: "{bos_token}:0 $A:0 {eos_token}"                # (str) Template for the tokenizer.
 
 # Benchmark .inter file
 benchmark_filename: ~           # (list) List of pre-split user-item interaction suffix.

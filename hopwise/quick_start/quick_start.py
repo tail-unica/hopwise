@@ -131,6 +131,7 @@ def run_hopwise(
 
     # dataset splitting
     train_data, valid_data, test_data = data_preparation(config, dataset)
+    train_data.generate_path_dataset()  # TODO: TO REMOVE
 
     # model loading and initialization
     init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
