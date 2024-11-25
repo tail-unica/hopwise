@@ -33,7 +33,7 @@ class ConvKB(KnowledgeRecommender):
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
 
-        # load parameters info
+        # Load parameters info
         self.embedding_size = config["embedding_size"]
         self.device = config["device"]
         self.out_channels = config["out_channels"]
@@ -41,11 +41,10 @@ class ConvKB(KnowledgeRecommender):
         self.drop_prob = config["dropout_prob"]
         self.lmbda = config["lambda"]
 
-        # define layers and loss
-        self.E_users = nn.Embedding(self.n_users, self.embedding_size)
-        self.E_entities = nn.Embedding(self.n_entities, self.embedding_size)
-
-        self.R = nn.Embedding(self.n_relations + 1, self.embedding_size)
+        # Embeddings and Layers
+        self.users_embeddings = nn.Embedding(self.n_users, self.embedding_size)
+        self.entities_embeddings = nn.Embedding(self.n_entities, self.embedding_size)
+        self.relations_embeddings = nn.Embedding(self.n_relations + 1, self.embedding_size)
 
         self.conv1_bn = nn.BatchNorm2d(1)
         self.conv_layer = nn.Conv2d(1, self.out_channels, (self.kernel_size, 3))
@@ -54,10 +53,11 @@ class ConvKB(KnowledgeRecommender):
         self.non_linearity = nn.ReLU()
         self.fc_layer = nn.Linear((self.embedding_size - self.kernel_size + 1) * self.out_channels, 1, bias=False)
 
+        # Loss and Regularization
         self.loss = LogisticLoss()
         self.reg = RegLoss()
 
-        # parameters initialization
+        # Embeddings Initialization
         self.apply(xavier_normal_initialization)
 
     def forward(self, head, relation, tail):
@@ -86,17 +86,17 @@ class ConvKB(KnowledgeRecommender):
 
     def _get_rec_embeddings(self, user, positive_items, negative_items):
         relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        h = self.E_users(user)
-        r = self.R(relation_users)
-        t_pos = self.E_entities(positive_items)
-        t_neg = self.E_entities(negative_items)
+        h = self.users_embeddings(user)
+        r = self.relations_embeddings(relation_users)
+        t_pos = self.entities_embeddings(positive_items)
+        t_neg = self.entities_embeddings(negative_items)
         return h, r, t_pos, t_neg
 
-    def _get_kg_embeddings(self, user, relation, positive_tails, negative_tails):
-        h = self.E_entities(user)
-        r = self.R(relation)
-        t_pos = self.E_entities(positive_tails)
-        t_neg = self.E_entities(negative_tails)
+    def _get_kg_embeddings(self, head, relation, positive_tails, negative_tails):
+        h = self.entities_embeddings(head)
+        r = self.relations_embeddings(relation)
+        t_pos = self.entities_embeddings(positive_tails)
+        t_neg = self.entities_embeddings(negative_tails)
         return h, r, t_pos, t_neg
 
     def calculate_loss(self, interaction):
@@ -129,8 +129,8 @@ class ConvKB(KnowledgeRecommender):
         pos_kg_reg = self._get_regularization(heads_embedding, relations_kg_embedding, pos_tails_embedding)
         neg_kg_reg = self._get_regularization(heads_embedding, relations_kg_embedding, pos_tails_embedding)
 
-        rec_loss = self.loss(-score_pos_users, score_neg_users, pos_users_reg, neg_users_reg)
-        kg_loss = self.loss(-score_pos_kg, score_neg_kg, pos_kg_reg, neg_kg_reg)
+        rec_loss = self.loss(-score_pos_users, -score_neg_users, pos_users_reg, neg_users_reg)
+        kg_loss = self.loss(-score_pos_kg, -score_neg_kg, pos_kg_reg, neg_kg_reg)
         return rec_loss + kg_loss
 
     def predict(self, interaction):
@@ -138,8 +138,8 @@ class ConvKB(KnowledgeRecommender):
         items = interaction[self.ITEM_ID]
         relations = torch.tensor([self.n_relations] * users.shape[0], device=self.device)
 
-        users_e = self.E_users(users)
-        relations_e = self.R(relations)
-        items_e = self.E_entities(items)
+        users_e = self.users_embeddings(users)
+        relations_e = self.relations_embeddings(relations)
+        items_e = self.entities_embeddings(items)
 
         return self.forward(users_e, relations_e, items_e)

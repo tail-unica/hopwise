@@ -419,12 +419,13 @@ class Config:
         ):
             raise NotImplementedError("Full sort evaluation do not match value-based metrics!")
 
-        # metapath format check
-        metapaths = self.final_config_dict["metapaths"]
-        if metapaths is not None:
-            for i in range(len(metapaths)):
-                if isinstance(metapaths[i][0], list):
-                    metapaths[i] = list(map(tuple, metapaths[i]))
+        if self.internal_config_dict["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
+            # metapath format check
+            metapaths = self.final_config_dict["metapaths"]
+            if metapaths is not None:
+                for i in range(len(metapaths)):
+                    if isinstance(metapaths[i][0], list):
+                        metapaths[i] = list(map(tuple, metapaths[i]))
 
     def _init_device(self):
         if isinstance(self.final_config_dict["gpu_id"], tuple):

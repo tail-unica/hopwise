@@ -124,7 +124,7 @@ class LogisticLoss(nn.Module):
 
     def forward(self, positive_score, negative_score, pos_regularization=None, neg_regularization=None):
         positive_labels = torch.ones_like(positive_score)
-        negative_labels = torch.ones_like(negative_score)
+        negative_labels = -torch.ones_like(negative_score)
 
         positive_score = torch.mean(self.softplus(positive_score * positive_labels))
         negative_score = torch.mean(self.softplus(negative_score * negative_labels))
@@ -134,3 +134,18 @@ class LogisticLoss(nn.Module):
             negative_score = negative_score + neg_regularization
 
         return torch.mean(positive_score + negative_score)
+
+
+class BinaryCrossEntropyLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.bce = nn.BCEWithLogitsLoss()
+
+    def forward(self, positive_scores, negative_scores):
+        positive_labels = torch.ones_like(positive_scores)
+        negative_labels = torch.zeros_like(negative_scores)
+
+        scores = torch.cat([positive_scores, negative_scores], dim=0)
+        labels = torch.cat([positive_labels, negative_labels], dim=0)
+
+        return self.bce(scores, labels)
