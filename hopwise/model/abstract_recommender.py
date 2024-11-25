@@ -195,6 +195,16 @@ class KnowledgeRecommender(AbstractRecommender):
         self.device = config["device"]
 
 
+class PathLanguageModelingRecommender(KnowledgeRecommender):
+    """This is an abstract path-language-modeling recommender.
+    All the path-language-modeling model should implement this class.
+    The base path-language-modeling recommender class inherits the knowledge-aware recommender class to
+    learn from knowledge graph paths defined by a chain of entity-relation triplets.
+    """
+
+    type = ModelType.PATH_LANGUAGE_MODELING
+
+
 class ContextRecommender(AbstractRecommender):
     """This is a abstract context-aware recommender. All the context-aware model should implement this class.
     The base context-aware recommender class provide the basic embedding function of feature fields which also

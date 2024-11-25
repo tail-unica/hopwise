@@ -169,3 +169,20 @@ class KnowledgeBasedDataLoader:
 
         if self.general_dataloader.shuffle:
             self.general_dataloader.sampler.set_epoch(epoch_seed)
+
+
+class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
+    """:class:`KnowledgePathDataLoader` is a dataloader for path-language-modeling on knowledge graphs.
+
+    Currently, it mainly serves as a wrapper to :class:`~hopwise.data.dataset.kg_path_dataset.KnowledgePathDataset`,
+    so as to be aware of generating paths only for the training phase.
+    class:'KnowledgeBasedDataLoader' is subclassed for future uses.
+    """
+
+    def generate_path_dataset(self):
+        """Generate path dataset with the used ids based on the dataloader phase.
+
+        Pleaser refer to :meth:`~hopwise.data.dataset.kg_path_dataset.KnowledgePathDataset.generate_path_dataset`
+        for more details.
+        """
+        return self._dataset.generate_path_dataset(self.general_dataloader._sampler.used_ids)

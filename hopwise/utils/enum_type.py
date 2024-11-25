@@ -16,6 +16,7 @@ class ModelType(Enum):
     - ``SEQUENTIAL``: Sequential Recommendation
     - ``CONTEXT``: Context-aware Recommendation
     - ``KNOWLEDGE``: Knowledge-based Recommendation
+    - ``PATH_LANGUAGE_MODELING``: Path Language Modeling Recommendation
     """
 
     GENERAL = 1
@@ -24,6 +25,7 @@ class ModelType(Enum):
     KNOWLEDGE = 4
     TRADITIONAL = 5
     DECISIONTREE = 6
+    PATH_LANGUAGE_MODELING = 7
 
 
 class KGDataLoaderState(Enum):
@@ -96,3 +98,19 @@ class FeatureSource(Enum):
     ITEM_ID = "item_id"
     KG = "kg"
     NET = "net"
+
+
+class PathLanuageModelingTokenType(Enum):
+    """Type of tokens in paths for Path Language Modeling.
+
+    - ``USER``: User tokens.
+    - ``ITEM``: Item tokens.
+    - ``ENTITY``: Entity tokens.
+    - ``RELATION``: Relation tokens.
+
+    """
+
+    USER = "U"
+    ITEM = "I"
+    ENTITY = "E"
+    RELATION = "R"

@@ -61,7 +61,8 @@ class KnowledgeBasedDataset(Dataset):
         :attr:`entity_field` doesn't exist exactly. It's only a symbol,
         representing entity features.
 
-        ``[UI-Relation]`` is a special relation token.
+        :attr:`ui_relation` is a special relation token, which is used to represent
+        the interaction relation between users and items.
     """
 
     def __init__(self, config):
@@ -75,6 +76,7 @@ class KnowledgeBasedDataset(Dataset):
         self.relation_field = self.config["RELATION_ID_FIELD"]
         self.entity_field = self.config["ENTITY_ID_FIELD"]
         self.kg_reverse_r = self.config["kg_reverse_r"]
+        self.ui_relation = self.config["ui_relation"]
         self.entity_kg_num_interval = self.config["entity_kg_num_interval"]
         self.relation_kg_num_interval = self.config["relation_kg_num_interval"]
         self._check_field("head_entity_field", "tail_entity_field", "relation_field", "entity_field")
@@ -358,8 +360,10 @@ class KnowledgeBasedDataset(Dataset):
 
         # Add UI-relation pairs in the relation field
         kg_rel_num = len(self.field2id_token[self.relation_field])
-        self.field2token_id[self.relation_field]["[UI-Relation]"] = kg_rel_num
-        self.field2id_token[self.relation_field] = np.append(self.field2id_token[self.relation_field], "[UI-Relation]")
+        self.field2token_id[self.relation_field][self.ui_relation] = kg_rel_num
+        self.field2id_token[self.relation_field] = np.append(
+            self.field2id_token[self.relation_field], self.ui_relation
+        )
 
     def _remap_ID_all(self):
         super()._remap_ID_all()
@@ -450,21 +454,47 @@ class KnowledgeBasedDataset(Dataset):
         else:
             raise NotImplementedError("kg graph format [{}] has not been implemented.")
 
-    def _create_ckg_sparse_matrix(self, form="coo", show_relation=False):
+    def _create_ckg_source_target(self, form="numpy"):
+        """Create base collaborative knowledge graph.
+
+        Args:
+            form (str, optional): The format of the returned graph source and target.
+            Defaults to ``numpy``.
+        """
         user_num = self.user_num
 
-        hids = self.head_entities + user_num
-        tids = self.tail_entities + user_num
+        if form == "numpy":
+            hids = self.head_entities + user_num
+            tids = self.tail_entities + user_num
 
-        uids = self.inter_feat[self.uid_field].numpy()
-        iids = self.inter_feat[self.iid_field].numpy() + user_num
+            uids = self.inter_feat[self.uid_field].numpy()
+            iids = self.inter_feat[self.iid_field].numpy() + user_num
 
-        ui_rel_num = len(uids)
+            src = np.concatenate([uids, iids, hids])
+            tgt = np.concatenate([iids, uids, tids])
+        elif form == "torch":
+            kg_tensor = self.kg_feat
+            inter_tensor = self.inter_feat
+
+            hids = kg_tensor[self.head_entity_field] + user_num
+            tids = kg_tensor[self.tail_entity_field] + user_num
+
+            uids = inter_tensor[self.uid_field]
+            iids = inter_tensor[self.iid_field] + user_num
+
+            src = torch.cat([uids, iids, hids])
+            tgt = torch.cat([iids, uids, tids])
+        else:
+            raise NotImplementedError(f"form [{form}] has not been implemented.")
+
+        return src, tgt
+
+    def _create_ckg_sparse_matrix(self, form="coo", show_relation=False):
+        src, tgt = self._create_ckg_source_target(form="numpy")
+
+        ui_rel_num = self.inter_num
         ui_rel_id = self.relation_num - 1
-        assert self.field2id_token[self.relation_field][ui_rel_id] == "[UI-Relation]"
-
-        src = np.concatenate([uids, iids, hids])
-        tgt = np.concatenate([iids, uids, tids])
+        assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
 
         if not show_relation:
             data = np.ones(len(src))
@@ -482,25 +512,13 @@ class KnowledgeBasedDataset(Dataset):
             raise NotImplementedError(f"Sparse matrix format [{form}] has not been implemented.")
 
     def _create_ckg_graph(self, form="dgl", show_relation=False):
-        user_num = self.user_num
-
-        kg_tensor = self.kg_feat
-        inter_tensor = self.inter_feat
-
-        head_entity = kg_tensor[self.head_entity_field] + user_num
-        tail_entity = kg_tensor[self.tail_entity_field] + user_num
-
-        user = inter_tensor[self.uid_field]
-        item = inter_tensor[self.iid_field] + user_num
-
-        src = torch.cat([user, item, head_entity])
-        tgt = torch.cat([item, user, tail_entity])
+        src, tgt = self._create_ckg_source_target(form="torch")
 
         if show_relation:
-            ui_rel_num = user.shape[0]
+            ui_rel_num = len(self.inter_feat)
             ui_rel_id = self.relation_num - 1
-            assert self.field2id_token[self.relation_field][ui_rel_id] == "[UI-Relation]"
-            kg_rel = kg_tensor[self.relation_field]
+            assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
+            kg_rel = self.kg_feat[self.relation_field]
             ui_rel = torch.full((2 * ui_rel_num,), ui_rel_id, dtype=kg_rel.dtype)
             edge = torch.cat([ui_rel, kg_rel])
 
@@ -520,6 +538,48 @@ class KnowledgeBasedDataset(Dataset):
         else:
             raise NotImplementedError(f"Graph format [{form}] has not been implemented.")
 
+    def _create_ckg_igraph(self, show_relation=False, directed=True):
+        import igraph as ig
+
+        vertex_type_attrs = np.concatenate(
+            [
+                [self.uid_field] * self.user_num,
+                [self.iid_field] * self.item_num,
+                [self.entity_field] * (self.entity_num - self.item_num),
+            ],
+            axis=0,
+        )
+        if show_relation:
+            n_ui_relations = self.inter_num * 2 if directed else self.inter_num
+            edge_type_attrs = np.concatenate(
+                [[self.ui_relation] * n_ui_relations, self.field2id_token[self.relation_field][self.relations]], axis=0
+            )
+        else:
+            edge_type_attrs = None
+
+        if directed:
+            src, tgt = self._create_ckg_source_target(form="numpy")
+        else:
+            user_num = self.user_num
+            hids = self.head_entities + user_num
+            tids = self.tail_entities + user_num
+
+            uids = self.inter_feat[self.uid_field].numpy()
+            iids = self.inter_feat[self.iid_field].numpy() + user_num
+
+            src = np.concatenate([uids, hids])
+            tgt = np.concatenate([iids, tids])
+
+        tuple_graph = list(zip(src, tgt))
+        ig_graph = ig.Graph(
+            edges=tuple_graph,
+            vertex_attrs={"type": vertex_type_attrs},
+            edge_attrs={"type": edge_type_attrs} if show_relation else None,
+            directed=directed,
+        )
+
+        return ig_graph
+
     def ckg_graph(self, form="coo", value_field=None):
         """Get graph or sparse matrix that describe relations of CKG,
         which combines interactions and kg triplets into the same graph.
@@ -528,10 +588,10 @@ class KnowledgeBasedDataset(Dataset):
 
         For an edge of <src, tgt>, ``graph[src, tgt] = 1`` if ``value_field`` is ``None``,
         else ``graph[src, tgt] = self.kg_feat[self.relation_field][src, tgt]``
-        or ``graph[src, tgt] = [UI-Relation]``.
+        or ``graph[src, tgt] = self.ui_relation``.
 
-        Currently, we support graph in `DGL`_ and `PyG`_,
-        and two type of sparse matrices, ``coo`` and ``csr``.
+        Currently, we support graph in `DGL`_, `PyG`_, and `igraph`_,
+        two type of sparse matrices, ``coo`` and ``csr``.
 
         Args:
             form (str, optional): Format of sparse matrix, or library of graph data structure.
@@ -547,6 +607,9 @@ class KnowledgeBasedDataset(Dataset):
 
         .. _PyG:
             https://github.com/rusty1s/pytorch_geometric
+
+        .. _igraph:
+            https://python.igraph.org/en/stable/
         """
         if value_field is not None and value_field != self.relation_field:
             raise ValueError(f"Value_field [{value_field}] can only be [{self.relation_field}] in ckg_graph.")
@@ -556,5 +619,100 @@ class KnowledgeBasedDataset(Dataset):
             return self._create_ckg_sparse_matrix(form, show_relation)
         elif form in ["dgl", "pyg"]:
             return self._create_ckg_graph(form, show_relation)
+        elif form == "igraph":
+            return self._create_ckg_igraph(show_relation)
         else:
             raise NotImplementedError("ckg graph format [{}] has not been implemented.")
+
+    def _create_hetero_ckg_graph(self, form="dgl"):
+        """DGL expects each node type to be in the range [0, num_nodes_dict[ntype])."""
+        import dgl
+
+        item_num = self.item_num
+        inter_tensor = self.inter_feat
+        kg_tensor = self.kg_feat
+
+        uids = inter_tensor[self.uid_field]
+        iids = inter_tensor[self.iid_field]
+
+        graph_data = {(self.uid_field, self.ui_relation, self.iid_field): (uids, iids)}
+
+        hids = kg_tensor[self.head_entity_field]
+        tids = kg_tensor[self.tail_entity_field]
+        kg_rel = kg_tensor[self.relation_field]
+        entity_token = self.field2id_token[self.entity_field]
+        entities_not_items_mask = np.array(
+            [token != "[PAD]" and token not in self.entity2item for token in entity_token]
+        )
+        for rel, rel_id in self.field2token_id[self.relation_field].items():
+            if rel in ["[PAD]", self.ui_relation]:
+                continue
+
+            rel_mask = kg_rel == rel_id
+            rel_hids = hids[rel_mask]
+            rel_tids = tids[rel_mask]
+
+            rel_hids_ents = entities_not_items_mask[rel_hids]
+            rel_tids_ents = entities_not_items_mask[rel_tids]
+
+            # Entity-entity links
+            entity_entity_links = rel_hids_ents & rel_tids_ents
+            if entity_entity_links.any():
+                ee_hids = rel_hids[entity_entity_links] - item_num
+                ee_tids = rel_tids[entity_entity_links] - item_num
+                graph_data[(self.entity_field, rel, self.entity_field)] = (ee_hids, ee_tids)
+
+            # Entity-item links
+            entity_item_links = rel_hids_ents & ~rel_tids_ents
+            if entity_item_links.any():
+                ei_hids = rel_hids[entity_item_links] - item_num
+                ei_tids = rel_tids[entity_item_links]
+                graph_data[(self.entity_field, rel, self.iid_field)] = (ei_hids, ei_tids)
+
+            # Item-entity links
+            item_entity_links = ~rel_hids_ents & rel_tids_ents
+            if item_entity_links.any():
+                ie_hids = rel_hids[item_entity_links]
+                ie_tids = rel_tids[item_entity_links] - item_num
+                graph_data[(self.iid_field, rel, self.entity_field)] = (ie_hids, ie_tids)
+
+            # Item-item links
+            item_item_links = ~rel_hids_ents & ~rel_tids_ents
+            if item_item_links.any():
+                ii_hids = rel_hids[item_item_links]
+                ii_tids = rel_tids[item_item_links]
+                graph_data[(self.iid_field, rel, self.iid_field)] = (ii_hids, ii_tids)
+
+        num_nodes_dict = {
+            self.uid_field: self.user_num,
+            self.iid_field: item_num,
+            self.entity_field: self.entity_num - item_num,
+        }
+        graph = dgl.heterograph(graph_data, num_nodes_dict=num_nodes_dict)
+
+        return graph
+
+    def ckg_hetero_graph(self, form="dgl"):
+        """Get heterogeneous graph that describes relations of CKG,
+        which does not only combine interactions and kg triplets into the same graph,
+        but it also enable metapath-based random walks.
+
+        Item ids and entity ids are added by ``user_num`` temporally.
+
+        Currently, we support graph in `DGL`_.
+
+        Args:
+            form (str, optional): Format of sparse matrix, or library of graph data structure.
+                Defaults to ``dgl``.
+
+        Returns:
+            Heterogeneous graph.
+
+        .. _DGL:
+            https://www.dgl.ai/
+        """
+
+        if form in ["dgl"]:
+            return self._create_hetero_ckg_graph(form)
+        else:
+            raise NotImplementedError("ckg hetero graph format [{}] has not been implemented.")

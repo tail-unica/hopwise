@@ -234,6 +234,10 @@ class Config:
         )
         sequential_embedding_model_init = os.path.join(quick_start_config_path, "sequential_embedding_model.yaml")
         knowledge_base_init = os.path.join(quick_start_config_path, "knowledge_base.yaml")
+        knowledge_path_base_init = os.path.join(quick_start_config_path, "knowledge_path_base.yaml")
+        knowledge_path_base_on_ml_100k_init = os.path.join(
+            quick_start_config_path, "knowledge_path_base_on_ml-100k.yaml"
+        )
 
         self.internal_config_dict = dict()
         for file in [
@@ -278,6 +282,10 @@ class Config:
 
         elif self.internal_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE:
             self._update_internal_config_dict(knowledge_base_init)
+        elif self.internal_config_dict["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
+            self._update_internal_config_dict(knowledge_path_base_init)
+            if dataset == "ml-100k":
+                self._update_internal_config_dict(knowledge_path_base_on_ml_100k_init)
 
     def _get_final_config_dict(self):
         final_config_dict = dict()
@@ -410,6 +418,13 @@ class Config:
             and "full" in self.final_config_dict["eval_args"]["mode"].values()
         ):
             raise NotImplementedError("Full sort evaluation do not match value-based metrics!")
+
+        # metapath format check
+        metapaths = self.final_config_dict["metapaths"]
+        if metapaths is not None:
+            for i in range(len(metapaths)):
+                if isinstance(metapaths[i][0], list):
+                    metapaths[i] = list(map(tuple, metapaths[i]))
 
     def _init_device(self):
         if isinstance(self.final_config_dict["gpu_id"], tuple):

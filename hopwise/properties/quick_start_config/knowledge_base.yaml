@@ -4,6 +4,7 @@ load_col:
     link: ['item_id', 'entity_id']
 
 # Data preprocessing for knowledge graph triples
+ui_relation: "[UI-Relation]"            # (str) Name assigned to the interaction relation between users and items.
 kg_reverse_r: False                     # (bool) Whether to reverse relations of triples for bidirectional edges.
 entity_kg_num_interval: "[0,inf)"       # (str) Entity interval for filtering kg.
 relation_kg_num_interval: "[0,inf)"     # (str) Relation interval for filtering kg.

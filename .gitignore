@@ -18,3 +18,5 @@ config/
 venv/
 testModules.py
 tempCodeRunnerFile.py
+.aider*
+.env
