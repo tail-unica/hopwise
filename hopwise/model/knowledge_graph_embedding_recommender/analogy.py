@@ -34,11 +34,7 @@ class Analogy(KnowledgeRecommender):
         # Load parameters info
         self.embedding_size = config["embedding_size"]
         self.device = config["device"]
-
-        if config["scalar_share"] is None:
-            self.scalar_share = 0.5
-        else:
-            self.scalar_share = config["scalar_share"]
+        self.scalar_share = config["scalar_share"]
 
         self.scalar_dim = int(self.embedding_size * self.scalar_share)
         self.complex_dim = int(self.embedding_size - self.scalar_dim)

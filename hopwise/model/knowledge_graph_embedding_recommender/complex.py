@@ -15,7 +15,6 @@ from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
 from hopwise.model.init import xavier_normal_initialization
-from hopwise.model.loss import BinaryCrossEntropyLoss
 from hopwise.utils import InputType
 
 
@@ -45,7 +44,7 @@ class ComplEx(KnowledgeRecommender):
         self.relation_re_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
         self.relation_im_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
 
-        self.loss = BinaryCrossEntropyLoss()
+        self.loss = nn.BCEWithLogitsLoss()
 
         # parameters initialization
         self.apply(xavier_normal_initialization)
@@ -117,8 +116,13 @@ class ComplEx(KnowledgeRecommender):
         score_pos_kg = self.forward(head_re_e, head_im_e, kg_r_re_e, kg_r_im_e, pos_tail_re_e, pos_tail_im_e)
         score_neg_kg = self.forward(head_re_e, head_im_e, kg_r_re_e, kg_r_im_e, neg_tail_re_e, neg_tail_im_e)
 
-        rec_loss = self.loss(score_pos_users, score_neg_users)
-        kg_loss = self.loss(score_pos_kg, score_neg_kg)
+        scores_rec = torch.cat([score_pos_users, score_neg_users], dim=0)
+        scores_kg = torch.cat([score_pos_kg, score_neg_kg], dim=0)
+        labels_rec = torch.cat([torch.ones_like(score_pos_users), torch.zeros_like(score_neg_users)], dim=0)
+        labels_kg = torch.cat([torch.ones_like(score_pos_kg), torch.zeros_like(score_neg_kg)], dim=0)
+
+        rec_loss = self.loss(scores_rec, labels_rec)
+        kg_loss = self.loss(scores_kg, labels_kg)
 
         return rec_loss + kg_loss
 

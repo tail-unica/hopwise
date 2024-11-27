@@ -18,10 +18,9 @@ from hopwise.utils import InputType
 
 
 class TransH(KnowledgeRecommender):
-    r"""TransH
-
-    .. math::
-        f_t(r)=
+    r"""TransH Have been invented to overcome the disadvantages of TransE,
+    allowing an entity to have distinct representations when involved in different relations.
+    It introduces relation-specific hyperplanes.
 
     Note:
         In this version, we sample recommender data and knowledge data separately, and put them together for training.
@@ -136,5 +135,9 @@ class TransH(KnowledgeRecommender):
         relation_ids_item = torch.tensor([self.n_relations] * all_item_e.shape[0], device=self.device)
 
         h_r = self.project(user_e, relation_ids_user) + rec_r_e
+        h_r = h_r.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
+
         t = self.project(all_item_e, relation_ids_item)
-        return -torch.norm(h_r.unsqueeze(1).expand(-1, all_item_e.shape[0], -1) - t.unsqueeze(0), p=2, dim=2)
+        t = t.unsqueeze(0)
+
+        return -torch.norm(h_r - t, p=2, dim=2)

@@ -1,0 +1,6 @@
+embedding_size: 64                                # (int) The embedding size of users and items.
+input_dropout: 0.3                                #
+input_dropout1: 0.4                               #
+input_dropout2: 0.5                               #
+label_smoothing: 0.1                              #
+train_neg_sample_args: {"sample_size": "none"}    #

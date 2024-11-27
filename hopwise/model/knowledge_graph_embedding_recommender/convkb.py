@@ -127,7 +127,7 @@ class ConvKB(KnowledgeRecommender):
         pos_users_reg = self._get_regularization(users_embedding, relations_user_embedding, pos_items_embedding)
         neg_users_reg = self._get_regularization(users_embedding, relations_user_embedding, neg_items_embedding)
         pos_kg_reg = self._get_regularization(heads_embedding, relations_kg_embedding, pos_tails_embedding)
-        neg_kg_reg = self._get_regularization(heads_embedding, relations_kg_embedding, pos_tails_embedding)
+        neg_kg_reg = self._get_regularization(heads_embedding, relations_kg_embedding, neg_tails_embedding)
 
         rec_loss = self.loss(-score_pos_users, -score_neg_users, pos_users_reg, neg_users_reg)
         kg_loss = self.loss(-score_pos_kg, -score_neg_kg, pos_kg_reg, neg_kg_reg)

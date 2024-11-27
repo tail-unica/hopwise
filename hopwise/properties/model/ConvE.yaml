@@ -1,0 +1,9 @@
+embedding_size: 200                                 # (int) The embedding size of users and items.
+train_neg_sample_args: {"sample_size": "none"}      #
+use_bias: True                                      #
+input_dropout: 0.2                                  #
+hidden_dropout: 0.3                                 #
+feature_dropout: 0.2                                #
+hidden_size: 9728                                   #
+embedding_shape: 20                                 #
+label_smoothing: 0.1                                #

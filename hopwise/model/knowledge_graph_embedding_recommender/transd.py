@@ -53,13 +53,6 @@ class TransD(KnowledgeRecommender):
         # Parameters initialization
         self.apply(xavier_normal_initialization)
 
-    def forward(self, user_e, user_e_vec, rec_r_e, rec_r_e_vec, item_e, item_e_vec):
-        user_projection = self.project(user_e, user_e_vec, rec_r_e_vec)
-        item_projection = self.project(item_e, item_e_vec, rec_r_e_vec)
-
-        score = -torch.norm(user_projection + rec_r_e - item_projection, p=2, dim=1)
-        return score
-
     def _get_rec_embedding(self, user, pos_item, neg_item):
         user_e = self.user_embedding(user)
         pos_item_e = self.entity_embedding(pos_item)
@@ -94,7 +87,7 @@ class TransD(KnowledgeRecommender):
 
         return head_e, pos_tail_e, neg_tail_e, relation_e
 
-    def project(self, ent, ent_vect, rel_vect):
+    def forward(self, ent, ent_vect, rel_vect):
         """We note that :math:`p_r(e)_i = e^p^Te \\times r^p_i + e_i` which is
         more efficient to compute than the matrix formulation in the original
         paper."""
@@ -132,9 +125,9 @@ class TransD(KnowledgeRecommender):
         pos_t_e_vec = torch.cat([pos_item_e_vec, pos_tail_e_vec])
         neg_t_e_vec = torch.cat([neg_item_e_vec, neg_tail_e_vec])
 
-        h_projection = self.project(h_e, h_e_vec, r_e_vec)
-        pos_t_e_projection = self.project(pos_t_e, pos_t_e_vec, r_e_vec)
-        neg_t_e_projection = self.project(neg_t_e, neg_t_e_vec, r_e_vec)
+        h_projection = self.forward(h_e, h_e_vec, r_e_vec)
+        pos_t_e_projection = self.forward(pos_t_e, pos_t_e_vec, r_e_vec)
+        neg_t_e_projection = self.forward(neg_t_e, neg_t_e_vec, r_e_vec)
 
         loss = self.loss(h_projection + r_e, pos_t_e_projection, neg_t_e_projection)
         return loss
@@ -154,7 +147,11 @@ class TransD(KnowledgeRecommender):
 
         rec_r_e_vec = self.relation_vec_embedding.weight[-1]
 
-        return self.forward(user_e, user_e_vec, rec_r_e, rec_r_e_vec, item_e, item_e_vec)
+        user_projection = self.forward(user_e, user_e_vec, rec_r_e_vec)
+        item_projection = self.forward(item_e, item_e_vec, rec_r_e_vec)
+
+        score = -torch.norm(user_projection + rec_r_e - item_projection, p=2, dim=1)
+        return score
 
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
@@ -165,12 +162,12 @@ class TransD(KnowledgeRecommender):
 
         rec_r_e_vec = self.relation_vec_embedding.weight[-1]
 
-        users_projection = self.project(user_e, user_e_vec, rec_r_e_vec)
+        users_projection = self.forward(user_e, user_e_vec, rec_r_e_vec)
 
         item_indices = torch.tensor(range(self.n_items)).to(self.device)
         all_item_e = self.entity_embedding.weight[item_indices]
         all_item_e_vec = self.entity_vec_embedding.weight[item_indices]
-        items_projection = self.project(all_item_e, all_item_e_vec, rec_r_e_vec)
+        items_projection = self.forward(all_item_e, all_item_e_vec, rec_r_e_vec)
 
         h_r = (users_projection + rec_r_e).unsqueeze(1).expand(-1, items_projection.shape[0], -1)
         t = items_projection.unsqueeze(0)

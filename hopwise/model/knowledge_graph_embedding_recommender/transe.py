@@ -117,7 +117,9 @@ class TransE(KnowledgeRecommender):
         item_indices = torch.tensor(range(self.n_items)).to(self.device)
         all_item_e = self.entity_embedding.weight[item_indices]
 
-        h_r = (user_e + rec_r_e).unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
+        # h_r = (user_e + rec_r_e).unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
+        user_e = user_e.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
+        rec_r_e = rec_r_e.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
         t = all_item_e.unsqueeze(0)
 
-        return -torch.norm(h_r - t, p=2, dim=2)
+        return -torch.norm(user_e + rec_r_e - t, p=2, dim=2)

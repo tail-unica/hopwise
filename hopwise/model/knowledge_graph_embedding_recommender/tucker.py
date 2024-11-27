@@ -62,51 +62,33 @@ class TuckER(KnowledgeRecommender):
         # Parameters initialization
         self.apply(xavier_normal_initialization)
 
-    def forward(self, user, relation, items):
-        score = self._get_rec_score(user, relation)
-        score = score[:, self.n_users :]
-        score = score[torch.arange(user.size(0)), items]
-        return score
-
-    def _get_rec_score(self, h, r):
-        e1 = self.users_embeddings(h)
-        r = self.relations_embeddings(r)
-
-        x = self.bn0(e1)
+    def forward(self, h, r, embeddings):
+        x = self.bn0(h)
         x = self.input_dropout(x)
-        x = x.view(-1, 1, e1.size(1))
+        x = x.view(-1, 1, h.size(1))
 
         w_mat = torch.mm(r, self.weights.view(r.size(1), -1))
-        w_mat = w_mat.view(-1, e1.size(1), e1.size(1))
+        w_mat = w_mat.view(-1, h.size(1), h.size(1))
         w_mat = self.hidden_dropout1(w_mat)
 
         x = torch.bmm(x, w_mat)
-        x = x.view(-1, e1.size(1))
+        x = x.view(-1, h.size(1))
         x = self.bn1(x)
         x = self.hidden_dropout2(x)
-        x = torch.mm(x, self.users_embeddings.weight.transpose(1, 0))
+        x = torch.mm(x, embeddings.weight.transpose(1, 0))
         pred = torch.sigmoid(x)
         return pred
 
-    def _get_kg_score(self, h, r):
-        e1 = self.entities_embeddings(h)
+    def _get_rec_embeddings(self, user):
+        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        user_e = self.users_embeddings(user)
+        r_e = self.relations_embeddings(relation_users)
+        return user_e, r_e
+
+    def _get_kg_embeddings(self, h, r):
+        h = self.entities_embeddings(h)
         r = self.relations_embeddings(r)
-
-        x = self.bn0(e1)
-        x = self.input_dropout(x)
-        x = x.view(-1, 1, e1.size(1))
-
-        w_mat = torch.mm(r, self.weights.view(r.size(1), -1))
-        w_mat = w_mat.view(-1, e1.size(1), e1.size(1))
-        w_mat = self.hidden_dropout1(w_mat)
-
-        x = torch.bmm(x, w_mat)
-        x = x.view(-1, e1.size(1))
-        x = self.bn1(x)
-        x = self.hidden_dropout2(x)
-        x = torch.mm(x, self.entities_embeddings.weight.transpose(1, 0))
-        pred = torch.sigmoid(x)
-        return pred
+        return h, r
 
     def calculate_loss(self, interaction):
         user = interaction[self.USER_ID]
@@ -119,10 +101,8 @@ class TuckER(KnowledgeRecommender):
 
         tail = interaction[self.TAIL_ENTITY_ID]
 
-        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        score_users = self._get_rec_score(user, relation_users)
-
-        score_heads = self._get_kg_score(head, relation)
+        head_e, relation_e = self._get_kg_embeddings(head, relation)
+        user_e, rec_r_e = self._get_rec_embeddings(user)
 
         item_new = torch.zeros((item.size(0), self.n_users + self.n_items), device=self.device)
         item_new[:, item + self.n_users] = 1.0
@@ -134,20 +114,34 @@ class TuckER(KnowledgeRecommender):
             item_new = ((1.0 - self.label_smoothing) * item_new) + (1.0 / self.n_items)
             tail_new = ((1.0 - self.label_smoothing) * tail_new) + (1.0 / self.n_entities)
 
+        score_users = self.forward(user_e, rec_r_e, self.users_embeddings)
+        score_kg = self.forward(head_e, relation_e, self.entities_embeddings)
+
         loss_rec = self.loss(score_users, item_new)
-        loss_kg = self.loss(score_heads, tail_new)
+        loss_kg = self.loss(score_kg, tail_new)
 
         return loss_rec + loss_kg
 
     def predict(self, interaction):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
-        relation = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        return self.forward(user, relation, item)
+
+        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        user_e = self.users_embeddings(user)
+        r_e = self.relations_embeddings(relation_users)
+
+        score = self.forward(user_e, r_e, self.users_embeddings)
+
+        score = score[:, self.n_users :]
+        score = score[torch.arange(user.size(0)), item]
+        return score
 
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
-        relation = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        score = self._get_rec_score(user, relation)
+        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        user_e = self.users_embeddings(user)
+        r_e = self.relations_embeddings(relation_users)
+
+        score = self.forward(user_e, r_e, self.users_embeddings)
         score = score[:, self.n_users :]
         return score
