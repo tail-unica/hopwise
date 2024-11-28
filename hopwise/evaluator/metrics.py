@@ -795,3 +795,57 @@ DeltaMAP = create_consumer_metric_class("MAP")
 DeltaNDCG = create_consumer_metric_class("NDCG")
 DeltaPrecision = create_consumer_metric_class("Precision")
 DeltaRecall = create_consumer_metric_class("Recall")
+
+# Beyond Accuracy Metrics
+
+
+class Serendipity(AbstractMetric):
+    metric_type = EvaluatorType.RANKING
+    metric_need = ["rec.items", "data.count_items", "data.history_index"]
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.topk = config["topk"]
+
+    def used_info(self, dataobject):
+        """Get the matrix of recommendation items and the popularity of items in training data"""
+        item_counter = dataobject.get("data.count_items")
+        item_matrix = dataobject.get("rec.items")
+        history_matrix = dataobject.get("data.history_index")
+
+        items, count = zip(*item_counter.items())
+        item_counter = np.zeros(history_matrix.shape[1], dtype=np.int)
+        item_counter[list(items)] = count
+
+        return item_matrix.numpy(), item_counter, history_matrix
+
+    def calculate_metric(self, dataobject):
+        item_matrix, item_count, history_matrix = self.used_info(dataobject)
+        pop_recs = np.tile(item_count, (item_matrix.shape[0], 1))
+        pop_recs[history_matrix] = 0
+        pop_topk = np.argsort(pop_recs, axis=-1)[:, ::-1][:, : max(self.topk)]
+        topk_intersection = (item_matrix[:, None] == pop_topk).any(axis=1)
+
+        result = self.metric_info(topk_intersection)
+        metric_dict = self.topk_result("serendipity", result)
+        return metric_dict
+
+    def metric_info(self, values):
+        return 1 - (values.cumsum(axis=1) / np.arange(1, values.shape[1] + 1))
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result[k - 1], self.decimal_place)
+        return metric_dict

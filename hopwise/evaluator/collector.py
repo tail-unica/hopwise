@@ -48,6 +48,7 @@ class DataStruct:
         else:
             if not isinstance(self._data_dict[name], torch.Tensor):
                 raise ValueError(f"{name} is not a tensor.")
+
             self._data_dict[name] = torch.cat((self._data_dict[name], value.clone().detach()), dim=0)
 
     def __str__(self):
@@ -132,6 +133,7 @@ class Collector:
         interaction,
         positive_u: torch.Tensor,
         positive_i: torch.Tensor,
+        history_index: torch.Tensor,
     ):
         """Collect the evaluation resource from batched eval data and batched model output.
 
@@ -178,6 +180,11 @@ class Collector:
             self.label_field = self.config["LABEL_FIELD"]
             self.data_struct.update_tensor("data.label", interaction[self.label_field].to(self.device))
 
+        if self.register.need("data.history_index"):
+            history_matrix = torch.zeros_like(scores_tensor, dtype=torch.int)
+            history_matrix[history_index] = 1
+            self.data_struct.update_tensor("data.history_index", history_matrix.to(self.device))
+
     def model_collect(self, model: torch.nn.Module):
         """Collect the evaluation resource from model.
 
@@ -207,9 +214,10 @@ class Collector:
         And reset some of outdated resource.
         """
         for key in self.data_struct._data_dict:
-            self.data_struct._data_dict[key] = self.data_struct._data_dict[key].cpu()
+            if isinstance(self.data_struct._data_dict[key], torch.Tensor):
+                self.data_struct._data_dict[key] = self.data_struct._data_dict[key].cpu()
         returned_struct = copy.deepcopy(self.data_struct)
-        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label"]:
+        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label", "data.history_index"]:
             if key in self.data_struct:
                 del self.data_struct[key]
         return returned_struct
