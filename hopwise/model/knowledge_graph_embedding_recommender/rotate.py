@@ -34,12 +34,12 @@ class RotatE(KnowledgeRecommender):
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
 
-        # load parameters info
+        # Load parameters info
         self.embedding_size = config["embedding_size"]
         self.margin = config["margin"]
         self.device = config["device"]
 
-        # define layers and loss
+        # Embeddings
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.user_embedding_im = nn.Embedding(self.n_users, self.embedding_size)
 
@@ -48,45 +48,15 @@ class RotatE(KnowledgeRecommender):
 
         self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
 
-        self.rec_loss = nn.BCEWithLogitsLoss()
+        # Loss
+        self.loss = nn.BCEWithLogitsLoss()
 
-        # items mapping
-        self.items_indexes = torch.tensor(list(dataset.field2token_id["item_id"].values()), device=self.device)
-
-        # parameters initialization
+        # Parameters initialization
         self.apply(xavier_normal_initialization)
         nn.init.uniform_(self.relation_embedding.weight, 0, 2 * math.pi)
 
-    def forward(self, user, relation, item):
-        score = self._get_score_users(user, relation, item)
-        return score
-
-    def _get_score_users(self, user, relation, item):
-        user_re = self.user_embedding(user)
-        user_im = self.user_embedding_im(user)
-        item_re = self.entity_embedding(item)
-        item_im = self.entity_embedding_im(item)
-
-        rel_theta = self.relation_embedding(relation)
-
-        rel_re, rel_im = torch.cos(rel_theta), torch.sin(rel_theta)
-
-        re_score = (rel_re * user_re - rel_im * user_im) - item_re
-        im_score = (rel_re * user_im + rel_im * user_re) - item_im
-        complex_score = torch.stack([re_score, im_score], dim=2)
-        score = torch.linalg.vector_norm(complex_score, dim=(1, 2))
-
-        return self.margin - score
-
-    def _get_score_entities(self, head, relation, tail):
-        head_re = self.entity_embedding(head)
-        head_im = self.entity_embedding_im(head)
-        tail_re = self.entity_embedding(tail)
-        tail_im = self.entity_embedding_im(tail)
-
-        rel_theta = self.relation_embedding(relation)
-
-        rel_re, rel_im = torch.cos(rel_theta), torch.sin(rel_theta)
+    def forward(self, head_re, head_im, relation, tail_re, tail_im):
+        rel_re, rel_im = torch.cos(relation), torch.sin(relation)
 
         re_score = (rel_re * head_re - rel_im * head_im) - tail_re
         im_score = (rel_re * head_im + rel_im * head_re) - tail_im
@@ -94,6 +64,33 @@ class RotatE(KnowledgeRecommender):
         score = torch.linalg.vector_norm(complex_score, dim=(1, 2))
 
         return self.margin - score
+
+    def _get_rec_embeddings(self, user, positive_items, negative_items):
+        user_re = self.user_embedding(user)
+        user_im = self.user_embedding_im(user)
+        pos_item_re = self.entity_embedding(positive_items)
+        pos_item_im = self.entity_embedding_im(positive_items)
+
+        neg_item_re = self.entity_embedding(negative_items)
+        neg_item_im = self.entity_embedding_im(negative_items)
+
+        relation_user = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        rec_r_e = self.relation_embedding(relation_user)
+
+        return user_re, user_im, rec_r_e, pos_item_re, pos_item_im, neg_item_re, neg_item_im
+
+    def _get_kg_embeddings(self, head, relation, positive_tails, negative_tails):
+        head_re = self.entity_embedding(head)
+        head_im = self.entity_embedding_im(head)
+        pos_tail_re = self.entity_embedding(positive_tails)
+        pos_tail_im = self.entity_embedding_im(positive_tails)
+
+        neg_tail_re = self.entity_embedding(negative_tails)
+        neg_tail_im = self.entity_embedding_im(negative_tails)
+
+        kg_r_e = self.relation_embedding(relation)
+
+        return head_re, head_im, kg_r_e, pos_tail_re, pos_tail_im, neg_tail_re, neg_tail_im
 
     def calculate_loss(self, interaction):
         user = interaction[self.USER_ID]
@@ -108,51 +105,62 @@ class RotatE(KnowledgeRecommender):
         pos_tail = interaction[self.TAIL_ENTITY_ID]
         neg_tail = interaction[self.NEG_TAIL_ENTITY_ID]
 
-        relation_user = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        pos_score_users = self._get_score_users(user, relation_user, pos_item)
-        neg_score_users = self._get_score_users(user, relation_user, neg_item)
+        user_re, user_im, rec_r_e, pos_item_re, pos_item_im, neg_item_re, neg_item_im = self._get_rec_embeddings(
+            user, pos_item, neg_item
+        )
+        head_re, head_im, kg_r_e, pos_tail_re, pos_tail_im, neg_tail_re, neg_tail_im = self._get_kg_embeddings(
+            head, relation, pos_tail, neg_tail
+        )
 
-        pos_score_entities = self._get_score_entities(head, relation, pos_tail)
-        neg_score_entities = self._get_score_entities(head, relation, neg_tail)
+        score_pos_users = self.forward(user_re, user_im, rec_r_e, pos_item_re, pos_item_im)
+        score_neg_users = self.forward(user_re, user_im, rec_r_e, neg_item_re, neg_item_im)
+        score_pos_kg = self.forward(head_re, head_im, kg_r_e, pos_tail_re, pos_tail_im)
+        score_neg_kg = self.forward(head_re, head_im, kg_r_e, neg_tail_re, neg_tail_im)
 
-        pos_scores = torch.cat([pos_score_users, pos_score_entities])
-        neg_scores = torch.cat([neg_score_users, neg_score_entities])
+        scores_rec = torch.cat([score_pos_users, score_neg_users], dim=0)
+        scores_kg = torch.cat([score_pos_kg, score_neg_kg], dim=0)
+        labels_rec = torch.cat([torch.ones_like(score_pos_users), torch.zeros_like(score_neg_users)], dim=0)
+        labels_kg = torch.cat([torch.ones_like(score_pos_kg), torch.zeros_like(score_neg_kg)], dim=0)
 
-        pos_labels = torch.ones_like(pos_scores).to(self.device)
-        neg_labels = torch.zeros_like(neg_scores).to(self.device)
+        rec_loss = self.loss(scores_rec, labels_rec)
+        kg_loss = self.loss(scores_kg, labels_kg)
 
-        scores = torch.cat([pos_scores, neg_scores], dim=0)
-        labels = torch.cat([pos_labels, neg_labels], dim=0)
-
-        loss = self.rec_loss(scores, labels)
-        return loss
+        return rec_loss + kg_loss
 
     def predict(self, interaction):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
         relation_user = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        return self.forward(user, relation_user, item)
+
+        user_re = self.user_embedding(user)
+        user_im = self.user_embedding_im(user)
+        item_re = self.entity_embedding(item)
+        item_im = self.entity_embedding_im(item)
+
+        rec_r_e = self.relation_embedding(relation_user)
+
+        return self.forward(user_re, user_im, rec_r_e, item_re, item_im)
 
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         relation_user = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        all_items = self.items_indexes
+        item_indices = torch.tensor(range(self.n_items)).to(self.device)
 
         user_re = self.user_embedding(user)
         user_im = self.user_embedding_im(user)
 
-        item_re = self.entity_embedding(all_items)
-        item_im = self.entity_embedding_im(all_items)
+        item_re = self.entity_embedding(item_indices)
+        item_im = self.entity_embedding_im(item_indices)
 
         rel_theta = self.relation_embedding(relation_user)
 
         rel_re, rel_im = torch.cos(rel_theta), torch.sin(rel_theta)
 
-        user_re = user_re.unsqueeze(1).expand(-1, all_items.shape[0], -1)
-        user_im = user_im.unsqueeze(1).expand(-1, all_items.shape[0], -1)
+        user_re = user_re.unsqueeze(1).expand(-1, item_indices.shape[0], -1)
+        user_im = user_im.unsqueeze(1).expand(-1, item_indices.shape[0], -1)
 
-        rel_re = rel_re.unsqueeze(1).expand(-1, all_items.shape[0], -1)
-        rel_im = rel_im.unsqueeze(1).expand(-1, all_items.shape[0], -1)
+        rel_re = rel_re.unsqueeze(1).expand(-1, item_indices.shape[0], -1)
+        rel_im = rel_im.unsqueeze(1).expand(-1, item_indices.shape[0], -1)
 
         item_re = item_re.unsqueeze(0)
         item_im = item_im.unsqueeze(0)

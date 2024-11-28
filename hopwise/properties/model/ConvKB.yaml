@@ -1,0 +1,6 @@
+embedding_size: 50                                  # (int) The embedding size of users and items.
+out_channels: 64                                    #
+train_batch_size: 512                               #
+dropout_prob: 0                                     #
+kernel_size: 1                                      #
+lambda: 0.2                                         #

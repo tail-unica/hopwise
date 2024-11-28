@@ -124,7 +124,7 @@ class LogisticLoss(nn.Module):
 
     def forward(self, positive_score, negative_score, pos_regularization=None, neg_regularization=None):
         positive_labels = torch.ones_like(positive_score)
-        negative_labels = torch.ones_like(negative_score)
+        negative_labels = -torch.ones_like(negative_score)
 
         positive_score = torch.mean(self.softplus(positive_score * positive_labels))
         negative_score = torch.mean(self.softplus(negative_score * negative_labels))

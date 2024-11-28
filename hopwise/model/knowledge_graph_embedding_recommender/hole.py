@@ -30,32 +30,27 @@ class HolE(KnowledgeRecommender):
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
 
-        # load parameters info
+        # Load parameters info
         self.embedding_size = config["embedding_size"]
         self.margin = config["margin"]
         self.device = config["device"]
 
-        # define layers and loss
+        # Embeddings
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
         self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
 
+        # Loss
         self.sigmoid = nn.Sigmoid()
-        self.rec_loss = nn.MarginRankingLoss(margin=self.margin)
+        self.loss = nn.MarginRankingLoss(margin=self.margin)
 
-        # items mapping
-        self.items_indexes = torch.tensor(list(dataset.field2token_id["item_id"].values()), device=self.device)
-
-        # parameters initialization
+        # Embeddings Initialization
         self.apply(xavier_normal_initialization)
 
-    def forward(self, user, item):
-        user_e = self.user_embedding(user)
-        item_e = self.entity_embedding(item)
-        rec_r_e = self.relation_embedding.weight[-1]
-        rec_r_e = rec_r_e.expand_as(user_e)
-        score = self._get_score(user_e, rec_r_e, item_e)
-        return score
+    def forward(self, h, r, t):
+        r_e = self.get_rolling_matrix(r)
+        hr = torch.matmul(h.view(-1, 1, self.embedding_size), r_e)
+        return (hr.view(-1, self.embedding_size) * t).sum(dim=1)
 
     def get_rolling_matrix(self, x):
         b_size, dim = x.shape
@@ -78,11 +73,6 @@ class HolE(KnowledgeRecommender):
         relation_e = self.relation_embedding(relation)
         return head_e, pos_tail_e, neg_tail_e, relation_e
 
-    def _get_score(self, h_e, r_e, t_e):
-        r_e = self.get_rolling_matrix(r_e)
-        hr = torch.matmul(h_e.view(-1, 1, self.embedding_size), r_e)
-        return (hr.view(-1, self.embedding_size) * t_e).sum(dim=1)
-
     def calculate_loss(self, interaction):
         user = interaction[self.USER_ID]
 
@@ -99,22 +89,28 @@ class HolE(KnowledgeRecommender):
         user_e, pos_item_e, neg_item_e, rec_r_e = self._get_rec_embedding(user, pos_item, neg_item)
         head_e, pos_tail_e, neg_tail_e, relation_e = self._get_kg_embedding(head, pos_tail, neg_tail, relation)
 
-        pos_score_users = self._get_score(user_e, rec_r_e, pos_item_e)
-        neg_score_users = self._get_score(user_e, rec_r_e, neg_item_e)
+        pos_score_users = self.forward(user_e, rec_r_e, pos_item_e)
+        neg_score_users = self.forward(user_e, rec_r_e, neg_item_e)
 
-        pos_score_entities = self._get_score(head_e, relation_e, pos_tail_e)
-        neg_score_entities = self._get_score(head_e, relation_e, neg_tail_e)
+        pos_score_entities = self.forward(head_e, relation_e, pos_tail_e)
+        neg_score_entities = self.forward(head_e, relation_e, neg_tail_e)
 
         pos_scores = torch.cat([pos_score_users, pos_score_entities])
         neg_scores = torch.cat([neg_score_users, neg_score_entities])
 
-        loss = self.rec_loss(self.sigmoid(pos_scores), self.sigmoid(neg_scores), torch.ones_like(pos_scores))
+        loss = self.loss(self.sigmoid(pos_scores), self.sigmoid(neg_scores), torch.ones_like(pos_scores))
         return loss
 
     def predict(self, interaction):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
-        return self.forward(user, item)
+
+        user_e = self.user_embedding(user)
+        item_e = self.entity_embedding(item)
+        rec_r_e = self.relation_embedding.weight[-1]
+        rec_r_e = rec_r_e.expand_as(user_e)
+
+        return self.forward(user, rec_r_e, item_e)
 
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
@@ -123,7 +119,8 @@ class HolE(KnowledgeRecommender):
         rec_r_e = self.relation_embedding.weight[-1]
         rec_r_e = rec_r_e.expand_as(user_e)
 
-        all_item_e = self.entity_embedding.weight[self.items_indexes]
+        item_indices = torch.tensor(range(self.n_items)).to(self.device)
+        all_item_e = self.entity_embedding.weight[item_indices]
 
         r_e = self.get_rolling_matrix(rec_r_e)
 
