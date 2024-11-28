@@ -22,8 +22,7 @@ from time import time
 
 import numpy as np
 import torch
-from torch import optim
-from torch import amp
+from torch import amp, optim
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from tqdm import tqdm
@@ -551,10 +550,11 @@ class Trainer(AbstractTrainer):
         num_sample = 0
         for batch_idx, batched_data in enumerate(iter_data):
             num_sample += len(batched_data)
+            _, history_index, _, _ = batched_data
             interaction, scores, positive_u, positive_i = eval_func(batched_data)
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
-            self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
+            self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i, history_index)
         self.eval_collector.model_collect(self.model)
         struct = self.eval_collector.get_data_struct()
         result = self.evaluator.evaluate(struct)

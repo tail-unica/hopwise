@@ -106,7 +106,7 @@ class KnowledgeBasedDataLoader:
 
         self.shuffle = False
         self.state = None
-        self._dataset = dataset
+        self.dataset = dataset
         self.kg_iter, self.gen_iter = None, None
 
     def update_config(self, config):
