@@ -420,7 +420,7 @@ class Config:
             raise NotImplementedError("Full sort evaluation do not match value-based metrics!")
 
         # metapath format check
-        metapaths = self.final_config_dict["metapaths"]
+        metapaths = self.final_config_dict.get("metapaths", None)
         if metapaths is not None:
             for i in range(len(metapaths)):
                 if isinstance(metapaths[i][0], list):
