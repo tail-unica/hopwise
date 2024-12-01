@@ -110,7 +110,7 @@ class HolE(KnowledgeRecommender):
         rec_r_e = self.relation_embedding.weight[-1]
         rec_r_e = rec_r_e.expand_as(user_e)
 
-        return self.forward(user, rec_r_e, item_e)
+        return self.forward(user_e, rec_r_e, item_e)
 
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]

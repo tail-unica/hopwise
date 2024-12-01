@@ -89,12 +89,13 @@ class TransH(KnowledgeRecommender):
         user_e, pos_item_e, neg_item_e, rec_r_e = self._get_rec_embedding(user, pos_item, neg_item)
         head_e, pos_tail_e, neg_tail_e, relation_e = self._get_kg_embedding(head, pos_tail, neg_tail, relation)
 
+        relation_user = torch.tensor([self.n_relations] * user_e.shape[0], device=self.device)
         # Projections
-        user_e = self.project(user_e, relation[: user_e.shape[0]])
+        user_e = self.project(user_e, relation_user)
         head_e = self.project(head_e, relation)
-        pos_item_e = self.project(pos_item_e, relation[: pos_item_e.shape[0]])
+        pos_item_e = self.project(pos_item_e, relation_user)
         pos_tail_e = self.project(pos_tail_e, relation)
-        neg_item_e = self.project(neg_item_e, relation[: pos_item_e.shape[0]])
+        neg_item_e = self.project(neg_item_e, relation_user)
         neg_tail_e = self.project(neg_tail_e, relation)
 
         h_e = torch.cat([user_e, head_e])
@@ -139,5 +140,4 @@ class TransH(KnowledgeRecommender):
 
         t = self.project(all_item_e, relation_ids_item)
         t = t.unsqueeze(0)
-
         return -torch.norm(h_r - t, p=2, dim=2)

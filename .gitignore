@@ -20,3 +20,5 @@ testModules.py
 tempCodeRunnerFile.py
 .aider*
 .env
+dataset/
+hyper/
