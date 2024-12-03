@@ -203,6 +203,7 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
     """
 
     type = ModelType.PATH_LANGUAGE_MODELING
+    input_type = InputType.PATHWISE
 
 
 class ContextRecommender(AbstractRecommender):

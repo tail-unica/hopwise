@@ -624,7 +624,7 @@ class KnowledgeBasedDataset(Dataset):
         else:
             raise NotImplementedError("ckg graph format [{}] has not been implemented.")
 
-    def _create_hetero_ckg_graph(self, form="dgl"):
+    def _create_hetero_ckg_graph(self, form="dgl", directed=False):
         """DGL expects each node type to be in the range [0, num_nodes_dict[ntype])."""
         import dgl
 
@@ -636,6 +636,8 @@ class KnowledgeBasedDataset(Dataset):
         iids = inter_tensor[self.iid_field]
 
         graph_data = {(self.uid_field, self.ui_relation, self.iid_field): (uids, iids)}
+        if not directed:
+            graph_data[(self.iid_field, self.ui_relation, self.uid_field)] = (iids, uids)
 
         hids = kg_tensor[self.head_entity_field]
         tids = kg_tensor[self.tail_entity_field]
@@ -652,32 +654,32 @@ class KnowledgeBasedDataset(Dataset):
             rel_hids = hids[rel_mask]
             rel_tids = tids[rel_mask]
 
-            rel_hids_ents = entities_not_items_mask[rel_hids]
-            rel_tids_ents = entities_not_items_mask[rel_tids]
+            rel_hids_ents = np.take(entities_not_items_mask, rel_hids)
+            rel_tids_ents = np.take(entities_not_items_mask, rel_tids)
 
             # Entity-entity links
-            entity_entity_links = rel_hids_ents & rel_tids_ents
+            entity_entity_links = np.logical_and(rel_hids_ents, rel_tids_ents)
             if entity_entity_links.any():
                 ee_hids = rel_hids[entity_entity_links] - item_num
                 ee_tids = rel_tids[entity_entity_links] - item_num
                 graph_data[(self.entity_field, rel, self.entity_field)] = (ee_hids, ee_tids)
 
             # Entity-item links
-            entity_item_links = rel_hids_ents & ~rel_tids_ents
+            entity_item_links = np.logical_and(rel_hids_ents, ~rel_tids_ents)
             if entity_item_links.any():
                 ei_hids = rel_hids[entity_item_links] - item_num
                 ei_tids = rel_tids[entity_item_links]
                 graph_data[(self.entity_field, rel, self.iid_field)] = (ei_hids, ei_tids)
 
             # Item-entity links
-            item_entity_links = ~rel_hids_ents & rel_tids_ents
+            item_entity_links = np.logical_and(~rel_hids_ents, rel_tids_ents)
             if item_entity_links.any():
                 ie_hids = rel_hids[item_entity_links]
                 ie_tids = rel_tids[item_entity_links] - item_num
                 graph_data[(self.iid_field, rel, self.entity_field)] = (ie_hids, ie_tids)
 
             # Item-item links
-            item_item_links = ~rel_hids_ents & ~rel_tids_ents
+            item_item_links = np.logical_and(~rel_hids_ents, ~rel_tids_ents)
             if item_item_links.any():
                 ii_hids = rel_hids[item_item_links]
                 ii_tids = rel_tids[item_item_links]
@@ -692,7 +694,7 @@ class KnowledgeBasedDataset(Dataset):
 
         return graph
 
-    def ckg_hetero_graph(self, form="dgl"):
+    def ckg_hetero_graph(self, form="dgl", directed=False):
         """Get heterogeneous graph that describes relations of CKG,
         which does not only combine interactions and kg triplets into the same graph,
         but it also enable metapath-based random walks.
@@ -704,6 +706,8 @@ class KnowledgeBasedDataset(Dataset):
         Args:
             form (str, optional): Format of sparse matrix, or library of graph data structure.
                 Defaults to ``dgl``.
+            directed (bool, optional): Whether the graph is directed or not.
+                Defaults to ``False``.
 
         Returns:
             Heterogeneous graph.
@@ -713,6 +717,6 @@ class KnowledgeBasedDataset(Dataset):
         """
 
         if form in ["dgl"]:
-            return self._create_hetero_ckg_graph(form)
+            return self._create_hetero_ckg_graph(form, directed=directed)
         else:
             raise NotImplementedError("ckg hetero graph format [{}] has not been implemented.")
