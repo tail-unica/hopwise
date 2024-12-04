@@ -92,7 +92,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         # Pre-tokenizer defined based on separator used between tokens in :attr:`reasoning_path_template`
         template_fields = list(Formatter().parse(self.reasoning_path_template))
         separator = template_fields[1][0]
-        tokenizer_object.pre_tokenizer = pre_tokenizers.CharDelimiterSplit(separator)
+        tokenizer_object.pre_tokenizer = pre_tokenizers.Split(separator, "removed")
 
         # The token vocabulary is generated and passed to the tokenizer trainer
         entity_range = np.arange(self.item_num + 1, self.entity_num)  # only entities that are not items are considered
@@ -640,7 +640,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return final_paths
 
     def _check_kg_path(self, path, check_last_node=False):
-        """Check if the path is valid. It assumes the user node is omitted and the first node is an item node.
+        """Check if the path is valid. The first node must be an item node and it assumes the user node is omitted.
 
         Args:
             path (list): The path to be checked.
@@ -653,11 +653,13 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         graph_min_iid = 1 + self.user_num
         graph_max_iid = self.item_num - 1 + self.user_num
 
+        first_node_check = graph_min_iid <= path[0] <= graph_max_iid
         if self.collaborative_path:
             valid_path = np.logical_or(path[1:-1] > graph_max_iid, path[1:-1] <= graph_max_uid).all()
         else:
             valid_path = (path[1:-1] > graph_max_iid).all()
-        return valid_path and (not check_last_node or graph_min_iid <= path[-1] <= graph_max_iid)
+        check_last_node = not check_last_node or graph_min_iid <= path[-1] <= graph_max_iid
+        return first_node_check and valid_path and check_last_node
 
     def _format_path(self, path):
         """Format the path to a string according to :attr:`reasoning_path_template`.
@@ -683,13 +685,13 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         path_relations = path[1::2]
 
         entity_mapped_list = []
-        graph_min_iid = 1 + self.user_num
+        graph_min_iid = self.user_num
         graph_max_iid = self.item_num - 1 + self.user_num
         for e in path_entities:
             if graph_min_iid <= e <= graph_max_iid:
                 entity_mapped_list.append(PathLanuageModelingTokenType.ITEM.value + str(e - self.user_num))
             elif e < graph_min_iid:
-                entity_mapped_list.append(PathLanuageModelingTokenType.USER.value)
+                entity_mapped_list.append(PathLanuageModelingTokenType.USER.value + str(e))
             else:
                 entity_mapped_list.append(PathLanuageModelingTokenType.ENTITY.value + str(e - self.user_num))
 
@@ -701,6 +703,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             entity_list=separator.join(entity_mapped_list),
             rec_iid=PathLanuageModelingTokenType.ITEM.value + str(rec_iid),
         )
+
+        # removes repeated separators due to empty entity list
+        path_string = path_string.replace(separator * 2, separator)
 
         interleaved_entities_relations = zip_longest(path_string.split(separator), relation_mapped_list)
         path_string = separator.join(list(chain(*interleaved_entities_relations))[:-1])

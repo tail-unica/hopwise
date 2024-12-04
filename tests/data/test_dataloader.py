@@ -764,6 +764,63 @@ class TestKnowledgePathDataLoader:
         subsequent_pos_items = paths[:, -1] - dataset.user_num
         assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
 
+    def test_kg_add_paths_relations(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        paths = np.array(
+            [
+                [2, 6, 11, 7],  # ub->eb->ei->ec
+                [2, 7, 11, 6],  # reverse of above
+                [2, 6, 13, 7],  # ub->eb->ek->ec
+                # [3, 7, 14, -1],  # uc->ec->-el->-1  # not supported yet
+            ]
+        )
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        graph = train_data.dataset._create_ckg_igraph(show_relation=True, directed=False)
+        paths_with_relations = train_data.dataset._add_paths_relations(graph, paths)
+        assert paths_with_relations[0].tolist() == [2, 5, 6, 1, 11, 1, 7]
+        assert paths_with_relations[1].tolist() == [2, 5, 7, 1, 11, 1, 6]
+        assert paths_with_relations[2].tolist() == [2, 5, 6, 2, 13, 3, 7]
+        # assert paths_with_relations[3] == [3, 5, 7, 2, 14, -1, -1]  # not supported yet
+
+    def test_kg_tokenize_path_dataset(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "reasoning_path_template": "{user} {pos_iid} {entity_list} {rec_iid}",
+            "tokenizer": {
+                "model": "WordLevel",
+                "context_length": 24,
+                "special_tokens": {
+                    "mask_token": "[MASK]",
+                    "unk_token": "[UNK]",
+                    "pad_token": "[PAD]",
+                    "eos_token": "[EOS]",
+                    "bos_token": "[BOS]",
+                    "sep_token": "[SEP]",
+                    "cls_token": "[CLS]",
+                },
+                "template": "{bos_token}:0 $A:0 {eos_token}",
+            },
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        path_string = "U2 R5 I2 R1 E7 R1 I3\nU2 R5 I3 R1 E7 R1 I2\nU2 R5 I2 R2 E9 R3 I3"
+        train_data.dataset._path_dataset = path_string
+        tokenized_dataset = train_data.dataset.tokenize_path_dataset(phase="train")
+        tokenized_path_string = tokenized_dataset.data["train"]["input_ids"].to_pylist()
+        assert tokenized_path_string[0] == [4, 27, 24, 14, 20, 1, 20, 15, 3]
+        assert tokenized_path_string[1] == [4, 27, 24, 15, 20, 1, 20, 14, 3]
+        assert tokenized_path_string[2] == [4, 27, 24, 14, 21, 11, 22, 15, 3]
+
 
 if __name__ == "__main__":
     pytest.main()
