@@ -9,7 +9,9 @@
 
 import logging
 import os
+import unittest
 
+import numpy as np
 import pytest
 
 from hopwise.config import Config
@@ -961,6 +963,67 @@ class TestKGDataset:
         dataset = new_dataset(config_dict=config_dict)
         assert dataset.entity_num == 7
         assert dataset.relation_num == 5
+
+
+class TestKGPathDataset(unittest.TestCase):
+    def test_kg_valid_path(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "weighted-rw",
+            "max_paths_per_user": 2,
+            "collaborative_path": False,
+            "temporal_causality": False,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        dataset = new_dataset(config_dict=config_dict)
+        collaborative_dataset = new_dataset(config_dict={**config_dict, "collaborative_path": True})
+        user_num = dataset.user_num
+        item_num = dataset.item_num
+        entity_num = dataset.entity_num
+        uids = list(range(user_num))
+        iids = list(range(user_num + 1, user_num + item_num + 1))
+        eids = list(range(user_num + item_num + 1, user_num + item_num + entity_num + 1))
+        self.assertTrue(dataset._check_kg_path((iids[1], eids[1], eids[2], eids[3])))
+        self.assertFalse(dataset._check_kg_path((iids[1], eids[1], eids[2], eids[3]), check_last_node=True))
+        self.assertFalse(dataset._check_kg_path((iids[1], eids[1], iids[2], eids[3])))
+        self.assertFalse(dataset._check_kg_path((eids[1], eids[2], eids[3])))
+        self.assertFalse(dataset._check_kg_path((iids[1], eids[1], uids[1], eids[3])))
+        self.assertTrue(collaborative_dataset._check_kg_path((iids[1], eids[1], uids[1], eids[3])))
+
+    def test_kg_format_path(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "weighted-rw",
+            "max_paths_per_user": 2,
+            "collaborative_path": False,
+            "temporal_causality": False,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        dataset1 = new_dataset(
+            config_dict={**config_dict, "reasoning_path_template": "{user} -> {pos_iid} -> {entity_list} -> {rec_iid}"}
+        )
+        dataset2 = new_dataset(
+            config_dict={**config_dict, "reasoning_path_template": "{user} ## {pos_iid} ## {entity_list} ## {rec_iid}"}
+        )
+        ui_relation = 5
+        user3, user2, pos_iid, entity1, entity2, rec_iid = 3, 2, 6, 12, 13, 7
+        full_path = np.array([user3, ui_relation, pos_iid, 1, entity1, 2, entity2, 3, rec_iid])
+        path_no_entity = np.array([user3, ui_relation, pos_iid, 4, rec_iid])
+        padded_path = np.concatenate([full_path, [-1, -1]])
+        collaborative_path = np.array([user3, ui_relation, pos_iid, ui_relation, user2, ui_relation, rec_iid])
+        assert dataset1._format_path(full_path) == "U3 -> R5 -> I2 -> R1 -> E8 -> R2 -> E9 -> R3 -> I3"
+        assert dataset1._format_path(path_no_entity) == "U3 -> R5 -> I2 -> R4 -> I3"
+        assert dataset1._format_path(padded_path) == "U3 -> R5 -> I2 -> R1 -> E8 -> R2 -> E9 -> R3 -> I3"
+        assert dataset1._format_path(collaborative_path) == "U3 -> R5 -> I2 -> R5 -> U2 -> R5 -> I3"
+        assert dataset2._format_path(full_path) == "U3 ## R5 ## I2 ## R1 ## E8 ## R2 ## E9 ## R3 ## I3"
 
 
 if __name__ == "__main__":

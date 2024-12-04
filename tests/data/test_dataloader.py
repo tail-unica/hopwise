@@ -10,6 +10,7 @@
 import logging
 import os
 
+import numpy as np
 import pytest
 
 from hopwise.config import Config
@@ -423,6 +424,402 @@ class TestGeneralDataloader:
         assert valid_data.neg_sample_args["sample_num"] == 100
         assert test_data.neg_sample_args["distribution"] == "popularity"
         assert test_data.neg_sample_args["sample_num"] == 200
+
+
+class TestKnowledgePathDataLoader:
+    """
+    Expected paths:
+    ea->rd->eb
+    """
+
+    def test_kg_generate_path_weighted_random_walk_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "weighted-rw",
+            "max_paths_per_user": 2,
+            "collaborative_path": False,
+            "temporal_causality": False,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        potential_paths = np.array(
+            [
+                [2, 5, 6, 1, 11, 1, 7],  # ub->[UI-Relation]->eb->ra->ei->ra->ec
+                [2, 5, 7, 1, 11, 1, 6],  # reverse of above
+                [3, 5, 7, 1, 12, 1, 8],  # uc->[UI-Relation]->ec->ra->ej->ra->ed
+                [3, 5, 8, 1, 12, 1, 7],  # reverse of above
+                [2, 5, 6, 2, 13, 3, 7],  # ub->[UI-Relation]->eb->rb->ek->rc->ec
+                [2, 5, 7, 3, 13, 2, 6],  # reverse of above
+                [3, 5, 7, 2, 14, 3, 8],  # uc->[UI-Relation]->ec->rb->el->rc->ed
+                [3, 5, 8, 3, 14, 2, 7],  # reverse of above
+            ]
+        )
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        # randomness forces us to retry until we get a valid path
+        while True:
+            paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+            if len(paths) > 0:
+                break
+        potential_paths_found = paths[:, None] == potential_paths
+        assert potential_paths_found.all(axis=-1).any()
+
+    def test_kg_generate_path_weighted_random_walk_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "weighted-rw",
+            "max_paths_per_user": 2,
+            "collaborative_path": True,
+            "temporal_causality": False,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        user_num = train_data.dataset.user_num
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        # randomness forces us to retry until we get a valid path
+        while True:
+            paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+            if len(paths) > 0:
+                break
+        assert (paths[:, 4] < user_num).any()
+
+    def test_kg_generate_path_weighted_random_walk_no_collaborative_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "weighted-rw",
+            "max_paths_per_user": 2,
+            "collaborative_path": False,
+            "temporal_causality": True,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        dataset = train_data.dataset
+        user = dataset.inter_feat[dataset.uid_field].numpy()
+        item = dataset.inter_feat[dataset.iid_field].numpy()
+        timestamp = dataset.inter_feat[dataset.time_field].numpy()
+        temporal_matrix = np.zeros((dataset.user_num, dataset.item_num), dtype=timestamp.dtype)
+        temporal_matrix[user, item] = timestamp
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        # randomness forces us to retry until we get a valid path
+        while True:
+            paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+            if len(paths) > 0:
+                break
+        users = paths[:, 0]
+        starting_pos_items = paths[:, 2] - dataset.user_num
+        subsequent_pos_items = paths[:, -1] - dataset.user_num
+        assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
+
+    def test_kg_generate_path_constrained_random_walk_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "constrained-rw",
+            "max_paths_per_user": 2,
+            "collaborative_path": False,
+            "temporal_causality": False,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        potential_paths = np.array(
+            [
+                [2, 5, 6, 1, 11, 1, 7],  # ub->[UI-Relation]->eb->ra->ei->ra->ec
+                [2, 5, 7, 1, 11, 1, 6],  # reverse of above
+                [3, 5, 7, 1, 12, 1, 8],  # uc->[UI-Relation]->ec->ra->ej->ra->ed
+                [3, 5, 8, 1, 12, 1, 7],  # reverse of above
+                [2, 5, 6, 2, 13, 3, 7],  # ub->[UI-Relation]->eb->rb->ek->rc->ec
+                [2, 5, 7, 3, 13, 2, 6],  # reverse of above
+                [3, 5, 7, 2, 14, 3, 8],  # uc->[UI-Relation]->ec->rb->el->rc->ed
+                [3, 5, 8, 3, 14, 2, 7],  # reverse of above
+            ]
+        )
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        potential_paths_found = paths[:, None] == potential_paths
+        assert potential_paths_found.all(axis=-1).any()
+
+    def test_kg_generate_path_constrained_random_walk_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "constrained-rw",
+            "max_paths_per_user": 2,
+            "collaborative_path": True,
+            "temporal_causality": False,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        user_num = train_data.dataset.user_num
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        assert (paths[:, 4] < user_num).any()
+
+    def test_kg_generate_path_constrained_random_walk_no_collaborative_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "constrained-rw",
+            "max_paths_per_user": 2,
+            "collaborative_path": False,
+            "temporal_causality": True,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        dataset = train_data.dataset
+        user = dataset.inter_feat[dataset.uid_field].numpy()
+        item = dataset.inter_feat[dataset.iid_field].numpy()
+        timestamp = dataset.inter_feat[dataset.time_field].numpy()
+        temporal_matrix = np.zeros((dataset.user_num, dataset.item_num), dtype=timestamp.dtype)
+        temporal_matrix[user, item] = timestamp
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        users = paths[:, 0]
+        starting_pos_items = paths[:, 2] - dataset.user_num
+        subsequent_pos_items = paths[:, -1] - dataset.user_num
+        assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
+
+    def test_kg_generate_path_all_simple_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "simple",
+            "max_paths_per_user": 2,
+            "collaborative_path": False,
+            "temporal_causality": False,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        potential_paths = np.array(
+            [
+                [2, 5, 6, 1, 11, 1, 7],  # ub->[UI-Relation]->eb->ra->ei->ra->ec
+                [2, 5, 7, 1, 11, 1, 6],  # reverse of above
+                [3, 5, 7, 1, 12, 1, 8],  # uc->[UI-Relation]->ec->ra->ej->ra->ed
+                [3, 5, 8, 1, 12, 1, 7],  # reverse of above
+                [2, 5, 6, 2, 13, 3, 7],  # ub->[UI-Relation]->eb->rb->ek->rc->ec
+                [2, 5, 7, 3, 13, 2, 6],  # reverse of above
+                [3, 5, 7, 2, 14, 3, 8],  # uc->[UI-Relation]->ec->rb->el->rc->ed
+                [3, 5, 8, 3, 14, 2, 7],  # reverse of above
+            ]
+        )
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        potential_paths_found = paths[:, None] == potential_paths
+        assert potential_paths_found.all(axis=-1).any()
+
+    def test_kg_generate_path_all_simple_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "simple",
+            "max_paths_per_user": 2,
+            "collaborative_path": True,
+            "temporal_causality": False,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        user_num = train_data.dataset.user_num
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        assert (paths[:, 4] < user_num).any()
+
+    def test_kg_generate_path_all_simple_no_collaborative_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "simple",
+            "max_paths_per_user": 2,
+            "collaborative_path": False,
+            "temporal_causality": True,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        dataset = train_data.dataset
+        user = dataset.inter_feat[dataset.uid_field].numpy()
+        item = dataset.inter_feat[dataset.iid_field].numpy()
+        timestamp = dataset.inter_feat[dataset.time_field].numpy()
+        temporal_matrix = np.zeros((dataset.user_num, dataset.item_num), dtype=timestamp.dtype)
+        temporal_matrix[user, item] = timestamp
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        users = paths[:, 0]
+        starting_pos_items = paths[:, 2] - dataset.user_num
+        subsequent_pos_items = paths[:, -1] - dataset.user_num
+        assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
+
+    def test_kg_generate_path_metapaths_no_collaborative_no_temporal(self):
+        metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "metapath",
+            "max_paths_per_user": 2,
+            "collaborative_path": False,
+            "temporal_causality": False,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "metapaths": metapaths,
+        }
+        # Differently from igraph, reverse paths must be explicitly defined in the KG
+        potential_paths = np.array(
+            [
+                [2, 5, 6, 1, 11, 1, 7],  # ub->[UI-Relation]->eb->ra->ei->ra->ec
+                [2, 5, 7, 1, 11, 1, 6],  # reverse of above ub->[UI-Relation]->ec->ra->ei->ra->eb
+                [3, 5, 7, 1, 12, 1, 8],  # uc->[UI-Relation]->ec->ra->ej->ra->ed
+                [2, 5, 6, 2, 13, 3, 7],  # ub->[UI-Relation]->eb->rb->ek->rc->ec
+                [3, 5, 7, 2, 14, 3, 8],  # uc->[UI-Relation]->ec->rb->el->rc->ed
+            ]
+        )
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        potential_paths_found = paths[:, None] == potential_paths
+        assert potential_paths_found.all(axis=-1).any()
+
+    def test_kg_generate_path_metapaths_collaborative_no_temporal(self):
+        metapaths = [
+            [
+                ("item_id", "[UI-Relation]", "user_id"),
+                ("user_id", "[UI-Relation]", "item_id"),
+                ("item_id", "ra", "entity_id"),
+                ("entity_id", "ra", "item_id"),
+            ],
+            [("item_id", "[UI-Relation]", "user_id"), ("user_id", "[UI-Relation]", "item_id")],
+        ]
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "metapath",
+            "max_paths_per_user": 2,
+            "collaborative_path": True,
+            "temporal_causality": False,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "metapaths": metapaths,
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        user_num = train_data.dataset.user_num
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        assert (paths[:, 4] < user_num).any()
+
+    def test_kg_generate_path_metapaths_no_collaborative_temporal(self):
+        metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "path_sampling_strategy": "metapath",
+            "max_paths_per_user": 2,
+            "collaborative_path": False,
+            "temporal_causality": True,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "metapaths": metapaths,
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        dataset = train_data.dataset
+        user = dataset.inter_feat[dataset.uid_field].numpy()
+        item = dataset.inter_feat[dataset.iid_field].numpy()
+        timestamp = dataset.inter_feat[dataset.time_field].numpy()
+        temporal_matrix = np.zeros((dataset.user_num, dataset.item_num), dtype=timestamp.dtype)
+        temporal_matrix[user, item] = timestamp
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        users = paths[:, 0]
+        starting_pos_items = paths[:, 2] - dataset.user_num
+        subsequent_pos_items = paths[:, -1] - dataset.user_num
+        assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
+
+    def test_kg_add_paths_relations(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        paths = np.array(
+            [
+                [2, 6, 11, 7],  # ub->eb->ei->ec
+                [2, 7, 11, 6],  # reverse of above
+                [2, 6, 13, 7],  # ub->eb->ek->ec
+                # [3, 7, 14, -1],  # uc->ec->-el->-1  # not supported yet
+            ]
+        )
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        graph = train_data.dataset._create_ckg_igraph(show_relation=True, directed=False)
+        paths_with_relations = train_data.dataset._add_paths_relations(graph, paths)
+        assert paths_with_relations[0].tolist() == [2, 5, 6, 1, 11, 1, 7]
+        assert paths_with_relations[1].tolist() == [2, 5, 7, 1, 11, 1, 6]
+        assert paths_with_relations[2].tolist() == [2, 5, 6, 2, 13, 3, 7]
+        # assert paths_with_relations[3] == [3, 5, 7, 2, 14, -1, -1]  # not supported yet
+
+    def test_kg_tokenize_path_dataset(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "reasoning_path_template": "{user} {pos_iid} {entity_list} {rec_iid}",
+            "tokenizer": {
+                "model": "WordLevel",
+                "context_length": 24,
+                "special_tokens": {
+                    "mask_token": "[MASK]",
+                    "unk_token": "[UNK]",
+                    "pad_token": "[PAD]",
+                    "eos_token": "[EOS]",
+                    "bos_token": "[BOS]",
+                    "sep_token": "[SEP]",
+                    "cls_token": "[CLS]",
+                },
+                "template": "{bos_token}:0 $A:0 {eos_token}",
+            },
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        path_string = "U2 R5 I2 R1 E7 R1 I3\nU2 R5 I3 R1 E7 R1 I2\nU2 R5 I2 R2 E9 R3 I3"
+        train_data.dataset._path_dataset = path_string
+        tokenized_dataset = train_data.dataset.tokenize_path_dataset(phase="train")
+        tokenized_path_string = tokenized_dataset.data["train"]["input_ids"].to_pylist()
+        assert tokenized_path_string[0] == [4, 27, 24, 14, 20, 1, 20, 15, 3]
+        assert tokenized_path_string[1] == [4, 27, 24, 15, 20, 1, 20, 14, 3]
+        assert tokenized_path_string[2] == [4, 27, 24, 14, 21, 11, 22, 15, 3]
 
 
 if __name__ == "__main__":

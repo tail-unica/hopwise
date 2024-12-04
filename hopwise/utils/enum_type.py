@@ -57,11 +57,14 @@ class InputType(Enum):
 
     - ``POINTWISE``: Point-wise input, like ``uid, iid, label``.
     - ``PAIRWISE``: Pair-wise input, like ``uid, pos_iid, neg_iid``.
+    - ``LISTWISE``: List-wise input, like ``uid, [iid1, iid2, ...]``.
+    - ``PATHWISE``: KG Path-wise input, like ``uid, pos_iid, eid1, eid2, next_pos_iid``.
     """
 
     POINTWISE = 1
     PAIRWISE = 2
     LISTWISE = 3
+    PATHWISE = 4
 
 
 class FeatureType(Enum):

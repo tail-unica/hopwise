@@ -1,3 +1,4 @@
+import random
 from itertools import chain, zip_longest
 from string import Formatter
 
@@ -28,6 +29,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         temporal_causality (bool): The same as ``config["temporal_causality"]``.
 
         collaborative_path (bool): The same as ``config["collaborative_path"]``.
+        Not used when :attr:`path_sampling_strategy` = `metapaths` as
+        collaborative metapaths must be explicitly defined.
 
         path_sampling_strategy (str): The same as ``config["path_sampling_strategy"]``.
 
@@ -35,6 +38,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         tokenizer (PreTrainedTokenizerFast): Tokenizer to process the sample paths.
     """
+
+    PATH_PADDING = -1
 
     def __init__(self, config):
         super().__init__(config)
@@ -52,6 +57,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self.collaborative_path = self.config["collaborative_path"]
         self.path_sampling_strategy = self.config["path_sampling_strategy"]
         self.reasoning_path_template = self.config["reasoning_path_template"]
+        self.max_consecutive_invalid_paths_per_user = self.config["MAX_CONSECUTIVE_INVALID_PATHS_PER_USER"]
 
         # Tokenizer parameters
         self.tokenizer_model = self.config["tokenizer"]["model"]
@@ -86,7 +92,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         # Pre-tokenizer defined based on separator used between tokens in :attr:`reasoning_path_template`
         template_fields = list(Formatter().parse(self.reasoning_path_template))
         separator = template_fields[1][0]
-        tokenizer_object.pre_tokenizer = pre_tokenizers.CharDelimiterSplit(separator)
+        tokenizer_object.pre_tokenizer = pre_tokenizers.Split(separator, "removed")
 
         # The token vocabulary is generated and passed to the tokenizer trainer
         entity_range = np.arange(self.item_num + 1, self.entity_num)  # only entities that are not items are considered
@@ -169,7 +175,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
             path_string = ""
             for path in generated_paths:
-                path_string += self._format_path(path, self.reasoning_path_template) + "\n"
+                path_string += self._format_path(path) + "\n"
 
             self._path_dataset = path_string
 
@@ -203,7 +209,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         if strategy in ["weighted-rw", "constrained-rw", "simple"]:
             graph = self._create_ckg_igraph(show_relation=True, directed=False)
         elif strategy in ["metapath"]:
-            graph = self.ckg_hetero_graph(form="dgl")
+            graph = self.ckg_hetero_graph(form="dgl", directed=not self.collaborative_path)
         else:
             raise NotImplementedError(f"Path generation method [{strategy}] has not been implemented.")
 
@@ -237,7 +243,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 used_ids,
                 temporal_matrix=temporal_matrix,
                 max_tries_per_iid=rw_args["MAX_TRIES_PER_IID"],
-                max_tries_per_user=rw_args["MAX_TRIES_PER_USER"],
                 max_visited_duplicates_per_iid=rw_args["MAX_VISITED_DUPLICATES_PER_IID"],
             )
         elif strategy == "constrained-rw":
@@ -254,7 +259,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         if strategy != "metapath":
             paths_with_relations = self._add_paths_relations(graph, generated_paths)
         else:
-            paths_with_relations = generated_paths
+            padded_generated_paths = list(zip_longest(*generated_paths, fillvalue=self.PATH_PADDING))
+            paths_with_relations = np.array(padded_generated_paths).T
 
         return paths_with_relations
 
@@ -264,7 +270,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         used_ids,
         temporal_matrix=None,
         max_tries_per_iid=50,
-        max_tries_per_user=1000,
         max_visited_duplicates_per_iid=3,
     ):
         """Generate paths from the knowledge graph using weighted random walk.
@@ -290,12 +295,11 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             pos_iid += self.user_num
 
             iid_tries = 0
-            user_tries = 0
             user_path_sample_size = 0
+            user_invalid_paths = self.max_consecutive_invalid_paths_per_user
             while True:
                 if iid_tries == 0:
                     iid_tries = max_tries_per_iid
-                    user_tries = max_tries_per_user
                     duplicates = max_visited_duplicates_per_iid
 
                     # select new starting node
@@ -326,19 +330,20 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                         valid_path = False
 
                 if valid_path:
-                    if full_path in paths:
-                        duplicates -= 1
-                    else:
+                    if full_path not in paths:
                         paths.add(full_path)
                         user_path_sample_size += 1
-
-                iid_tries -= 1
-                user_tries -= 1
+                        user_invalid_paths = self.max_consecutive_invalid_paths_per_user
+                    else:
+                        duplicates -= 1
+                        user_invalid_paths -= 1
+                else:
+                    user_invalid_paths -= 1
 
                 if duplicates == 0:
                     iid_tries = 0
 
-                if user_path_sample_size == self.max_paths_per_user or user_tries == 0:
+                if user_path_sample_size == self.max_paths_per_user or user_invalid_paths == 0:
                     break
 
         return paths
@@ -372,26 +377,29 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             pos_iid += self.user_num
 
             user_path_sample_size = 0
+            user_invalid_paths = self.max_consecutive_invalid_paths_per_user
 
             def _graph_traversal(g, path, hop, candidates):
                 nonlocal paths
                 nonlocal user_path_sample_size
+                nonlocal user_invalid_paths
 
                 if hop == 1:
                     next_node_candidates = g.es.select(_source=path[-1], _target=candidates)
                     next_node_candidates = list(
-                        set(
-                            e.source if e.source_vertex["type"] == self.iid_field else e.target
-                            for e in next_node_candidates
-                        )
+                        set(e.source if e.source_vertex != path[-1] else e.target for e in next_node_candidates)
                     )
                 else:
-                    # Self-loops are discarded
-                    next_node_candidates = [
-                        node
-                        for node in g.neighbors(path[-1])
-                        if g.vs[node]["type"] == self.entity_field and node != path[-1]
-                    ]
+                    next_node_candidates = []
+                    for node in g.neighbors(path[-1]):
+                        if self.collaborative_path:
+                            type_check = g.vs[node]["type"] in [self.entity_field, self.uid_field]
+                        else:
+                            type_check = g.vs[node]["type"] == self.entity_field
+
+                        # Self-loops are discarded
+                        if node != path[-1] and type_check:
+                            next_node_candidates.append(node)
 
                 next_nodes = np.random.choice(
                     next_node_candidates, min(len(next_node_candidates), paths_per_hop), replace=False
@@ -419,9 +427,14 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                     item_candidates = np.concatenate([pos_iid[:start_node_idx], pos_iid[start_node_idx + 1 :]])
 
                 # First hop is the relation user-item already addressed
+                curr_path_sample_size = user_path_sample_size
                 _graph_traversal(graph, (u, start_node), path_hop_length, item_candidates)
+                if user_path_sample_size - curr_path_sample_size == 0:
+                    user_invalid_paths -= paths_per_hop
+                else:
+                    user_invalid_paths = self.max_consecutive_invalid_paths_per_user
 
-                if user_path_sample_size == self.max_paths_per_user:
+                if user_path_sample_size == self.max_paths_per_user or user_invalid_paths <= 0:
                     break
 
         return paths
@@ -469,6 +482,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 generated_paths = graph.get_all_simple_paths(
                     start_node, to=item_candidates, cutoff=path_hop_length, mode="all"
                 )
+                random.shuffle(generated_paths)
                 for path in generated_paths:
                     full_path = (u, *path)
                     valid_path = self._check_kg_path(path, check_last_node=True)
@@ -493,7 +507,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         import torch
 
         final_paths = set()
-        path_hop_length = self.path_hop_length - 1
 
         iter_users = tqdm(
             range(1, self.user_num),
@@ -506,21 +519,24 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             temporal_matrix = torch.from_numpy(temporal_matrix)
 
         # Filter metapaths that do not match the hop length
-        metapaths = self.config["metapaths"]
-        metapaths = list(filter(lambda mp: len(mp) == path_hop_length, metapaths))
+        base_metapaths = self.config["metapaths"]
+        # metapaths = list(filter(lambda mp: len(mp) == path_hop_length, metapaths))
+        metapaths = np.empty(len(base_metapaths), dtype=object)
+        metapaths[:] = base_metapaths
         for u in iter_users:
             pos_iid = torch.tensor(list(used_ids[u]))
             if temporal_matrix is not None:
                 pos_iid = pos_iid[torch.argsort(temporal_matrix[u, pos_iid])]
 
             user_path_sample_size = 0
+            user_invalid_paths = self.max_consecutive_invalid_paths_per_user
             while True:
-                # select new starting node
-                start_nodes = pos_iid[:-1]
+                # select new starting node. If temporal last pos item can only be at the end of the path
+                start_nodes = pos_iid if temporal_matrix is None else pos_iid[:-1]
 
                 generated_path_nodes, relations, node_types = [], [], []
                 # First hop is the relation user-item already addressed
-                for mp in metapaths[torch.randperm(len(metapaths))]:
+                for mp in metapaths[np.random.permutation(len(metapaths))]:
                     try:
                         mp_nodes, mp_types = dgl.sampling.random_walk(graph, start_nodes, metapath=mp)
                     except dgl._ffi.base.DGLError as error:
@@ -543,57 +559,88 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                     mp_relations = mp_relations.expand(mp_nodes.shape[0], -1)
                     relations.append(mp_relations)
 
-                generated_path_nodes = torch.vstack(generated_path_nodes)
-                relations = torch.vstack(relations)
-                node_types = torch.vstack(node_types)
+                def filter_and_validate_metapaths(pnodes, rels, ntypes):
+                    nonlocal user_path_sample_size
+                    nonlocal user_invalid_paths
 
-                # filter valid random walks
-                valid_path_node_mask = ~(generated_path_nodes == -1).any(dim=1)
-                generated_path_nodes = generated_path_nodes[valid_path_node_mask]
-                relations = relations[valid_path_node_mask]
-                node_types = node_types[valid_path_node_mask]
+                    pnodes = torch.vstack(pnodes)
+                    rels = torch.vstack(rels)
+                    ntypes = torch.vstack(ntypes)
+                    path_hop_length = pnodes.shape[1]
 
-                # filter paths that do not end in a positive item
-                pos_iid_mask = torch.full((self.item_num,), fill_value=-1, dtype=int)
-                pos_iid_mask[pos_iid] = torch.arange(pos_iid.shape[0])
-                start_end_nodes = generated_path_nodes[:, [0, -1]]
-                start_end_nodes_pos_idxs = pos_iid_mask[start_end_nodes]
-                valid_path_node_mask = ~(start_end_nodes_pos_idxs == -1).any(dim=1)
-                if temporal_matrix is not None:
-                    valid_path_node_mask &= start_end_nodes_pos_idxs[:, 1] > start_end_nodes_pos_idxs[:, 0]
-                else:
-                    valid_path_node_mask &= start_end_nodes_pos_idxs[:, 0] != start_end_nodes_pos_idxs[:, 1]
-                valid_path_nodes = generated_path_nodes[valid_path_node_mask]
-                valid_relations = relations[valid_path_node_mask]
-                valid_node_types = node_types[valid_path_node_mask]
+                    # filter valid random walks
+                    valid_path_node_mask = ~(pnodes == -1).any(dim=1)
+                    pnodes = pnodes[valid_path_node_mask]
+                    rels = rels[valid_path_node_mask]
+                    ntypes = ntypes[valid_path_node_mask]
 
-                if valid_path_nodes.shape[0] > 0:
-                    # remap entities to dataset ids
-                    entity_idx = graph.ntypes.index(self.entity_field)
-                    paths_entities_map = valid_node_types == entity_idx
-                    valid_path_nodes[paths_entities_map] += self.item_num  # remap to dataset id
+                    # filter paths that do not end in a positive item
+                    pos_iid_mask = torch.full((self.item_num,), fill_value=-1, dtype=int)
+                    pos_iid_mask[pos_iid] = torch.arange(pos_iid.shape[0])
+                    start_end_nodes = pnodes[:, [0, -1]]
+                    start_end_nodes_pos_idxs = pos_iid_mask[start_end_nodes]
+                    valid_path_node_mask = ~(start_end_nodes_pos_idxs == -1).any(dim=1)
+                    if temporal_matrix is not None:
+                        pos_idxs_check = start_end_nodes_pos_idxs[:, 1] > start_end_nodes_pos_idxs[:, 0]
+                        valid_path_node_mask = torch.logical_and(valid_path_node_mask, pos_idxs_check)
+                    else:
+                        pos_idxs_check = start_end_nodes_pos_idxs[:, 0] != start_end_nodes_pos_idxs[:, 1]
+                        valid_path_node_mask = torch.logical_and(valid_path_node_mask, pos_idxs_check)
+                    valid_path_nodes = pnodes[valid_path_node_mask]
+                    valid_relations = rels[valid_path_node_mask]
+                    valid_node_types = ntypes[valid_path_node_mask]
 
-                    paths_with_relations = torch.zeros(
-                        (valid_path_nodes.shape[0], self.path_hop_length * 2 + 1), dtype=int
+                    if valid_path_nodes.shape[0] > 0:
+                        # remap entities to dataset ids
+                        entity_idx = graph.ntypes.index(self.entity_field)
+                        paths_entities_map = valid_node_types == entity_idx
+                        valid_path_nodes[paths_entities_map] += self.item_num
+
+                        # remap non-user entities ids to homogeneous ids (entity ids after item ids after user ids)
+                        non_user_idx = graph.ntypes.index(self.uid_field)
+                        paths_non_users_map = valid_node_types != non_user_idx
+                        valid_path_nodes[paths_non_users_map] += self.user_num
+
+                        paths_with_relations = torch.zeros(
+                            (valid_path_nodes.shape[0], path_hop_length * 2 + 1), dtype=int
+                        )
+                        paths_with_relations[:, 0] = u
+                        paths_with_relations[:, 1::2] = valid_relations
+                        paths_with_relations[:, 2::2] = valid_path_nodes
+                        paths_with_relations = paths_with_relations.unique(dim=0)
+
+                        n_paths = min(self.max_paths_per_user - user_path_sample_size, paths_with_relations.shape[0])
+                        paths_with_relations = paths_with_relations[:n_paths]
+
+                        user_path_sample_size += paths_with_relations.shape[0]
+                        final_paths.update(map(tuple, paths_with_relations.numpy().tolist()))
+
+                        user_invalid_paths = self.max_consecutive_invalid_paths_per_user
+                    else:
+                        user_invalid_paths -= 1
+
+                # Group a list of torch tensors based on the second dimension to speed-up path filtering and validation
+                path_length_groups = {}
+                for paths_mp_i in range(len(generated_path_nodes)):
+                    path_length = generated_path_nodes[paths_mp_i].shape[1]
+                    if path_length not in path_length_groups:
+                        path_length_groups[path_length] = {"path_nodes": [], "relations": [], "node_types": []}
+                    path_length_groups[path_length]["path_nodes"].append(generated_path_nodes[paths_mp_i])
+                    path_length_groups[path_length]["relations"].append(relations[paths_mp_i])
+                    path_length_groups[path_length]["node_types"].append(node_types[paths_mp_i])
+
+                for path_length_gr in path_length_groups.values():
+                    filter_and_validate_metapaths(
+                        path_length_gr["path_nodes"], path_length_gr["relations"], path_length_gr["node_types"]
                     )
-                    paths_with_relations[:, 0] = u
-                    paths_with_relations[:, 1::2] = valid_path_nodes
-                    paths_with_relations[:, 2::2] = valid_relations
-                    paths_with_relations = paths_with_relations.unique(dim=0)
 
-                    n_paths = min(self.max_paths_per_user - user_path_sample_size, paths_with_relations.shape[0])
-                    paths_with_relations = paths_with_relations[:n_paths]
-
-                    user_path_sample_size += paths_with_relations.shape[0]
-                    final_paths.update(map(tuple, paths_with_relations.numpy().tolist()))
-
-                if user_path_sample_size == self.max_paths_per_user:
+                if user_path_sample_size == self.max_paths_per_user or user_invalid_paths == 0:
                     break
 
         return final_paths
 
     def _check_kg_path(self, path, check_last_node=False):
-        """Check if the path is valid. It assumes the user node is omitted and the first node is an item node.
+        """Check if the path is valid. The first node must be an item node and it assumes the user node is omitted.
 
         Args:
             path (list): The path to be checked.
@@ -606,27 +653,31 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         graph_min_iid = 1 + self.user_num
         graph_max_iid = self.item_num - 1 + self.user_num
 
+        first_node_check = graph_min_iid <= path[0] <= graph_max_iid
         if self.collaborative_path:
-            valid_path = (path[1:-1] > graph_max_iid | path[1:-1] <= graph_max_uid).all()
+            valid_path = np.logical_or(path[1:-1] > graph_max_iid, path[1:-1] <= graph_max_uid).all()
         else:
             valid_path = (path[1:-1] > graph_max_iid).all()
-        return valid_path and (not check_last_node or graph_min_iid <= path[-1] <= graph_max_iid)
+        check_last_node = not check_last_node or graph_min_iid <= path[-1] <= graph_max_iid
+        return first_node_check and valid_path and check_last_node
 
-    def _format_path(self, path, path_template):
-        """Format the path to a string.
+    def _format_path(self, path):
+        """Format the path to a string according to :attr:`reasoning_path_template`.
+        The template used for formatting expects the following fields:
+
+        user: Starting user node of the path.
+        pos_iid: Positive item that `user` interacted with.
+        entity_list: List of entities in the path. It can include user and item entities.
+        rec_iid: Item sampled as recommendation candidate.
 
         Args:
             path (list): The path to be formatted.
-            path_template (str): The template to be used for formatting. It expects the following fields:
-
-            user: Starting user node of the path.
-            pos_iid: Positive item that `user` interacted with.
-            entity_list: List of entities in the path. It can include user and item entities.
-            rec_iid: Item sampled as recommendation candidate.
         """
+        path_template = self.reasoning_path_template
         template_fields = list(Formatter().parse(path_template))
         separator = template_fields[1][0]
 
+        path = path[path != self.PATH_PADDING]  # remove padding for shorter paths
         user = path[0]
         pos_iid = path[2] - self.user_num  # remap to dataset id
         rec_iid = path[-1] - self.user_num  # remap to dataset id
@@ -634,13 +685,13 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         path_relations = path[1::2]
 
         entity_mapped_list = []
-        graph_min_iid = 1 + self.user_num
+        graph_min_iid = self.user_num
         graph_max_iid = self.item_num - 1 + self.user_num
         for e in path_entities:
             if graph_min_iid <= e <= graph_max_iid:
-                entity_mapped_list.append(PathLanuageModelingTokenType.ITEM.value + str(e))
+                entity_mapped_list.append(PathLanuageModelingTokenType.ITEM.value + str(e - self.user_num))
             elif e < graph_min_iid:
-                entity_mapped_list.append(PathLanuageModelingTokenType.USER.value + str(e - self.user_num))
+                entity_mapped_list.append(PathLanuageModelingTokenType.USER.value + str(e))
             else:
                 entity_mapped_list.append(PathLanuageModelingTokenType.ENTITY.value + str(e - self.user_num))
 
@@ -653,6 +704,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             rec_iid=PathLanuageModelingTokenType.ITEM.value + str(rec_iid),
         )
 
+        # removes repeated separators due to empty entity list
+        path_string = path_string.replace(separator * 2, separator)
+
         interleaved_entities_relations = zip_longest(path_string.split(separator), relation_mapped_list)
         path_string = separator.join(list(chain(*interleaved_entities_relations))[:-1])
 
@@ -660,7 +714,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
     def _add_paths_relations(self, graph, paths):
         complete_path_length = self.path_hop_length * 2 + 1
-        paths_with_relations = np.zeros((len(paths), complete_path_length), dtype=int)
+        paths_with_relations = np.full((len(paths), complete_path_length), fill_value=self.PATH_PADDING, dtype=int)
         for i, path in enumerate(paths):
             for node_idx in range(len(path) - 1):
                 edge = graph.es.find(_source=path[node_idx], _target=path[node_idx + 1])
