@@ -973,14 +973,13 @@ class TestKGPathDataset(unittest.TestCase):
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "weighted-rw",
             "max_paths_per_user": 2,
-            "collaborative_path": False,
-            "temporal_causality": False,
+            "path_sample_args": {"strategy": "weighted-rw", "collaborative_path": False, "temporal_causality": False},
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
         dataset = new_dataset(config_dict=config_dict)
-        collaborative_dataset = new_dataset(config_dict={**config_dict, "collaborative_path": True})
+        collaborative_dataset = new_dataset(config_dict=config_dict)
+        collaborative_dataset["path_sample_args"]["collaborative_path"] = True
         user_num = dataset.user_num
         item_num = dataset.item_num
         entity_num = dataset.entity_num
@@ -1001,18 +1000,13 @@ class TestKGPathDataset(unittest.TestCase):
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "weighted-rw",
             "max_paths_per_user": 2,
-            "collaborative_path": False,
-            "temporal_causality": False,
+            "path_sample_args": {"strategy": "weighted-rw", "collaborative_path": False, "temporal_causality": False},
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
-        dataset1 = new_dataset(
-            config_dict={**config_dict, "reasoning_path_template": "{user} -> {pos_iid} -> {entity_list} -> {rec_iid}"}
-        )
-        dataset2 = new_dataset(
-            config_dict={**config_dict, "reasoning_path_template": "{user} ## {pos_iid} ## {entity_list} ## {rec_iid}"}
-        )
+        dataset1, dataset2 = new_dataset(config_dict), new_dataset(config_dict)
+        dataset1["path_sample_args"]["reasoning_template"] = "{user} -> {pos_iid} -> {entity_list} -> {rec_iid}"
+        dataset2["path_sample_args"]["reasoning_template"] = "{user} ## {pos_iid} ## {entity_list} ## {rec_iid}"
         ui_relation = 5
         user3, user2, pos_iid, entity1, entity2, rec_iid = 3, 2, 6, 12, 13, 7
         full_path = np.array([user3, ui_relation, pos_iid, 1, entity1, 2, entity2, 3, rec_iid])

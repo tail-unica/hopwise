@@ -426,6 +426,26 @@ class Config:
                 if isinstance(metapaths[i][0], list):
                     metapaths[i] = list(map(tuple, metapaths[i]))
 
+        default_path_sample_args = {
+            "temporal_causality": False,
+            "collaborative_path": True,
+            "strategy": "simple",
+            "reasoning_template": "{user} {pos_iid} {entity_list} {rec_iid}",
+            "restrict_by_phase": False,
+            "MAX_CONSECUTIVE_INVALID": 10,
+            "MAX_RW_TRIES_PER_IID": 50,
+            "MAX_RW_PATHS_PER_HOP": 1,
+        }
+        if not isinstance(self.final_config_dict["path_sample_args"], dict):
+            raise ValueError(f"path_sample_args:[{self.final_config_dict['path_sample_args']}] should be a dict.")
+
+        default_path_sample_args.update(self.final_config_dict["path_sample_args"])
+        if default_path_sample_args["temporal_causality"] and not default_path_sample_args["restrict_by_phase"]:
+            default_path_sample_args["restrict_by_phase"] = True
+            logger.warning("temporal_causality is set to True, restrict_by_phase is automatically set to True.")
+
+        self.final_config_dict["path_sample_args"] = default_path_sample_args
+
     def _init_device(self):
         if isinstance(self.final_config_dict["gpu_id"], tuple):
             self.final_config_dict["gpu_id"] = ",".join(map(str, list(self.final_config_dict["gpu_id"])))
