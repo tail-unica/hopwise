@@ -30,16 +30,17 @@ relation_kg_num_interval: ~     # (str) Relation interval for filtering kg, such
 
 # Knowledge Path Sampling-based Model Needed
 path_hop_length: 3              # (int) Number of hops in the knowledge path.
-max_paths_per_user: 250         # (int) Maximum number of kg sampled paths per user.
-temporal_causality: True        # (bool) Whether to use temporal causality.
-collaborative_path: False       # (bool) Whether to include users in sampled paths.
-path_sampling_strategy: weighted-rw         # (str) Strategy for sampling paths.
-reasoning_path_template: "{user} {pos_iid} {entity_list} {rec_iid}"  # (str) Template used to format reasoning pahts.
-MAX_CONSECUTIVE_INVALID_PATHS_PER_USER: 10  # (int) Maximum number of consecutive invalid paths per user.
-random_walk_args:               # (dict) Args for random walk path sampling
-    MAX_TRIES_PER_IID: 50       # (int) Maximum number of tries per positive item.
-    MAX_VISITED_DUPLICATES_PER_IID: 3       # (int) Maximum number of duplicated paths visited per positive item.
-    MAX_PATHS_PER_HOP: 1        # (int) Maximum number of paths sampled at each hop for constrained random walk.
+MAX_PATHS_PER_USER: 250         # (int) Maximum number of kg sampled paths per user.
+metapaths: ~                    # (list) Metapaths used to sample paths.
+path_sample_args:
+    temporal_causality: False   # (bool) Whether to use temporal causality.
+    collaborative_path: True    # (bool) Whether to include users in sampled paths.
+    strategy: constrained-rw    # (str) Strategy for sampling paths.
+    reasoning_template: "{user} {pos_iid} {entity_list} {rec_iid}"  # (str) Template used to format reasoning pahts.
+    restrict_by_phase: True     # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.
+    MAX_CONSECUTIVE_INVALID: 10 # (int) Maximum number of consecutive invalid paths per user.
+    MAX_RW_TRIES_PER_IID: 50    # (int) Maximum number of tries per positive item.
+    MAX_RW_PATHS_PER_HOP: 1     # (int) Maximum number of paths sampled at each hop for constrained random walk.
 tokenizer:                      # (dict) Tokenizer parameters.
     model: WordLevel            # (str) Tokenizer model.
     context_length: 24          # (int) Maximum length of the context.

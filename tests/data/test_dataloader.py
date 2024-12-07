@@ -427,10 +427,31 @@ class TestGeneralDataloader:
 
 
 class TestKnowledgePathDataLoader:
-    """
-    Expected paths:
-    ea->rd->eb
-    """
+    def test_kg_generate_path_weighted_random_walk_unrestricted_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "max_paths_per_user": 2,
+            "path_sample_args": {
+                "strategy": "weighted-rw",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": False,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        # randomness forces us to retry until we get a valid path
+        while True:
+            paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+            if len(paths) > 0:
+                break
+        paths_used_ids = used_ids[paths[:, 0]]
+        assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
 
     def test_kg_generate_path_weighted_random_walk_no_collaborative_no_temporal(self):
         config_dict = {
@@ -439,10 +460,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "weighted-rw",
             "max_paths_per_user": 2,
-            "collaborative_path": False,
-            "temporal_causality": False,
+            "path_sample_args": {
+                "strategy": "weighted-rw",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
         potential_paths = np.array(
@@ -474,10 +498,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "weighted-rw",
             "max_paths_per_user": 2,
-            "collaborative_path": True,
-            "temporal_causality": False,
+            "path_sample_args": {
+                "strategy": "weighted-rw",
+                "collaborative_path": True,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
@@ -497,10 +524,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "weighted-rw",
             "max_paths_per_user": 2,
-            "collaborative_path": False,
-            "temporal_causality": True,
+            "path_sample_args": {
+                "strategy": "weighted-rw",
+                "collaborative_path": False,
+                "temporal_causality": True,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
@@ -521,6 +551,28 @@ class TestKnowledgePathDataLoader:
         subsequent_pos_items = paths[:, -1] - dataset.user_num
         assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
 
+    def test_kg_generate_path_constrained_random_walk_unrestricted_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "max_paths_per_user": 2,
+            "path_sample_args": {
+                "strategy": "constrained-rw",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": False,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths_used_ids = used_ids[paths[:, 0]]
+        assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
+
     def test_kg_generate_path_constrained_random_walk_no_collaborative_no_temporal(self):
         config_dict = {
             "model": "KGGLM",
@@ -528,10 +580,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "constrained-rw",
             "max_paths_per_user": 2,
-            "collaborative_path": False,
-            "temporal_causality": False,
+            "path_sample_args": {
+                "strategy": "constrained-rw",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
         potential_paths = np.array(
@@ -559,10 +614,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "constrained-rw",
             "max_paths_per_user": 2,
-            "collaborative_path": True,
-            "temporal_causality": False,
+            "path_sample_args": {
+                "strategy": "constrained-rw",
+                "collaborative_path": True,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
@@ -578,10 +636,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "constrained-rw",
             "max_paths_per_user": 2,
-            "collaborative_path": False,
-            "temporal_causality": True,
+            "path_sample_args": {
+                "strategy": "constrained-rw",
+                "collaborative_path": False,
+                "temporal_causality": True,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
@@ -598,6 +659,28 @@ class TestKnowledgePathDataLoader:
         subsequent_pos_items = paths[:, -1] - dataset.user_num
         assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
 
+    def test_kg_generate_path_all_simple_unrestricted_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "max_paths_per_user": 2,
+            "path_sample_args": {
+                "strategy": "simple",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": False,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths_used_ids = used_ids[paths[:, 0]]
+        assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
+
     def test_kg_generate_path_all_simple_no_collaborative_no_temporal(self):
         config_dict = {
             "model": "KGGLM",
@@ -605,10 +688,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "simple",
             "max_paths_per_user": 2,
-            "collaborative_path": False,
-            "temporal_causality": False,
+            "path_sample_args": {
+                "strategy": "simple",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
         potential_paths = np.array(
@@ -636,10 +722,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "simple",
             "max_paths_per_user": 2,
-            "collaborative_path": True,
-            "temporal_causality": False,
+            "path_sample_args": {
+                "strategy": "simple",
+                "collaborative_path": True,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
@@ -655,10 +744,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "simple",
             "max_paths_per_user": 2,
-            "collaborative_path": False,
-            "temporal_causality": True,
+            "path_sample_args": {
+                "strategy": "simple",
+                "collaborative_path": False,
+                "temporal_causality": True,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
@@ -675,6 +767,31 @@ class TestKnowledgePathDataLoader:
         subsequent_pos_items = paths[:, -1] - dataset.user_num
         assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
 
+    def test_kg_generate_path_metapaths_unrestricted_no_collaborative_no_temporal(self):
+        metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "max_paths_per_user": 2,
+            "path_sample_args": {
+                "strategy": "metapath",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": False,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "metapaths": metapaths,
+        }
+        # Differently from igraph, reverse paths must be explicitly defined in the KG
+        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        used_ids = train_data.general_dataloader._sampler.used_ids
+        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths_used_ids = used_ids[paths[:, 0]]
+        assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
+
     def test_kg_generate_path_metapaths_no_collaborative_no_temporal(self):
         metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
         config_dict = {
@@ -683,10 +800,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "metapath",
             "max_paths_per_user": 2,
-            "collaborative_path": False,
-            "temporal_causality": False,
+            "path_sample_args": {
+                "strategy": "metapath",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
             "metapaths": metapaths,
         }
@@ -722,10 +842,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "metapath",
             "max_paths_per_user": 2,
-            "collaborative_path": True,
-            "temporal_causality": False,
+            "path_sample_args": {
+                "strategy": "metapath",
+                "collaborative_path": True,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
             "metapaths": metapaths,
         }
@@ -743,10 +866,13 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "path_sampling_strategy": "metapath",
             "max_paths_per_user": 2,
-            "collaborative_path": False,
-            "temporal_causality": True,
+            "path_sample_args": {
+                "strategy": "metapath",
+                "collaborative_path": False,
+                "temporal_causality": True,
+                "restrict_by_phase": True,
+            },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
             "metapaths": metapaths,
         }
@@ -796,7 +922,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
-            "reasoning_path_template": "{user} {pos_iid} {entity_list} {rec_iid}",
+            "path_sample_args": {"reasoning_template": "{user} {pos_iid} {entity_list} {rec_iid}"},
             "tokenizer": {
                 "model": "WordLevel",
                 "context_length": 24,
@@ -815,7 +941,8 @@ class TestKnowledgePathDataLoader:
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         path_string = "U2 R5 I2 R1 E7 R1 I3\nU2 R5 I3 R1 E7 R1 I2\nU2 R5 I2 R2 E9 R3 I3"
         train_data.dataset._path_dataset = path_string
-        tokenized_dataset = train_data.dataset.tokenize_path_dataset(phase="train")
+        train_data.dataset.tokenize_path_dataset(phase="train")
+        tokenized_dataset = train_data.dataset.tokenized_dataset
         tokenized_path_string = tokenized_dataset.data["train"]["input_ids"].to_pylist()
         assert tokenized_path_string[0] == [4, 27, 24, 14, 20, 1, 20, 15, 3]
         assert tokenized_path_string[1] == [4, 27, 24, 15, 20, 1, 20, 14, 3]

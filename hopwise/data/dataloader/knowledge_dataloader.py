@@ -179,10 +179,13 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
     class:'KnowledgeBasedDataLoader' is subclassed for future uses.
     """
 
-    def generate_path_dataset(self):
-        """Generate path dataset with the used ids based on the dataloader phase.
+    def get_path_dataset(self):
+        """Get path dataset with the used ids based on the dataloader phase.
 
-        Pleaser refer to :meth:`~hopwise.data.dataset.kg_path_dataset.KnowledgePathDataset.generate_path_dataset`
-        for more details.
+        Pleaser refer to :meth:`~hopwise.data.dataset.kg_path_dataset.KnowledgePathDataset.generate_path_dataset` and
+        :meth:`~hopwise.data.dataset.kg_path_dataset.KnowledgePathDataset.tokenize_path_dataset` for more details.
         """
-        return self._dataset.generate_path_dataset(self.general_dataloader._sampler.used_ids)
+        self._dataset.generate_path_dataset(self.general_dataloader._sampler.used_ids)
+        self._dataset.tokenize_path_dataset(phase=self.general_dataloader._sampler.phase)
+
+        return self._dataset.tokenized_path_dataset
