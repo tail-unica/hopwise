@@ -8,6 +8,7 @@
 # @Email  : xy_pan@foxmail.com
 
 import os
+import sys
 import unittest
 
 from hopwise.config import Config
@@ -106,7 +107,6 @@ class TestConfigClass(unittest.TestCase):
         self.assertEqual(config["eval_args"]["mode"]["test"], "full")
         self.assertEqual(config["eval_args"]["group_by"], "user")
 
-    # todo: add command line test examples
     def test_priority(self):
         config = Config(
             model="BPR",
@@ -123,6 +123,22 @@ class TestConfigClass(unittest.TestCase):
         self.assertEqual(config["eval_args"]["mode"]["test"], "full")
         self.assertEqual(config["eval_args"]["group_by"], "user")
         self.assertEqual(config["epochs"], 100)  # default, dict
+
+    def test_config_command_line(self):
+        sys.argv.append("--use_gpu=False")
+        sys.argv.append("--valid_metric=Recall@10")
+        sys.argv.append('--metrics=["Recall"]')
+        sys.argv.append("--epochs=200")
+        sys.argv.append("--learning_rate=0.3")
+        sys.argv.append("--train_neg_sample_args.sample_num=12")
+
+        config = Config(model="BPR", dataset="ml-100k")
+
+        self.assertEqual(config["use_gpu"], False)
+        self.assertEqual(config["metrics"], ["Recall"])
+        self.assertEqual(config["train_neg_sample_args"]["sample_num"], 12)
+        self.assertEqual(config["learning_rate"], 0.3)
+        self.assertEqual(config["epochs"], 200)
 
 
 if __name__ == "__main__":
