@@ -121,6 +121,8 @@ class Config:
         for key in config_dict:
             param = config_dict[key]
             if not isinstance(param, str):
+                if isinstance(param, dict):
+                    config_dict[key] = self._convert_config_dict(param)
                 continue
             try:
                 value = eval(param)
@@ -144,7 +146,7 @@ class Config:
         if file_list:
             for file in file_list:
                 with open(file, encoding="utf-8") as f:
-                    file_config_dict.update(yaml.load(f.read(), Loader=self.yaml_loader))
+                    self.deep_dict_update(file_config_dict, yaml.load(f.read(), Loader=self.yaml_loader))
         return file_config_dict
 
     def _load_variable_config_dict(self, config_dict):
@@ -164,7 +166,12 @@ class Config:
                     continue
                 cmd_arg_name, cmd_arg_value = arg[2:].split("=")
                 if cmd_arg_name in cmd_config_dict and cmd_arg_value != cmd_config_dict[cmd_arg_name]:
-                    raise SyntaxError("There are duplicate commend arg '%s' with different value." % arg)
+                    raise SyntaxError("There are duplicate command arg '%s' with different value." % arg)
+                elif "." in cmd_arg_name:
+                    nested_cmd_dict = cmd_arg_value
+                    for key in reversed(cmd_arg_name.split(".")):
+                        nested_cmd_dict = {key: nested_cmd_dict}
+                    self.deep_dict_update(cmd_config_dict, nested_cmd_dict)
                 else:
                     cmd_config_dict[cmd_arg_name] = cmd_arg_value
         if len(unrecognized_args) > 0:
@@ -175,9 +182,9 @@ class Config:
 
     def _merge_external_config_dict(self):
         external_config_dict = dict()
-        external_config_dict.update(self.file_config_dict)
-        external_config_dict.update(self.variable_config_dict)
-        external_config_dict.update(self.cmd_config_dict)
+        self.deep_dict_update(external_config_dict, self.file_config_dict)
+        self.deep_dict_update(external_config_dict, self.variable_config_dict)
+        self.deep_dict_update(external_config_dict, self.cmd_config_dict)
         self.external_config_dict = external_config_dict
 
     def _get_model_and_dataset(self, model, dataset):
@@ -209,11 +216,19 @@ class Config:
 
         return final_model, final_model_class, final_dataset
 
+    def deep_dict_update(self, updated_dict, updating_dict):
+        overwrite_keys = ["split"]
+        for key, value in updating_dict.items():
+            if isinstance(value, dict) and isinstance(updated_dict.get(key), dict) and key not in overwrite_keys:
+                self.deep_dict_update(updated_dict[key], value)
+            else:
+                updated_dict[key] = value
+
     def _update_internal_config_dict(self, file):
         with open(file, encoding="utf-8") as f:
             config_dict = yaml.load(f.read(), Loader=self.yaml_loader)
             if config_dict is not None:
-                self.internal_config_dict.update(config_dict)
+                self.deep_dict_update(self.internal_config_dict, config_dict)
         return config_dict
 
     def _load_internal_config_dict(self, model, model_class, dataset):
@@ -289,8 +304,8 @@ class Config:
 
     def _get_final_config_dict(self):
         final_config_dict = dict()
-        final_config_dict.update(self.internal_config_dict)
-        final_config_dict.update(self.external_config_dict)
+        self.deep_dict_update(final_config_dict, self.internal_config_dict)
+        self.deep_dict_update(final_config_dict, self.external_config_dict)
         return final_config_dict
 
     def _set_default_parameters(self):
@@ -397,7 +412,7 @@ class Config:
         if not isinstance(self.final_config_dict["eval_args"], dict):
             raise ValueError(f"eval_args:[{self.final_config_dict['eval_args']}] should be a dict.")
 
-        default_eval_args.update(self.final_config_dict["eval_args"])
+        self.deep_dict_update(default_eval_args, self.final_config_dict["eval_args"])
 
         mode = default_eval_args["mode"]
         # backward compatible
@@ -439,7 +454,7 @@ class Config:
         if not isinstance(self.final_config_dict["path_sample_args"], dict):
             raise ValueError(f"path_sample_args:[{self.final_config_dict['path_sample_args']}] should be a dict.")
 
-        default_path_sample_args.update(self.final_config_dict["path_sample_args"])
+        self.deep_dict_update(default_path_sample_args, self.final_config_dict["path_sample_args"])
         if default_path_sample_args["temporal_causality"] and not default_path_sample_args["restrict_by_phase"]:
             default_path_sample_args["restrict_by_phase"] = True
             logger.warning("temporal_causality is set to True, restrict_by_phase is automatically set to True.")
