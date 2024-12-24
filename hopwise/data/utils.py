@@ -89,10 +89,19 @@ def save_split_dataloaders(config, dataloaders):
     logger.info(set_color("Saving split dataloaders into", "pink") + f": [{file_path}]")
     Serialization_dataloaders = []
     for dataloader in dataloaders:
-        generator_state = dataloader.generator.get_state()
-        dataloader.generator = None
-        dataloader.sampler.generator = None
-        Serialization_dataloaders += [(dataloader, generator_state)]
+        if isinstance(dataloader, KnowledgeBasedDataLoader):
+            general_generator_state = dataloader.general_dataloader.generator.get_state()
+            dataloader.general_dataloader.generator = None
+            dataloader.general_dataloader.sampler.generator = None
+            kg_generator_state = dataloader.kg_dataloader.generator.get_state()
+            dataloader.kg_dataloader.generator = None
+            dataloader.kg_dataloader.sampler.generator = None
+            Serialization_dataloaders += [(dataloader, general_generator_state, kg_generator_state)]
+        else:
+            generator_state = dataloader.generator.get_state()
+            dataloader.generator = None
+            dataloader.sampler.generator = None
+            Serialization_dataloaders += [(dataloader, generator_state)]
 
     with open(file_path, "wb") as f:
         pickle.dump(Serialization_dataloaders, f)
@@ -117,12 +126,25 @@ def load_split_dataloaders(config):
         return None
     with open(dataloaders_save_path, "rb") as f:
         dataloaders = []
-        for data_loader, generator_state in pickle.load(f):
-            generator = torch.Generator()
-            generator.set_state(generator_state)
-            data_loader.generator = generator
-            data_loader.sampler.generator = generator
-            dataloaders.append(data_loader)
+        for dataloader_saved_data in pickle.load(f):
+            if isinstance(dataloader_saved_data, KnowledgeBasedDataLoader):
+                data_loader, general_generator_state, kg_generator_state = dataloader_saved_data
+                general_generator = torch.Generator()
+                general_generator.set_state(general_generator_state)
+                data_loader.general_dataloader.generator = general_generator
+                data_loader.general_dataloader.sampler.generator = general_generator
+                kg_generator = torch.Generator()
+                kg_generator.set_state(kg_generator_state)
+                data_loader.kg_dataloader.generator = kg_generator
+                data_loader.kg_dataloader.sampler.generator = kg_generator
+                dataloaders.append(data_loader)
+            else:
+                data_loader, generator_state = dataloader_saved_data
+                generator = torch.Generator()
+                generator.set_state(generator_state)
+                data_loader.generator = generator
+                data_loader.sampler.generator = generator
+                dataloaders.append(data_loader)
 
         train_data, valid_data, test_data = dataloaders
     for arg in dataset_arguments + ["seed", "repeatable", "eval_args"]:
