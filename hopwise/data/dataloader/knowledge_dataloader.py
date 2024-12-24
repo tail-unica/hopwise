@@ -179,6 +179,10 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
     class:'KnowledgeBasedDataLoader' is subclassed for future uses.
     """
 
+    def __init__(self, config, dataset, sampler, kg_sampler, shuffle=False):
+        super().__init__(config, dataset, sampler, kg_sampler, shuffle)
+        self.get_path_dataset()
+
     def get_path_dataset(self):
         """Get path dataset with the used ids based on the dataloader phase.
 
