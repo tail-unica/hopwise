@@ -16,9 +16,9 @@ from logging import getLogger
 import numpy as np
 
 from hopwise.data.dataloader.abstract_dataloader import AbstractDataLoader
-from hopwise.data.dataloader.general_dataloader import TrainDataLoader
+from hopwise.data.dataloader.general_dataloader import FullSortEvalDataLoader, TrainDataLoader
 from hopwise.data.interaction import Interaction
-from hopwise.utils import KGDataLoaderState
+from hopwise.utils import KGDataLoaderState, PathLanuageModelingTokenType
 
 
 class KGDataLoader(AbstractDataLoader):
@@ -106,7 +106,7 @@ class KnowledgeBasedDataLoader:
 
         self.shuffle = False
         self.state = None
-        self.dataset = dataset
+        self.dataset = self._dataset = dataset
         self.kg_iter, self.gen_iter = None, None
 
     def update_config(self, config):
@@ -180,8 +180,8 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
     """
 
     def __init__(self, config, dataset, sampler, kg_sampler, shuffle=False):
-        super().__init__(config, dataset, sampler, kg_sampler, shuffle)
-        self.get_path_dataset()
+        super().__init__(config, dataset, sampler, kg_sampler, shuffle=shuffle)
+        self.get_path_dataset()  # needs to be pre-generated
 
     def get_path_dataset(self):
         """Get path dataset with the used ids based on the dataloader phase.
@@ -192,4 +192,36 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         self._dataset.generate_path_dataset(self.general_dataloader._sampler.used_ids)
         self._dataset.tokenize_path_dataset(phase=self.general_dataloader._sampler.phase)
 
-        return self._dataset.tokenized_path_dataset
+        return self._dataset.tokenized_dataset
+
+
+class KnowledgePathEvalDataLoader(FullSortEvalDataLoader):
+    def __init__(self, config, dataset, sampler, shuffle=False):
+        super().__init__(config, dataset, sampler, shuffle)
+
+        from datasets import Dataset
+
+        user_df = self.user_df[self.uid_field]
+        ui_relation = dataset.field2token_id[dataset.relation_field][dataset.ui_relation]
+        inference_path_dataset = {
+            self.uid_field: [
+                dataset.path_separator.join(
+                    [
+                        dataset.bos_token,
+                        PathLanuageModelingTokenType.USER.value + str(uid.item()),
+                        PathLanuageModelingTokenType.RELATION.value + str(ui_relation),
+                    ]
+                )
+                for uid in user_df
+            ]
+        }
+        self.inference_path_dataset = Dataset.from_dict(inference_path_dataset)
+
+    def _init_batch_size_and_step(self):
+        batch_size = self.config["eval_batch_size"]
+        self.step = batch_size
+        self.set_batch_size(batch_size)
+
+    def collate_fn(self, index):
+        _, history_index, positive_u, positive_i = super().collate_fn(index)
+        return self.inference_path_dataset[index][self.uid_field], history_index, positive_u, positive_i

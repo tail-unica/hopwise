@@ -54,6 +54,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def _get_field_from_config(self):
         super()._get_field_from_config()
 
+        self.context_length = self.config["context_length"]
+
         # Path sampling parameters
         self.path_hop_length = self.config["path_hop_length"]
         self.max_paths_per_user = self.config["MAX_PATHS_PER_USER"]
@@ -66,9 +68,11 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self.restrict_by_phase = path_sample_args["restrict_by_phase"]
         self.max_consecutive_invalid = path_sample_args["MAX_CONSECUTIVE_INVALID"]
 
+        template_fields = list(Formatter().parse(self.reasoning_template))
+        self.path_separator = template_fields[1][0]
+
         # Tokenizer parameters
         self.tokenizer_model = self.config["tokenizer"]["model"]
-        self.context_length = self.config["tokenizer"]["context_length"]
         self.sequence_template = self.config["tokenizer"]["template"]
 
         # Special tokens
@@ -99,6 +103,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         else:
             return self._tokenized_dataset
 
+    def __getitem__(self, index):
+        """Probably to be removed. It avoids issues with Recbole flops calculation."""
+        dummy_data = self.tokenizer(["U1"], truncation=True, padding=True, max_length=self.context_length)
+        df = Interaction(dummy_data.data)
+        return df
+
     def _init_tokenizer(self):
         """Initialize tokenizer for the dataset."""
         tokenizer_model_class = getattr(token_models, self.tokenizer_model)
@@ -106,12 +116,10 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         tokenizer_object = Tokenizer(tokenizer_model_class(unk_token=self.unk_token))
 
         # Pre-tokenizer defined based on separator used between tokens in :attr:`reasoning_template`
-        template_fields = list(Formatter().parse(self.reasoning_template))
-        separator = template_fields[1][0]
-        tokenizer_object.pre_tokenizer = pre_tokenizers.Split(separator, "removed")
+        tokenizer_object.pre_tokenizer = pre_tokenizers.Split(self.path_separator, "removed")
 
         # The token vocabulary is generated and passed to the tokenizer trainer
-        entity_range = np.arange(self.item_num + 1, self.entity_num)  # only entities that are not items are considered
+        entity_range = np.arange(self.item_num, self.entity_num)  # only entities that are not items are considered
         token_vocab = np.concatenate(
             [
                 np.char.add(PathLanuageModelingTokenType.USER.value, np.arange(self.user_num).astype(str)),
@@ -155,6 +163,79 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             mask_token=self.mask_token,
         )
 
+    def get_tokenized_ckg(self):
+        """Return the tokenized collaborative knowledge graph.
+
+        We assume the any path is bidirectional except for user-item relations and :attr:`collaborative_path` is False.
+
+        Returns:
+            dict[dict[set]]: The tokenized collaborative knowledge graph.
+        """
+        token_vocab = self.tokenizer.get_vocab()
+        graph = self._create_ckg_igraph(show_relation=True, directed=False)
+        vertex_metadata, edge_metadata = graph.to_dict_list()
+
+        def igraph_id_to_tokenizer_id(igraph_head, igraph_relation, igraph_tail):
+            ret = []
+            triple = [igraph_head, igraph_relation, igraph_tail]
+            for term, term_type in zip(triple, ["node", "relation", "node"]):
+                term_id = term
+                if term_type == "node":
+                    if vertex_metadata[term_id]["type"] == self.uid_field:
+                        prefix = PathLanuageModelingTokenType.USER.value
+                    elif vertex_metadata[term_id]["type"] == self.iid_field:
+                        term_id -= self.user_num
+                        prefix = PathLanuageModelingTokenType.ITEM.value
+                    elif vertex_metadata[term_id]["type"] == self.entity_field:
+                        prefix = PathLanuageModelingTokenType.ENTITY.value
+                        term_id -= self.user_num
+                    else:
+                        raise ValueError(
+                            f"Unknown vertex type [{vertex_metadata[term_id]['type']}] "
+                            "in igraph during tokenized_kg generation."
+                        )
+                else:
+                    prefix = PathLanuageModelingTokenType.RELATION.value
+
+                token_id = token_vocab[prefix + str(term_id)]
+                ret.append(token_id)
+
+            return ret
+
+        tokenized_kg = {}
+        for edge in edge_metadata:
+            head = edge["source"]
+            tail = edge["target"]
+            relation = edge["type"]
+            relation_id = self.field2token_id[self.relation_field][relation]
+
+            head_token, relation_token, tail_token = igraph_id_to_tokenizer_id(head, relation_id, tail)
+
+            # head is always the user in user-item relations. The check to add the reverse path is done later
+            if relation == self.ui_relation and vertex_metadata[head]["type"] != self.uid_field:
+                head_token, tail_token = tail_token, head_token
+
+            if head_token not in tokenized_kg:
+                tokenized_kg[head_token] = {}
+            if tail_token not in tokenized_kg:
+                tokenized_kg[tail_token] = {}
+
+            if relation_token not in tokenized_kg[head_token]:
+                tokenized_kg[head_token][relation_token] = set()
+
+            tokenized_kg[head_token][relation_token].add(tail_token)
+
+            # if relation is user-item and collaborative path is False, the reverse path is not added
+            if relation == self.ui_relation and not self.collaborative_path:
+                continue
+
+            if relation_token not in tokenized_kg[tail_token]:
+                tokenized_kg[tail_token][relation_token] = set()
+
+            tokenized_kg[tail_token][relation_token].add(head_token)
+
+        return tokenized_kg
+
     def tokenize_path_dataset(self, phase="train"):
         """Tokenize the path dataset.
 
@@ -162,7 +243,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             phase (str, optional): The phase for which the path dataset is used. Defaults to "train".
         """
 
-        if self.tokenized_dataset is None:
+        if self._tokenized_dataset is None:
 
             def tokenization(example):
                 return self.tokenizer(example["path"], truncation=True, padding=True, max_length=self.context_length)
@@ -187,7 +268,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         if not isinstance(self.inter_feat, Interaction):
             raise ValueError("The data should be prepared before generating the path dataset.")
 
-        if self.path_dataset is None:
+        if self._path_dataset is None:
             generated_paths = self.generate_paths(used_ids)
 
             path_string = ""
@@ -685,8 +766,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             path (list): The path to be formatted.
         """
         path_template = self.reasoning_template
-        template_fields = list(Formatter().parse(path_template))
-        separator = template_fields[1][0]
+        separator = self.path_separator
 
         path = path[path != self.PATH_PADDING]  # remove padding for shorter paths
         user = path[0]

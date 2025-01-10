@@ -3,8 +3,11 @@ from typing import Optional, Tuple, Union
 
 import torch
 from torch import nn
-from transformers import GPT2LMHeadModel, GPT2Model
+from transformers import AutoConfig, GPT2LMHeadModel
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
+
+from hopwise.data import Interaction
+from hopwise.utils import InputType, ModelType
 
 # from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
 
@@ -12,23 +15,35 @@ TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("ENTITY", 1), ("RELATION", 2)
 
 
 # class KGGLM(PathLanguageModelingRecommender):
-class KGGLM(GPT2LMHeadModel):
+class KGGLM(GPT2LMHeadModel):  # , PathLanguageModelingRecommender):
     """KGGLM is a path-language-modeling recommender. It learns the sequence of entity-relation triplets
     from a knowledge graph as a next-token prediction task.
     """
 
+    input_type = InputType.PATHWISE
+    type = ModelType.PATH_LANGUAGE_MODELING
+
     def __init__(self, config, dataset):
-        super().__init__(config)
-        self.max_hop_length = dataset.max_hop_length
+        # PathLanguageModelingRecommender.__init__(self, config, dataset)
+        tokenizer = dataset.tokenizer
+        transformers_config = AutoConfig.from_pretrained(
+            "distilgpt2",
+            **{
+                "vocab_size": len(tokenizer),
+                "n_ctx": config["context_length"],
+                "pad_token_id": tokenizer.pad_token_id,
+                "bos_token_id": tokenizer.bos_token_id,
+                "eos_token_id": tokenizer.eos_token_id,
+            },
+        )
+        GPT2LMHeadModel.__init__(self, transformers_config)
+
+        self.max_hop_length = dataset.path_hop_length
 
         # Create type embedding layer
-        self.type_embeddings = torch.nn.Embedding(num_embeddings=len(TokenType), embedding_dim=config.hidden_size)
-        self.transformer = GPT2Model(config)
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-
-        # Model parallel
-        self.model_parallel = False
-        self.device_map = None
+        self.type_embeddings = torch.nn.Embedding(
+            num_embeddings=len(TokenType), embedding_dim=transformers_config.hidden_size
+        )
 
         middle_token_types = [TokenType.ENTITY.value, TokenType.RELATION.value] * ((self.max_hop_length - 1) // 2)
         self.token_type_ids = torch.tensor(
@@ -38,9 +53,10 @@ class KGGLM(GPT2LMHeadModel):
         )
 
         self.loss = nn.CrossEntropyLoss()
-        self.init_weights()
+        self.post_init()
 
     def get_type_embeds(self, batch_size):
+        self.token_type_ids = self.token_type_ids.to(self.type_embeddings.weight.device)
         type_ids = self.token_type_ids.expand(batch_size, -1)
         return self.type_embeddings(type_ids)
 
@@ -61,6 +77,11 @@ class KGGLM(GPT2LMHeadModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, CausalLMOutputWithCrossAttentions]:
+        if isinstance(input_ids, Interaction):
+            token_type_ids = input_ids["token_type_ids"]
+            attention_mask = input_ids["attention_mask"]
+            input_ids = input_ids["input_ids"]
+
         batch_size = input_ids.shape[0]
         type_embeds = self.get_type_embeds(batch_size)
 
@@ -105,3 +126,6 @@ class KGGLM(GPT2LMHeadModel):
             attentions=transformer_outputs.attentions,
             cross_attentions=transformer_outputs.cross_attentions,
         )
+
+    def predict(self, input_ids, **kwargs):
+        return self.forward(input_ids, **kwargs)

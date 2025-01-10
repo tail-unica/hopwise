@@ -57,6 +57,7 @@ relation_kg_num_interval: "[0,inf)"     # (str) Relation interval for filtering 
 # Knowledge Path Sampling-based Model Needed
 path_hop_length: 3              # (int) Number of hops in the knowledge path.
 MAX_PATHS_PER_USER: 250         # (int) Maximum number of kg sampled paths per user.
+context_length: ~               # (int) Maximum length of the context.
 metapaths: ~                    # (list) Metapaths used to sample paths.
 path_sample_args:
     temporal_causality: False   # (bool) Whether to use temporal causality.
@@ -69,7 +70,6 @@ path_sample_args:
     MAX_RW_PATHS_PER_HOP: 1     # (int) Maximum number of paths sampled at each hop for constrained random walk.
 tokenizer:                      # (dict) Tokenizer parameters.
     model: WordLevel            # (str) Tokenizer model.
-    context_length: 24          # (int) Maximum length of the context.
     special_tokens:             # (dict) Special tokens.
         mask_token: "[MASK]"    # (str) Mask token.
         unk_token: "[UNK]"      # (str) Unknown token.
@@ -79,7 +79,6 @@ tokenizer:                      # (dict) Tokenizer parameters.
         sep_token: "[SEP]"      # (str) Separator token.
         cls_token: "[CLS]"      # (str) Classification token.
     template: "{bos_token}:0 $A:0 {eos_token}"                # (str) Template for the tokenizer.
-
 
 # Benchmark .inter file
 benchmark_filename: ~           # (list) List of pre-split user-item interaction suffix.

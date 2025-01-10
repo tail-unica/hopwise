@@ -235,7 +235,7 @@ def data_preparation(config, dataset):
     return train_data, valid_data, test_data
 
 
-def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"]):
+def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"]):  # noqa: PLR0911
     """Return a dataloader class according to :attr:`config` and :attr:`phase`.
 
     Args:
@@ -281,7 +281,10 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
     else:
         eval_mode = config["eval_args"]["mode"][phase]
         if eval_mode == "full":
-            return FullSortEvalDataLoader
+            if model_type == ModelType.PATH_LANGUAGE_MODELING:
+                return KnowledgePathEvalDataLoader
+            else:
+                return FullSortEvalDataLoader
         else:
             return NegSampleEvalDataLoader
 
