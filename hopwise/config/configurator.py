@@ -257,9 +257,7 @@ class Config:
         self.internal_config_dict = dict()
         for file in [
             overall_init_file,
-            model_init_file,
             sample_init_file,
-            dataset_init_file,
         ]:
             if os.path.isfile(file):
                 config_dict = self._update_internal_config_dict(file)
@@ -301,6 +299,17 @@ class Config:
             self._update_internal_config_dict(knowledge_path_base_init)
             if dataset == "ml-100k":
                 self._update_internal_config_dict(knowledge_path_base_on_ml_100k_init)
+
+        for file in [
+            dataset_init_file,
+            model_init_file,
+        ]:
+            if os.path.isfile(file):
+                config_dict = self._update_internal_config_dict(file)
+                if file == dataset_init_file:
+                    self.parameters["Dataset"] += [
+                        key for key in config_dict.keys() if key not in self.parameters["Dataset"]
+                    ]
 
     def _get_final_config_dict(self):
         final_config_dict = dict()

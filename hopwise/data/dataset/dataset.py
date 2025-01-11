@@ -1097,7 +1097,8 @@ class Dataset(torch.utils.data.Dataset):
         """Change feat format from :class:`pandas.DataFrame` to :class:`Interaction`."""
         for feat_name in self.feat_name_list:
             feat = getattr(self, feat_name)
-            setattr(self, feat_name, self._dataframe_to_interaction(feat))
+            if not isinstance(feat, Interaction):
+                setattr(self, feat_name, self._dataframe_to_interaction(feat))
 
     def num(self, field):
         """Given ``field``, for token-like fields, return the number of different tokens after remapping,

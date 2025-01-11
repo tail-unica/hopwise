@@ -1,0 +1,17 @@
+learning_rate: 2e-4
+weight_decay: 0.01
+warmup_steps: 250               # (int) Number of warmup steps for learning rate scheduler.
+context_length: 24              # (int) Maximum length of the context.
+save_step: 1                    # (int) Number of steps to save the model during pre-training.
+pretrain_epochs: 10             # (int) Number of epochs for pre-training.
+path_sample_args:
+    restrict_by_phase: True     # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.
+
+path_generation_args:
+    paths_per_user: 30          # (int) Number of paths generated per user.
+    language_model:
+        num_beams: 50           # (int) Number of beams for beam search.
+        num_beam_groups: 5      # (int) Number of groups for diverse beam search.
+        diversity_penalty: 0.3  # (float) Diversity penalty for beam search.
+        length_penalty: 0.0     # (float) Length penalty for beam search.
+        do_sample: False        # (bool) Whether to use sampling ; use greedy decoding otherwise.

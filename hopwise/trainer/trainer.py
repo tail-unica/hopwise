@@ -691,6 +691,13 @@ class PretrainTrainer(Trainer):
         torch.save(state, saved_model_file)
         self.saved_model_file = saved_model_file
 
+    def _get_pretrained_model_path(self, epoch_label=None):
+        epoch_label = str(epoch_label) if epoch_label is not None else "pretrained"
+        return os.path.join(
+            self.checkpoint_dir,
+            "{}-{}-{}.pth".format(self.config["model"], self.config["dataset"], epoch_label),
+        )
+
     def pretrain(self, train_data, verbose=True, show_progress=False):
         for epoch_idx in range(self.start_epoch, self.pretrain_epochs):
             # train
@@ -706,10 +713,7 @@ class PretrainTrainer(Trainer):
             self._add_train_loss_to_tensorboard(epoch_idx, train_loss)
 
             if (epoch_idx + 1) % self.save_step == 0:
-                saved_model_file = os.path.join(
-                    self.checkpoint_dir,
-                    "{}-{}-{}.pth".format(self.config["model"], self.config["dataset"], str(epoch_idx + 1)),
-                )
+                saved_model_file = self._get_pretrained_model_path(epoch_idx + 1)
                 self.save_pretrained_model(epoch_idx, saved_model_file)
                 update_output = set_color("Saving current", "blue") + ": %s" % saved_model_file
                 if verbose:
@@ -1345,3 +1349,238 @@ class NCLTrainer(Trainer):
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
         return total_loss
+
+
+class KGGLMTrainer(PretrainTrainer):
+    r"""KGGLMTrainer is designed for KGGLM, which is a path-based knowledge-aware recommendation method.
+    It includes two training stages: link prediction pre-training and recommendation path generation fine-tuning.
+
+    """
+
+    def __init__(self, config, model):
+        super().__init__(config, model)
+
+        self.path_hop_length = self.config["path_hop_length"]
+        path_gen_args = self.config["path_generation_args"]
+        self.paths_per_user = path_gen_args["paths_per_user"]
+        self.path_gen_lm_args = path_gen_args["language_model"]
+
+    def prepare_training_arguments(self, train_stage="pretrain"):
+        from transformers import TrainingArguments
+
+        save_path_suffix = "huggingface-"
+        if train_stage == "pretrain":
+            pretrain_path = self._get_pretrained_model_path().replace("hopwise-", save_path_suffix)
+            output_dir = pretrain_path
+            num_train_epochs = self.pretrain_epochs
+            save_steps = self.save_step
+            eval_strategy = "no"
+        else:
+            dirname, basename = os.path.split(self.saved_model_file)
+            output_dir = os.path.join(dirname, save_path_suffix + basename)
+            self.saved_model_file = os.path.join(dirname, "hopwise-" + basename)
+            num_train_epochs = self.epochs
+            save_steps = self.eval_step
+            eval_strategy = "epoch"
+
+        return TrainingArguments(
+            output_dir=output_dir,
+            eval_strategy=eval_strategy,
+            save_strategy="epoch",
+            eval_steps=self.eval_step,
+            learning_rate=self.learning_rate,
+            weight_decay=self.weight_decay,
+            bf16=False,
+            fp16=self.enable_amp,
+            num_train_epochs=num_train_epochs,
+            per_device_train_batch_size=self.config["train_batch_size"],
+            per_device_eval_batch_size=self.test_batch_size,
+            warmup_steps=self.config["warmup_steps"],
+            save_steps=save_steps,
+            save_total_limit=1,
+            load_best_model_at_end=train_stage != "pretrain",
+            metric_for_best_model=self.valid_metric,
+            greater_is_better=self.valid_metric_bigger,
+            seed=self.config["seed"],
+            report_to="none",
+            disable_tqdm=True,
+        )
+
+    def _get_pretrained_model_path(self, epoch_label=None):
+        epoch_label = str(epoch_label) if epoch_label is not None else "pretrained"
+        return os.path.join(
+            self.checkpoint_dir,
+            "hopwise-{}-{}-{}.pth".format(self.config["model"], self.config["dataset"], epoch_label),
+        )
+
+    def _save_checkpoint(self, epoch, verbose=True, **kwargs):
+        r"""Store the model parameters information and training information.
+
+        Args:
+            epoch (int): the current epoch id
+
+        """
+        if not self.config["single_spec"] and self.config["local_rank"] != 0:
+            return
+        saved_model_file = kwargs.pop("saved_model_file", self.saved_model_file)
+        state = {
+            "config": self.config,
+            "epoch": epoch,
+            "cur_step": self.cur_step,
+            "best_valid_score": self.best_valid_score,
+        }
+        torch.save(state, saved_model_file, pickle_protocol=4)
+        if verbose:
+            self.logger.info(set_color("Saving current", "blue") + f": {saved_model_file}")
+
+    def resume_checkpoint(self, resume_file):
+        # TODO: use the resume_from_checkpoint parameter of the HF train function
+        raise NotImplementedError()
+        return super().resume_checkpoint(resume_file)
+
+    def pretrain(self, train_data, verbose=True, show_progress=False):
+        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
+
+        training_arguments = self.prepare_training_arguments(train_stage="pretrain")
+
+        callbacks = [HopwiseCallback(self, train_data, verbose=verbose, show_progress=show_progress)]
+
+        self.hf_trainer = HFPathTrainer(
+            train_data,
+            self.config,
+            callbacks,
+            model=self.model,
+            args=training_arguments,
+            path_hop_length=self.path_hop_length,
+            paths_per_user=self.paths_per_user,
+            path_generation_args=self.path_gen_lm_args,
+            eval_device=self.device,
+        )
+
+        # hf_train_output = self.hf_trainer.train()
+        self.hf_trainer.train()
+
+        return self.best_valid_score, self.best_valid_result
+
+    def finetune(
+        self,
+        train_data,
+        valid_data=None,
+        verbose=True,
+        saved=True,
+        show_progress=False,
+        callback_fn=None,
+    ):
+        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
+
+        training_arguments = self.prepare_training_arguments(train_stage="finetune")
+
+        callbacks = [
+            HopwiseCallback(
+                self,
+                train_data,
+                valid_data=valid_data,
+                verbose=verbose,
+                saved=saved,
+                show_progress=show_progress,
+                callback_fn=callback_fn,
+            )
+        ]
+
+        self.hf_trainer = HFPathTrainer(
+            train_data,
+            self.config,
+            callbacks,
+            model=self.model,
+            args=training_arguments,
+            path_hop_length=self.path_hop_length,
+            paths_per_user=self.paths_per_user,
+            path_generation_args=self.path_gen_lm_args,
+            eval_device=self.device,
+        )
+
+        # hf_train_output = self.hf_trainer.train()
+        self.hf_trainer.train()
+
+        return self.best_valid_score, self.best_valid_result
+
+    def fit(
+        self,
+        train_data,
+        valid_data=None,
+        verbose=True,
+        saved=True,
+        show_progress=False,
+        callback_fn=None,
+    ):
+        self.eval_collector.data_collect(train_data)
+
+        train_stages = ["lp_pretrain", "finetune"]
+        for stage in train_stages:
+            if stage == "lp_pretrain":
+                self.pretrain(train_data, verbose, show_progress)
+            elif stage == "finetune":
+                return self.finetune(train_data, valid_data, verbose, saved, show_progress, callback_fn)
+            else:
+                raise ValueError("Please make sure that the 'train_stage' is " "'lp_pretrain', or 'finetune'!")
+
+    def _valid_epoch(self, valid_data, show_progress=False):
+        valid_result = self.evaluate(valid_data, load_best_model=False, show_progress=show_progress, task="rec")
+        valid_score = calculate_valid_score(valid_result, self.valid_metric)
+        return valid_score, valid_result
+
+    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False, task="rec"):
+        if not eval_data:
+            return
+
+        if load_best_model:
+            self.hf_trainer._load_best_model()
+            best_model_checkpoint_path = self.hf_trainer.state.best_model_checkpoint
+            message_output = f"Loading model structure and parameters from {best_model_checkpoint_path}"
+            self.logger.info(message_output)
+
+        self.model.eval()
+        if isinstance(self.model, torch.nn.DataParallel):
+            model = self.model.module
+        else:
+            model = self.model
+
+        if self.config["eval_type"] == EvaluatorType.RANKING:
+            self.tot_item_num = eval_data._dataset.item_num
+
+        iter_data = (
+            tqdm(
+                eval_data,
+                total=len(eval_data),
+                ncols=100,
+                desc=set_color("Evaluate   ", "pink"),
+            )
+            if show_progress
+            else eval_data
+        )
+
+        num_sample = 0
+        for batch_idx, batched_data in enumerate(iter_data):
+            num_sample += len(batched_data)
+            interaction, history_index, positive_u, positive_i = batched_data
+
+            inputs = self.hf_trainer.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(
+                self.hf_trainer.eval_device
+            )
+            scores = self.hf_trainer._full_sort_batch_eval(model, inputs, task=task)
+
+            scores = scores.view(-1, self.tot_item_num)
+            scores[:, 0] = -np.inf
+            if history_index is not None:
+                scores[history_index] = -np.inf
+
+            if self.gpu_available and show_progress:
+                iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
+            self.eval_collector.eval_batch_collect(scores, None, positive_u, positive_i, history_index)
+        self.eval_collector.model_collect(self.model)
+        struct = self.eval_collector.get_data_struct()
+        result = self.evaluator.evaluate(struct)
+        if not self.config["single_spec"]:
+            result = self._map_reduce(result, num_sample)
+        self.wandblogger.log_eval_metrics(result, head="eval")
+        return result
