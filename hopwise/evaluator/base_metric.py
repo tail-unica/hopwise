@@ -62,6 +62,7 @@ class TopkMetric(AbstractMetric):
         and number of positive items for each user.
         """
         rec_mat = dataobject.get("rec.topk")
+        self.topk = dataobject.get("topk")
         topk_idx, pos_len_list = torch.split(rec_mat, [max(self.topk), 1], dim=1)
         return topk_idx.to(torch.bool).numpy(), pos_len_list.squeeze(-1).numpy()
 

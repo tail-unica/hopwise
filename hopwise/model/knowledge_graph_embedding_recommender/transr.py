@@ -119,6 +119,23 @@ class TransR(KnowledgeRecommender):
 
         return -torch.norm(user_e_proj + rec_r_e - item_e_proj, p=2, dim=1)
 
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_e = self.entity_embedding(head)
+        tail_e = self.entity_embedding(tail)
+
+        rec_r_e = self.relation_embedding(relation)
+
+        proj_mat = self.proj_mat_e(relation).view(head_e.shape[0], self.embedding_size, self.embedding_size)
+
+        head_e_proj = self.forward(head_e, proj_mat)
+        tail_e_proj = self.forward(tail_e, proj_mat)
+
+        return -torch.norm(head_e_proj + rec_r_e - tail_e_proj, p=2, dim=1)
+
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         user_e = self.user_embedding(user)

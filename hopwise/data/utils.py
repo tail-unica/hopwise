@@ -24,6 +24,8 @@ from hopwise.sampler import KGSampler, RepeatableSampler, Sampler
 from hopwise.utils import ModelType, ensure_dir, set_color
 from hopwise.utils.argument_list import dataset_arguments
 
+REC_DATA_LENGTH = 2
+
 
 def create_dataset(config):
     """Create dataset according to :attr:`config['model']` and :attr:`config['MODEL_TYPE']`.
@@ -191,27 +193,84 @@ def data_preparation(config, dataset):
         model_type = config["MODEL_TYPE"]
         built_datasets = dataset.build()
 
-        train_dataset, valid_dataset, test_dataset = built_datasets
-        train_sampler, valid_sampler, test_sampler = create_samplers(config, dataset, built_datasets)
-
         if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]:
-            kg_sampler = KGSampler(
-                dataset,
-                config["train_neg_sample_args"]["distribution"],
-                config["train_neg_sample_args"]["alpha"],
-            )
-            train_data = get_dataloader(config, "train")(
-                config, train_dataset, train_sampler, kg_sampler, shuffle=True
-            )
+            if len(built_datasets.keys()) == REC_DATA_LENGTH:
+                # then the kg has been split
+                train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets["kg"]
+                train_inter_dataset, valid_inter_dataset, test_inter_dataset = built_datasets["inter"]
+
+                kg_sampler = KGSampler(
+                    train_kg_dataset,
+                    config["train_neg_sample_args"]["distribution"],
+                    config["train_neg_sample_args"]["alpha"],
+                )
+
+                train_inter_sampler, valid_inter_sampler, test_inter_sampler = create_samplers(
+                    config, dataset, built_datasets["inter"]
+                )
+
+                train_data = get_dataloader(config, "train")(
+                    config, train_inter_dataset, train_inter_sampler, kg_sampler, shuffle=True
+                )
+
+                valid_kg_sampler = KGSampler(valid_kg_dataset, distribution=None)
+                valid_kg_data = get_dataloader(config, "valid")(
+                    config, valid_kg_dataset, valid_kg_sampler, shuffle=False, is_a_kg=True
+                )
+                valid_inter_data = get_dataloader(config, "valid")(
+                    config, valid_inter_dataset, valid_inter_sampler, shuffle=False
+                )
+
+                test_kg_sampler = KGSampler(test_kg_dataset, distribution=None)
+                test_kg_data = get_dataloader(config, "valid")(
+                    config, test_kg_dataset, test_kg_sampler, shuffle=False, is_a_kg=True
+                )
+                test_inter_data = get_dataloader(config, "test")(
+                    config, test_inter_dataset, test_inter_sampler, shuffle=False
+                )
+
+                if config["save_dataloaders"]:
+                    save_split_dataloaders(
+                        config,
+                        dataloaders=(train_data, valid_inter_data, valid_kg_data, test_inter_data, test_kg_data),
+                    )
+
+                valid_data = [valid_inter_data, valid_kg_data]
+                test_data = [test_inter_data, test_kg_data]
+            else:
+                built_datasets = built_datasets["inter"]
+
+                # then we want to use the whole kg
+                kg_sampler = KGSampler(
+                    dataset,
+                    config["train_neg_sample_args"]["distribution"],
+                    config["train_neg_sample_args"]["alpha"],
+                )
+
+                train_dataset, valid_dataset, test_dataset = built_datasets
+                train_sampler, valid_sampler, test_sampler = create_samplers(config, dataset, built_datasets)
+
+                train_data = get_dataloader(config, "train")(
+                    config, train_dataset, train_sampler, kg_sampler, shuffle=True
+                )
+                valid_data = get_dataloader(config, "valid")(config, valid_dataset, valid_sampler, shuffle=False)
+                test_data = get_dataloader(config, "test")(config, test_dataset, test_sampler, shuffle=False)
+
+                if config["save_dataloaders"]:
+                    save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
         else:
+            train_dataset, valid_dataset, test_dataset = built_datasets
+            train_sampler, valid_sampler, test_sampler = create_samplers(config, dataset, built_datasets)
+
             train_data = get_dataloader(config, "train")(
                 config, train_dataset, train_sampler, shuffle=config["shuffle"]
             )
 
-        valid_data = get_dataloader(config, "valid")(config, valid_dataset, valid_sampler, shuffle=False)
-        test_data = get_dataloader(config, "test")(config, test_dataset, test_sampler, shuffle=False)
-        if config["save_dataloaders"]:
-            save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
+            valid_data = get_dataloader(config, "valid")(config, valid_dataset, valid_sampler, shuffle=False)
+            test_data = get_dataloader(config, "test")(config, test_dataset, test_sampler, shuffle=False)
+
+            if config["save_dataloaders"]:
+                save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
 
     logger = getLogger()
     logger.info(

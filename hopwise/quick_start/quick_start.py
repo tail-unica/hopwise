@@ -134,16 +134,16 @@ def run_hopwise(
 
     # model loading and initialization
     init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
-    model = get_model(config["model"])(config, train_data._dataset).to(config["device"])
+    model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
     logger.info(model)
 
     transform = construct_transform(config)
+
     flops = get_flops(model, dataset, config["device"], logger, transform)
     logger.info(set_color("FLOPs", "blue") + f": {flops}")
 
     # trainer loading and initialization
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
-
     # model training
     best_valid_score, best_valid_result = trainer.fit(
         train_data, valid_data, saved=saved, show_progress=config["show_progress"]
@@ -155,9 +155,19 @@ def run_hopwise(
     environment_tb = get_environment(config)
     logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
 
-    logger.info(set_color("best valid ", "yellow") + f": {best_valid_result}")
-    logger.info(set_color("test result", "yellow") + f": {test_result}")
+    if isinstance(test_result, dict) and isinstance(best_valid_result, dict):
+        for task, result in best_valid_result.items():
+            logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
 
+        test_result = dict(Recommendation=test_result) if "Recommendation" not in test_result else test_result
+        for task, result in test_result.items():
+            logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
+    else:
+        logger.info(set_color("best valid ", "yellow") + f": {best_valid_result}")
+        logger.info(set_color("test result", "yellow") + f": {test_result}")
+
+    # In the case of KG-aware tasks, we don't care about the final "best_valid_score"
+    # format because it is not used anywhere.
     result = {
         "best_valid_score": best_valid_score,
         "valid_score_bigger": config["valid_metric_bigger"],
@@ -172,6 +182,11 @@ def run_hopwise(
         queue.put(result)  # for multiprocessing, e.g., mp.spawn
 
     return result  # for the single process
+
+
+def format_metrics(metrics):
+    formatted_str = "".join([f"[{key}]: {value} " for key, value in metrics.items()])
+    return formatted_str
 
 
 def run_hopwises(rank, *args):
@@ -205,7 +220,7 @@ def objective_function(config_dict=None, config_file_list=None, saved=True):
     train_data, valid_data, test_data = data_preparation(config, dataset)
     init_seed(config["seed"], config["reproducibility"])
     model_name = config["model"]
-    model = get_model(model_name)(config, train_data._dataset).to(config["device"])
+    model = get_model(model_name)(config, train_data.dataset).to(config["device"])
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
     best_valid_score, best_valid_result = trainer.fit(train_data, valid_data, verbose=False, saved=saved)
     test_result = trainer.evaluate(test_data, load_best_model=saved)
@@ -249,7 +264,7 @@ def load_data_and_model(model_file):
     train_data, valid_data, test_data = data_preparation(config, dataset)
 
     init_seed(config["seed"], config["reproducibility"])
-    model = get_model(config["model"])(config, train_data._dataset).to(config["device"])
+    model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
     model.load_state_dict(checkpoint["state_dict"])
     model.load_other_parameter(checkpoint.get("other_parameter"))
 

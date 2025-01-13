@@ -63,6 +63,19 @@ class AbstractRecommender(nn.Module):
         """
         raise NotImplementedError
 
+    def full_sort_predict_kg(self, interaction):
+        r"""Full sort prediction KG function.
+        Given heads, calculate the scores between heads and all candidate tails.
+
+        Args:
+            interaction (Interaction): Interaction class of the batch.
+
+        Returns:
+            torch.Tensor: Predicted scores for given heads and all candidate tails,
+            shape: [n_batch_heads * n_candidate_tails]
+        """
+        raise NotImplementedError
+
     def other_parameter(self):
         if hasattr(self, "other_parameter_name"):
             return {key: getattr(self, key) for key in self.other_parameter_name}

@@ -142,6 +142,22 @@ class ComplEx(KnowledgeRecommender):
 
         return self.forward(user_re_e, user_im_e, rec_r_re_e, rec_r_im_e, item_re_e, item_im_e)
 
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_re_e = self.entity_re_embedding(head)
+        head_im_e = self.entity_im_embedding(head)
+
+        tail_re_e = self.entity_re_embedding(tail)
+        tail_im_e = self.entity_im_embedding(tail)
+
+        rec_r_re_e = self.relation_re_embedding(relation)
+        rec_r_im_e = self.relation_im_embedding(relation)
+
+        return self.forward(head_re_e, head_im_e, rec_r_re_e, rec_r_im_e, tail_re_e, tail_im_e)
+
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         user_re_e = self.user_re_embedding(user)
@@ -170,4 +186,33 @@ class ComplEx(KnowledgeRecommender):
             + self.triple_dot(user_im_e, rec_r_re_e, all_item_im_e)
             + self.triple_dot(user_re_e, rec_r_im_e, all_item_im_e)
             - self.triple_dot(user_im_e, rec_r_im_e, all_item_im_e)
+        )
+
+    def full_sort_predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        head_re_e = self.entity_re_embedding(head)
+        head_im_e = self.entity_im_embedding(head)
+
+        rec_r_re_e = self.relation_re_embedding(relation)
+        rec_r_im_e = self.relation_im_embedding(relation)
+
+        entity_indices = torch.tensor(range(self.n_entities)).to(self.device)
+        all_entity_re_e = self.entity_re_embedding.weight[entity_indices]
+        all_entity_im_e = self.entity_im_embedding.weight[entity_indices]
+
+        head_re_e = head_re_e.unsqueeze(1).expand(-1, all_entity_re_e.shape[0], -1)
+        head_im_e = head_im_e.unsqueeze(1).expand(-1, all_entity_re_e.shape[0], -1)
+
+        rec_r_re_e = rec_r_re_e.unsqueeze(1).expand(-1, all_entity_re_e.shape[0], -1)
+        rec_r_im_e = rec_r_im_e.unsqueeze(1).expand(-1, all_entity_re_e.shape[0], -1)
+
+        all_entity_re_e = all_entity_re_e.unsqueeze(0)
+        all_entity_im_e = all_entity_im_e.unsqueeze(0)
+
+        return (
+            self.triple_dot(head_re_e, rec_r_re_e, all_entity_re_e)
+            + self.triple_dot(head_im_e, rec_r_re_e, all_entity_im_e)
+            + self.triple_dot(head_re_e, rec_r_im_e, all_entity_im_e)
+            - self.triple_dot(head_im_e, rec_r_im_e, all_entity_im_e)
         )

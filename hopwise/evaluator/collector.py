@@ -15,7 +15,7 @@ import copy
 
 import torch
 
-from hopwise.evaluator.register import Register
+from hopwise.evaluator.register import Register, Register_KG
 
 
 class DataStruct:
@@ -192,7 +192,6 @@ class Collector:
             model (nn.Module): the trained recommendation model.
         """
         pass
-        # TODO:
 
     def eval_collect(self, eval_pred: torch.Tensor, data_label: torch.Tensor):
         """Collect the evaluation resource from total output and label.
@@ -220,4 +219,21 @@ class Collector:
         for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label", "data.history_index"]:
             if key in self.data_struct:
                 del self.data_struct[key]
+        returned_struct.set("topk", self.topk)
         return returned_struct
+
+
+class Collector_KG(Collector):
+    """The collector is used to collect the resource for evaluator.
+    As the evaluation metrics are various, the needed resource not only contain the recommended result
+    but also other resource from data and model. They all can be collected by the collector during the training
+    and evaluation process.
+
+    This class is only used in Trainer.
+
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.register = Register_KG(config)
+        self.topk = self.config["topk_kg"]

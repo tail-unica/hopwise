@@ -117,9 +117,36 @@ class TransE(KnowledgeRecommender):
         item_indices = torch.tensor(range(self.n_items)).to(self.device)
         all_item_e = self.entity_embedding.weight[item_indices]
 
-        # h_r = (user_e + rec_r_e).unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
         user_e = user_e.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
         rec_r_e = rec_r_e.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
         t = all_item_e.unsqueeze(0)
 
         return -torch.norm(user_e + rec_r_e - t, p=2, dim=2)
+
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_e = self.entity_embedding(head)
+        relation_e = self.relation_embedding(relation)
+        tail_e = self.entity_embedding(tail)
+
+        return self.forward(head_e, relation_e, tail_e)
+
+    def full_sort_predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+
+        head_e = self.entity_embedding(head)
+
+        rel_e = self.relation_embedding(relation)
+        rel_e = rel_e.expand_as(head_e)
+
+        tail_indices = torch.tensor(range(self.n_entities)).to(self.device)
+        all_tail_e = self.entity_embedding.weight[tail_indices]
+
+        head_e = head_e.unsqueeze(1).expand(-1, all_tail_e.shape[0], -1)
+        rel_e = rel_e.unsqueeze(1).expand(-1, all_tail_e.shape[0], -1)
+        t = all_tail_e.unsqueeze(0)
+        return -torch.norm(head_e + rel_e - t, p=2, dim=2)

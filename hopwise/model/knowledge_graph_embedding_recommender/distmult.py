@@ -103,6 +103,17 @@ class DistMult(KnowledgeRecommender):
 
         return self.forward(user_e, rec_r_e, item_e)
 
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_e = self.entity_embedding(head)
+        item_e = self.entity_embedding(tail)
+        rec_r_e = self.relation_embedding(relation)
+
+        return self.forward(head_e, rec_r_e, item_e)
+
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         user_e = self.user_embedding(user)
@@ -116,5 +127,18 @@ class DistMult(KnowledgeRecommender):
         h = user_e.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
         r = rec_r_e.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
         t = all_item_e.unsqueeze(0)
+
+        return (h * r * t).sum(dim=-1)
+
+    def full_sort_predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+
+        head_e = self.entity_embedding(head)
+        rec_r_e = self.relation_embedding(relation)
+
+        h = head_e.unsqueeze(1).expand(-1, self.entity_embedding.weight.size(0), -1)
+        r = rec_r_e.unsqueeze(1).expand(-1, self.entity_embedding.weight.size(0), -1)
+        t = self.entity_embedding.weight.unsqueeze(0)
 
         return (h * r * t).sum(dim=-1)

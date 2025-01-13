@@ -99,6 +99,17 @@ class TorusE(KnowledgeRecommender):
 
         return loss
 
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_e = self.entity_embedding(head)
+        tail_e = self.entity_embedding(tail)
+        rec_r_e = self.relation_embedding(relation)
+
+        return self.forward(head_e, rec_r_e, tail_e)
+
     def predict(self, interaction):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
@@ -123,6 +134,30 @@ class TorusE(KnowledgeRecommender):
         h_e = user_e.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
         r_e = rec_r_e.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
         t = all_item_e.unsqueeze(0)
+
+        h_e = h_e.clone()
+        r_e = r_e.clone()
+        t = t.clone()
+
+        h_e.data.frac_()
+        r_e.data.frac_()
+        t.data.frac_()
+
+        h_r = h_e + r_e
+        return -(4 * torch.min((h_r - t) ** 2, 1 - (h_r - t) ** 2).sum(dim=-1))
+
+    def full_sort_predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+
+        head_e = self.entity_embedding(head)
+        rec_r_e = self.relation_embedding(relation)
+
+        all_tail_e = self.entity_embedding.weight
+
+        h_e = head_e.unsqueeze(1).expand(-1, all_tail_e.shape[0], -1)
+        r_e = rec_r_e.unsqueeze(1).expand(-1, all_tail_e.shape[0], -1)
+        t = all_tail_e.unsqueeze(0)
 
         h_e = h_e.clone()
         r_e = r_e.clone()

@@ -37,7 +37,7 @@ from hopwise.utils import (
 class Config:
     """Configurator module that load the defined parameters.
 
-    Configurator module will first load the default parameters from the fixed properties in RecBole and then
+    Configurator module will first load the default parameters from the fixed properties in Hopwise and then
     load parameters from the external input.
 
     External input supports three kind of forms: config file, command line and parameter dictionaries.
@@ -134,6 +134,8 @@ class Config:
                         value = True
                     elif param.lower() == "false":
                         value = False
+                    elif param.lower() == "none":
+                        value = None
                     else:
                         value = param
                 else:
@@ -182,9 +184,9 @@ class Config:
 
     def _merge_external_config_dict(self):
         external_config_dict = dict()
-        self.deep_dict_update(external_config_dict, self.file_config_dict)
-        self.deep_dict_update(external_config_dict, self.variable_config_dict)
-        self.deep_dict_update(external_config_dict, self.cmd_config_dict)
+        self.deep_dict_update(external_config_dict, self._convert_config_dict(self.file_config_dict))
+        self.deep_dict_update(external_config_dict, self._convert_config_dict(self.variable_config_dict))
+        self.deep_dict_update(external_config_dict, self._convert_config_dict(self.cmd_config_dict))
         self.external_config_dict = external_config_dict
 
     def _get_model_and_dataset(self, model, dataset):
@@ -378,6 +380,50 @@ class Config:
         else:
             raise TypeError(f"The topk [{topk}] must be a integer, list")
 
+        # Knowledge Graph
+        if "metrics_kg" in self.final_config_dict:
+            metrics_kg = self.final_config_dict["metrics_kg"]
+            if isinstance(metrics_kg, str):
+                self.final_config_dict["metrics_kg"] = [metrics_kg]
+
+            eval_type_kg = set()
+            for metric in self.final_config_dict["metrics_kg"]:
+                if metric.lower() in metric_types:
+                    eval_type_kg.add(metric_types[metric.lower()])
+                else:
+                    raise NotImplementedError(f"There is no metric named '{metric}'")
+            if len(eval_type_kg) > 1:
+                raise RuntimeError("Ranking metrics and value metrics can not be used at the same time.")
+
+            self.final_config_dict["eval_type"] = eval_type_kg.pop()
+
+            assert (
+                "valid_metric_kg" in self.file_config_dict
+            ), "valid_metric_kg should be in the config file if metrics_kg is specified!."
+
+            if "valid_metrics_kg" in self.final_config_dict:
+                valid_metric_kg = self.final_config_dict["valid_metric_kg"].split("@")[0]
+                self.final_config_dict["valid_metric_bigger_kg"] = (
+                    False if valid_metric_kg.lower() in smaller_metrics else True
+                )
+
+            assert (
+                "topk_kg" in self.file_config_dict
+            ), "topk_kg should be in the config file if metrics_kg is specified!."
+
+            topk_kg = self.final_config_dict["topk_kg"]
+            if isinstance(topk_kg, (int, list)):
+                if isinstance(topk_kg, int):
+                    topk_kg = [topk_kg]
+                for k in topk_kg:
+                    if k <= 0:
+                        raise ValueError(
+                            f"topk_kg must be a positive integer or a list of positive integers, but get `{k}`"
+                        )
+                self.final_config_dict["topk_kg"] = topk_kg
+            else:
+                raise TypeError(f"The topk_kg [{topk_kg}] must be a integer, list")
+
         if "additional_feat_suffix" in self.final_config_dict:
             ad_suf = self.final_config_dict["additional_feat_suffix"]
             if isinstance(ad_suf, str):
@@ -413,6 +459,8 @@ class Config:
 
         # eval_args checking
         default_eval_args = {
+            "knowledge_split": None,
+            "knowledge_group_by": None,
             "split": {"RS": [0.8, 0.1, 0.1]},
             "order": "RO",
             "group_by": "user",
@@ -422,6 +470,20 @@ class Config:
             raise ValueError(f"eval_args:[{self.final_config_dict['eval_args']}] should be a dict.")
 
         self.deep_dict_update(default_eval_args, self.final_config_dict["eval_args"])
+
+        check_metrics_kg_exists = (
+            "metrics_kg" in self.final_config_dict and self.final_config_dict["metrics_kg"] is not None
+        )
+        check_topk_kg_exists = "topk_kg" in self.final_config_dict and self.final_config_dict["topk_kg"] is not None
+        check_knowledge_split_arg_exists = (
+            "knowledge_split" in self.final_config_dict["eval_args"]
+            and self.final_config_dict["eval_args"]["knowledge_split"] is not None
+        )
+
+        if check_knowledge_split_arg_exists:
+            assert (
+                check_metrics_kg_exists and check_topk_kg_exists
+            ), "metrics_kg and topk_kg should be in the config file if knowledge_split in eval_args is specified!."
 
         mode = default_eval_args["mode"]
         # backward compatible

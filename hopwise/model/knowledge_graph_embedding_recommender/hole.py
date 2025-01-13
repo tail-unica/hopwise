@@ -112,6 +112,17 @@ class HolE(KnowledgeRecommender):
 
         return self.forward(user_e, rec_r_e, item_e)
 
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_e = self.entity_embedding(head)
+        tail_e = self.entity_embedding(tail)
+        rec_r_e = self.relation_embedding(relation)
+
+        return self.forward(head_e, rec_r_e, tail_e)
+
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         user_e = self.user_embedding(user)
@@ -126,5 +137,21 @@ class HolE(KnowledgeRecommender):
 
         h_e = user_e.view(user_e.shape[0], 1, self.embedding_size)
         hr = torch.matmul(h_e, r_e).view(user_e.shape[0], self.embedding_size, 1)
+
+        return torch.matmul(hr.squeeze(2), all_item_e.T)
+
+    def full_sort_predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+
+        head_e = self.entity_embedding(head)
+        rec_r_e = self.relation_embedding(relation)
+
+        all_item_e = self.entity_embedding.weight
+
+        r_e = self.get_rolling_matrix(rec_r_e)
+
+        h_e = head_e.view(head_e.shape[0], 1, self.embedding_size)
+        hr = torch.matmul(h_e, r_e).view(head_e.shape[0], self.embedding_size, 1)
 
         return torch.matmul(hr.squeeze(2), all_item_e.T)
