@@ -92,10 +92,17 @@ def get_trainer(model_type, model_name):
     Returns:
         Trainer: trainer class
     """
+    register_table = {
+        "PEARLM": "HFPathLanguageModelingTrainer",
+        "PLM": "HFPathLanguageModelingTrainer",
+    }
+
     try:
         return getattr(importlib.import_module("hopwise.trainer"), model_name + "Trainer")
     except AttributeError:
-        if model_type == ModelType.KNOWLEDGE:
+        if model_name in register_table:
+            return getattr(importlib.import_module("hopwise.trainer"), register_table[model_name])
+        elif model_type == ModelType.KNOWLEDGE:
             return getattr(importlib.import_module("hopwise.trainer"), "KGTrainer")
         elif model_type == ModelType.TRADITIONAL:
             return getattr(importlib.import_module("hopwise.trainer"), "TraditionalTrainer")

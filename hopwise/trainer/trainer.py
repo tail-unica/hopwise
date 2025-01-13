@@ -1351,10 +1351,10 @@ class NCLTrainer(Trainer):
         return total_loss
 
 
-class KGGLMTrainer(PretrainTrainer):
-    r"""KGGLMTrainer is designed for KGGLM, which is a path-based knowledge-aware recommendation method.
-    It includes two training stages: link prediction pre-training and recommendation path generation fine-tuning.
-
+class HFPathLanguageModelingTrainer(PretrainTrainer):
+    r"""HFPathLanguageModelingTrainer is designed for path-based knowledge-aware recommendation methods.
+    It is specifically designed to communicate with the Hugging Face Trainer to use language models and functionalities
+    as tokenizers and beam search.
     """
 
     def __init__(self, config, model):
@@ -1365,53 +1365,41 @@ class KGGLMTrainer(PretrainTrainer):
         self.paths_per_user = path_gen_args["paths_per_user"]
         self.path_gen_lm_args = path_gen_args["language_model"]
 
-    def prepare_training_arguments(self, train_stage="pretrain"):
+        self.hopwise_save_path_suffix = "hopwise-"
+        self.huggingface_save_path_suffix = "huggingface-"
+
+        dirname, basename = os.path.split(self.saved_model_file)
+        self.saved_model_file = os.path.join(dirname, self.hopwise_save_path_suffix + basename)
+
+    def prepare_training_arguments(self, **kwargs):
         from transformers import TrainingArguments
 
-        save_path_suffix = "huggingface-"
-        if train_stage == "pretrain":
-            pretrain_path = self._get_pretrained_model_path().replace("hopwise-", save_path_suffix)
-            output_dir = pretrain_path
-            num_train_epochs = self.pretrain_epochs
-            save_steps = self.save_step
-            eval_strategy = "no"
-        else:
-            dirname, basename = os.path.split(self.saved_model_file)
-            output_dir = os.path.join(dirname, save_path_suffix + basename)
-            self.saved_model_file = os.path.join(dirname, "hopwise-" + basename)
-            num_train_epochs = self.epochs
-            save_steps = self.eval_step
-            eval_strategy = "epoch"
+        output_dir = self.saved_model_file.replace(self.hopwise_save_path_suffix, self.huggingface_save_path_suffix)
 
-        return TrainingArguments(
+        train_args = dict(
             output_dir=output_dir,
-            eval_strategy=eval_strategy,
+            eval_strategy="epoch",
             save_strategy="epoch",
             eval_steps=self.eval_step,
             learning_rate=self.learning_rate,
             weight_decay=self.weight_decay,
             bf16=False,
             fp16=self.enable_amp,
-            num_train_epochs=num_train_epochs,
+            num_train_epochs=self.epochs,
             per_device_train_batch_size=self.config["train_batch_size"],
             per_device_eval_batch_size=self.test_batch_size,
             warmup_steps=self.config["warmup_steps"],
-            save_steps=save_steps,
+            save_steps=self.eval_step,
             save_total_limit=1,
-            load_best_model_at_end=train_stage != "pretrain",
+            load_best_model_at_end=True,
             metric_for_best_model=self.valid_metric,
             greater_is_better=self.valid_metric_bigger,
             seed=self.config["seed"],
             report_to="none",
             disable_tqdm=True,
         )
-
-    def _get_pretrained_model_path(self, epoch_label=None):
-        epoch_label = str(epoch_label) if epoch_label is not None else "pretrained"
-        return os.path.join(
-            self.checkpoint_dir,
-            "hopwise-{}-{}-{}.pth".format(self.config["model"], self.config["dataset"], epoch_label),
-        )
+        train_args.update(kwargs)
+        return TrainingArguments(**train_args)
 
     def _save_checkpoint(self, epoch, verbose=True, **kwargs):
         r"""Store the model parameters information and training information.
@@ -1438,31 +1426,7 @@ class KGGLMTrainer(PretrainTrainer):
         raise NotImplementedError()
         return super().resume_checkpoint(resume_file)
 
-    def pretrain(self, train_data, verbose=True, show_progress=False):
-        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
-
-        training_arguments = self.prepare_training_arguments(train_stage="pretrain")
-
-        callbacks = [HopwiseCallback(self, train_data, verbose=verbose, show_progress=show_progress)]
-
-        self.hf_trainer = HFPathTrainer(
-            train_data,
-            self.config,
-            callbacks,
-            model=self.model,
-            args=training_arguments,
-            path_hop_length=self.path_hop_length,
-            paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_lm_args,
-            eval_device=self.device,
-        )
-
-        # hf_train_output = self.hf_trainer.train()
-        self.hf_trainer.train()
-
-        return self.best_valid_score, self.best_valid_result
-
-    def finetune(
+    def fit(
         self,
         train_data,
         valid_data=None,
@@ -1473,7 +1437,9 @@ class KGGLMTrainer(PretrainTrainer):
     ):
         from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
 
-        training_arguments = self.prepare_training_arguments(train_stage="finetune")
+        self.eval_collector.data_collect(train_data)
+
+        training_arguments = self.prepare_training_arguments()
 
         callbacks = [
             HopwiseCallback(
@@ -1503,26 +1469,6 @@ class KGGLMTrainer(PretrainTrainer):
         self.hf_trainer.train()
 
         return self.best_valid_score, self.best_valid_result
-
-    def fit(
-        self,
-        train_data,
-        valid_data=None,
-        verbose=True,
-        saved=True,
-        show_progress=False,
-        callback_fn=None,
-    ):
-        self.eval_collector.data_collect(train_data)
-
-        train_stages = ["lp_pretrain", "finetune"]
-        for stage in train_stages:
-            if stage == "lp_pretrain":
-                self.pretrain(train_data, verbose, show_progress)
-            elif stage == "finetune":
-                return self.finetune(train_data, valid_data, verbose, saved, show_progress, callback_fn)
-            else:
-                raise ValueError("Please make sure that the 'train_stage' is " "'lp_pretrain', or 'finetune'!")
 
     def _valid_epoch(self, valid_data, show_progress=False):
         valid_result = self.evaluate(valid_data, load_best_model=False, show_progress=show_progress, task="rec")
@@ -1584,3 +1530,69 @@ class KGGLMTrainer(PretrainTrainer):
             result = self._map_reduce(result, num_sample)
         self.wandblogger.log_eval_metrics(result, head="eval")
         return result
+
+
+class KGGLMTrainer(HFPathLanguageModelingTrainer):
+    r"""KGGLM is designed for KGGLM, which is a path-based language model for knowledge-aware recommendation.
+    It includes two training stages: link prediction pre-training and recommendation path generation fine-tuning.
+    """
+
+    def _get_pretrained_model_path(self, epoch_label=None):
+        epoch_label = str(epoch_label) if epoch_label is not None else "pretrained"
+        return os.path.join(
+            self.checkpoint_dir,
+            self.hopwise_save_path_suffix
+            + "{}-{}-{}.pth".format(self.config["model"], self.config["dataset"], epoch_label),
+        )
+
+    def pretrain(self, train_data, verbose=True, show_progress=False):
+        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
+
+        self.eval_collector.data_collect(train_data)
+
+        pretrain_path = self._get_pretrained_model_path()
+        pretrain_path = pretrain_path.replace(self.hopwise_save_path_suffix, self.huggingface_save_path_suffix)
+        pretrain_args = dict(
+            output_dir=pretrain_path,
+            num_train_epochs=self.pretrain_epochs,
+            save_steps=self.save_step,
+            eval_strategy="no",
+        )
+        training_arguments = self.prepare_training_arguments(**pretrain_args)
+
+        callbacks = [HopwiseCallback(self, train_data, verbose=verbose, show_progress=show_progress)]
+
+        self.hf_trainer = HFPathTrainer(
+            train_data,
+            self.config,
+            callbacks,
+            model=self.model,
+            args=training_arguments,
+            path_hop_length=self.path_hop_length,
+            paths_per_user=self.paths_per_user,
+            path_generation_args=self.path_gen_lm_args,
+            eval_device=self.device,
+        )
+
+        # hf_train_output = self.hf_trainer.train()
+        self.hf_trainer.train()
+
+        return self.best_valid_score, self.best_valid_result
+
+    def fit(
+        self,
+        train_data,
+        valid_data=None,
+        verbose=True,
+        saved=True,
+        show_progress=False,
+        callback_fn=None,
+    ):
+        train_stages = ["lp_pretrain", "finetune"]
+        for stage in train_stages:
+            if stage == "lp_pretrain":
+                self.pretrain(train_data, verbose, show_progress)
+            elif stage == "finetune":
+                return super().fit(train_data, valid_data, verbose, saved, show_progress, callback_fn)
+            else:
+                raise ValueError("Please make sure that the 'train_stage' is " "'lp_pretrain', or 'finetune'!")

@@ -5,7 +5,7 @@ context_length: 24              # (int) Maximum length of the context.
 save_step: 1                    # (int) Number of steps to save the model during pre-training.
 pretrain_epochs: 10             # (int) Number of epochs for pre-training.
 path_sample_args:
-    restrict_by_phase: True     # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.
+    restrict_by_phase: False    # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.
 
 path_generation_args:
     paths_per_user: 30          # (int) Number of paths generated per user.
