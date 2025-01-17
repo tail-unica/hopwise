@@ -23,8 +23,7 @@ from hopwise.data.dataloader import *
 from hopwise.sampler import KGSampler, RepeatableSampler, Sampler
 from hopwise.utils import ModelType, ensure_dir, set_color
 from hopwise.utils.argument_list import dataset_arguments
-
-REC_DATA_LENGTH = 2
+from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
 def create_dataset(config):
@@ -194,10 +193,12 @@ def data_preparation(config, dataset):
         built_datasets = dataset.build()
 
         if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]:
-            if len(built_datasets.keys()) == REC_DATA_LENGTH:
+            if isinstance(built_datasets, dict):
                 # then the kg has been split
-                train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets["kg"]
-                train_inter_dataset, valid_inter_dataset, test_inter_dataset = built_datasets["inter"]
+                train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets[KnowledgeEvaluationType.LP]
+                train_inter_dataset, valid_inter_dataset, test_inter_dataset = built_datasets[
+                    KnowledgeEvaluationType.REC
+                ]
 
                 kg_sampler = KGSampler(
                     train_kg_dataset,
@@ -206,7 +207,7 @@ def data_preparation(config, dataset):
                 )
 
                 train_inter_sampler, valid_inter_sampler, test_inter_sampler = create_samplers(
-                    config, dataset, built_datasets["inter"]
+                    config, dataset, built_datasets[KnowledgeEvaluationType.REC]
                 )
 
                 train_data = get_dataloader(config, "train")(
@@ -238,8 +239,6 @@ def data_preparation(config, dataset):
                 valid_data = [valid_inter_data, valid_kg_data]
                 test_data = [test_inter_data, test_kg_data]
             else:
-                built_datasets = built_datasets["inter"]
-
                 # then we want to use the whole kg
                 kg_sampler = KGSampler(
                     dataset,
@@ -282,6 +281,14 @@ def data_preparation(config, dataset):
         + ": "
         + set_color(f'[{config["train_neg_sample_args"]}]', "yellow")
     )
+
+    if KnowledgeEvaluationType.LP in built_datasets:
+        eval_lp_args_info = (
+            set_color(" eval_lp_args", "cyan") + ": " + set_color(f'[{config["eval_lp_args"]}]', "yellow")
+        )
+    else:
+        eval_lp_args_info = ""
+
     logger.info(
         set_color("[Evaluation]: ", "pink")
         + set_color("eval_batch_size", "cyan")
@@ -290,6 +297,7 @@ def data_preparation(config, dataset):
         + set_color(" eval_args", "cyan")
         + ": "
         + set_color(f'[{config["eval_args"]}]', "yellow")
+        + eval_lp_args_info
     )
     return train_data, valid_data, test_data
 

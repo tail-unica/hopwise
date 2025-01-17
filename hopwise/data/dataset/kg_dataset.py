@@ -24,6 +24,7 @@ from scipy.sparse import coo_matrix
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
 from hopwise.utils import FeatureSource, FeatureType, set_color
+from hopwise.utils.enum_type import KnowledgeEvaluationType
 from hopwise.utils.url import decide_download, download_url, extract_zip
 
 
@@ -185,16 +186,16 @@ class KnowledgeBasedDataset(Dataset):
 
         # splitting & grouping
         split_args = self.config["eval_args"]["split"]
-        knowledge_split_args = self.config["eval_args"]["knowledge_split"]
+        knowledge_split_args = self.config["eval_lp_args"]["knowledge_split"]
 
-        if knowledge_split_args is not None:
+        if knowledge_split_args != "None":
             print("Splitting the knowledge graph")
             if not isinstance(knowledge_split_args, dict):
                 raise ValueError(f"The knowledge_split_args [{knowledge_split_args}] should be a dict.")
             else:
                 knowledge_split_mode = list(knowledge_split_args.keys())[0]
                 assert len(knowledge_split_args.keys()) == 1
-                knowledge_group_by = self.config["eval_args"]["knowledge_group_by"]
+                knowledge_group_by = self.config["eval_lp_args"]["knowledge_group_by"]
         else:
             knowledge_split_mode = None
             knowledge_group_by = None
@@ -219,25 +220,29 @@ class KnowledgeBasedDataset(Dataset):
                 raise ValueError(
                     f'The value of "RS" in knowledge_split_args [{knowledge_split_args}] should be a list.'
                 )
-            if knowledge_group_by is None:
-                datasets["kg"] = self.split_by_ratio(
-                    knowledge_split_args["RS"], data={"data": self.kg_feat, "name": "kg"}, group_by=None
+            if knowledge_group_by is None or knowledge_group_by.lower() == "none":
+                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
+                    knowledge_split_args["RS"],
+                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
+                    group_by=None,
                 )
-            elif knowledge_group_by == "head":
-                datasets["kg"] = self.split_by_ratio(
+            elif knowledge_group_by.lower() == "head":
+                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
                     knowledge_split_args["RS"],
                     data={"data": self.kg_feat, "name": "kg"},
                     group_by=self.head_entity_field,
                 )
-            elif knowledge_group_by == "tail":
-                datasets["kg"] = self.split_by_ratio(
+            elif knowledge_group_by.lower() == "tail":
+                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
                     knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": "kg"},
+                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
                     group_by=self.tail_entity_field,
                 )
-            elif knowledge_group_by == "relation":
-                datasets["kg"] = self.split_by_ratio(
-                    knowledge_split_args["RS"], data={"data": self.kg_feat, "name": "kg"}, group_by=self.relation_field
+            elif knowledge_group_by.lower() == "relation":
+                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
+                    knowledge_split_args["RS"],
+                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
+                    group_by=self.relation_field,
                 )
             else:
                 raise NotImplementedError(f"The knowledge grouping method [{group_by}] has not been implemented.")
@@ -247,21 +252,27 @@ class KnowledgeBasedDataset(Dataset):
             if not isinstance(split_args["RS"], list):
                 raise ValueError(f'The value of "RS" in split_args [{split_args}] should be a list.')
             if group_by is None or group_by.lower() == "none":
-                datasets["inter"] = self.split_by_ratio(
-                    split_args["RS"], data={"data": self.inter_feat, "name": "interactions"}, group_by=None
+                datasets[KnowledgeEvaluationType.REC] = self.split_by_ratio(
+                    split_args["RS"],
+                    data={"data": self.inter_feat, "name": KnowledgeEvaluationType.REC},
+                    group_by=None,
                 )
-            elif group_by == "user":
-                datasets["inter"] = self.split_by_ratio(
-                    split_args["RS"], data={"data": self.inter_feat, "name": "interactions"}, group_by=self.uid_field
+            elif group_by.lower() == "user":
+                datasets[KnowledgeEvaluationType.REC] = self.split_by_ratio(
+                    split_args["RS"],
+                    data={"data": self.inter_feat, "name": KnowledgeEvaluationType.REC},
+                    group_by=self.uid_field,
                 )
             else:
                 raise NotImplementedError(f"The grouping method [{group_by}] has not been implemented.")
         elif split_mode == "LS":
-            datasets["inter"] = self.leave_one_out(group_by=self.uid_field, leave_one_mode=split_args["LS"])
+            datasets[KnowledgeEvaluationType.REC] = self.leave_one_out(
+                group_by=self.uid_field, leave_one_mode=split_args["LS"]
+            )
         else:
             raise NotImplementedError(f"The splitting_method [{split_mode}] has not been implemented.")
 
-        return datasets
+        return datasets[KnowledgeEvaluationType.REC] if KnowledgeEvaluationType.LP not in datasets else datasets
 
     def copy(self, new_inter_feat, data_type):
         """Given a new interaction feature, return a new :class:`Dataset` object,
@@ -274,10 +285,9 @@ class KnowledgeBasedDataset(Dataset):
             :class:`~Dataset`: the new :class:`~Dataset` object, whose interaction feature has been updated.
         """
         nxt = copy.copy(self)
-        if data_type == "interactions":
+        if data_type == KnowledgeEvaluationType.REC:
             nxt.inter_feat = new_inter_feat
         else:
-            # data_type == 'kg'
             nxt.kg_feat = new_inter_feat
         return nxt
 
@@ -319,7 +329,7 @@ class KnowledgeBasedDataset(Dataset):
         next_df = [data[index] for index in next_index]
         next_ds = [self.copy(split, data_type) for split in next_df]
 
-        if data_type == "kg":
+        if data_type == KnowledgeEvaluationType.LP:
             # self.kg_feat now have only train data, to prevent data leakage
             self.kg_feat = next_df[0]
         return next_ds

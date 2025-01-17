@@ -8,11 +8,8 @@
 # @Email  : chenyuwuxinn@gmail.com, houyupeng@ruc.edu.cn, zhlin@ruc.edu.cn
 
 import argparse
-import warnings
 
 from hopwise.quick_start import run
-
-warnings.filterwarnings("ignore")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

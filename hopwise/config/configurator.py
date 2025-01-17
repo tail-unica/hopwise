@@ -134,8 +134,6 @@ class Config:
                         value = True
                     elif param.lower() == "false":
                         value = False
-                    elif param.lower() == "none":
-                        value = None
                     else:
                         value = param
                 else:
@@ -184,9 +182,9 @@ class Config:
 
     def _merge_external_config_dict(self):
         external_config_dict = dict()
-        self.deep_dict_update(external_config_dict, self._convert_config_dict(self.file_config_dict))
-        self.deep_dict_update(external_config_dict, self._convert_config_dict(self.variable_config_dict))
-        self.deep_dict_update(external_config_dict, self._convert_config_dict(self.cmd_config_dict))
+        self.deep_dict_update(external_config_dict, self.file_config_dict)
+        self.deep_dict_update(external_config_dict, self.variable_config_dict)
+        self.deep_dict_update(external_config_dict, self.cmd_config_dict)
         self.external_config_dict = external_config_dict
 
     def _get_model_and_dataset(self, model, dataset):
@@ -381,7 +379,7 @@ class Config:
             raise TypeError(f"The topk [{topk}] must be a integer, list")
 
         # Knowledge Graph
-        if "metrics_kg" in self.final_config_dict:
+        if self.final_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE:
             metrics_kg = self.final_config_dict["metrics_kg"]
             if isinstance(metrics_kg, str):
                 self.final_config_dict["metrics_kg"] = [metrics_kg]
@@ -397,19 +395,11 @@ class Config:
 
             self.final_config_dict["eval_type"] = eval_type_kg.pop()
 
-            assert (
-                "valid_metric_kg" in self.file_config_dict
-            ), "valid_metric_kg should be in the config file if metrics_kg is specified!."
-
             if "valid_metrics_kg" in self.final_config_dict:
                 valid_metric_kg = self.final_config_dict["valid_metric_kg"].split("@")[0]
                 self.final_config_dict["valid_metric_bigger_kg"] = (
                     False if valid_metric_kg.lower() in smaller_metrics else True
                 )
-
-            assert (
-                "topk_kg" in self.file_config_dict
-            ), "topk_kg should be in the config file if metrics_kg is specified!."
 
             topk_kg = self.final_config_dict["topk_kg"]
             if isinstance(topk_kg, (int, list)):
@@ -423,6 +413,12 @@ class Config:
                 self.final_config_dict["topk_kg"] = topk_kg
             else:
                 raise TypeError(f"The topk_kg [{topk_kg}] must be a integer, list")
+
+            default_eval_lp_args = {
+                "knowledge_split": None,
+                "knowledge_group_by": None,
+            }
+            self.deep_dict_update(default_eval_lp_args, self.final_config_dict["eval_lp_args"])
 
         if "additional_feat_suffix" in self.final_config_dict:
             ad_suf = self.final_config_dict["additional_feat_suffix"]
@@ -459,8 +455,6 @@ class Config:
 
         # eval_args checking
         default_eval_args = {
-            "knowledge_split": None,
-            "knowledge_group_by": None,
             "split": {"RS": [0.8, 0.1, 0.1]},
             "order": "RO",
             "group_by": "user",
@@ -470,20 +464,6 @@ class Config:
             raise ValueError(f"eval_args:[{self.final_config_dict['eval_args']}] should be a dict.")
 
         self.deep_dict_update(default_eval_args, self.final_config_dict["eval_args"])
-
-        check_metrics_kg_exists = (
-            "metrics_kg" in self.final_config_dict and self.final_config_dict["metrics_kg"] is not None
-        )
-        check_topk_kg_exists = "topk_kg" in self.final_config_dict and self.final_config_dict["topk_kg"] is not None
-        check_knowledge_split_arg_exists = (
-            "knowledge_split" in self.final_config_dict["eval_args"]
-            and self.final_config_dict["eval_args"]["knowledge_split"] is not None
-        )
-
-        if check_knowledge_split_arg_exists:
-            assert (
-                check_metrics_kg_exists and check_topk_kg_exists
-            ), "metrics_kg and topk_kg should be in the config file if knowledge_split in eval_args is specified!."
 
         mode = default_eval_args["mode"]
         # backward compatible

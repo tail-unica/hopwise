@@ -30,7 +30,6 @@ from tqdm import tqdm
 
 from hopwise.data.dataloader import FullSortEvalDataLoader
 from hopwise.data.interaction import Interaction
-from hopwise.data.utils import REC_DATA_LENGTH
 from hopwise.evaluator import Collector, Collector_KG, Evaluator, Evaluator_KG
 from hopwise.utils import (
     EvaluatorType,
@@ -45,6 +44,7 @@ from hopwise.utils import (
     get_tensorboard,
     set_color,
 )
+from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
 class AbstractTrainer:
@@ -407,12 +407,7 @@ class Trainer(AbstractTrainer):
             )
 
             # eval
-            if not isinstance(valid_data, list):
-                if self.eval_step <= 0 or not valid_data:
-                    if saved:
-                        self._save_checkpoint(epoch_idx, verbose=verbose)
-                    continue
-            elif self.eval_step <= 0 or not valid_data[0] or not valid_data[1]:
+            if self.eval_step <= 0 or not valid_data:
                 if saved:
                     self._save_checkpoint(epoch_idx, verbose=verbose)
                 continue
@@ -434,7 +429,7 @@ class Trainer(AbstractTrainer):
                 )
                 valid_end_time = time()
                 valid_score_output = (
-                    set_color("epoch %d ", "green")
+                    set_color("epoch %d evaluating", "green")
                     + " ["
                     + set_color("time", "blue")
                     + ": %.2fs, "
@@ -614,7 +609,6 @@ class KGTrainer(Trainer):
 
     def __init__(self, config, model):
         super().__init__(config, model)
-        self.eval_collector = Collector(config)
         self.train_rec_step = config["train_rec_step"]
         self.train_kg_step = config["train_kg_step"]
         self.tail_tensor = None
@@ -663,12 +657,15 @@ class KGTrainer(Trainer):
             valid_result_kg = self.evaluate(valid_data_kg, load_best_model=False, show_progress=show_progress)
             valid_score_inter = calculate_valid_score(valid_result_inter, self.valid_metric)
             valid_score_kg = calculate_valid_score(valid_result_kg, self.valid_metric)
-            return valid_score_inter, valid_result_inter, valid_score_kg, valid_result_kg
+            return {
+                KnowledgeEvaluationType.REC: [valid_score_inter, valid_result_inter],
+                KnowledgeEvaluationType.LP: [valid_score_kg, valid_result_kg],
+            }
         else:
             valid_data_inter = valid_data
             valid_result_inter = self.evaluate(valid_data_inter, load_best_model=False, show_progress=show_progress)
             valid_score_inter = calculate_valid_score(valid_result_inter, self.valid_metric)
-            return valid_score_inter, valid_result_inter
+            return {KnowledgeEvaluationType.REC: [valid_score_inter, valid_result_inter]}
 
     @torch.no_grad()
     def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
@@ -699,12 +696,12 @@ class KGTrainer(Trainer):
         self.model.eval()
 
         # Evaluate on test set data if kg data available
-        if isinstance(eval_data, list) and len(eval_data) == REC_DATA_LENGTH:
+        if isinstance(eval_data, list):
             results = dict()
-            tasks = ["Recommendation", "KG"]
+            tasks = [KnowledgeEvaluationType.REC, KnowledgeEvaluationType.LP]
             # then the first part is for recommendation and the second part for kg
             for task, data in zip(tasks, eval_data):
-                if task == "Recommendation":
+                if task == KnowledgeEvaluationType.REC:
                     eval_collector = self.eval_collector
                     evaluator = self.evaluator
                 else:
@@ -712,11 +709,12 @@ class KGTrainer(Trainer):
                     evaluator = self.evaluator_kg
 
                 if isinstance(data, FullSortEvalDataLoader):
-                    eval_func = self._full_sort_batch_eval if not data.is_a_kg else self._full_sort_batch_eval_kg
+                    eval_func = self._full_sort_batch_fn
                     if self.item_tensor is None:
                         self.item_tensor = data._dataset.get_item_feature().to(self.device)
                 else:
                     eval_func = self._neg_sample_batch_eval
+
                 if self.config["eval_type"] == EvaluatorType.RANKING:
                     self.tot_item_num = data._dataset.item_num
 
@@ -728,7 +726,9 @@ class KGTrainer(Trainer):
                         data,
                         total=len(data),
                         ncols=100,
-                        desc=set_color("Evaluate", "pink") if not data.is_a_kg else set_color("Evaluate KG", "pink"),
+                        desc=set_color("Evaluate", "pink")
+                        if task != KnowledgeEvaluationType.LP
+                        else set_color(f"Evaluate {task}", "pink"),
                     )
                     if show_progress
                     else data
@@ -737,7 +737,7 @@ class KGTrainer(Trainer):
                 for batch_idx, batched_data in enumerate(iter_data):
                     num_sample += len(batched_data)
                     _, history_index, _, _ = batched_data
-                    interaction, scores, positive_u, positive_i = eval_func(batched_data)
+                    interaction, scores, positive_u, positive_i = eval_func(batched_data, task)
                     if self.gpu_available and show_progress:
                         iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
                     eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i, history_index)
@@ -752,13 +752,14 @@ class KGTrainer(Trainer):
         else:
             # Evaluate on Validation data or test data if not kg split
             if isinstance(eval_data, FullSortEvalDataLoader):
+                eval_func = self._full_sort_batch_fn
                 if eval_data.is_a_kg:
+                    task = KnowledgeEvaluationType.LP
                     self.tot_entity_num = eval_data.heads_num
-                    eval_func = self._full_sort_batch_eval_kg
                     eval_collector = self.eval_collector_kg
                     evaluator = self.evaluator_kg
                 else:
-                    eval_func = self._full_sort_batch_eval
+                    task = KnowledgeEvaluationType.REC
                     eval_collector = self.eval_collector
                     evaluator = self.evaluator
 
@@ -779,7 +780,9 @@ class KGTrainer(Trainer):
                     eval_data,
                     total=len(eval_data),
                     ncols=100,
-                    desc=set_color("Evaluate", "pink") if not eval_data.is_a_kg else set_color("Evaluate KG", "pink"),
+                    desc=set_color("Evaluate", "pink")
+                    if task != KnowledgeEvaluationType.LP
+                    else set_color(f"Evaluate {task}", "pink"),
                 )
                 if show_progress
                 else eval_data
@@ -789,7 +792,7 @@ class KGTrainer(Trainer):
             for batch_idx, batched_data in enumerate(iter_data):
                 num_sample += len(batched_data)
                 _, history_index, _, _ = batched_data
-                interaction, scores, positive_u, positive_i = eval_func(batched_data)
+                interaction, scores, positive_u, positive_i = eval_func(batched_data, task)
                 if self.gpu_available and show_progress:
                     iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
                 eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i, history_index)
@@ -799,7 +802,6 @@ class KGTrainer(Trainer):
             if not self.config["single_spec"]:
                 result = self._map_reduce(result, num_sample)
             self.wandblogger.log_eval_metrics(result, head="eval")
-
             return result
 
     def fit(
@@ -868,20 +870,11 @@ class KGTrainer(Trainer):
 
                 best_valid = defaultdict(dict)
 
-                if len(return_data) == REC_DATA_LENGTH:
-                    #  then is returning only inter scores and results
-                    valid_score, valid_result = return_data
-                    valid_epoch_data = {"recommendation": [valid_score, valid_result]}
-                else:
+                if KnowledgeEvaluationType.LP in return_data:
                     kg_valid_scores = list()
                     kg_valid_results = list()
-                    valid_inter_score, valid_inter_result, valid_kg_score, valid_kg_result = return_data
-                    valid_epoch_data = {
-                        "recommendation": [valid_inter_score, valid_inter_result],
-                        "kg": [valid_kg_score, valid_kg_result],
-                    }
 
-                for task, (valid_score, valid_result) in valid_epoch_data.items():
+                for task, (valid_score, valid_result) in return_data.items():
                     # TODO
                     #  - add early stopping for KG
                     (
@@ -928,44 +921,61 @@ class KGTrainer(Trainer):
                             self.logger.info(stop_output)
                         break
 
-                    if task == "kg":
+                    if task == KnowledgeEvaluationType.LP:
                         # Track valid scores and results
                         kg_valid_scores.append(valid_score)
                         kg_valid_results.append(valid_result)
                         # Track best valid scores and results
-                        best_valid["score"]["KG"] = max(kg_valid_scores)
-                        best_valid["result"]["KG"] = kg_valid_results[kg_valid_scores.index(best_valid["score"]["KG"])]
+                        best_valid["score"][KnowledgeEvaluationType.LP] = max(kg_valid_scores)
+                        best_valid["result"][KnowledgeEvaluationType.LP] = kg_valid_results[
+                            kg_valid_scores.index(best_valid["score"][KnowledgeEvaluationType.LP])
+                        ]
 
                     valid_step += 1
 
-        best_valid["score"]["Recommendation"] = self.best_valid_score
-        best_valid["result"]["Recommendation"] = self.best_valid_result
+        best_valid["score"][KnowledgeEvaluationType.REC] = self.best_valid_score
+        best_valid["result"][KnowledgeEvaluationType.REC] = self.best_valid_result
 
         self._add_hparam_to_tensorboard(self.best_valid_score)
         return best_valid["score"], best_valid["result"]
 
-    def _full_sort_batch_eval_kg(self, batched_data):
+    def _full_sort_batch_fn(self, batched_data, task):
+        if task == KnowledgeEvaluationType.REC:
+            return self._full_sort_batch_eval(
+                batched_data, self.model.full_sort_predict, self.model.predict, self.item_tensor, self.tot_item_num
+            )
+        else:
+            return self._full_sort_batch_eval(
+                batched_data,
+                self.model.full_sort_predict_kg,
+                self.model.predict_kg,
+                self.tail_tensor,
+                self.tot_entity_num,
+            )
+
+    def _full_sort_batch_eval(self, batched_data, full_sort_predict_fn, predict_fn, column_tensor, tot_column_num):
+        # in the case of recommendation, positive_h and positive_t are the user and item ids
         interaction, history_index, positive_h, positive_t = batched_data
         try:
-            scores = self.model.full_sort_predict_kg(interaction.to(self.device))
+            scores = full_sort_predict_fn(interaction.to(self.device))
         except NotImplementedError:
             inter_len = len(interaction)
-            new_inter = interaction.to(self.device).repeat_interleave(self.tot_entity_num)
+            new_inter = interaction.to(self.device).repeat_interleave(tot_column_num)
             batch_size = len(new_inter)
-            new_inter.update(self.tail_tensor.repeat(inter_len))
+            new_inter.update(column_tensor.repeat(inter_len))
             if batch_size <= self.test_batch_size:
-                scores = self.model.predict_kg(new_inter)
+                scores = predict_fn(new_inter)
             else:
-                scores = self._split_predict_kg(new_inter, batch_size)
+                scores = self._split_predict_fn(new_inter, batch_size, predict_fn)
 
-        scores = scores.view(-1, self.tot_entity_num)
+        scores = scores.view(-1, tot_column_num)
 
         scores[:, 0] = -np.inf
         if history_index is not None:
             scores[history_index] = -np.inf
         return interaction, scores, positive_h, positive_t
 
-    def _split_predict_kg(self, interaction, batch_size):
+    def _split_predict_fn(self, interaction, batch_size, predict_fn):
         split_interaction = dict()
         for key, tensor in interaction.interaction.items():
             split_interaction[key] = tensor.split(self.test_batch_size, dim=0)
@@ -975,7 +985,7 @@ class KGTrainer(Trainer):
             current_interaction = dict()
             for key, split_tensor in split_interaction.items():
                 current_interaction[key] = split_tensor[i]
-            result = self.model.predict_kg(Interaction(current_interaction).to(self.device))
+            result = predict_fn(Interaction(current_interaction).to(self.device))
             if len(result.shape) == 0:
                 result = result.unsqueeze(0)
             result_list.append(result)

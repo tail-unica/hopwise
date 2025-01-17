@@ -41,6 +41,22 @@ class KGDataLoaderState(Enum):
     KG = 3
 
 
+class KnowledgeEvaluationType(Enum):
+    """Type of evaluation task: Recommendation or Link Prediction
+
+    - ``REC``: Evaluate on Recommendation
+    - ``LP``:  Evaluate on Link Prediction
+    """
+
+    REC = 1
+    LP = 2
+
+    def __str__(self):
+        _descriptions = {KnowledgeEvaluationType.REC: "recommendation", KnowledgeEvaluationType.LP: "link prediction"}
+
+        return _descriptions[self]
+
+
 class EvaluatorType(Enum):
     """Type for evaluation metrics.
 

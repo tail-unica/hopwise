@@ -69,7 +69,6 @@ def ray_tune(args):
                 low, high = para_value.strip().split(",")
                 config[para_name] = tune.loguniform(math.exp(float(low)), math.exp(float(high)))
             else:
-                print(para_name)
                 raise ValueError(f"Illegal param type [{para_type}]")
     # choose different schedulers to use different tuning optimization algorithms
     # For details, please refer to Ray's official website https://docs.ray.io
