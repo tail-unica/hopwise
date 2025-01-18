@@ -90,3 +90,15 @@ class Register:
         if hasattr(self, key):
             return getattr(self, key)
         return False
+
+
+class Register_KG(Register):
+    """Register module load the registry according to the metrics in config.
+    It is a member of DataCollector.
+    The DataCollector collect the resource that need for Evaluator under the guidance of Register
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.metrics = [metric.lower() for metric in self.config["metrics_lp"]]
+        self._build_register()

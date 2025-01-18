@@ -141,6 +141,20 @@ class RotatE(KnowledgeRecommender):
 
         return self.forward(user_re, user_im, rec_r_e, item_re, item_im)
 
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_re = self.entity_embedding(head)
+        head_im = self.entity_embedding_im(head)
+        tail_re = self.entity_embedding(tail)
+        tail_im = self.entity_embedding_im(tail)
+
+        rec_r_e = self.relation_embedding(relation)
+
+        return self.forward(head_re, head_im, rec_r_e, tail_re, tail_im)
+
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         relation_user = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
@@ -167,6 +181,36 @@ class RotatE(KnowledgeRecommender):
 
         re_score = (rel_re * user_re - rel_im * user_im) - item_re
         im_score = (rel_re * user_im + rel_im * user_re) - item_im
+        complex_score = torch.stack([re_score, im_score], dim=3)
+        score = torch.linalg.vector_norm(complex_score, dim=(2, 3))
+
+        return self.margin - score
+
+    def full_sort_predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+
+        head_re = self.entity_embedding(head)
+        head_im = self.entity_embedding_im(head)
+
+        tail_re = self.entity_embedding.weight
+        tail_im = self.entity_embedding_im.weight
+
+        rel_theta = self.relation_embedding(relation)
+
+        rel_re, rel_im = torch.cos(rel_theta), torch.sin(rel_theta)
+
+        head_re = head_re.unsqueeze(1).expand(-1, self.entity_embedding.weight.shape[0], -1)
+        head_im = head_im.unsqueeze(1).expand(-1, self.entity_embedding.weight.shape[0], -1)
+
+        rel_re = rel_re.unsqueeze(1).expand(-1, self.entity_embedding.weight.shape[0], -1)
+        rel_im = rel_im.unsqueeze(1).expand(-1, self.entity_embedding.weight.shape[0], -1)
+
+        tail_re = tail_re.unsqueeze(0)
+        tail_im = tail_im.unsqueeze(0)
+
+        re_score = (rel_re * head_re - rel_im * head_im) - tail_re
+        im_score = (rel_re * head_im + rel_im * head_re) - tail_im
         complex_score = torch.stack([re_score, im_score], dim=3)
         score = torch.linalg.vector_norm(complex_score, dim=(2, 3))
 

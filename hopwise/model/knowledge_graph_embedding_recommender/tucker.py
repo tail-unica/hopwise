@@ -132,8 +132,19 @@ class TuckER(KnowledgeRecommender):
 
         score = self.forward(user_e, r_e, self.users_embeddings)
 
-        score = score[:, self.n_users :]
         score = score[torch.arange(user.size(0)), item]
+        return score
+
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_e = self.entities_embeddings(head)
+        r_e = self.relations_embeddings(relation)
+
+        score = self.forward(head_e, r_e, self.entities_embeddings)
+        score = score[torch.arange(head.size(0)), tail]
         return score
 
     def full_sort_predict(self, interaction):
@@ -145,3 +156,13 @@ class TuckER(KnowledgeRecommender):
         score = self.forward(user_e, r_e, self.users_embeddings)
         score = score[:, self.n_users :]
         return score
+
+    # def full_sort_predict_kg(self, interaction):
+    #     head = interaction[self.HEAD_ENTITY_ID]
+    #     relation = interaction[self.RELATION_ID]
+
+    #     head_e = self.entities_embeddings(head)
+    #     r_e = self.relations_embeddings(relation)
+
+    #     score = self.forward(head_e, r_e, self.entities_embeddings)
+    #     return score

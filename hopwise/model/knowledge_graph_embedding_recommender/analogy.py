@@ -241,3 +241,58 @@ class Analogy(KnowledgeRecommender):
             user_re_e * (rec_r_re_e * all_item_re_e + rec_r_im_e * all_item_im_e)
             + user_im_e * (rec_r_re_e * all_item_im_e - rec_r_im_e * all_item_re_e)
         ).sum(dim=-1)
+
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_e = self.entity_embedding(head)
+        head_re_e = self.entity_re_embedding(head)
+        head_im_e = self.entity_im_embedding(head)
+
+        r_e = self.relation_embedding(relation)
+        r_re_e = self.relation_re_embedding(relation)
+        r_im_e = self.relation_im_embedding(relation)
+
+        tail_e = self.entity_embedding(tail)
+        tail_re_e = self.entity_re_embedding(tail)
+        tail_im_e = self.entity_im_embedding(tail)
+
+        return self.forward(head_e, head_re_e, head_im_e, r_e, r_re_e, r_im_e, tail_e, tail_re_e, tail_im_e)
+
+    def full_sort_predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        head_e = self.entity_embedding(head)
+        head_re_e = self.entity_re_embedding(head)
+        head_im_e = self.entity_im_embedding(head)
+
+        rec_r_e = self.relation_embedding(relation)
+        rec_r_re_e = self.relation_re_embedding(relation)
+        rec_r_im_e = self.relation_im_embedding(relation)
+        rec_r_e = rec_r_e.expand_as(head_e)
+        rec_r_re_e = rec_r_re_e.expand_as(head_e)
+        rec_r_im_e = rec_r_im_e.expand_as(head_e)
+
+        entity_indices = torch.tensor(range(self.n_entities)).to(self.device)
+        all_entities_e = self.entity_embedding.weight[entity_indices]
+        all_entities_re_e = self.entity_re_embedding.weight[entity_indices]
+        all_entities_im_e = self.entity_im_embedding.weight[entity_indices]
+
+        head_e = head_e.unsqueeze(1).expand(-1, all_entities_e.shape[0], -1)
+        head_re_e = head_re_e.unsqueeze(1).expand(-1, all_entities_e.shape[0], -1)
+        head_im_e = head_im_e.unsqueeze(1).expand(-1, all_entities_e.shape[0], -1)
+
+        rec_r_e = rec_r_e.unsqueeze(1).expand(-1, all_entities_e.shape[0], -1)
+        rec_r_re_e = rec_r_re_e.unsqueeze(1).expand(-1, all_entities_e.shape[0], -1)
+        rec_r_im_e = rec_r_im_e.unsqueeze(1).expand(-1, all_entities_e.shape[0], -1)
+
+        all_entities_e = all_entities_e.unsqueeze(0)
+        all_entities_re_e = all_entities_re_e.unsqueeze(0)
+        all_entities_im_e = all_entities_im_e.unsqueeze(0)
+
+        return (head_e * rec_r_e * all_entities_e).sum(dim=-1) + (
+            head_re_e * (rec_r_re_e * all_entities_re_e + rec_r_im_e * all_entities_im_e)
+            + head_im_e * (rec_r_re_e * all_entities_im_e - rec_r_im_e * all_entities_re_e)
+        ).sum(dim=-1)

@@ -89,9 +89,9 @@ class KnowledgeBasedDataLoader:
                 - :obj:`~hopwise.utils.enum_type.KGDataLoaderState.KG`
                 - :obj:`~hopwise.utils.enum_type.KGDataLoaderState.RSKG`
 
-            In the first state, this dataloader would only return the triplets with negative
+            In the first state, this dataloader would only return the user-item interaction.
+            In the second state, this dataloader would only return the triplets with negative
             examples in a knowledge graph.
-            In the second state, this dataloader would only return the user-item interaction.
             In the last state, this dataloader would return both knowledge graph information
             and user-item interaction information.
     """  # noqa: E501

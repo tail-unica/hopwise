@@ -143,3 +143,14 @@ class ConvKB(KnowledgeRecommender):
         items_e = self.entities_embeddings(items)
 
         return self.forward(users_e, relations_e, items_e)
+
+    def predict_kg(self, interaction):
+        heads = interaction[self.HEAD_ENTITY_ID]
+        relations = interaction[self.RELATION_ID]
+        tails = interaction[self.TAIL_ENTITY_ID]
+
+        heads_e = self.entities_embeddings(heads)
+        relations_e = self.relations_embeddings(relations)
+        tails_e = self.entities_embeddings(tails)
+
+        return self.forward(heads_e, relations_e, tails_e)

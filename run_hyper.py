@@ -43,7 +43,7 @@ def ray_tune(args):
     config_file_list = args.config_files.strip().split(" ") if args.config_files else None
     config_file_list = [os.path.join(os.getcwd(), file) for file in config_file_list] if args.config_files else None
     params_file = os.path.join(os.getcwd(), args.params_file) if args.params_file else None
-    ray.init()
+    ray.init(address="auto")
     tune.register_trainable("train_func", objective_function)
     config = {}
     with open(params_file) as fp:
@@ -82,10 +82,10 @@ def ray_tune(args):
         log_to_file=args.output_file,
         scheduler=scheduler,
         local_dir=local_dir,
-        resources_per_trial={"gpu": 1},
+        resources_per_trial={"gpu": 0},
     )
 
-    best_trial = result.get_best_trial("recall@10", "max", "last")
+    best_trial = result.get_best_trial("ndcg@10", "max", "last")
     print("best params: ", best_trial.config)
     print("best result: ", best_trial.last_result)
 
@@ -95,10 +95,9 @@ if __name__ == "__main__":
     parser.add_argument("--config_files", type=str, default=None, help="fixed config files")
     parser.add_argument("--params_file", type=str, default=None, help="parameters file")
     parser.add_argument("--output_file", type=str, default="hyper_example.result", help="output file")
-    parser.add_argument("--display_file", type=str, default=None, help="visualization file")
+    parser.add_argument("--display_file", type=str, default=True, help="visualization file")
     parser.add_argument("--tool", type=str, default="Hyperopt", help="tuning tool")
     args, _ = parser.parse_known_args()
-
     if args.tool == "Hyperopt":
         hyperopt_tune(args)
     elif args.tool == "Ray":

@@ -91,8 +91,8 @@ class TransD(KnowledgeRecommender):
         """We note that :math:`p_r(e)_i = e^p^Te \\times r^p_i + e_i` which is
         more efficient to compute than the matrix formulation in the original
         paper."""
-        proj_e = rel_vect * (ent * ent_vect).sum(dim=1).view(ent.shape[0], 1)
-        return proj_e + ent[:, : self.embedding_size]
+        proj_e = rel_vect * ((ent * ent_vect).sum(dim=1).unsqueeze(1))
+        return proj_e + ent
 
     def calculate_loss(self, interaction):
         user = interaction[self.USER_ID]
@@ -153,13 +153,32 @@ class TransD(KnowledgeRecommender):
         score = -torch.norm(user_projection + rec_r_e - item_projection, p=2, dim=1)
         return score
 
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_e = self.entity_embedding(head)
+        head_e_vec = self.entity_vec_embedding(head)
+
+        tail_e = self.entity_embedding(tail)
+        tail_e_vec = self.entity_vec_embedding(tail)
+
+        rec_r_e = self.relation_embedding(relation)
+        rec_r_e_vec = self.relation_vec_embedding(relation)
+
+        head_projection = self.forward(head_e, head_e_vec, rec_r_e_vec)
+        tail_projection = self.forward(tail_e, tail_e_vec, rec_r_e_vec)
+
+        score = -torch.norm(head_projection + rec_r_e - tail_projection, p=2, dim=1)
+        return score
+
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         user_e = self.user_embedding(user)
         user_e_vec = self.user_vec_embedding(user)
 
         rec_r_e = self.relation_embedding.weight[-1]
-
         rec_r_e_vec = self.relation_vec_embedding.weight[-1]
 
         users_projection = self.forward(user_e, user_e_vec, rec_r_e_vec)
@@ -167,9 +186,32 @@ class TransD(KnowledgeRecommender):
         item_indices = torch.tensor(range(self.n_items)).to(self.device)
         all_item_e = self.entity_embedding.weight[item_indices]
         all_item_e_vec = self.entity_vec_embedding.weight[item_indices]
+
         items_projection = self.forward(all_item_e, all_item_e_vec, rec_r_e_vec)
 
         h_r = (users_projection + rec_r_e).unsqueeze(1).expand(-1, items_projection.shape[0], -1)
         t = items_projection.unsqueeze(0)
 
         return -torch.norm(h_r - t, p=2, dim=2)
+
+    def full_sort_predict_kg(self, interaction):
+        user = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+
+        head_e = self.entity_embedding(user)
+        head_e_vec = self.entity_embedding(user)
+
+        rec_r_e = self.relation_embedding(relation)
+        rec_r_e_vec = self.relation_vec_embedding(relation)
+
+        heads_projection = self.forward(head_e, head_e_vec, rec_r_e_vec)
+
+        all_tail_e = self.entity_embedding.weight
+        all_tail_e_vec = self.entity_vec_embedding.weight
+
+        rec_r_e_vec = rec_r_e_vec.unsqueeze(1)
+        tails_projection = self.forward(all_tail_e, all_tail_e_vec, rec_r_e_vec)
+
+        h_r = (heads_projection + rec_r_e).unsqueeze(1).expand(-1, tails_projection.shape[1], -1)
+
+        return -torch.norm(h_r - tails_projection, p=2, dim=2)

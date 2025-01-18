@@ -11,6 +11,7 @@
 ##########################
 """
 
+import copy
 import os
 import sys
 from collections import Counter
@@ -21,7 +22,9 @@ import torch
 from scipy.sparse import coo_matrix
 
 from hopwise.data.dataset import Dataset
+from hopwise.data.interaction import Interaction
 from hopwise.utils import FeatureSource, FeatureType, set_color
+from hopwise.utils.enum_type import KnowledgeEvaluationType
 from hopwise.utils.url import decide_download, download_url, extract_zip
 
 
@@ -67,10 +70,11 @@ class KnowledgeBasedDataset(Dataset):
 
     def __init__(self, config):
         super().__init__(config)
+        self.tail_field = None
+        self.is_kg_data = None
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
-
         self.head_entity_field = self.config["HEAD_ENTITY_ID_FIELD"]
         self.tail_entity_field = self.config["TAIL_ENTITY_ID_FIELD"]
         self.relation_field = self.config["RELATION_ID_FIELD"]
@@ -111,7 +115,10 @@ class KnowledgeBasedDataset(Dataset):
         if entity_kg_num_interval:
             head_entity_kg_num = Counter(self.kg_feat[self.head_entity_field].values)
             tail_entity_kg_num = Counter(self.kg_feat[self.tail_entity_field].values)
+
+            self.head_entity_kg_num = head_entity_kg_num
             entity_kg_num = head_entity_kg_num + tail_entity_kg_num
+        self.entity_kg_num = entity_kg_num
         relation_kg_num = Counter(self.kg_feat[self.relation_field].values) if relation_kg_num_interval else Counter()
 
         while True:
@@ -152,6 +159,201 @@ class KnowledgeBasedDataset(Dataset):
             dropped_index = self.kg_feat.index[dropped_kg]
             self.logger.debug(f"[{len(dropped_index)}] dropped triples.")
             self.kg_feat.drop(dropped_index, inplace=True)
+
+    def build(self):
+        """Processing dataset according to evaluation setting, including Group, Order and Split.
+        See :class:`~hopwise.config.eval_setting.EvalSetting` for details.
+
+        Returns:
+            list: List of built :class:`Dataset`.
+        """
+        self._change_feat_format()
+
+        if self.benchmark_filename_list is not None:
+            self._drop_unused_col()
+            cumsum = list(np.cumsum(self.file_size_list))
+            datasets = [self.copy(self.inter_feat[start:end]) for start, end in zip([0] + cumsum[:-1], cumsum)]
+            return datasets
+
+        # ordering
+        ordering_args = self.config["eval_args"]["order"]
+        if ordering_args == "RO":
+            self.shuffle()
+        elif ordering_args == "TO":
+            self.sort(by=self.time_field)
+        else:
+            raise NotImplementedError("The ordering_method [{ordering_args}] has not been implemented.")
+
+        # splitting & grouping
+        split_args = self.config["eval_args"]["split"]
+        knowledge_split_args = self.config["eval_lp_args"]["knowledge_split"]
+
+        if knowledge_split_args is not None:
+            print("Splitting the knowledge graph")
+            if not isinstance(knowledge_split_args, dict):
+                raise ValueError(f"The knowledge_split_args [{knowledge_split_args}] should be a dict.")
+            else:
+                knowledge_split_mode = list(knowledge_split_args.keys())[0]
+                assert len(knowledge_split_args.keys()) == 1
+                knowledge_group_by = self.config["eval_lp_args"]["knowledge_group_by"]
+        else:
+            knowledge_split_mode = None
+            knowledge_group_by = None
+
+        # split_args is for interaction data
+        if split_args is None:
+            raise ValueError("The split_args in eval_args should not be None.")
+        if not isinstance(split_args, dict):
+            raise ValueError(f"The split_args [{split_args}] should be a dict.")
+
+        split_mode = list(split_args.keys())[0]
+
+        assert len(split_args.keys()) == 1
+
+        group_by = self.config["eval_args"]["group_by"]
+
+        datasets = dict()
+
+        if knowledge_split_mode == "RS":
+            # Manage knowledge graph split
+            if not isinstance(knowledge_split_args["RS"], list):
+                raise ValueError(
+                    f'The value of "RS" in knowledge_split_args [{knowledge_split_args}] should be a list.'
+                )
+            if knowledge_group_by is None:
+                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
+                    knowledge_split_args["RS"],
+                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
+                    group_by=None,
+                )
+            elif knowledge_group_by == "head":
+                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
+                    knowledge_split_args["RS"],
+                    data={"data": self.kg_feat, "name": "kg"},
+                    group_by=self.head_entity_field,
+                )
+            elif knowledge_group_by == "tail":
+                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
+                    knowledge_split_args["RS"],
+                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
+                    group_by=self.tail_entity_field,
+                )
+            elif knowledge_group_by == "relation":
+                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
+                    knowledge_split_args["RS"],
+                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
+                    group_by=self.relation_field,
+                )
+            else:
+                raise NotImplementedError(f"The knowledge grouping method [{group_by}] has not been implemented.")
+
+        if split_mode == "RS":
+            # Manage interaction split
+            if not isinstance(split_args["RS"], list):
+                raise ValueError(f'The value of "RS" in split_args [{split_args}] should be a list.')
+            if group_by is None:
+                datasets[KnowledgeEvaluationType.REC] = self.split_by_ratio(
+                    split_args["RS"],
+                    data={"data": self.inter_feat, "name": KnowledgeEvaluationType.REC},
+                    group_by=None,
+                )
+            elif group_by.lower() == "user":
+                datasets[KnowledgeEvaluationType.REC] = self.split_by_ratio(
+                    split_args["RS"],
+                    data={"data": self.inter_feat, "name": KnowledgeEvaluationType.REC},
+                    group_by=self.uid_field,
+                )
+            else:
+                raise NotImplementedError(f"The grouping method [{group_by}] has not been implemented.")
+        elif split_mode == "LS":
+            datasets[KnowledgeEvaluationType.REC] = self.leave_one_out(
+                group_by=self.uid_field, leave_one_mode=split_args["LS"]
+            )
+        else:
+            raise NotImplementedError(f"The splitting_method [{split_mode}] has not been implemented.")
+
+        return datasets[KnowledgeEvaluationType.REC] if KnowledgeEvaluationType.LP not in datasets else datasets
+
+    def copy(self, new_inter_feat, data_type):
+        """Given a new interaction feature, return a new :class:`Dataset` object,
+        whose interaction feature is updated with ``new_inter_feat``, and all the other attributes the same.
+
+        Args:
+            new_inter_feat (Interaction): The new interaction feature need to be updated.
+
+        Returns:
+            :class:`~Dataset`: the new :class:`~Dataset` object, whose interaction feature has been updated.
+        """
+        nxt = copy.copy(self)
+        if data_type == KnowledgeEvaluationType.REC:
+            nxt.inter_feat = new_inter_feat
+        else:
+            nxt.kg_feat = new_inter_feat
+        return nxt
+
+    def split_by_ratio(self, ratios, data, group_by=None):
+        """Split interaction records by ratios.
+
+        Args:
+            ratios (list): List of split ratios. No need to be normalized.
+            group_by (str, optional): Field name that interaction records should grouped by before splitting.
+                Defaults to ``None``
+
+        Returns:
+            list: List of :class:`~Dataset`, whose interaction features has been split.
+
+        Note:
+            Other than the first one, each part is rounded down.
+        """
+
+        self.logger.debug(f"split {data['name']} by ratios [{ratios}], group_by=[{group_by}]")
+        data_type = data["name"]
+        data = data["data"]
+
+        tot_ratio = sum(ratios)
+        ratios = [_ / tot_ratio for _ in ratios]
+        if group_by is None:
+            split_ids = self._calcu_split_ids(tot=len(data), ratios=ratios)
+            next_index = [range(start, end) for start, end in zip([0] + split_ids, split_ids + [len(data)])]
+
+        else:
+            grouped_data_feat_index = self._grouped_index(data[group_by].numpy())
+            next_index = [[] for _ in range(len(ratios))]
+            for grouped_index in grouped_data_feat_index:
+                tot_cnt = len(grouped_index)
+                split_ids = self._calcu_split_ids(tot=tot_cnt, ratios=ratios)
+                for index, start, end in zip(next_index, [0] + split_ids, split_ids + [tot_cnt]):
+                    index.extend(grouped_index[start:end])
+
+        self._drop_unused_col()
+        next_df = [data[index] for index in next_index]
+        next_ds = [self.copy(split, data_type) for split in next_df]
+
+        if data_type == KnowledgeEvaluationType.LP:
+            # self.kg_feat now have only train data, to prevent data leakage
+            self.kg_feat = next_df[0]
+        return next_ds
+
+    @property
+    def tail_num(self):
+        """Get the number of different tokens of ``self.tail_entity_field``.
+
+        Returns:
+            int: Number of different tokens of ``self.tail_entity_field``.
+        """
+        self._check_field("tail_entity_field")
+        return self.num(self.tail_entity_field)
+
+    def get_tail_feature(self):
+        """Returns:
+        Interaction: tails features
+        """
+
+        if self.tail_feat is None:
+            self._check_field("tail_entity_field")
+            return Interaction({self.tail_entity_field: torch.arange(self.tail_num)})
+        else:
+            return self.tail_feat
 
     def _filter_link(self):
         """Filter rows of :attr:`item2entity` and :attr:`entity2item`,
@@ -203,6 +405,7 @@ class KnowledgeBasedDataset(Dataset):
     def _load_data(self, token, dataset_path):
         super()._load_data(token, dataset_path)
         self.kg_feat = self._load_kg(self.dataset_name, self.dataset_path)
+        self.tail_feat = None
         self.item2entity, self.entity2item = self._load_link(self.dataset_name, self.dataset_path)
 
     def __str__(self):

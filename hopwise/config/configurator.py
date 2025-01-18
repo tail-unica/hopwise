@@ -37,7 +37,7 @@ from hopwise.utils import (
 class Config:
     """Configurator module that load the defined parameters.
 
-    Configurator module will first load the default parameters from the fixed properties in RecBole and then
+    Configurator module will first load the default parameters from the fixed properties in Hopwise and then
     load parameters from the external input.
 
     External input supports three kind of forms: config file, command line and parameter dictionaries.
@@ -377,6 +377,45 @@ class Config:
             self.final_config_dict["topk"] = topk
         else:
             raise TypeError(f"The topk [{topk}] must be a integer, list")
+
+        # Knowledge Graph
+        if (
+            self.final_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE
+            and self.final_config_dict["eval_lp_args"]["knowledge_split"] is not None
+        ):
+            metrics_kg = self.final_config_dict["metrics_lp"]
+            if isinstance(metrics_kg, str):
+                self.final_config_dict["metrics_lp"] = [metrics_kg]
+
+            eval_type_kg = set()
+            for metric in self.final_config_dict["metrics_lp"]:
+                if metric.lower() in metric_types:
+                    eval_type_kg.add(metric_types[metric.lower()])
+                else:
+                    raise NotImplementedError(f"There is no metric named '{metric}'")
+            if len(eval_type_kg) > 1:
+                raise RuntimeError("Ranking metrics and value metrics can not be used at the same time.")
+
+            self.final_config_dict["eval_type"] = eval_type_kg.pop()
+
+            if "valid_metrics_kg" in self.final_config_dict:
+                valid_metric_kg = self.final_config_dict["valid_metric_kg"].split("@")[0]
+                self.final_config_dict["valid_metric_bigger_kg"] = (
+                    False if valid_metric_kg.lower() in smaller_metrics else True
+                )
+
+            topk_kg = self.final_config_dict["topk_kg"]
+            if isinstance(topk_kg, (int, list)):
+                if isinstance(topk_kg, int):
+                    topk_kg = [topk_kg]
+                for k in topk_kg:
+                    if k <= 0:
+                        raise ValueError(
+                            f"topk_kg must be a positive integer or a list of positive integers, but get `{k}`"
+                        )
+                self.final_config_dict["topk_kg"] = topk_kg
+            else:
+                raise TypeError(f"The topk_kg [{topk_kg}] must be a integer, list")
 
         if "additional_feat_suffix" in self.final_config_dict:
             ad_suf = self.final_config_dict["additional_feat_suffix"]

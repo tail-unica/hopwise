@@ -152,6 +152,19 @@ class ConvE(KnowledgeRecommender):
         score = score[torch.arange(user.size(0)), item]
         return score
 
+    def predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        tail = interaction[self.TAIL_ENTITY_ID]
+
+        head_embeddings = self.entities_embeddings(head).view(-1, 1, self.embedding_dim1, self.embedding_dim2)
+        relation_embeddings = self.relations_embeddings(relation).view(-1, 1, self.embedding_dim1, self.embedding_dim2)
+
+        score = self.forward(head_embeddings, relation_embeddings, self.entities_embeddings, self.b_entities)
+
+        score = score[:, tail]
+        return score
+
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         relation = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
@@ -162,4 +175,15 @@ class ConvE(KnowledgeRecommender):
 
         score = self.forward(users_embedding, relation_embeddings, self.users_embeddings, self.b_users)
         score = score[:, self.n_users :]
+        return score
+
+    def full_sort_predict_kg(self, interaction):
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+
+        head_embeddings = self.entities_embeddings(head).view(-1, 1, self.embedding_dim1, self.embedding_dim2)
+        relation_embeddings = self.relations_embeddings(relation).view(-1, 1, self.embedding_dim1, self.embedding_dim2)
+
+        score = self.forward(head_embeddings, relation_embeddings, self.entities_embeddings, self.b_entities)
+
         return score
