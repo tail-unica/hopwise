@@ -613,7 +613,7 @@ class KGTrainer(Trainer):
         self.train_kg_step = config["train_kg_step"]
         self.tail_tensor = None
 
-        if config["metrics_kg"]:
+        if config["metrics_lp"]:
             self.eval_collector_kg = Collector_KG(config)
             self.evaluator_kg = Evaluator_KG(config)
 
@@ -726,9 +726,7 @@ class KGTrainer(Trainer):
                         data,
                         total=len(data),
                         ncols=100,
-                        desc=set_color("Evaluate", "pink")
-                        if task != KnowledgeEvaluationType.LP
-                        else set_color(f"Evaluate {task}", "pink"),
+                        desc=set_color(f"Evaluate {task}", "pink"),
                     )
                     if show_progress
                     else data

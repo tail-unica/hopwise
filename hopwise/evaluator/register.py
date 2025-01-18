@@ -100,5 +100,5 @@ class Register_KG(Register):
 
     def __init__(self, config):
         super().__init__(config)
-        self.metrics = [metric.lower() for metric in self.config["metrics_kg"]]
+        self.metrics = [metric.lower() for metric in self.config["metrics_lp"]]
         self._build_register()

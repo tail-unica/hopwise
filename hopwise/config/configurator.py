@@ -379,13 +379,16 @@ class Config:
             raise TypeError(f"The topk [{topk}] must be a integer, list")
 
         # Knowledge Graph
-        if self.final_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE:
-            metrics_kg = self.final_config_dict["metrics_kg"]
+        if (
+            self.final_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE
+            and self.final_config_dict["eval_lp_args"]["knowledge_split"] is not None
+        ):
+            metrics_kg = self.final_config_dict["metrics_lp"]
             if isinstance(metrics_kg, str):
-                self.final_config_dict["metrics_kg"] = [metrics_kg]
+                self.final_config_dict["metrics_lp"] = [metrics_kg]
 
             eval_type_kg = set()
-            for metric in self.final_config_dict["metrics_kg"]:
+            for metric in self.final_config_dict["metrics_lp"]:
                 if metric.lower() in metric_types:
                     eval_type_kg.add(metric_types[metric.lower()])
                 else:
@@ -413,12 +416,6 @@ class Config:
                 self.final_config_dict["topk_kg"] = topk_kg
             else:
                 raise TypeError(f"The topk_kg [{topk_kg}] must be a integer, list")
-
-            default_eval_lp_args = {
-                "knowledge_split": None,
-                "knowledge_group_by": None,
-            }
-            self.deep_dict_update(default_eval_lp_args, self.final_config_dict["eval_lp_args"])
 
         if "additional_feat_suffix" in self.final_config_dict:
             ad_suf = self.final_config_dict["additional_feat_suffix"]

@@ -188,7 +188,7 @@ class KnowledgeBasedDataset(Dataset):
         split_args = self.config["eval_args"]["split"]
         knowledge_split_args = self.config["eval_lp_args"]["knowledge_split"]
 
-        if knowledge_split_args != "None":
+        if knowledge_split_args is not None:
             print("Splitting the knowledge graph")
             if not isinstance(knowledge_split_args, dict):
                 raise ValueError(f"The knowledge_split_args [{knowledge_split_args}] should be a dict.")
@@ -220,25 +220,25 @@ class KnowledgeBasedDataset(Dataset):
                 raise ValueError(
                     f'The value of "RS" in knowledge_split_args [{knowledge_split_args}] should be a list.'
                 )
-            if knowledge_group_by is None or knowledge_group_by.lower() == "none":
+            if knowledge_group_by is None:
                 datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
                     knowledge_split_args["RS"],
                     data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
                     group_by=None,
                 )
-            elif knowledge_group_by.lower() == "head":
+            elif knowledge_group_by == "head":
                 datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
                     knowledge_split_args["RS"],
                     data={"data": self.kg_feat, "name": "kg"},
                     group_by=self.head_entity_field,
                 )
-            elif knowledge_group_by.lower() == "tail":
+            elif knowledge_group_by == "tail":
                 datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
                     knowledge_split_args["RS"],
                     data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
                     group_by=self.tail_entity_field,
                 )
-            elif knowledge_group_by.lower() == "relation":
+            elif knowledge_group_by == "relation":
                 datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
                     knowledge_split_args["RS"],
                     data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
@@ -251,7 +251,7 @@ class KnowledgeBasedDataset(Dataset):
             # Manage interaction split
             if not isinstance(split_args["RS"], list):
                 raise ValueError(f'The value of "RS" in split_args [{split_args}] should be a list.')
-            if group_by is None or group_by.lower() == "none":
+            if group_by is None:
                 datasets[KnowledgeEvaluationType.REC] = self.split_by_ratio(
                     split_args["RS"],
                     data={"data": self.inter_feat, "name": KnowledgeEvaluationType.REC},

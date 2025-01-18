@@ -163,13 +163,10 @@ def run_hopwise(
     if KnowledgeEvaluationType.REC in test_result and KnowledgeEvaluationType.LP in test_result:
         for task, result in test_result.items():
             logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
-    elif KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.REC not in test_result:
-        # edge case where we have a kg-aware model but we don't split the kg
-        best_valid_result = best_valid_result[KnowledgeEvaluationType.REC]
-        logger.info(set_color("best valid ", "yellow") + f": {format_metrics(best_valid_result)}")
-        logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
     else:
-        # if we don't use kg-aware models
+        if isinstance(best_valid_result, dict):
+            best_valid_result = best_valid_result[KnowledgeEvaluationType.REC]
+
         logger.info(set_color("best valid ", "yellow") + f": {format_metrics(best_valid_result)}")
         logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
 

@@ -46,7 +46,7 @@ class Evaluator_KG(Evaluator):
 
     def __init__(self, config):
         super().__init__(config)
-        self.metrics = [metric.lower() for metric in self.config["metrics_kg"]]
+        self.metrics = [metric.lower() for metric in self.config["metrics_lp"]]
         self.metric_class = {}
 
         for metric in self.metrics:
