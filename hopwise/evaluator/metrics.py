@@ -849,3 +849,42 @@ class Serendipity(AbstractMetric):
             key = f"{metric}@{k}"
             metric_dict[key] = round(avg_result[k - 1], self.decimal_place)
         return metric_dict
+
+
+class Novelty(AbstractMetric):
+    """
+    Paper:
+    Novelty: Inverse of popularity of the items recommended to the user
+    """
+
+    metric_type = EvaluatorType.RANKING
+    metric_need = ["rec.items", "data.count_items", "data.num_items"]
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.topk = config["topk"]
+
+    def used_info(self, dataobject):
+        """Get the matrix of recommendation items and number of items in total item set"""
+        item_matrix = dataobject.get("rec.items")
+        count_items = dataobject.get("data.count_items")
+        num_items = dataobject.get("data.num_items")
+        return item_matrix.cpu().numpy(), dict(count_items), int(num_items)
+
+    def normalize_popularity(self, item_count, num_items):
+        max_pop = max(list(item_count.values()))
+        min_pop = 0 if len(list(item_count.keys())) != num_items else min(list(item_count.values()))
+        normalized_item_count = {item: (pop - min_pop) / (max_pop - min_pop) for item, pop in item_count.items()}
+        return normalized_item_count
+
+    def calculate_metric(self, dataobject):
+        item_matrix, item_count, num_items = self.used_info(dataobject)
+        normalized_item_count = self.normalize_popularity(item_count, num_items)
+        metric_dict = {}
+        for k in self.topk:
+            novelty_score = []
+            for topk_user in item_matrix:
+                novelty_items_topk = [1 - normalized_item_count[pid] for pid in topk_user]
+                novelty_score.append(np.mean(novelty_items_topk))
+            metric_dict[f"novelty@{k}"] = round(np.mean(novelty_score), self.decimal_place)
+        return metric_dict
