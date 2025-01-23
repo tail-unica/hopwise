@@ -358,13 +358,7 @@ class Trainer(AbstractTrainer):
         self.tensorboard.add_hparams(hparam_dict, {"hparam/best_valid_result": best_valid_result})
 
     def fit(
-        self,
-        train_data,
-        valid_data=None,
-        verbose=True,
-        saved=True,
-        show_progress=False,
-        callback_fn=None,
+        self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, trial=None
     ):
         r"""Train the model based on the train data and the valid data.
 
@@ -449,7 +443,7 @@ class Trainer(AbstractTrainer):
                     self.best_valid_result = valid_result
 
                 if callback_fn:
-                    callback_fn(epoch_idx, valid_score)
+                    callback_fn(epoch_idx, valid_score, trial=trial)
 
                 if stop_flag:
                     stop_output = "Finished training, best eval result in epoch %d" % (
@@ -522,7 +516,7 @@ class Trainer(AbstractTrainer):
 
         if load_best_model:
             checkpoint_file = model_file or self.saved_model_file
-            checkpoint = torch.load(checkpoint_file, map_location=self.device)
+            checkpoint = torch.load(checkpoint_file, weights_only=False, map_location=self.device)
             self.model.load_state_dict(checkpoint["state_dict"])
             self.model.load_other_parameter(checkpoint.get("other_parameter"))
             message_output = f"Loading model structure and parameters from {checkpoint_file}"
@@ -611,6 +605,9 @@ class KGTrainer(Trainer):
         super().__init__(config, model)
         self.train_rec_step = config["train_rec_step"]
         self.train_kg_step = config["train_kg_step"]
+        self.best_valid_score_lp = -np.inf if self.valid_metric_bigger else np.inf
+        self.best_valid_result_lp = None
+        self.cur_step_lp = 0
         self.tail_tensor = None
 
         if config["metrics_lp"]:
@@ -687,7 +684,7 @@ class KGTrainer(Trainer):
 
         if load_best_model:
             checkpoint_file = model_file or self.saved_model_file
-            checkpoint = torch.load(checkpoint_file, map_location=self.device)
+            checkpoint = torch.load(checkpoint_file, weights_only=False, map_location=self.device)
             self.model.load_state_dict(checkpoint["state_dict"])
             self.model.load_other_parameter(checkpoint.get("other_parameter"))
             message_output = f"Loading model structure and parameters from {checkpoint_file}"
@@ -803,13 +800,7 @@ class KGTrainer(Trainer):
             return result
 
     def fit(
-        self,
-        train_data,
-        valid_data=None,
-        verbose=True,
-        saved=True,
-        show_progress=False,
-        callback_fn=None,
+        self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, trial=None
     ):
         r"""Train the model based on the train data and the valid data.
 
@@ -872,21 +863,39 @@ class KGTrainer(Trainer):
                     kg_valid_scores = list()
                     kg_valid_results = list()
 
+                update_flag = False
+                stop_flag = False
+
                 for task, (valid_score, valid_result) in return_data.items():
                     # TODO
                     #  - add early stopping for KG
-                    (
-                        self.best_valid_score,
-                        self.cur_step,
-                        stop_flag,
-                        update_flag,
-                    ) = early_stopping(
-                        valid_score,
-                        self.best_valid_score,
-                        self.cur_step,
-                        max_step=self.stopping_step,
-                        bigger=self.valid_metric_bigger,
-                    )
+                    if task == KnowledgeEvaluationType.REC:
+                        (
+                            self.best_valid_score,
+                            self.cur_step,
+                            stop_flag,
+                            update_flag,
+                        ) = early_stopping(
+                            valid_score,
+                            self.best_valid_score,
+                            self.cur_step,
+                            max_step=self.stopping_step,
+                            bigger=self.valid_metric_bigger,
+                        )
+                    else:
+                        (
+                            self.best_valid_score_lp,
+                            self.cur_step_lp,
+                            _,
+                            _,
+                        ) = early_stopping(
+                            valid_score,
+                            self.best_valid_score_lp,
+                            self.cur_step_lp,
+                            max_step=self.stopping_step,
+                            bigger=self.valid_metric_bigger,
+                        )
+
                     valid_end_time = time()
                     valid_score_output = (
                         set_color(f"epoch %d evaluating {task}", "green")
@@ -896,22 +905,24 @@ class KGTrainer(Trainer):
                         + set_color("valid_score", "blue")
                         + ": %f]"
                     ) % (epoch_idx, valid_end_time - valid_start_time, valid_score)
-                    valid_result_output = set_color("valid result", "blue") + ": \n" + dict2str(valid_result)
+                    valid_result_output = set_color("valid result ", "blue") + ": \n" + dict2str(valid_result)
+
                     if verbose:
                         self.logger.info(valid_score_output)
                         self.logger.info(valid_result_output)
-                    self.tensorboard.add_scalar("Valid_score", valid_score, epoch_idx)
-                    self.wandblogger.log_metrics({**valid_result, "valid_step": valid_step}, head="valid")
 
-                    if update_flag:
+                    self.tensorboard.add_scalar(f"Valid_score_{task}", valid_score, epoch_idx)
+                    self.wandblogger.log_metrics({**valid_result, f"valid_step_{task}": valid_step}, head="valid")
+
+                    if task == KnowledgeEvaluationType.REC and update_flag:
                         if saved:
                             self._save_checkpoint(epoch_idx, verbose=verbose)
                         self.best_valid_result = valid_result
 
                     if callback_fn:
-                        callback_fn(epoch_idx, valid_score)
+                        callback_fn(epoch_idx, valid_score, trial=trial)
 
-                    if stop_flag:
+                    if task == KnowledgeEvaluationType.REC and stop_flag:
                         stop_output = "Finished training, best eval result in epoch %d" % (
                             epoch_idx - self.cur_step * self.eval_step
                         )
@@ -928,7 +939,6 @@ class KGTrainer(Trainer):
                         best_valid["result"][KnowledgeEvaluationType.LP] = kg_valid_results[
                             kg_valid_scores.index(best_valid["score"][KnowledgeEvaluationType.LP])
                         ]
-
                     valid_step += 1
 
         best_valid["score"][KnowledgeEvaluationType.REC] = self.best_valid_score

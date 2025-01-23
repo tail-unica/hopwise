@@ -10,12 +10,16 @@
 import argparse
 import math
 import os
+from datetime import datetime
 
+import optuna
 import ray
+from optuna.trial import TrialState
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
 
-from hopwise.quick_start import objective_function
+from hopwise.config import Config
+from hopwise.quick_start import objective_function, objective_function_optuna
 from hopwise.trainer import HyperTuning
 
 
@@ -90,17 +94,81 @@ def ray_tune(args):
     print("best result: ", best_trial.last_result)
 
 
+def optuna_tune(args):
+    config_file_list = args.config_files.strip().split(" ") if args.config_files else None
+    config = {}
+    config = Config(config_dict={}, config_file_list=config_file_list)
+
+    def objective(trial):
+        with open(args.params_file) as fp:
+            for line in fp:
+                para_list = line.strip().split(" ")
+                if len(para_list) < 3:
+                    continue
+                para_name, para_type, para_value = (
+                    para_list[0],
+                    para_list[1],
+                    "".join(para_list[2:]),
+                )
+                if para_type == "choice":
+                    para_value = eval(para_value)
+                    config[para_name] = trial.suggest_categorical(para_name, para_value)
+                elif para_type == "uniform":
+                    low, high = map(float, para_value.strip().split(","))
+                    config[para_name] = trial.suggest_float(para_name, low, high)
+                elif para_type == "loguniform":
+                    low, high = map(float, para_value.strip().split(","))
+                    config[para_name] = trial.suggest_loguniform(para_name, low, high)
+                elif para_type == "quniform":
+                    low, high, q = map(float, para_value.strip().split(","))
+                    config[para_name] = trial.suggest_float(para_name, low, high, step=q)
+                else:
+                    raise ValueError(f"Illegal param type [{para_type}]")
+        # Call the objective function with the suggested configuration
+        result = objective_function_optuna(config=config, trial=trial)
+        return result["best_valid_score"]
+
+    study = optuna.create_study(direction="maximize", study_name=args.study_name)
+    study.optimize(objective, n_trials=args.trials)
+
+    complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
+    pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
+
+    print("Number of finished trials: ", len(study.trials))
+    print("Number of complete trials: ", len(complete_trials))
+    print("Number of pruned trials: ", len(pruned_trials))
+    print("Best Trial: ", study.best_trial)
+    print("Best Params: ", study.best_params)
+    print("Best Value: ", study.best_value)
+
+    if args.save_trials:
+        df = study.trials_dataframe()
+        df.columns = df.columns.str.replace(r"^(datetime_|params_|user_attrs_)", "", regex=True)
+        df.to_csv(f"{config['model']}_{args.output_file}", sep="\t", index=False)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_files", type=str, default=None, help="fixed config files")
     parser.add_argument("--params_file", type=str, default=None, help="parameters file")
     parser.add_argument("--output_file", type=str, default="hyper_example.result", help="output file")
-    parser.add_argument("--display_file", type=str, default=True, help="visualization file")
-    parser.add_argument("--tool", type=str, default="Hyperopt", help="tuning tool")
+    parser.add_argument("--display_file", type=str, default=None, help="visualization file")
+    parser.add_argument("--trials", type=int, default=10, help="Optuna trials number")
+    parser.add_argument("--tool", type=str, default="Optuna", help="{ray, hyperopt, optuna}")
+    parser.add_argument(
+        "--study_name",
+        type=str,
+        default=f"optuna_{datetime.now().strftime('%d_%m_%Y_%H:%M:%S')}",
+        help="optuna study name",
+    )
+    parser.add_argument("--save_trials", type=bool, default=True, help="whether to save optuna trials in a csv file")
     args, _ = parser.parse_known_args()
+
     if args.tool == "Hyperopt":
         hyperopt_tune(args)
     elif args.tool == "Ray":
         ray_tune(args)
+    elif args.tool == "Optuna":
+        optuna_tune(args)
     else:
-        raise ValueError(f"The tool [{args.tool}] should in ['Hyperopt', 'Ray']")
+        raise ValueError(f"The tool [{args.tool}] should in ['Hyperopt', 'Ray', 'Optuna']")

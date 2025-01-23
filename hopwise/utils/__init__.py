@@ -9,6 +9,7 @@ from hopwise.utils.utils import (
     get_environment,
     get_flops,
     get_gpu_usage,
+    get_hyper_trainer,
     get_local_time,
     get_model,
     get_tensorboard,

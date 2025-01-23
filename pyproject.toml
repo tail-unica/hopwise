@@ -74,6 +74,8 @@ dev = [
   "ray==2.6.3",
   "dgl==0.9.1",
   "kmeans-pytorch",
+  "opentsne",
+  "nbformat"
 ]
 docs = [
   "sphinx"

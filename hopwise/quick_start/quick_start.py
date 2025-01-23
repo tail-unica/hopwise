@@ -16,6 +16,7 @@ import sys
 from collections.abc import MutableMapping
 from logging import getLogger
 
+import optuna
 import torch.distributed as dist
 from ray import tune
 
@@ -157,6 +158,7 @@ def run_hopwise(
     logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
 
     # case where we have a kg-aware model and the kg is splitted
+
     if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.LP in best_valid_result:
         for task, result in best_valid_result.items():
             logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
@@ -230,6 +232,65 @@ def objective_function(config_dict=None, config_file_list=None, saved=True):
     test_result = trainer.evaluate(test_data, load_best_model=saved)
 
     tune.report(**test_result)
+
+    return {
+        "model": model_name,
+        "best_valid_score": best_valid_score,
+        "valid_score_bigger": config["valid_metric_bigger"],
+        "best_valid_result": best_valid_result,
+        "test_result": test_result,
+    }
+
+
+def optuna_report(epoch_idx, valid_score, **kwargs):
+    r"""Report the intermediate value of the objective function.
+
+    Args:
+        valid_score (float): The intermediate value of the objective function.
+        epoch_idx (int): The epoch.
+    """
+    trial = kwargs.get("trial")
+
+    trial.report(valid_score, epoch_idx)
+
+    # Handle pruning based on the intermediate value.
+    if trial.should_prune():
+        raise optuna.exceptions.TrialPruned()
+
+
+def objective_function_optuna(config=None, saved=True, trial=None):
+    r"""The default objective_function used in HyperTuning
+
+    Args:
+        config_dict (dict, optional): Parameters dictionary used to modify experiment parameters. Defaults to ``None``.
+        config_file_list (list, optional): Config files used to modify experiment parameters. Defaults to ``None``.
+        saved (bool, optional): Whether to save the model. Defaults to ``True``.
+    """
+    init_seed(config["seed"], config["reproducibility"])
+    logger = getLogger()
+    for hdlr in logger.handlers[:]:  # remove all old handlers
+        logger.removeHandler(hdlr)
+    init_logger(config)
+    logging.basicConfig(level=logging.ERROR)
+    dataset = create_dataset(config)
+    train_data, valid_data, test_data = data_preparation(config, dataset)
+    init_seed(config["seed"], config["reproducibility"])
+    model_name = config["model"]
+    model = get_model(model_name)(config, train_data._dataset).to(config["device"])
+    trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
+    best_valid_score, best_valid_result = trainer.fit(
+        train_data, valid_data, verbose=False, saved=saved, trial=trial, callback_fn=optuna_report
+    )
+    if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.REC in best_valid_score:
+        best_valid_score, best_valid_result = (
+            best_valid_score[KnowledgeEvaluationType.REC],
+            best_valid_result[KnowledgeEvaluationType.REC],
+        )
+    test_result = trainer.evaluate(test_data, load_best_model=saved)
+
+    for key, value in test_result.items():
+        trial.set_user_attr(key, value)
+
     return {
         "model": model_name,
         "best_valid_score": best_valid_score,

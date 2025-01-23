@@ -110,6 +110,34 @@ def get_trainer(model_type, model_name):
             return getattr(importlib.import_module("hopwise.trainer"), "Trainer")
 
 
+def get_hyper_trainer(model_type, model_name):
+    r"""Automatically select trainer class based on model type and model name
+
+    Args:
+        model_type (ModelType): model type
+        model_name (str): model name
+
+    Returns:
+        Trainer: trainer class
+    """
+    register_table = {
+        "PEARLM": "HFPathLanguageModelingTrainer",
+        "PLM": "HFPathLanguageModelingTrainer",
+    }
+
+    try:
+        return getattr(importlib.import_module("hopwise.trainer.hyper_trainer"), model_name + "Trainer")
+    except AttributeError:
+        if model_name in register_table:
+            pass
+        elif model_type == ModelType.KNOWLEDGE:
+            return getattr(importlib.import_module("hopwise.trainer.hyper_trainer"), "KGTrainer_optuna")
+        elif model_type == ModelType.TRADITIONAL:
+            pass
+        else:
+            pass
+
+
 def early_stopping(value, best, cur_step, max_step, bigger=True):
     r"""validation-based early stopping
 

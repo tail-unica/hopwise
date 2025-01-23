@@ -871,15 +871,39 @@ class Novelty(AbstractMetric):
         num_items = dataobject.get("data.num_items")
         return item_matrix.cpu().numpy(), dict(count_items), int(num_items)
 
-    def normalize_popularity(self, item_count, num_items):
-        max_pop = max(list(item_count.values()))
-        min_pop = 0 if len(list(item_count.keys())) != num_items else min(list(item_count.values()))
-        normalized_item_count = {item: (pop - min_pop) / (max_pop - min_pop) for item, pop in item_count.items()}
+    def get_pop(self, item_matrix, item_count):
+        """Convert the matrix of item id to the matrix of item popularity using a dict:{id,count}.
+
+        Args:
+            item_matrix(numpy.ndarray): matrix of items recommended to users.
+            item_count(dict): the number of interaction of items in training data.
+
+        Returns:
+            numpy.ndarray: the popularity of items in the recommended list.
+        """
+        value = np.zeros_like(item_matrix)
+        for i in range(item_matrix.shape[0]):
+            row = item_matrix[i, :]
+            for j in range(row.shape[0]):
+                value[i][j] = item_count.get(row[j], 0)
+        return value
+
+    def normalize_popularity(self, item_matrix, pop_matrix, item_count, num_items):
+        normalized_item_count = dict()
+        min_pop = min(item_count.values()) if len(item_count.values()) == num_items else 0
+        max_pop = max(item_count.values())
+
+        for i in range(item_matrix.shape[0]):
+            row = item_matrix[i, :]
+            for j, product in enumerate(row):
+                if product not in normalized_item_count:
+                    normalized_item_count[product] = (pop_matrix[i, j] - min_pop) / (max_pop - min_pop)
         return normalized_item_count
 
     def calculate_metric(self, dataobject):
         item_matrix, item_count, num_items = self.used_info(dataobject)
-        normalized_item_count = self.normalize_popularity(item_count, num_items)
+        pop_matrix = self.get_pop(item_matrix, item_count)
+        normalized_item_count = self.normalize_popularity(item_matrix, pop_matrix, item_count, num_items)
         metric_dict = {}
         for k in self.topk:
             novelty_score = []
