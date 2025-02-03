@@ -72,7 +72,7 @@ dev = [
   "python-louvain",
   "hyperopt==0.2.5",
   "ray==2.6.3",
-  "dgl==0.9.1",
+  "dgl>=2.4.0",
   "kmeans-pytorch",
   "opentsne",
   "nbformat"
