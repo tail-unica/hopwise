@@ -107,7 +107,7 @@ test = [
   "pre-commit"
 ]
 
-[tool.uv.pip]
+[tool.uv]
 find-links = ["https://data.dgl.ai/wheels/torch-2.4/repo.html"]
 
 [tool.ruff]
