@@ -2,6 +2,10 @@
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["hopwise"]
+namespaces = false
+
 [project]
 name = "hopwise"
 description = """
@@ -16,7 +20,7 @@ authors = [
     { name = "Giacomo Medda", email = "jackm.medda@gmail.com" },
 ]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { file = "LICENSE" }
 dynamic = ["version"]
 keywords = [
@@ -42,7 +46,10 @@ dependencies = [
     "tensorboard>=2.5.0",
     "psutil",
     "texttable",
-    "scikit_learn>=0.23.2"
+    "datasets",
+    "colorlog>=4.7.2",
+    "protobuf==3.19.0",
+    "dgl>=2.2.0",
 ]
 classifiers = [
   "Intended Audience :: Developers",
@@ -59,21 +66,37 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = [
-  "pydantic",
-  "datasets",  # do we need it for language path modeling?
+nncf = [
   "community",
-  "xgboost",
-  "colorlog>=4.7.2",
-  "protobuf==3.19.0",
-  "faiss-cpu",
-  "lightgbm",
-  "plotly",
-  "python-louvain",
+  "python-louvain"
+]
+xgboost = [
+  "xgboost"
+]
+ncl = [
+  "faiss-cpu"
+]
+lightgbm = [
+  "lightgbm"
+]
+ldiffrec = [
+  "kmeans-pytorch"
+]
+hyper = [
   "hyperopt==0.2.5",
-  "ray==2.6.3",
-  "dgl>=2.4.0",
-  "kmeans-pytorch",
+  "optuna",
+  "ray[tune]"
+]
+
+[dependency-groups]
+dev = [
+  "hopwise[nncf]",
+  "hopwise[xgboost]",
+  "hopwise[ncl]",
+  "hopwise[lightgbm]",
+  "hopwise[ldiffrec]",
+  "hopwise[hyper]",
+  "plotly",
   "opentsne",
   "nbformat"
 ]
@@ -124,7 +147,6 @@ fixable = ["ALL"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
-
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

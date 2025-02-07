@@ -16,9 +16,7 @@ import sys
 from collections.abc import MutableMapping
 from logging import getLogger
 
-import optuna
 import torch.distributed as dist
-from ray import tune
 
 from hopwise.config import Config
 from hopwise.data import (
@@ -215,6 +213,8 @@ def objective_function(config_dict=None, config_file_list=None, saved=True):
         config_file_list (list, optional): Config files used to modify experiment parameters. Defaults to ``None``.
         saved (bool, optional): Whether to save the model. Defaults to ``True``.
     """
+    from ray import tune
+
     config = Config(config_dict=config_dict, config_file_list=config_file_list)
     init_seed(config["seed"], config["reproducibility"])
     logger = getLogger()
@@ -249,6 +249,8 @@ def optuna_report(epoch_idx, valid_score, **kwargs):
         valid_score (float): The intermediate value of the objective function.
         epoch_idx (int): The epoch.
     """
+    import optuna
+
     trial = kwargs.get("trial")
 
     trial.report(valid_score, epoch_idx)
