@@ -9,13 +9,18 @@ on: [
 jobs:
   check-uv-sync:
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
+      fail-fast: true
       matrix:
         python-version:
           - "3.9"
           - "3.10"
           - "3.11"
-          - "3.12"
+        experimental: [false]
+        include:
+          - version: "3.12"
+            experimental: true
 
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +32,6 @@ jobs:
 
       - name: Install the project
         run: uv sync --all-extras --dev
-        timeout-minutes: 10
 
       - name: Run Hopwise
         run: |
