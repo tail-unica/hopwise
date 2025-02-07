@@ -1,6 +1,10 @@
 name: Check UV Sync and Run
 
-on: [push, pull_request, workflow_dispatch]
+on: [
+  # push,
+  pull_request,
+  workflow_dispatch
+]
 
 jobs:
   check-uv-sync:
