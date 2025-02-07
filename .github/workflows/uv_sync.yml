@@ -19,10 +19,6 @@ jobs:
           - "3.11"
         experimental: [false]
         include:
-          - python-version: "3.7"
-            experimental: true
-          - python-version: "3.8"
-            experimental: true
           - python-version: "3.12"
             experimental: true
 
