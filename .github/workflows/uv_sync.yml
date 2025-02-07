@@ -27,6 +27,7 @@ jobs:
 
       - name: Install the project
         run: uv sync --all-extras --dev
+        timeout-minutes: 10
 
       - name: Run Hopwise
         run: |

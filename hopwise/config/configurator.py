@@ -176,7 +176,7 @@ class Config:
                     cmd_config_dict[cmd_arg_name] = cmd_arg_value
         if len(unrecognized_args) > 0:
             logger = getLogger()
-            logger.warning("command line args [{}] will not be used in RecBole".format(" ".join(unrecognized_args)))
+            logger.warning("command line args [{}] will not be used in Hopwise".format(" ".join(unrecognized_args)))
         cmd_config_dict = self._convert_config_dict(cmd_config_dict)
         return cmd_config_dict
 

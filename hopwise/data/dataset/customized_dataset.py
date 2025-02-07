@@ -44,7 +44,7 @@ class DIENDataset(SequentialDataset):
     then refactored DIENDataset, either.
 
     Attributes:
-        augmentation (bool): Whether the interactions should be augmented in RecBole.
+        augmentation (bool): Whether the interactions should be augmented in hopwise.
         seq_sample (hopwise.sampler.SeqSampler): A sampler used to sample negative item sequence.
         neg_item_list_field (str): Field name for negative item sequence.
         neg_item_list (torch.tensor): all users' negative item history sequence.
