@@ -12,7 +12,7 @@ class WandbLogger:
 
     def __init__(self, config):
         """Args:
-        config (dict): A dictionary of parameters used by RecBole.
+        config (dict): A dictionary of parameters used by hopwise.
         """
         self.config = config
         self.log_wandb = config.log_wandb

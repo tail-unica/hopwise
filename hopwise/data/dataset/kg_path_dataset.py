@@ -104,7 +104,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             return self._tokenized_dataset
 
     def __getitem__(self, index):
-        """Probably to be removed. It avoids issues with Recbole flops calculation."""
+        """Probably to be removed. It avoids issues with hopwise flops calculation."""
         dummy_data = self.tokenizer(["U1"], truncation=True, padding=True, max_length=self.context_length)
         df = Interaction(dummy_data.data)
         return df

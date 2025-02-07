@@ -395,7 +395,7 @@ class KnowledgeBasedDataset(Dataset):
                 f"to atomic files (.kg and .link).\n"
                 f"Please refer to https://github.com/RUCAIBox/RecSysDatasets/tree/master/conversion_tools#knowledge-aware-datasets "  # noqa: E501
                 f"for detailed instructions.\n"
-                f"You can run RecBole after the conversion, see you soon."
+                f"You can run hopwise after the conversion, see you soon."
             )
             sys.exit(0)
         else:
