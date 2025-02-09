@@ -93,6 +93,10 @@ class Collector:
             self.data_struct.set("data.count_items", train_data.dataset.item_counter)
         if self.register.need("data.count_users"):
             self.data_struct.set("data.count_users", train_data.dataset.user_counter)
+        if self.register.need("data.history_index"):
+            row = train_data.dataset.inter_feat[train_data.dataset.uid_field]
+            col = train_data.dataset.inter_feat[train_data.dataset.iid_field]
+            self.data_struct.set("data.history_index", torch.vstack([row, col]))
 
     def _average_rank(self, scores):
         """Get the ranking of an ordered tensor, and take the average of the ranking for positions with equal values.
@@ -133,7 +137,6 @@ class Collector:
         interaction,
         positive_u: torch.Tensor,
         positive_i: torch.Tensor,
-        history_index: torch.Tensor,
     ):
         """Collect the evaluation resource from batched eval data and batched model output.
 
@@ -180,11 +183,6 @@ class Collector:
             self.label_field = self.config["LABEL_FIELD"]
             self.data_struct.update_tensor("data.label", interaction[self.label_field].to(self.device))
 
-        if self.register.need("data.history_index"):
-            history_matrix = torch.zeros_like(scores_tensor, dtype=torch.int)
-            history_matrix[history_index] = 1
-            self.data_struct.update_tensor("data.history_index", history_matrix.to(self.device))
-
     def model_collect(self, model: torch.nn.Module):
         """Collect the evaluation resource from model.
 
@@ -216,7 +214,7 @@ class Collector:
             if isinstance(self.data_struct._data_dict[key], torch.Tensor):
                 self.data_struct._data_dict[key] = self.data_struct._data_dict[key].cpu()
         returned_struct = copy.deepcopy(self.data_struct)
-        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label", "data.history_index"]:
+        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label"]:
             if key in self.data_struct:
                 del self.data_struct[key]
         returned_struct.set("topk", self.topk)
