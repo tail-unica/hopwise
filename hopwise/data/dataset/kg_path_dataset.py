@@ -362,7 +362,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         paths = set()
         path_hop_length = self.path_hop_length - 2
 
-        all_items = np.arange(1, self.item_num) + self.user_num
         iter_users = tqdm(
             range(1, self.user_num),
             total=self.user_num - 1,
@@ -394,7 +393,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                     else:
                         item_candidates = np.concatenate([pos_iid[:start_node_idx], pos_iid[start_node_idx + 1 :]])
                 else:
-                    item_candidates = np.concatenate([all_items[:start_node_idx], all_items[start_node_idx + 1 :]])
+                    item_candidates = None
 
                 # First hop is the relation user-item already addressed
                 generated_path = graph.random_walk(start_node, path_hop_length, weights="weight")
@@ -402,11 +401,18 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
                 valid_path = self._check_kg_path((*generated_path, -1), check_last_node=False)
                 if valid_path:
-                    reachable_candidates = graph.es.select(_source=full_path[-1], _target=item_candidates)
-                    reachable_candidates = set(
-                        e.source if e.source_vertex["type"] == self.iid_field else e.target
-                        for e in reachable_candidates
-                    )
+                    if item_candidates is not None:
+                        reachable_candidates = graph.es.select(_source=full_path[-1], _target=item_candidates)
+                        reachable_candidates = set(
+                            e.source if e.source_vertex["type"] == self.iid_field else e.target
+                            for e in reachable_candidates
+                        )
+                    else:
+                        reachable_candidates = [
+                            v
+                            for v in graph.neighbors(full_path[-1])
+                            if graph.vs[v]["type"] == self.iid_field and v != start_node
+                        ]
 
                     if len(reachable_candidates) > 0:
                         last_node = np.random.choice(list(reachable_candidates))
@@ -443,7 +449,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         paths = set()
         path_hop_length = self.path_hop_length - 1
 
-        all_items = np.arange(1, self.item_num) + self.user_num
         iter_users = tqdm(
             range(1, self.user_num),
             total=self.user_num - 1,
@@ -461,16 +466,21 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             user_path_sample_size = 0
             user_invalid_paths = self.max_consecutive_invalid
 
-            def _graph_traversal(g, path, hop, candidates):
+            def _graph_traversal(g, path, hop, candidates=None):
                 nonlocal paths
                 nonlocal user_path_sample_size
                 nonlocal user_invalid_paths
 
                 if hop == 1:
-                    next_node_candidates = g.es.select(_source=path[-1], _target=candidates)
-                    next_node_candidates = list(
-                        set(e.source if e.source_vertex != path[-1] else e.target for e in next_node_candidates)
-                    )
+                    if candidates is not None:
+                        next_node_candidates = g.es.select(_source=path[-1], _target=candidates)
+                        next_node_candidates = list(
+                            set(e.source if e.source_vertex != path[-1] else e.target for e in next_node_candidates)
+                        )
+                    else:
+                        next_node_candidates = [
+                            v for v in g.neighbors(path[-1]) if g.vs[v]["type"] == self.iid_field and v != path[1]
+                        ]
                 else:
                     next_node_candidates = []
                     for node in g.neighbors(path[-1]):
@@ -509,7 +519,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                     else:
                         item_candidates = np.concatenate([pos_iid[:start_node_idx], pos_iid[start_node_idx + 1 :]])
                 else:
-                    item_candidates = np.concatenate([all_items[:start_node_idx], all_items[start_node_idx + 1 :]])
+                    item_candidates = None
 
                 # First hop is the relation user-item already addressed
                 curr_path_sample_size = user_path_sample_size
@@ -565,7 +575,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                     else:
                         item_candidates = np.concatenate([pos_iid[:start_node_idx], pos_iid[start_node_idx + 1 :]])
                 else:
-                    item_candidates = np.concatenate([all_items[:start_node_idx], all_items[start_node_idx + 1 :]])
+                    item_candidates = np.concatenate([all_items[:start_node], all_items[start_node + 1 :]])
 
                 # First hop is the relation user-item already addressed
                 generated_paths = graph.get_all_simple_paths(

@@ -89,7 +89,7 @@ def save_split_dataloaders(config, dataloaders):
     )
     logger = getLogger()
     logger.info(set_color("Saving split dataloaders into", "pink") + f": [{file_path}]")
-    Serialization_dataloaders = []
+    serialization_dataloaders = []
     for dataloader in dataloaders:
         if isinstance(dataloader, KnowledgeBasedDataLoader):
             general_generator_state = dataloader.general_dataloader.generator.get_state()
@@ -98,15 +98,15 @@ def save_split_dataloaders(config, dataloaders):
             kg_generator_state = dataloader.kg_dataloader.generator.get_state()
             dataloader.kg_dataloader.generator = None
             dataloader.kg_dataloader.sampler.generator = None
-            Serialization_dataloaders += [(dataloader, general_generator_state, kg_generator_state)]
+            serialization_dataloaders += [(dataloader, general_generator_state, kg_generator_state)]
         else:
             generator_state = dataloader.generator.get_state()
             dataloader.generator = None
             dataloader.sampler.generator = None
-            Serialization_dataloaders += [(dataloader, generator_state)]
+            serialization_dataloaders += [(dataloader, generator_state)]
 
     with open(file_path, "wb") as f:
-        pickle.dump(Serialization_dataloaders, f)
+        pickle.dump(serialization_dataloaders, f)
 
 
 def load_split_dataloaders(config):
@@ -150,7 +150,11 @@ def load_split_dataloaders(config):
                     data_loader.sampler.generator = generator
                     dataloaders.append(data_loader)
 
-        train_data, valid_data, test_data = dataloaders
+        eval_lp_args = config["eval_lp_args"]
+        if eval_lp_args is not None and eval_lp_args["knwoledge_split"] is not None:
+            train_data, valid_inter_data, valid_kg_data, test_inter_data, test_kg_data = dataloaders
+        else:
+            train_data, valid_data, test_data = dataloaders
 
     for arg in dataset_arguments + ["seed", "repeatable", "eval_args"]:
         if isinstance(train_data, KnowledgeBasedDataLoader):
@@ -161,8 +165,17 @@ def load_split_dataloaders(config):
         elif config[arg] != train_data.config[arg]:
             return None
     train_data.update_config(config)
-    valid_data.update_config(config)
-    test_data.update_config(config)
+    if eval_lp_args is not None and eval_lp_args["knwoledge_split"] is not None:
+        valid_inter_data.update_config(config)
+        valid_kg_data.update_config(config)
+        test_inter_data.update_config(config)
+        test_kg_data.update_config(config)
+
+        valid_data = [valid_inter_data, valid_kg_data]
+        test_data = [test_inter_data, test_kg_data]
+    else:
+        valid_data.update_config(config)
+        test_data.update_config(config)
     logger = getLogger()
     logger.info(set_color("Load split dataloaders from", "pink") + f": [{dataloaders_save_path}]")
     return train_data, valid_data, test_data
@@ -282,7 +295,7 @@ def data_preparation(config, dataset):
         + set_color(f'[{config["train_neg_sample_args"]}]', "yellow")
     )
 
-    if KnowledgeEvaluationType.LP in built_datasets:
+    if config["eval_lp_args"] is not None and config["eval_lp_args"]["knwoledge_split"] is not None:
         eval_lp_args_info = (
             set_color(" eval_lp_args", "cyan") + ": " + set_color(f'[{config["eval_lp_args"]}]', "yellow")
         )

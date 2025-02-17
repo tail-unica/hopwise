@@ -379,9 +379,11 @@ class Config:
             raise TypeError(f"The topk [{topk}] must be a integer, list")
 
         # Knowledge Graph
+        eval_lp_args = self.final_config_dict.get("eval_lp_args", None)
         if (
             self.final_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE
-            and self.final_config_dict["eval_lp_args"]["knowledge_split"] is not None
+            and eval_lp_args is not None
+            and eval_lp_args["knowledge_split"] is not None
         ):
             metrics_kg = self.final_config_dict["metrics_lp"]
             if isinstance(metrics_kg, str):
