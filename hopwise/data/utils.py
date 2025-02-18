@@ -151,7 +151,7 @@ def load_split_dataloaders(config):
                     dataloaders.append(data_loader)
 
         eval_lp_args = config["eval_lp_args"]
-        if eval_lp_args is not None and eval_lp_args["knwoledge_split"] is not None:
+        if eval_lp_args is not None and eval_lp_args["knowledge_split"] is not None:
             train_data, valid_inter_data, valid_kg_data, test_inter_data, test_kg_data = dataloaders
         else:
             train_data, valid_data, test_data = dataloaders
@@ -165,7 +165,7 @@ def load_split_dataloaders(config):
         elif config[arg] != train_data.config[arg]:
             return None
     train_data.update_config(config)
-    if eval_lp_args is not None and eval_lp_args["knwoledge_split"] is not None:
+    if eval_lp_args is not None and eval_lp_args["knowledge_split"] is not None:
         valid_inter_data.update_config(config)
         valid_kg_data.update_config(config)
         test_inter_data.update_config(config)
@@ -295,7 +295,7 @@ def data_preparation(config, dataset):
         + set_color(f'[{config["train_neg_sample_args"]}]', "yellow")
     )
 
-    if config["eval_lp_args"] is not None and config["eval_lp_args"]["knwoledge_split"] is not None:
+    if config["eval_lp_args"] is not None and config["eval_lp_args"]["knowledge_split"] is not None:
         eval_lp_args_info = (
             set_color(" eval_lp_args", "cyan") + ": " + set_color(f'[{config["eval_lp_args"]}]', "yellow")
         )
