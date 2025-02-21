@@ -8,3 +8,4 @@ from hopwise.model.knowledge_aware_recommender.ktup import KTUP
 from hopwise.model.knowledge_aware_recommender.mcclk import MCCLK
 from hopwise.model.knowledge_aware_recommender.mkr import MKR
 from hopwise.model.knowledge_aware_recommender.ripplenet import RippleNet
+from hopwise.model.knowledge_aware_recommender.userkgat import UserKGAT

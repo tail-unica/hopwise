@@ -8,6 +8,7 @@
 # @Email  : houyupeng@ruc.edu.cn, panxy@ruc.edu.cn, chenyushuo@ruc.edu.cn, xulanling_sherry@163.com
 
 """hopwise.data.kg_dataset
+   hopwise.data.user_item_kg_dataset
 ##########################
 """
 
@@ -924,3 +925,208 @@ class KnowledgeBasedDataset(Dataset):
             return self._create_hetero_ckg_graph(form, directed=directed)
         else:
             raise NotImplementedError("ckg hetero graph format [{}] has not been implemented.")
+
+
+class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
+    """:class:`UserItemKnowledgeBasedDataset` is based on :class:`~recbole.data.dataset.dataset.KnowledgeBasedDataset`,
+    and load ``.kg`` and ``.user_link`` and ``.item_link`` additionally.
+
+    Entities are remapped together with ``user_id`` and ``item_id`` specially.
+    All entities are remapped into three consecutive ID sections.
+
+    - virtual entities that only exist in interaction data.
+    - entities that exist both in interaction data and kg triplets.
+    - entities only exist in kg triplets.
+
+    It also provides several interfaces to transfer ``.kg`` features into coo sparse matrix,
+    csr sparse matrix, :class:`DGL.Graph` or :class:`PyG.Data`.
+
+    Attributes:
+        head_entity_field (str): The same as ``config['HEAD_ENTITY_ID_FIELD']``.
+
+        tail_entity_field (str): The same as ``config['TAIL_ENTITY_ID_FIELD']``.
+
+        relation_field (str): The same as ``config['RELATION_ID_FIELD']``.
+
+        entity_field (str): The same as ``config['ENTITY_ID_FIELD']``.
+
+        kg_feat (pandas.DataFrame): Internal data structure stores the kg triplets.
+            It's loaded from file ``.kg``.
+
+        user2entity (dict): Dict maps ``user_id`` to ``entity``,
+            which is loaded from  file ``.user_link``.
+
+        entity2user (dict): Dict maps ``entity`` to ``user_id``,
+            which is loaded from  file ``.user_link``.
+
+        item2entity (dict): Dict maps ``item_id`` to ``entity``,
+            which is loaded from  file ``.item_link``.
+
+        entity2item (dict): Dict maps ``entity`` to ``item_id``,
+            which is loaded from  file ``.item_link``.
+
+    Note:
+        :attr:`entity_field` doesn't exist exactly. It's only a symbol,
+        representing entity features.
+
+        :attr:`ui_relation` is a special relation token, which is used to represent
+        the interaction relation between users and items.
+    """
+
+    def _filter_link(self):
+        """Filter rows of :attr:`item2entity` and :attr:`entity2item`,
+        whose ``entity_id`` doesn't occur in kg triplets and
+        ``item_id`` doesn't occur in interaction records.
+        Extended to also filter rows of :attr:`user2entity` and :attr:`entity2user`,
+        whose ``entity_id`` doesn't occur in kg triplets and
+        ``user_id`` doesn't occur in interaction records.
+        """
+        item_tokens = self._get_rec_token("item_id")
+        user_tokens = self._get_rec_token("user_id")
+        ent_tokens = self._get_entity_token()
+
+        illegal_item = set()
+        illegal_item_ent = set()
+        for item in self.item2entity:
+            ent = self.item2entity[item]
+            if item not in item_tokens or ent not in ent_tokens:
+                illegal_item.add(item)
+                illegal_item_ent.add(ent)
+        for item in illegal_item:
+            del self.item2entity[item]
+        for ent in illegal_item_ent:
+            del self.entity2item[ent]
+
+        remained_inter = pd.Series(True, index=self.inter_feat.index)
+        remained_inter &= self.inter_feat[self.iid_field].isin(self.item2entity.keys())
+
+        illegal_user = set()
+        illegal_user_ent = set()
+        for user in self.user2entity:
+            ent = self.user2entity[user]
+            if user not in user_tokens or ent not in ent_tokens:
+                illegal_user.add(user)
+                illegal_user_ent.add(ent)
+        for user in illegal_user:
+            del self.user2entity[user]
+        for ent in illegal_user_ent:
+            del self.entity2user[ent]
+
+        remained_inter |= self.inter_feat[self.uid_field].isin(self.user2entity.keys())
+
+        self.inter_feat.drop(self.inter_feat.index[~remained_inter], inplace=True)
+
+    def _load_data(self, token, dataset_path):
+        super(KnowledgeBasedDataset, self)._load_data(token, dataset_path)
+        self.kg_feat = self._load_kg(self.dataset_name, self.dataset_path)
+        self.tail_feat = None
+        self.item2entity, self.entity2item, self.user2entity, self.entity2user = self._load_link(
+            self.dataset_name, self.dataset_path
+        )
+
+    def __str__(self):
+        info = [
+            super().__str__(),
+            f"The number of entities: {self.entity_num}",
+            f"The number of relations: {self.relation_num}",
+            f"The number of triples: {len(self.kg_feat)}",
+            f"The number of items that have been linked to KG: {len(self.item2entity)}",
+            f"The number of users that have been linked to KG: {len(self.user2entity)}",
+        ]  # yapf: disable
+        return "\n".join(info)
+
+    def _load_link(self, token, dataset_path):
+        self.logger.debug(set_color(f"Loading link from [{dataset_path}].", "green"))
+        item_link_path = os.path.join(dataset_path, f"{token}.item_link")
+        user_link_path = os.path.join(dataset_path, f"{token}.user_link")
+        if not os.path.isfile(item_link_path) and not os.path.isfile(user_link_path):
+            raise ValueError(f"[{token}.item_link] and [{token}.user_link] not found in [{dataset_path}].")
+        item_df = self._load_feat(item_link_path, "item_link")
+        user_df = self._load_feat(user_link_path, "user_link")
+        self._check_link(item_df, user_df)
+
+        item2entity, entity2item = {}, {}
+        for item_id, entity_id in zip(item_df[self.iid_field].values, item_df[self.entity_field].values):
+            item2entity[item_id] = entity_id
+            entity2item[entity_id] = item_id
+
+        user2entity, entity2user = {}, {}
+        for user_id, entity_id in zip(user_df[self.uid_field].values, user_df[self.entity_field].values):
+            user2entity[user_id] = entity_id
+            entity2user[entity_id] = user_id
+
+        return item2entity, entity2item, user2entity, entity2user
+
+    def _check_link(self, item_link, user_link):
+        link_warn_message = "link data requires field [{}]"
+        assert self.entity_field in item_link, link_warn_message.format(self.entity_field)
+        assert self.iid_field in item_link, link_warn_message.format(self.iid_field)
+        assert self.entity_field in user_link, link_warn_message.format(self.entity_field)
+        assert self.uid_field in user_link, link_warn_message.format(self.uid_field)
+
+    def _get_rec_token(self, field):
+        """Get set of entity tokens from fields in ``rec`` level."""
+        remap_list = self._get_remap_list(self.alias[field])
+        tokens, _ = self._concat_remaped_tokens(remap_list)
+        return set(tokens)
+
+    def _merge_item_and_entity(self):
+        """Merge item-id and entity-id into the same id-space."""
+        item_token = self.field2id_token[self.iid_field]
+        user_token = self.field2id_token[self.uid_field]
+        entity_token = self.field2id_token[self.head_entity_field]
+        item_num = len(item_token)
+        user_num = len(user_token)
+        item_link_num = len(self.item2entity)
+        user_link_num = len(self.user2entity)
+        entity_num = len(entity_token)
+
+        # reset user id
+        user_priority = np.array([token in self.user2entity for token in user_token])
+        user_order = np.argsort(user_priority, kind="stable")
+        user_id_map = np.zeros_like(user_order)
+        user_id_map[user_order] = np.arange(user_num)
+        new_user_id2token = user_token[user_order]
+        new_user_token2id = {t: i for i, t in enumerate(new_user_id2token)}
+        for field in self.alias["user_id"]:
+            self._reset_ent_remapID(field, user_id_map, new_user_id2token, new_user_token2id)
+
+        # reset item id
+        item_priority = np.array([token in self.item2entity for token in item_token])
+        item_order = np.argsort(item_priority, kind="stable")
+        item_id_map = np.zeros_like(item_order)
+        item_id_map[item_order] = np.arange(item_num)
+        new_item_id2token = item_token[item_order]
+        new_item_token2id = {t: i for i, t in enumerate(new_item_id2token)}
+        for field in self.alias["item_id"]:
+            self._reset_ent_remapID(field, item_id_map, new_item_id2token, new_item_token2id)
+
+        # reset entity id
+        entity_priority = np.array(
+            [  # these values will be used to set the order in which the entities are remapped
+                # 0 for padding and user, 1 for item, 2 for other entities
+                0 if token == "[PAD]" or token in self.entity2user else (1 if token in self.entity2item else 2)
+                for token in entity_token
+            ]
+        )
+        entity_order = np.argsort(entity_priority, kind="stable")
+        entity_id_map = np.zeros_like(entity_order)
+        for i in entity_order[1 : user_link_num + 1]:
+            entity_id_map[i] = new_user_token2id[self.entity2user[entity_token[i]]]
+        for i in entity_order[user_link_num + 1 : user_link_num + item_link_num + 1]:
+            entity_id_map[i] = new_item_token2id[self.entity2item[entity_token[i]]]
+        entity_id_map[entity_order[user_link_num + item_link_num + 1 :]] = np.arange(
+            user_num + item_num, user_num + item_num + entity_num - user_link_num - item_link_num - 1
+        )
+        new_entity_id2token = np.concatenate(
+            [new_user_id2token, new_item_id2token, entity_token[entity_order[user_link_num + item_link_num + 1 :]]]
+        )
+        for i in range(user_num - user_link_num, user_num):
+            new_entity_id2token[i] = self.user2entity[new_entity_id2token[i]]
+        for i in range(user_num + item_num - item_link_num, user_num + item_num):
+            new_entity_id2token[i] = self.item2entity[new_entity_id2token[i]]
+        new_entity_token2id = {t: i for i, t in enumerate(new_entity_id2token)}
+        for field in self.alias["entity_id"]:
+            self._reset_ent_remapID(field, entity_id_map, new_entity_id2token, new_entity_token2id)
+        self.field2id_token[self.entity_field] = new_entity_id2token
+        self.field2token_id[self.entity_field] = new_entity_token2id

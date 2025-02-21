@@ -439,7 +439,7 @@ class Dataset(torch.utils.data.Dataset):
                 continue
             if unload_col is not None and field in unload_col:
                 continue
-            if isinstance(source, FeatureSource) or source != "link":
+            if isinstance(source, FeatureSource) or source not in ["link", "user_link", "item_link"]:
                 self.field2source[field] = source
                 self.field2type[field] = ftype
                 if not ftype.value.endswith("seq"):
