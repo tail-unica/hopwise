@@ -186,7 +186,7 @@ class SimpleX(GeneralRecommender):
         r"""Data processing and call function forward(), return loss
 
         To use SimpleX, a user must have a historical transaction record,
-        a pos item and a sequence of neg items. Based on the RecBole
+        a pos item and a sequence of neg items. Based on the hopwise
         framework, the data in the interaction object is ordered, so
         we can get the data quickly.
         """

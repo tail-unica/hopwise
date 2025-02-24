@@ -187,16 +187,17 @@ class KnowledgeBasedDataset(Dataset):
 
         # splitting & grouping
         split_args = self.config["eval_args"]["split"]
-        knowledge_split_args = self.config["eval_lp_args"]["knowledge_split"]
+        eval_lp_args = self.config["eval_lp_args"]
 
-        if knowledge_split_args is not None:
+        if eval_lp_args is not None and eval_lp_args["knowledge_split"] is not None:
+            knowledge_split_args = eval_lp_args["knowledge_split"]
             print("Splitting the knowledge graph")
             if not isinstance(knowledge_split_args, dict):
                 raise ValueError(f"The knowledge_split_args [{knowledge_split_args}] should be a dict.")
             else:
                 knowledge_split_mode = list(knowledge_split_args.keys())[0]
                 assert len(knowledge_split_args.keys()) == 1
-                knowledge_group_by = self.config["eval_lp_args"]["knowledge_group_by"]
+                knowledge_group_by = eval_lp_args["knowledge_group_by"]
         else:
             knowledge_split_mode = None
             knowledge_group_by = None
@@ -396,7 +397,7 @@ class KnowledgeBasedDataset(Dataset):
                 f"to atomic files (.kg and .link).\n"
                 f"Please refer to https://github.com/RUCAIBox/RecSysDatasets/tree/master/conversion_tools#knowledge-aware-datasets "  # noqa: E501
                 f"for detailed instructions.\n"
-                f"You can run RecBole after the conversion, see you soon."
+                f"You can run hopwise after the conversion, see you soon."
             )
             sys.exit(0)
         else:
