@@ -603,6 +603,7 @@ class KGTrainer(Trainer):
 
     def __init__(self, config, model):
         super().__init__(config, model)
+        self.config = config
         self.train_rec_step = config["train_rec_step"]
         self.train_kg_step = config["train_kg_step"]
         self.best_valid_score_lp = -np.inf if self.valid_metric_bigger else np.inf
@@ -615,6 +616,10 @@ class KGTrainer(Trainer):
             self.evaluator_kg = Evaluator_KG(config)
 
     def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
+        # when train_kge is true and model is PGPR, we only train the kge part
+        if self.config["model"] == "PGPR":
+            return super()._train_epoch(train_data, epoch_idx, show_progress=show_progress)
+
         if self.train_rec_step is None or self.train_kg_step is None:
             interaction_state = KGDataLoaderState.RSKG
         elif epoch_idx % (self.train_rec_step + self.train_kg_step) < self.train_rec_step:
@@ -710,44 +715,22 @@ class KGTrainer(Trainer):
                     if self.item_tensor is None:
                         self.item_tensor = data._dataset.get_item_feature().to(self.device)
                 else:
+                    eval_collector = self.eval_collector
+                    evaluator = self.evaluator
                     eval_func = self._neg_sample_batch_eval
-
-                if self.config["eval_type"] == EvaluatorType.RANKING:
-                    self.tot_item_num = data._dataset.item_num
 
                 if data.is_a_kg:
                     self.tot_entity_num = data.heads_num
 
-                iter_data = (
-                    tqdm(
-                        data,
-                        total=len(data),
-                        ncols=100,
-                        desc=set_color(f"Evaluate {task}", "pink"),
-                    )
-                    if show_progress
-                    else data
+                results[task] = self.evaluate_data_loop(
+                    data, task, eval_func, eval_collector, evaluator, load_best_model, show_progress
                 )
-                num_sample = 0
-                for batch_idx, batched_data in enumerate(iter_data):
-                    num_sample += len(batched_data)
-                    _, history_index, _, _ = batched_data
-                    interaction, scores, positive_u, positive_i = eval_func(batched_data, task)
-                    if self.gpu_available and show_progress:
-                        iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
-                    eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i, history_index)
-                eval_collector.model_collect(self.model)
-                struct = eval_collector.get_data_struct()
-                result = evaluator.evaluate(struct)
-                if not self.config["single_spec"]:
-                    result = self._map_reduce(result, num_sample)
-                self.wandblogger.log_eval_metrics(result, head="eval")
-                results[task] = result
             return results
         else:
             # Evaluate on Validation data or test data if not kg split
             if isinstance(eval_data, FullSortEvalDataLoader):
                 eval_func = self._full_sort_batch_fn
+
                 if eval_data.is_a_kg:
                     task = KnowledgeEvaluationType.LP
                     self.tot_entity_num = eval_data.heads_num
@@ -765,39 +748,47 @@ class KGTrainer(Trainer):
                     self.tail_tensor = eval_data._dataset.get_tail_feature().to(self.device)
 
             else:
+                task = KnowledgeEvaluationType.REC
+                eval_collector = self.eval_collector
+                evaluator = self.evaluator
                 eval_func = self._neg_sample_batch_eval
 
-            if self.config["eval_type"] == EvaluatorType.RANKING:
-                self.tot_item_num = eval_data._dataset.item_num
-
-            iter_data = (
-                tqdm(
-                    eval_data,
-                    total=len(eval_data),
-                    ncols=100,
-                    desc=set_color("Evaluate", "pink")
-                    if task != KnowledgeEvaluationType.LP
-                    else set_color(f"Evaluate {task}", "pink"),
-                )
-                if show_progress
-                else eval_data
+            return self.evaluate_data_loop(
+                eval_data, task, eval_func, eval_collector, evaluator, load_best_model, show_progress
             )
 
-            num_sample = 0
-            for batch_idx, batched_data in enumerate(iter_data):
-                num_sample += len(batched_data)
-                _, history_index, _, _ = batched_data
-                interaction, scores, positive_u, positive_i = eval_func(batched_data, task)
-                if self.gpu_available and show_progress:
-                    iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
-                eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i, history_index)
-            eval_collector.model_collect(self.model)
-            struct = eval_collector.get_data_struct()
-            result = evaluator.evaluate(struct)
-            if not self.config["single_spec"]:
-                result = self._map_reduce(result, num_sample)
-            self.wandblogger.log_eval_metrics(result, head="eval")
-            return result
+    def evaluate_data_loop(
+        self, eval_data, task, eval_func, eval_collector, evaluator, load_best_model, show_progress
+    ):
+        if self.config["eval_type"] == EvaluatorType.RANKING:
+            self.tot_item_num = eval_data._dataset.item_num
+
+        iter_data = (
+            tqdm(
+                eval_data,
+                total=len(eval_data),
+                ncols=100,
+                desc=set_color(f"Evaluate {task}", "pink"),
+            )
+            if show_progress
+            else eval_data
+        )
+
+        num_sample = 0
+        for batch_idx, batched_data in enumerate(iter_data):
+            num_sample += len(batched_data)
+            _, history_index, _, _ = batched_data
+            interaction, scores, positive_u, positive_i = eval_func(batched_data, task)
+            if self.gpu_available and show_progress:
+                iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
+            eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i, history_index)
+        eval_collector.model_collect(self.model, load_best_model)
+        struct = eval_collector.get_data_struct()
+        result = evaluator.evaluate(struct)
+        if not self.config["single_spec"]:
+            result = self._map_reduce(result, num_sample)
+        self.wandblogger.log_eval_metrics(result, head="eval")
+        return result
 
     def fit(
         self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, trial=None
@@ -977,7 +968,6 @@ class KGTrainer(Trainer):
                 scores = self._split_predict_fn(new_inter, batch_size, predict_fn)
 
         scores = scores.view(-1, tot_column_num)
-
         scores[:, 0] = -np.inf
         if history_index is not None:
             scores[history_index] = -np.inf

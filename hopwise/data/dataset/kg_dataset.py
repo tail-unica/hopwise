@@ -14,12 +14,13 @@
 import copy
 import os
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 
 import numpy as np
 import pandas as pd
 import torch
 from scipy.sparse import coo_matrix
+from tqdm import tqdm
 
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
@@ -562,11 +563,12 @@ class KnowledgeBasedDataset(Dataset):
             self.kg_feat = pd.concat([self.kg_feat, reverse_kg_feat])
 
         # Add UI-relation pairs in the relation field
-        kg_rel_num = len(self.field2id_token[self.relation_field])
-        self.field2token_id[self.relation_field][self.ui_relation] = kg_rel_num
-        self.field2id_token[self.relation_field] = np.append(
-            self.field2id_token[self.relation_field], self.ui_relation
-        )
+        if self.ui_relation not in self.field2token_id[self.relation_field]:
+            kg_rel_num = len(self.field2id_token[self.relation_field])
+            self.field2token_id[self.relation_field][self.ui_relation] = kg_rel_num
+            self.field2id_token[self.relation_field] = np.append(
+                self.field2id_token[self.relation_field], self.ui_relation
+            )
 
     def _remap_ID_all(self):
         super()._remap_ID_all()
@@ -618,6 +620,11 @@ class KnowledgeBasedDataset(Dataset):
         numpy.ndarray: List of entity id, including virtual entities.
         """
         return np.arange(self.entity_num)
+
+    def ckg_dict_graph(self, ui_relation, update=False):
+        G = self.ckg_graph(form="dgl", value_field="relation_id")
+        G = GraphDict(G, dataset=self, ui_relation=ui_relation, update_graph=update)
+        return G, G.kg_relation
 
     def kg_graph(self, form="coo", value_field=None):
         """Get graph or sparse matrix that describe relations between entities.
@@ -697,7 +704,7 @@ class KnowledgeBasedDataset(Dataset):
 
         ui_rel_num = self.inter_num
         ui_rel_id = self.relation_num - 1
-        assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
+        # assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
 
         if not show_relation:
             data = np.ones(len(src))
@@ -720,7 +727,7 @@ class KnowledgeBasedDataset(Dataset):
         if show_relation:
             ui_rel_num = len(self.inter_feat)
             ui_rel_id = self.relation_num - 1
-            assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
+            # assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
             kg_rel = self.kg_feat[self.relation_field]
             ui_rel = torch.full((2 * ui_rel_num,), ui_rel_id, dtype=kg_rel.dtype)
             edge = torch.cat([ui_rel, kg_rel])
@@ -923,3 +930,75 @@ class KnowledgeBasedDataset(Dataset):
             return self._create_hetero_ckg_graph(form, directed=directed)
         else:
             raise NotImplementedError("ckg hetero graph format [{}] has not been implemented.")
+
+
+class GraphDict:
+    def __init__(self, ckg, dataset, ui_relation, update_graph):
+        import pickle
+
+        self.dataset = dataset
+        self.ui_relation = ui_relation
+        self.update_graph = update_graph
+        self.user_num = self.dataset.user_num
+        self.users = self.dataset.inter_feat[self.dataset.uid_field]
+        self.items = self.dataset.inter_feat[self.dataset.iid_field] + self.user_num
+        self.relation2id = self.dataset.field2token_id["relation_id"]
+
+        self.G = dict()
+        self.kg_relation = dict()
+
+        (src, tgt), rel = ckg.edges(), ckg.edata["relation_id"]
+
+        # Load or build graph
+        filename = os.path.join(self.dataset.dataset_path, "pgpr_graph_dict.pkl")
+        if os.path.exists(filename) and not update_graph:
+            with open(filename, "rb") as f:
+                data = pickle.load(f)
+            self.G = data["G"]
+            self.kg_relation = data["kg_relation"]
+        else:
+            self._build_graph(src, rel, tgt)
+            with open(filename, "wb") as f:
+                pickle.dump({"G": self.G, "kg_relation": self.kg_relation}, f)
+
+    def _create_default_dict(self):
+        return defaultdict(list)
+
+    def _build_graph(self, src, rel, tgt):
+        self.G = {
+            "user": defaultdict(self._create_default_dict),
+            "entity": defaultdict(self._create_default_dict),
+        }
+        self.kg_relation["user"] = dict()
+        self.kg_relation["entity"] = dict()
+
+        for head, relation, tail in tqdm(
+            zip(src.tolist(), rel.tolist(), tgt.tolist()), total=len(src), desc="Building PGPR Graph Dict"
+        ):
+            if relation == self.ui_relation:
+                # UI interaction case
+                if head in self.users and tail in self.items:
+                    original_tail = tail - self.user_num
+                    self.G["user"][head][relation].append(original_tail)
+                    self.kg_relation["user"][relation] = "entity"
+                elif head in self.items and tail in self.users:
+                    original_head = head - self.user_num
+                    self.G["entity"][original_head][relation].append(tail)
+                    self.kg_relation["entity"][relation] = "user"
+            else:
+                original_head = head - self.user_num
+                original_tail = tail - self.user_num
+                # KG case
+                self.G["entity"][original_head][relation].append(original_tail)
+                self.G["entity"][original_tail][relation].append(original_head)
+                self.kg_relation["entity"][relation] = "entity"
+
+    def __call__(self, eh_type, eh_id=None, relation=None):
+        data = self.G
+        if eh_type is not None:
+            data = data.get(eh_type, None)
+        if eh_id is not None:
+            data = data.get(eh_id, None)
+        if relation is not None:
+            data = data.get(relation, None)
+        return data

@@ -166,7 +166,7 @@ def run_hopwise(
         for task, result in test_result.items():
             logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
     else:
-        if isinstance(best_valid_result, dict):
+        if isinstance(best_valid_result, dict) and KnowledgeEvaluationType.REC in best_valid_result:
             best_valid_result = best_valid_result[KnowledgeEvaluationType.REC]
 
         logger.info(set_color("best valid ", "yellow") + f": {format_metrics(best_valid_result)}")

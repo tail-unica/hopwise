@@ -190,9 +190,10 @@ def data_preparation(config, dataset):
         dataset._change_feat_format()
     else:
         model_type = config["MODEL_TYPE"]
+        model = config["model"]
         built_datasets = dataset.build()
 
-        if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]:
+        if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING] and model != "PGPR":
             if isinstance(built_datasets, dict):
                 # then the kg has been split
                 train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets[KnowledgeEvaluationType.LP]
@@ -339,6 +340,11 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
 
     model_type = config["MODEL_TYPE"]
     if phase == "train":
+        # Specific Cases
+        if model_type == ModelType.KNOWLEDGE and config["model"] == "PGPR":
+            return UserDataLoader
+
+        # Return Dataloader based on the modeltype
         if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
         elif model_type == ModelType.PATH_LANGUAGE_MODELING:

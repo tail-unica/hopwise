@@ -42,9 +42,9 @@ class ConvKB(KnowledgeRecommender):
         self.lmbda = config["lambda"]
 
         # Embeddings and Layers
-        self.users_embeddings = nn.Embedding(self.n_users, self.embedding_size)
-        self.entities_embeddings = nn.Embedding(self.n_entities, self.embedding_size)
-        self.relations_embeddings = nn.Embedding(self.n_relations + 1, self.embedding_size)
+        self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
+        self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
+        self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
 
         self.conv1_bn = nn.BatchNorm2d(1)
         self.conv_layer = nn.Conv2d(1, self.out_channels, (self.kernel_size, 3))
@@ -86,17 +86,17 @@ class ConvKB(KnowledgeRecommender):
 
     def _get_rec_embeddings(self, user, positive_items, negative_items):
         relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        h = self.users_embeddings(user)
-        r = self.relations_embeddings(relation_users)
-        t_pos = self.entities_embeddings(positive_items)
-        t_neg = self.entities_embeddings(negative_items)
+        h = self.user_embedding(user)
+        r = self.relation_embedding(relation_users)
+        t_pos = self.entity_embedding(positive_items)
+        t_neg = self.entity_embedding(negative_items)
         return h, r, t_pos, t_neg
 
     def _get_kg_embeddings(self, head, relation, positive_tails, negative_tails):
-        h = self.entities_embeddings(head)
-        r = self.relations_embeddings(relation)
-        t_pos = self.entities_embeddings(positive_tails)
-        t_neg = self.entities_embeddings(negative_tails)
+        h = self.entity_embedding(head)
+        r = self.relation_embedding(relation)
+        t_pos = self.entity_embedding(positive_tails)
+        t_neg = self.entity_embedding(negative_tails)
         return h, r, t_pos, t_neg
 
     def calculate_loss(self, interaction):
@@ -138,9 +138,9 @@ class ConvKB(KnowledgeRecommender):
         items = interaction[self.ITEM_ID]
         relations = torch.tensor([self.n_relations] * users.shape[0], device=self.device)
 
-        users_e = self.users_embeddings(users)
-        relations_e = self.relations_embeddings(relations)
-        items_e = self.entities_embeddings(items)
+        users_e = self.user_embedding(users)
+        relations_e = self.relation_embedding(relations)
+        items_e = self.entity_embedding(items)
 
         return self.forward(users_e, relations_e, items_e)
 
@@ -149,8 +149,8 @@ class ConvKB(KnowledgeRecommender):
         relations = interaction[self.RELATION_ID]
         tails = interaction[self.TAIL_ENTITY_ID]
 
-        heads_e = self.entities_embeddings(heads)
-        relations_e = self.relations_embeddings(relations)
-        tails_e = self.entities_embeddings(tails)
+        heads_e = self.entity_embedding(heads)
+        relations_e = self.relation_embedding(relations)
+        tails_e = self.entity_embedding(tails)
 
         return self.forward(heads_e, relations_e, tails_e)

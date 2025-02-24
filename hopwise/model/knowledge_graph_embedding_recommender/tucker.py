@@ -38,10 +38,10 @@ class TuckER(KnowledgeRecommender):
         self.input_dropout2 = config["input_dropout2"]
 
         # define layers and loss
-        self.users_embeddings = nn.Embedding(self.n_users + self.n_items, self.embedding_size)
-        self.entities_embeddings = nn.Embedding(self.n_entities, self.embedding_size)
+        self.user_embedding = nn.Embedding(self.n_users + self.n_items, self.embedding_size)
+        self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
 
-        self.relations_embeddings = nn.Embedding(self.n_relations + 1, self.embedding_size)
+        self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
 
         self.weights = torch.nn.Parameter(
             torch.tensor(
@@ -81,13 +81,13 @@ class TuckER(KnowledgeRecommender):
 
     def _get_rec_embeddings(self, user):
         relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        user_e = self.users_embeddings(user)
-        r_e = self.relations_embeddings(relation_users)
+        user_e = self.user_embedding(user)
+        r_e = self.relation_embedding(relation_users)
         return user_e, r_e
 
     def _get_kg_embeddings(self, h, r):
-        h = self.entities_embeddings(h)
-        r = self.relations_embeddings(r)
+        h = self.entity_embedding(h)
+        r = self.relation_embedding(r)
         return h, r
 
     def calculate_loss(self, interaction):
@@ -114,8 +114,8 @@ class TuckER(KnowledgeRecommender):
             item_new = ((1.0 - self.label_smoothing) * item_new) + (1.0 / self.n_items)
             tail_new = ((1.0 - self.label_smoothing) * tail_new) + (1.0 / self.n_entities)
 
-        score_users = self.forward(user_e, rec_r_e, self.users_embeddings)
-        score_kg = self.forward(head_e, relation_e, self.entities_embeddings)
+        score_users = self.forward(user_e, rec_r_e, self.user_embedding)
+        score_kg = self.forward(head_e, relation_e, self.entity_embedding)
 
         loss_rec = self.loss(score_users, item_new)
         loss_kg = self.loss(score_kg, tail_new)
@@ -127,10 +127,10 @@ class TuckER(KnowledgeRecommender):
         item = interaction[self.ITEM_ID]
 
         relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        user_e = self.users_embeddings(user)
-        r_e = self.relations_embeddings(relation_users)
+        user_e = self.user_embedding(user)
+        r_e = self.relation_embedding(relation_users)
 
-        score = self.forward(user_e, r_e, self.users_embeddings)
+        score = self.forward(user_e, r_e, self.user_embedding)
 
         score = score[torch.arange(user.size(0)), item]
         return score
@@ -140,20 +140,20 @@ class TuckER(KnowledgeRecommender):
         relation = interaction[self.RELATION_ID]
         tail = interaction[self.TAIL_ENTITY_ID]
 
-        head_e = self.entities_embeddings(head)
-        r_e = self.relations_embeddings(relation)
+        head_e = self.entity_embedding(head)
+        r_e = self.relation_embedding(relation)
 
-        score = self.forward(head_e, r_e, self.entities_embeddings)
+        score = self.forward(head_e, r_e, self.entity_embedding)
         score = score[torch.arange(head.size(0)), tail]
         return score
 
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        user_e = self.users_embeddings(user)
-        r_e = self.relations_embeddings(relation_users)
+        user_e = self.user_embedding(user)
+        r_e = self.relation_embedding(relation_users)
 
-        score = self.forward(user_e, r_e, self.users_embeddings)
+        score = self.forward(user_e, r_e, self.user_embedding)
         score = score[:, self.n_users :]
         return score
 
@@ -161,8 +161,8 @@ class TuckER(KnowledgeRecommender):
     #     head = interaction[self.HEAD_ENTITY_ID]
     #     relation = interaction[self.RELATION_ID]
 
-    #     head_e = self.entities_embeddings(head)
-    #     r_e = self.relations_embeddings(relation)
+    #     head_e = self.entity_embedding(head)
+    #     r_e = self.relation_embedding(relation)
 
-    #     score = self.forward(head_e, r_e, self.entities_embeddings)
+    #     score = self.forward(head_e, r_e, self.entity_embedding)
     #     return score

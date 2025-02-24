@@ -16,6 +16,7 @@ import copy
 import torch
 
 from hopwise.evaluator.register import Register, Register_KG
+from hopwise.evaluator.utils import train_tsne
 
 
 class DataStruct:
@@ -185,13 +186,22 @@ class Collector:
             history_matrix[history_index] = 1
             self.data_struct.update_tensor("data.history_index", history_matrix.to(self.device))
 
-    def model_collect(self, model: torch.nn.Module):
-        """Collect the evaluation resource from model.
+    def model_collect(self, model: torch.nn.Module, load_best_model=False):
+        """Collect the evaluation resource from model and do something with the model.
 
         Args:
             model (nn.Module): the trained recommendation model.
+            load_best_model (bool): whether to load the best model.
         """
-        pass
+
+        # Display t-SNE embeddings
+        if "tsne" in self.config:
+            if self.config["tsne"]["plot_on"] == "test" and load_best_model:
+                train_tsne(model, self.config)
+            elif self.config["tsne"]["plot_on"] == "validation":
+                train_tsne(model, self.config)
+            else:
+                train_tsne(model, self.config)
 
     def eval_collect(self, eval_pred: torch.Tensor, data_label: torch.Tensor):
         """Collect the evaluation resource from total output and label.
