@@ -156,21 +156,34 @@ def plot_tsne_embeddings(model, **kwargs):
     fig.write_html(f"{model} tSNE {current_datetime.strftime('%b-%d-%Y_%H-%M-%S')}.html")
 
 
-def train_tsne(model, config):
+def train_tsne(model, config, load_best_model):
     tsne = TSNE(
-        perplexity=config["tsne"]["perplexity"],
-        n_jobs=config["tsne"]["n_jobs"],
-        initialization=config["tsne"]["initialization"],
-        metric=config["tsne"]["metric"],
+        perplexity=config["perplexity"],
+        n_jobs=config["n_jobs"],
+        initialization=config["initialization"],
+        metric=config["metric"],
         random_state=config["seed"],
-        verbose=config["tsne"]["verbose"],
+        verbose=config["verbose"],
     )
-    tsne_user_embeddings = tsne.fit(model.user_embedding.weight.cpu().detach().numpy())
-    tsne_entity_embeddings = tsne.fit(model.entity_embedding.weight.cpu().detach().numpy())
-    tsne_relation_embeddings = tsne.fit(model.relation_embedding.weight.cpu().detach().numpy())
-    plot_tsne_embeddings(
-        model=config["model"],
-        user=tsne_user_embeddings,
-        entity=tsne_entity_embeddings,
-        relation=tsne_relation_embeddings,
-    )
+
+    if (
+        (config["plot_on"] == "test" and load_best_model)
+        or config["plot_on"] == "validation"
+        or config["plot_on"] is not None
+    ):
+        try:
+            tsne_user_embeddings = tsne.fit(model.user_embedding.weight.cpu().detach().numpy())
+            tsne_entity_embeddings = tsne.fit(model.entity_embedding.weight.cpu().detach().numpy())
+            tsne_relation_embeddings = tsne.fit(model.relation_embedding.weight.cpu().detach().numpy())
+        except AttributeError:
+            print(
+                "The model does not have the required embeddings for the t-SNE display, \
+                please check the name of the embeddings: user_embedding, entity_embedding, relation_embedding."
+            )
+
+        plot_tsne_embeddings(
+            model=config["model"],
+            user=tsne_user_embeddings,
+            entity=tsne_entity_embeddings,
+            relation=tsne_relation_embeddings,
+        )

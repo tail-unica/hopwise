@@ -1,14 +1,2 @@
 embedding_size: 100              # (int) The embedding size of users and items.
 margin: 1.0                     # (float) The margin used in the TripletMarginLoss
-metrics: ['NDCG', 'MRR', 'Hit', 'Precision', 'Recall', 'Novelty']
-topk: [10]
-valid_metric: 'ndcg@10'
-epochs: 30
-eval_step: 30
-train_neg_sample_args:
-  distribution: 'uniform'
-  sample_num: 5
-
-metrics_lp: ['NDCG', 'MRR', 'Hit']
-topk_kg: [10]
-eval_lp_args: {'knowledge_split': {'RS': [0.8, 0.1, 0.1]}, 'order': 'RO', 'group_by': None, 'mode': {'valid': 'full', 'test': 'full'}}

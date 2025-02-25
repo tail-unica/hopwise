@@ -546,11 +546,10 @@ class Trainer(AbstractTrainer):
         num_sample = 0
         for batch_idx, batched_data in enumerate(iter_data):
             num_sample += len(batched_data)
-            _, history_index, _, _ = batched_data
             interaction, scores, positive_u, positive_i = eval_func(batched_data)
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
-            self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i, history_index)
+            self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
         self.eval_collector.model_collect(self.model)
         struct = self.eval_collector.get_data_struct()
         result = self.evaluator.evaluate(struct)
@@ -603,7 +602,6 @@ class KGTrainer(Trainer):
 
     def __init__(self, config, model):
         super().__init__(config, model)
-        self.config = config
         self.train_rec_step = config["train_rec_step"]
         self.train_kg_step = config["train_kg_step"]
         self.best_valid_score_lp = -np.inf if self.valid_metric_bigger else np.inf
@@ -616,10 +614,6 @@ class KGTrainer(Trainer):
             self.evaluator_kg = Evaluator_KG(config)
 
     def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
-        # when train_kge is true and model is PGPR, we only train the kge part
-        if self.config["model"] == "PGPR":
-            return super()._train_epoch(train_data, epoch_idx, show_progress=show_progress)
-
         if self.train_rec_step is None or self.train_kg_step is None:
             interaction_state = KGDataLoaderState.RSKG
         elif epoch_idx % (self.train_rec_step + self.train_kg_step) < self.train_rec_step:
@@ -777,12 +771,11 @@ class KGTrainer(Trainer):
         num_sample = 0
         for batch_idx, batched_data in enumerate(iter_data):
             num_sample += len(batched_data)
-            _, history_index, _, _ = batched_data
             interaction, scores, positive_u, positive_i = eval_func(batched_data, task)
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
-            eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i, history_index)
-        eval_collector.model_collect(self.model, load_best_model)
+            eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
+        eval_collector.model_collect(self.model)
         struct = eval_collector.get_data_struct()
         result = evaluator.evaluate(struct)
         if not self.config["single_spec"]:
@@ -988,6 +981,16 @@ class KGTrainer(Trainer):
                 result = result.unsqueeze(0)
             result_list.append(result)
         return torch.cat(result_list, dim=0)
+
+
+class PGPRTrainer(Trainer):
+    r"""PGPRTrainer is designed for PGPR, which is a knowledge-aware recommendation method."""
+
+    def __init__(self, config, model):
+        super().__init__(config, model)
+
+    def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
+        return super()._train_epoch(train_data, epoch_idx, show_progress=show_progress)
 
 
 class KGATTrainer(Trainer):
@@ -1879,7 +1882,7 @@ class HFPathLanguageModelingTrainer(PretrainTrainer):
 
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
-            self.eval_collector.eval_batch_collect(scores, None, positive_u, positive_i, history_index)
+            self.eval_collector.eval_batch_collect(scores, None, positive_u, positive_i)
         self.eval_collector.model_collect(self.model)
         struct = self.eval_collector.get_data_struct()
         result = self.evaluator.evaluate(struct)

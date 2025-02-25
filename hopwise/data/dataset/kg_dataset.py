@@ -14,7 +14,7 @@
 import copy
 import os
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -187,16 +187,17 @@ class KnowledgeBasedDataset(Dataset):
 
         # splitting & grouping
         split_args = self.config["eval_args"]["split"]
-        knowledge_split_args = self.config["eval_lp_args"]["knowledge_split"]
+        eval_lp_args = self.config["eval_lp_args"]
 
-        if knowledge_split_args is not None:
+        if eval_lp_args is not None and eval_lp_args["knowledge_split"] is not None:
+            knowledge_split_args = eval_lp_args["knowledge_split"]
             print("Splitting the knowledge graph")
             if not isinstance(knowledge_split_args, dict):
                 raise ValueError(f"The knowledge_split_args [{knowledge_split_args}] should be a dict.")
             else:
                 knowledge_split_mode = list(knowledge_split_args.keys())[0]
                 assert len(knowledge_split_args.keys()) == 1
-                knowledge_group_by = self.config["eval_lp_args"]["knowledge_group_by"]
+                knowledge_group_by = eval_lp_args["knowledge_group_by"]
         else:
             knowledge_split_mode = None
             knowledge_group_by = None
@@ -396,7 +397,7 @@ class KnowledgeBasedDataset(Dataset):
                 f"to atomic files (.kg and .link).\n"
                 f"Please refer to https://github.com/RUCAIBox/RecSysDatasets/tree/master/conversion_tools#knowledge-aware-datasets "  # noqa: E501
                 f"for detailed instructions.\n"
-                f"You can run RecBole after the conversion, see you soon."
+                f"You can run hopwise after the conversion, see you soon."
             )
             sys.exit(0)
         else:
@@ -621,9 +622,9 @@ class KnowledgeBasedDataset(Dataset):
         """
         return np.arange(self.entity_num)
 
-    def ckg_dict_graph(self, ui_relation, update=False):
+    def ckg_dict_graph(self):
         G = self.ckg_graph(form="dgl", value_field="relation_id")
-        G = GraphDict(G, dataset=self, ui_relation=ui_relation, update_graph=update)
+        G = GraphDict(G, dataset=self, ui_relation=self.ui_relation)
         return G, G.kg_relation
 
     def kg_graph(self, form="coo", value_field=None):
@@ -704,7 +705,7 @@ class KnowledgeBasedDataset(Dataset):
 
         ui_rel_num = self.inter_num
         ui_rel_id = self.relation_num - 1
-        # assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
+        assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
 
         if not show_relation:
             data = np.ones(len(src))
@@ -727,7 +728,7 @@ class KnowledgeBasedDataset(Dataset):
         if show_relation:
             ui_rel_num = len(self.inter_feat)
             ui_rel_id = self.relation_num - 1
-            # assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
+            assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
             kg_rel = self.kg_feat[self.relation_field]
             ui_rel = torch.full((2 * ui_rel_num,), ui_rel_id, dtype=kg_rel.dtype)
             edge = torch.cat([ui_rel, kg_rel])
@@ -933,42 +934,25 @@ class KnowledgeBasedDataset(Dataset):
 
 
 class GraphDict:
-    def __init__(self, ckg, dataset, ui_relation, update_graph):
-        import pickle
-
+    def __init__(self, ckg, dataset, ui_relation):
         self.dataset = dataset
-        self.ui_relation = ui_relation
-        self.update_graph = update_graph
+        self.relation2id = self.dataset.field2token_id["relation_id"]
         self.user_num = self.dataset.user_num
         self.users = self.dataset.inter_feat[self.dataset.uid_field]
         self.items = self.dataset.inter_feat[self.dataset.iid_field] + self.user_num
-        self.relation2id = self.dataset.field2token_id["relation_id"]
+        self.ui_relation = self.relation2id[ui_relation]
 
         self.G = dict()
         self.kg_relation = dict()
 
         (src, tgt), rel = ckg.edges(), ckg.edata["relation_id"]
 
-        # Load or build graph
-        filename = os.path.join(self.dataset.dataset_path, "pgpr_graph_dict.pkl")
-        if os.path.exists(filename) and not update_graph:
-            with open(filename, "rb") as f:
-                data = pickle.load(f)
-            self.G = data["G"]
-            self.kg_relation = data["kg_relation"]
-        else:
-            self._build_graph(src, rel, tgt)
-            with open(filename, "wb") as f:
-                pickle.dump({"G": self.G, "kg_relation": self.kg_relation}, f)
-
-    def _create_default_dict(self):
-        return defaultdict(list)
+        # Build the graph. Consider to save the dataset to prevent the repeated building.
+        self._build_graph(src, rel, tgt)
 
     def _build_graph(self, src, rel, tgt):
-        self.G = {
-            "user": defaultdict(self._create_default_dict),
-            "entity": defaultdict(self._create_default_dict),
-        }
+        self.G["user"] = dict()
+        self.G["entity"] = dict()
         self.kg_relation["user"] = dict()
         self.kg_relation["entity"] = dict()
 
@@ -979,15 +963,37 @@ class GraphDict:
                 # UI interaction case
                 if head in self.users and tail in self.items:
                     original_tail = tail - self.user_num
+
+                    if head not in self.G["user"]:
+                        self.G["user"][head] = dict()
+                    if relation not in self.G["user"][head]:
+                        self.G["user"][head][relation] = list()
+
                     self.G["user"][head][relation].append(original_tail)
                     self.kg_relation["user"][relation] = "entity"
                 elif head in self.items and tail in self.users:
                     original_head = head - self.user_num
+
+                    if original_head not in self.G["entity"]:
+                        self.G["entity"][original_head] = dict()
+                    if relation not in self.G["entity"][original_head]:
+                        self.G["entity"][original_head][relation] = list()
+
                     self.G["entity"][original_head][relation].append(tail)
                     self.kg_relation["entity"][relation] = "user"
             else:
                 original_head = head - self.user_num
                 original_tail = tail - self.user_num
+
+                if original_head not in self.G["entity"]:
+                    self.G["entity"][original_head] = dict()
+                if relation not in self.G["entity"][original_head]:
+                    self.G["entity"][original_head][relation] = list()
+                if original_tail not in self.G["entity"]:
+                    self.G["entity"][original_tail] = dict()
+                if relation not in self.G["entity"][original_tail]:
+                    self.G["entity"][original_tail][relation] = list()
+
                 # KG case
                 self.G["entity"][original_head][relation].append(original_tail)
                 self.G["entity"][original_tail][relation].append(original_head)

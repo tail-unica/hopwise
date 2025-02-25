@@ -801,7 +801,7 @@ DeltaRecall = create_consumer_metric_class("Recall")
 
 class Serendipity(AbstractMetric):
     metric_type = EvaluatorType.RANKING
-    metric_need = ["rec.items", "data.count_items", "data.history_index"]
+    metric_need = ["rec.items", "data.num_items", "data.num_users", "data.count_items", "data.history_index"]
 
     def __init__(self, config):
         super().__init__(config)
@@ -809,22 +809,27 @@ class Serendipity(AbstractMetric):
 
     def used_info(self, dataobject):
         """Get the matrix of recommendation items and the popularity of items in training data"""
+        num_users = dataobject.get("data.num_users")
+        num_items = dataobject.get("data.num_items")
         item_counter = dataobject.get("data.count_items")
         item_matrix = dataobject.get("rec.items")
         history_matrix = dataobject.get("data.history_index")
 
         items, count = zip(*item_counter.items())
-        item_counter = np.zeros(history_matrix.shape[1], dtype=np.int)
+        item_counter = np.zeros(num_items, dtype=np.int)
         item_counter[list(items)] = count
 
-        return item_matrix.numpy(), item_counter, history_matrix
+        return item_matrix.numpy(), item_counter, history_matrix, num_users
 
     def calculate_metric(self, dataobject):
-        item_matrix, item_count, history_matrix = self.used_info(dataobject)
-        pop_recs = np.tile(item_count, (item_matrix.shape[0], 1))
-        pop_recs[history_matrix] = 0
+        item_matrix, item_count, history_matrix, num_users = self.used_info(dataobject)
+        pop_recs = np.tile(item_count, (num_users, 1))
+        pop_recs[tuple(history_matrix)] = 0
+        pop_recs = pop_recs[1:]  # remove the padding
         pop_topk = np.argsort(pop_recs, axis=-1)[:, ::-1][:, : max(self.topk)]
-        topk_intersection = (item_matrix[:, None] == pop_topk).any(axis=1)
+        topk_intersection = np.zeros_like(item_matrix, dtype=bool)
+        for u, (user_topk, user_pop_topk) in enumerate(zip(item_matrix, pop_topk)):
+            topk_intersection[u] = np.isin(user_topk, user_pop_topk)
 
         result = self.metric_info(topk_intersection)
         metric_dict = self.topk_result("serendipity", result)

@@ -40,11 +40,12 @@ class ConvKB(KnowledgeRecommender):
         self.kernel_size = config["kernel_size"]
         self.drop_prob = config["dropout_prob"]
         self.lmbda = config["lambda"]
+        self.ui_relation = self.n_relations - 1
 
         # Embeddings and Layers
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
-        self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
+        self.relation_embedding = nn.Embedding(self.n_relations, self.embedding_size)
 
         self.conv1_bn = nn.BatchNorm2d(1)
         self.conv_layer = nn.Conv2d(1, self.out_channels, (self.kernel_size, 3))
@@ -85,7 +86,7 @@ class ConvKB(KnowledgeRecommender):
         return self.lmbda * l2_reg
 
     def _get_rec_embeddings(self, user, positive_items, negative_items):
-        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation_users = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
         h = self.user_embedding(user)
         r = self.relation_embedding(relation_users)
         t_pos = self.entity_embedding(positive_items)
@@ -136,7 +137,7 @@ class ConvKB(KnowledgeRecommender):
     def predict(self, interaction):
         users = interaction[self.USER_ID]
         items = interaction[self.ITEM_ID]
-        relations = torch.tensor([self.n_relations] * users.shape[0], device=self.device)
+        relations = torch.tensor([self.ui_relation] * users.shape[0], device=self.device)
 
         users_e = self.user_embedding(users)
         relations_e = self.relation_embedding(relations)

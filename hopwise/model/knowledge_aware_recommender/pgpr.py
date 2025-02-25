@@ -27,14 +27,11 @@ class PGPR(KnowledgeRecommender):
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
 
-        import warnings
-
-        warnings.filterwarnings("ignore")
-
         # Load parameters info from config
         self.user_num = dataset.user_num
         self.device = config["device"]
         self.topk = config["topk"]
+        self.save_dataset = config["save_dataset"]
 
         # PGPR Configurations
         self.state_history = config["state_history"]
@@ -42,22 +39,21 @@ class PGPR(KnowledgeRecommender):
         self.gamma = config["gamma"]
         self.action_dropout = config["action_dropout"]
         self.hidden_sizes = config["hidden_sizes"]
-        self.topk_size = config["topk"]
         self.act_dim = self.max_acts + 1
         self.max_num_nodes = config["max_path_len"] + 1
         self.weight_factor = config["weight_factor"]
-        self.path_pattern = config["path_constraint"][config["dataset"]]
+        self.path_pattern = config["path_constraint"]
         self.beam_search_hop = config["beam_search_hop"]
         # user-item relation
         self.ui_relation = self.n_relations - 1
 
         # Load Full Knowledge Graph in dict form
-        self.G, self.kg_relation = dataset.ckg_dict_graph(
-            ui_relation=self.ui_relation, update=config["update_graph_dict"]
-        )
+        self.G, self.kg_relation = dataset.ckg_dict_graph()
+        if self.save_dataset:
+            dataset.save()
 
         # Items
-        self.items = list(range(self.n_items))
+        self.items = set(range(self.n_items))
         self.positives = dataset.history_item_matrix()[0]
 
         # Load Knowledge Graph Embedding Checkpoint
@@ -89,14 +85,14 @@ class PGPR(KnowledgeRecommender):
 
         # Normalization score
         u_p_scores = np.dot(
-            self.user_embedding + self.relation_embedding[self.ui_relation], self.entity_embedding[self.items].T
+            self.user_embedding + self.relation_embedding[self.ui_relation], self.entity_embedding[list(self.items)].T
         )
         self.u_p_scales = np.max(u_p_scores, axis=1)
 
         # These are the paths constraint to use when checking for path correctness in _get_reward function
         self.patterns = list()
         for path_constraint in self.path_pattern:
-            self.patterns.append(tuple(path_constraint))
+            self.patterns.append(tuple(["self_loop"]) + tuple(path_constraint))
 
         # Following is current episode information.
         self._batch_path = None
@@ -183,8 +179,8 @@ class PGPR(KnowledgeRecommender):
         return act_probs, state_values
 
     def calculate_loss(self, interaction):
-        # Track positives
         users = interaction[self.USER_ID]
+        users = users[users != 0]
 
         # Policy training
         batch_state = self.reset(users)
@@ -537,4 +533,4 @@ class KGState:
                 [user_embed, node_embed, last_node_embed, last_relation_embed, older_node_embed, older_relation_embed]
             )
         else:
-            raise Exception("mode should be one of {full, current}")
+            raise ValueError("mode should be one of {full, current}")

@@ -24,7 +24,7 @@ from hopwise.model.loss import BPRLoss
 
 
 class FDSA(SequentialRecommender):
-    r"""FDSA is similar with the GRU4RecF implemented in RecBole, which uses two different Transformer encoders to
+    r"""FDSA is similar with the GRU4RecF implemented in hopwise, which uses two different Transformer encoders to
     encode items and features respectively and concatenates the two subparts' outputs as the final output.
 
     """

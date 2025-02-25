@@ -32,6 +32,7 @@ class TuckER(KnowledgeRecommender):
         # load parameters info
         self.embedding_size = config["embedding_size"]
         self.device = config["device"]
+        self.ui_relation = self.n_relations - 1
         self.label_smoothing = config["label_smoothing"]
         self.input_dropout = config["input_dropout"]
         self.input_dropout1 = config["input_dropout1"]
@@ -41,7 +42,7 @@ class TuckER(KnowledgeRecommender):
         self.user_embedding = nn.Embedding(self.n_users + self.n_items, self.embedding_size)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
 
-        self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
+        self.relation_embedding = nn.Embedding(self.n_relations, self.embedding_size)
 
         self.weights = torch.nn.Parameter(
             torch.tensor(
@@ -80,7 +81,7 @@ class TuckER(KnowledgeRecommender):
         return pred
 
     def _get_rec_embeddings(self, user):
-        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation_users = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
         user_e = self.user_embedding(user)
         r_e = self.relation_embedding(relation_users)
         return user_e, r_e
@@ -126,7 +127,7 @@ class TuckER(KnowledgeRecommender):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
 
-        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation_users = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
         user_e = self.user_embedding(user)
         r_e = self.relation_embedding(relation_users)
 
@@ -149,7 +150,7 @@ class TuckER(KnowledgeRecommender):
 
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
-        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation_users = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
         user_e = self.user_embedding(user)
         r_e = self.relation_embedding(relation_users)
 

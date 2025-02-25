@@ -19,3 +19,27 @@ metapaths: [
     ['film.film.award_nomination'],
     ['film.film.award_won']
 ]
+
+path_constraint: [
+    [[UI-Relation],[UI-Relation],[UI-Relation]],
+    [[UI-Relation],'film.film.prequel','film.film.prequel'],
+    [[UI-Relation],'film.film.actor','film.film.actor'],
+    [[UI-Relation],'film.actor.film','film.actor.film'],
+    [[UI-Relation],'film.film.sequel','film.film.sequel'],
+    [[UI-Relation],'film.film_subject.films','film.film_subject.films'],
+    [[UI-Relation],'film.film.subjects', 'film.film.subjects'],
+    [[UI-Relation],'film.film.rating','film.film.rating'],
+    [[UI-Relation],'film.content_rating.film','film.content_rating.film'],
+    [[UI-Relation],'film.film.genre','film.film.genre'],
+    [[UI-Relation],'film.film_genre.films_in_this_genre','film.film_genre.films_in_this_genre'],
+    [[UI-Relation],'film.film.written_by','film.film.written_by'],
+    [[UI-Relation],'film.writer.film','film.writer.film'],
+    [[UI-Relation],'film.film.directed_by','film.film.directed_by'],
+    [[UI-Relation],'film.director.film','film.director.film'],
+    [[UI-Relation],'film.film.cinematography','film.film.cinematography'],
+    [[UI-Relation],'film.cinematographer.film','film.cinematographer.film'],
+    [[UI-Relation],'film.film.produced_by','film.film.produced_by'],
+    [[UI-Relation],'film.producer.film','film.producer.film'],
+    [[UI-Relation],'film.film.production_companies','film.film.production_companies'],
+    [[UI-Relation],'film.production_company.films','film.production_company.films']
+]

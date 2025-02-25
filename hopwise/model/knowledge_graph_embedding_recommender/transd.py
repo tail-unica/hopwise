@@ -41,11 +41,11 @@ class TransD(KnowledgeRecommender):
         # Embeddings
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
-        self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
+        self.relation_embedding = nn.Embedding(self.n_relations, self.embedding_size)
 
         self.user_vec_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.entity_vec_embedding = nn.Embedding(self.n_entities, self.embedding_size)
-        self.relation_vec_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
+        self.relation_vec_embedding = nn.Embedding(self.n_relations, self.embedding_size)
 
         # Loss
         self.loss = nn.TripletMarginLoss(margin=self.margin, p=2, reduction="mean")

@@ -1,15 +1,3 @@
-
-# Recbole configuration
-data_path: /home/recsysdatasets
-metrics: ['NDCG', 'MRR', 'Hit', 'Precision', 'Recall', 'Novelty', 'GiniIndex', 'ItemCoverage','Serendipity']
-topk: [10]
-valid_metric: 'ndcg@10'
-epochs: 50
-eval_step: 50
-learning_rate: 1e-3
-train_batch_size: 6040
-eval_batch_size: 1524736 # To evaluate N users, insert N * n_items
-
 # PGPR model parameters
 state_history: 1
 max_acts: 250
@@ -19,12 +7,11 @@ hidden_sizes: [512,256]
 max_path_len: 3
 weight_factor: 1e-3
 beam_search_hop: [25,5,1]
-update_graph_dict: False # (Bool) Whether to update the graph dictionary or not
 
 # The kge embeddings necessary to score paths
 additional_feat_suffix: [useremb, entityemb, relationemb]
 
-# To load the pretrained embeddings necessary to score the paths
+# To load the pretrained embeddings (Typically from TransE) necessary to score the paths
 load_col:
     useremb: [userid, user_embedding]
     entityemb: [entityid, entity_embedding]
@@ -38,42 +25,3 @@ preload_weight:
   userid: user_embedding
   entityid: entity_embedding
   relationid: relation_embedding
-
-path_constraint:
-  ml-1m_small: [
-    ['self_loop','ui_dummy_relation','ui_dummy_relation','ui_dummy_relation'],
-    ['self_loop','ui_dummy_relation','cinematography_by_cinematographer','cinematography_by_cinematographer'],
-    ['self_loop','ui_dummy_relation','produced_by_prodcompany','produced_by_prodcompany'],
-    ['self_loop','ui_dummy_relation','composed_by_composer','composed_by_composer'],
-    ['self_loop','ui_dummy_relation','belong_to_category','belong_to_category'],
-    ['self_loop','ui_dummy_relation','starred_by_actor','starred_by_actor'],
-    ['self_loop','ui_dummy_relation','edited_by_editor','edited_by_editor'],
-    ['self_loop','ui_dummy_relation','produced_by_producer','produced_by_producer'],
-    ['self_loop','ui_dummy_relation','wrote_by_writter','wrote_by_writter'],
-    ['self_loop','ui_dummy_relation','directed_by_director','directed_by_director'],
-    ['self_loop','ui_dummy_relation','produced_in_country','produced_in_country'],
-    ['self_loop','ui_dummy_relation','related_to_wikipage','related_to_wikipage'],
-  ]
-  ml-100k: [
-    ['self_loop','ui_dummy_relation','ui_dummy_relation','ui_dummy_relation'],
-    ['self_loop','ui_dummy_relation','film.film.prequel','film.film.prequel'],
-    ['self_loop','ui_dummy_relation','film.film.actor','film.film.actor'],
-    ['self_loop','ui_dummy_relation','film.actor.film','film.actor.film'],
-    ['self_loop','ui_dummy_relation','film.film.sequel','film.film.sequel'],
-    ['self_loop','ui_dummy_relation','film.film_subject.films','film.film_subject.films'],
-    ['self_loop','ui_dummy_relation','film.film.subjects', 'film.film.subjects'],
-    ['self_loop','ui_dummy_relation','film.film.rating','film.film.rating'],
-    ['self_loop','ui_dummy_relation','film.content_rating.film','film.content_rating.film'],
-    ['self_loop','ui_dummy_relation','film.film.genre','film.film.genre'],
-    ['self_loop','ui_dummy_relation','film.film_genre.films_in_this_genre','film.film_genre.films_in_this_genre'],
-    ['self_loop','ui_dummy_relation','film.film.written_by','film.film.written_by'],
-    ['self_loop','ui_dummy_relation','film.writer.film','film.writer.film'],
-    ['self_loop','ui_dummy_relation','film.film.directed_by','film.film.directed_by'],
-    ['self_loop','ui_dummy_relation','film.director.film','film.director.film'],
-    ['self_loop','ui_dummy_relation','film.film.cinematography','film.film.cinematography'],
-    ['self_loop','ui_dummy_relation','film.cinematographer.film','film.cinematographer.film'],
-    ['self_loop','ui_dummy_relation','film.film.produced_by','film.film.produced_by'],
-    ['self_loop','ui_dummy_relation','film.producer.film','film.producer.film'],
-    ['self_loop','ui_dummy_relation','film.film.production_companies','film.film.production_companies'],
-    ['self_loop','ui_dummy_relation','film.production_company.films','film.production_company.films']
-  ]

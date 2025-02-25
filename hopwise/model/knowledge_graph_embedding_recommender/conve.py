@@ -45,12 +45,13 @@ class ConvE(KnowledgeRecommender):
         self.embedding_dim2 = self.embedding_size // self.embedding_dim1
         self.hidden_size = config["hidden_size"]
         self.use_bias = config["use_bias"]
+        self.ui_relation = self.n_relations - 1
 
         # Embeddings
         self.user_embedding = nn.Embedding(self.n_users + self.n_items, self.embedding_size, padding_idx=0)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size, padding_idx=0)
 
-        self.relations_embeddings = nn.Embedding(self.n_relations + 1, self.embedding_size, padding_idx=0)
+        self.relations_embeddings = nn.Embedding(self.n_relations, self.embedding_size, padding_idx=0)
 
         # Layers
         self.inp_drop = torch.nn.Dropout(self.input_dropout)
@@ -89,7 +90,7 @@ class ConvE(KnowledgeRecommender):
         return pred
 
     def _get_rec_embeddings(self, user):
-        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation_users = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
 
         head_embeddings = self.user_embedding(user).view(-1, 1, self.embedding_dim1, self.embedding_dim2)
         relation_embeddings = self.relations_embeddings(relation_users).view(
@@ -115,11 +116,9 @@ class ConvE(KnowledgeRecommender):
 
         tail = interaction[self.TAIL_ENTITY_ID]
 
-        # relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
         user_e, rec_r_e = self._get_rec_embeddings(user)
         head_e, kg_r_e = self._get_kg_embeddings(head, relation)
 
-        # score_heads = self._get_kg_score(head, relation)
         score_users = self.forward(user_e, rec_r_e, self.user_embedding, self.b_users)
         score_kg = self.forward(head_e, kg_r_e, self.entity_embedding, self.b_entities)
 
@@ -141,7 +140,7 @@ class ConvE(KnowledgeRecommender):
     def predict(self, interaction):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
-        relation = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
 
         users_embedding = self.user_embedding(user).view(-1, 1, self.embedding_dim1, self.embedding_dim2)
         relation_embeddings = self.relations_embeddings(relation).view(-1, 1, self.embedding_dim1, self.embedding_dim2)
@@ -167,7 +166,7 @@ class ConvE(KnowledgeRecommender):
 
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
-        relation = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
 
         users_embedding = self.user_embedding(user).view(-1, 1, self.embedding_dim1, self.embedding_dim2)
 
