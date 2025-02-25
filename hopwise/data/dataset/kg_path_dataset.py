@@ -13,11 +13,11 @@ from tqdm import tqdm
 from transformers import PreTrainedTokenizerFast
 
 from hopwise.data import Interaction
-from hopwise.data.dataset import KnowledgeBasedDataset
+from hopwise.data.dataset import UserItemKnowledgeBasedDataset
 from hopwise.utils import PathLanuageModelingTokenType, set_color
 
 
-class KnowledgePathDataset(KnowledgeBasedDataset):
+class KnowledgePathDataset(UserItemKnowledgeBasedDataset):
     """:class:`KnowledgePathDataset` is based on :class:`~hopwise.data.dataset.KnowledgeBasedDataset`,
     and provides an interface to prepare tokenized knowledge graph path for path language modeling.
 

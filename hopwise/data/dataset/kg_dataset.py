@@ -1027,12 +1027,8 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
     def __str__(self):
         info = [
             super().__str__(),
-            f"The number of entities: {self.entity_num}",
-            f"The number of relations: {self.relation_num}",
-            f"The number of triples: {len(self.kg_feat)}",
-            f"The number of items that have been linked to KG: {len(self.item2entity)}",
             f"The number of users that have been linked to KG: {len(self.user2entity)}",
-        ]  # yapf: disable
+        ]
         return "\n".join(info)
 
     def _load_link(self, token, dataset_path):
