@@ -144,6 +144,7 @@ fixable = ["ALL"]
 "**/{significance_test.py,run_hyper.py}" = ["D", "PLR2004"]
 "**/hopwise/evaluator/__init__.py" = ["I"]
 "**/hopwise/data/dataset/__init__.py" = ["I"]
+"**/hopwise/model/knowledge_aware_recommender/pgpr.py" = ["PLR2004"]
 
 [tool.ruff.format]
 quote-style = "double"

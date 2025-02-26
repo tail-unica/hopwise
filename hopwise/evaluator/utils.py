@@ -12,9 +12,13 @@
 """
 
 import itertools
+from datetime import datetime
 
 import numpy as np
+import pandas as pd
+import plotly.express as px
 import torch
+from openTSNE import TSNE
 
 
 def pad_sequence(sequences, len_list, pad_to=None, padding_value=0):
@@ -111,3 +115,75 @@ def _binary_clf_curve(trues, preds):
     tps = np.cumsum(trues)[threshold_idxs]
     fps = 1 + threshold_idxs - tps
     return fps, tps
+
+
+def plot_tsne_embeddings(model, **kwargs):
+    embeddings_list = list()
+    identifiers_list = list()
+
+    for embeddings_name, embeddings in kwargs.items():
+        embeddings_list.append(embeddings)
+        identifiers_list.extend([f"{embeddings_name} {id}" for id in range(embeddings.shape[0])])
+
+    embeddings_list = np.concatenate(embeddings_list, axis=0)
+
+    combined_df = pd.DataFrame(
+        {
+            "x": embeddings_list[:, 0],
+            "y": embeddings_list[:, 1],
+            "type": [id.split(" ")[0] for id in identifiers_list],
+            "identifier": identifiers_list,
+        }
+    )
+
+    fig = px.scatter(
+        combined_df,
+        x="x",
+        y="y",
+        color="type",
+        hover_data=["identifier"],
+        labels={
+            "x": "Embedding Dimension 1",
+            "y": "Embedding Dimension 2",
+        },
+        title="Visualising Combined Embeddings",
+        width=1024,
+        height=1024,
+        template="plotly_white",
+    )
+    current_datetime = datetime.now()
+
+    fig.write_html(f"{model} tSNE {current_datetime.strftime('%b-%d-%Y_%H-%M-%S')}.html")
+
+
+def train_tsne(model, config, load_best_model):
+    tsne = TSNE(
+        perplexity=config["perplexity"],
+        n_jobs=config["n_jobs"],
+        initialization=config["initialization"],
+        metric=config["metric"],
+        random_state=config["seed"],
+        verbose=config["verbose"],
+    )
+
+    if (
+        (config["plot_on"] == "test" and load_best_model)
+        or config["plot_on"] == "validation"
+        or config["plot_on"] is not None
+    ):
+        try:
+            tsne_user_embeddings = tsne.fit(model.user_embedding.weight.cpu().detach().numpy())
+            tsne_entity_embeddings = tsne.fit(model.entity_embedding.weight.cpu().detach().numpy())
+            tsne_relation_embeddings = tsne.fit(model.relation_embedding.weight.cpu().detach().numpy())
+        except AttributeError:
+            print(
+                "The model does not have the required embeddings for the t-SNE display, \
+                please check the name of the embeddings: user_embedding, entity_embedding, relation_embedding."
+            )
+
+        plot_tsne_embeddings(
+            model=config["model"],
+            user=tsne_user_embeddings,
+            entity=tsne_entity_embeddings,
+            relation=tsne_relation_embeddings,
+        )

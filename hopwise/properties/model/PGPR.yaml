@@ -1,0 +1,27 @@
+# PGPR model parameters
+state_history: 1
+max_acts: 250
+gamma: 0.99
+action_dropout: 0.5
+hidden_sizes: [512,256]
+max_path_len: 3
+weight_factor: 1e-3
+beam_search_hop: [25,5,1]
+
+# The kge embeddings necessary to score paths
+additional_feat_suffix: [useremb, entityemb, relationemb]
+
+# To load the pretrained embeddings (Typically from TransE) necessary to score the paths
+load_col:
+    useremb: [userid, user_embedding]
+    entityemb: [entityid, entity_embedding]
+    relationemb: [relationid, relation_embedding]
+
+alias_of_user_id: [userid]
+alias_of_entity_id: [entityid]
+alias_of_relation_id: [relationid]
+
+preload_weight:
+  userid: user_embedding
+  entityid: entity_embedding
+  relationid: relation_embedding

@@ -469,7 +469,7 @@ class Dataset(torch.utils.data.Dataset):
             ftype = self.field2type[field]
             if not ftype.value.endswith("seq"):
                 continue
-            df[field].fillna(value="", inplace=True)
+            df[field] = df[field].fillna(value="")
             if ftype == FeatureType.TOKEN_SEQ:
                 df[field] = [np.array(list(filter(None, _.split(seq_separator)))) for _ in df[field].values]
             elif ftype == FeatureType.FLOAT_SEQ:
@@ -533,12 +533,12 @@ class Dataset(torch.utils.data.Dataset):
         """Transfer preload weight features into :class:`numpy.ndarray` with shape ``[id_token_length]``
         or ``[id_token_length, seqlen]``. See :doc:`../user_guide/data/data_args` for detail arg setting.
         """
+
         preload_fields = self.config["preload_weight"]
         if preload_fields is None:
             return
 
         self.logger.debug(f"Preload weight matrix for {preload_fields}.")
-
         for preload_id_field, preload_value_field in preload_fields.items():
             if preload_id_field not in self.field2source:
                 raise ValueError(f"Preload id field [{preload_id_field}] not exist.")
@@ -563,7 +563,6 @@ class Dataset(torch.utils.data.Dataset):
                     f"which will not be handled by preload matrix."
                 )
                 continue
-
             token_num = self.num(preload_id_field)
             feat = self.field2feats(preload_id_field)[0]
             if value_ftype == FeatureType.FLOAT:
@@ -602,7 +601,7 @@ class Dataset(torch.utils.data.Dataset):
                 elif ftype == FeatureType.FLOAT:
                     feat[field] = feat[field].fillna(value=feat[field].mean())
                 else:
-                    dtype = np.int64 if ftype == FeatureType.TOKEN_SEQ else np.float
+                    dtype = np.int64 if ftype == FeatureType.TOKEN_SEQ else float
                     feat[field] = feat[field].apply(
                         lambda x: (np.array([], dtype=dtype) if isinstance(x, float) else x)
                     )

@@ -34,12 +34,13 @@ class TransR(KnowledgeRecommender):
         self.embedding_size = config["embedding_size"]
         self.margin = config["margin"]
         self.device = config["device"]
+        self.ui_relation = self.n_relations - 1
 
         # Embeddings
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
-        self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
-        self.proj_mat_e = nn.Embedding(self.n_relations + 1, self.embedding_size * self.embedding_size)
+        self.relation_embedding = nn.Embedding(self.n_relations, self.embedding_size)
+        self.proj_mat_e = nn.Embedding(self.n_relations, self.embedding_size * self.embedding_size)
 
         # Loss
         self.loss = nn.TripletMarginLoss(margin=self.margin, p=2, reduction="mean")
@@ -88,7 +89,7 @@ class TransR(KnowledgeRecommender):
         pos_t_e = torch.cat([pos_item_e, pos_tail_e])
         neg_t_e = torch.cat([neg_item_e, neg_tail_e])
 
-        rec_rel = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        rec_rel = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
         relation = torch.cat([rec_rel, relation])
 
         proj_mat = self.proj_mat_e(relation).view(h_e.shape[0], self.embedding_size, self.embedding_size)
@@ -111,7 +112,7 @@ class TransR(KnowledgeRecommender):
         rec_r_e = self.relation_embedding.weight[-1]
         rec_r_e = rec_r_e.expand_as(user_e)
 
-        relation = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
         proj_mat = self.proj_mat_e(relation).view(user_e.shape[0], self.embedding_size, self.embedding_size)
 
         user_e_proj = self.forward(user_e, proj_mat)
@@ -145,8 +146,8 @@ class TransR(KnowledgeRecommender):
         item_indices = torch.tensor(range(self.n_items)).to(self.device)
         all_item_e = self.entity_embedding.weight[item_indices]
 
-        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
-        relation_items = torch.tensor([self.n_relations] * all_item_e.shape[0], device=self.device)
+        relation_users = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
+        relation_items = torch.tensor([self.ui_relation] * all_item_e.shape[0], device=self.device)
 
         proj_mat_user = self.proj_mat_e(relation_users).view(user.shape[0], self.embedding_size, self.embedding_size)
         proj_mat_items = self.proj_mat_e(relation_items).view(

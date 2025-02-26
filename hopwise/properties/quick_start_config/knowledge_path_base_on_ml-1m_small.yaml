@@ -1,0 +1,14 @@
+path_constraint: [
+    [[UI-Relation],[UI-Relation],[UI-Relation]],
+    [[UI-Relation],'cinematography_by_cinematographer','cinematography_by_cinematographer'],
+    [[UI-Relation],'produced_by_prodcompany','produced_by_prodcompany'],
+    [[UI-Relation],'composed_by_composer','composed_by_composer'],
+    [[UI-Relation],'belong_to_category','belong_to_category'],
+    [[UI-Relation],'starred_by_actor','starred_by_actor'],
+    [[UI-Relation],'edited_by_editor','edited_by_editor'],
+    [[UI-Relation],'produced_by_producer','produced_by_producer'],
+    [[UI-Relation],'wrote_by_writter','wrote_by_writter'],
+    [[UI-Relation],'directed_by_director','directed_by_director'],
+    [[UI-Relation],'produced_in_country','produced_in_country'],
+    [[UI-Relation],'related_to_wikipage','related_to_wikipage'],
+]

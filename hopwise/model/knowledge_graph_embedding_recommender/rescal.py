@@ -39,7 +39,7 @@ class RESCAL(KnowledgeRecommender):
         # Embeddings
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
-        self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size**2)
+        self.relation_embedding = nn.Embedding(self.n_relations, self.embedding_size**2)
 
         # Loss
         self.loss = nn.MarginRankingLoss(margin=self.margin)

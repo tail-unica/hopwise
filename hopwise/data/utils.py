@@ -203,9 +203,10 @@ def data_preparation(config, dataset):
         dataset._change_feat_format()
     else:
         model_type = config["MODEL_TYPE"]
+        model = config["model"]
         built_datasets = dataset.build()
 
-        if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]:
+        if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING] and model != "PGPR":
             if isinstance(built_datasets, dict):
                 # then the kg has been split
                 train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets[KnowledgeEvaluationType.LP]
@@ -336,15 +337,16 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
         )
 
     register_table = {
-        "MultiDAE": _get_AE_dataloader,
-        "MultiVAE": _get_AE_dataloader,
-        "MacridVAE": _get_AE_dataloader,
-        "CDAE": _get_AE_dataloader,
-        "ENMF": _get_AE_dataloader,
-        "RaCT": _get_AE_dataloader,
-        "RecVAE": _get_AE_dataloader,
-        "DiffRec": _get_AE_dataloader,
-        "LDiffRec": _get_AE_dataloader,
+        "MultiDAE": _get_user_dataloader,
+        "MultiVAE": _get_user_dataloader,
+        "MacridVAE": _get_user_dataloader,
+        "CDAE": _get_user_dataloader,
+        "ENMF": _get_user_dataloader,
+        "RaCT": _get_user_dataloader,
+        "RecVAE": _get_user_dataloader,
+        "DiffRec": _get_user_dataloader,
+        "LDiffRec": _get_user_dataloader,
+        "PGPR": _get_user_dataloader,
     }
 
     if config["model"] in register_table:
@@ -352,6 +354,7 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
 
     model_type = config["MODEL_TYPE"]
     if phase == "train":
+        # Return Dataloader based on the modeltype
         if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
         elif model_type == ModelType.PATH_LANGUAGE_MODELING:
@@ -369,8 +372,8 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
             return NegSampleEvalDataLoader
 
 
-def _get_AE_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"]):
-    """Customized function for VAE models to get correct dataloader class.
+def _get_user_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"]):
+    """Customized function for models that needs only users
 
     Args:
         config (Config): An instance object of Config, used to record parameter information.
