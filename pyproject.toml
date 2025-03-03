@@ -16,8 +16,8 @@ authors = [
     { name = "Giacomo Balloccu", email = "gballoccu@gmail.com" },
     { name = "Ludovico Boratto", email = "ludovico.boratto@acm.org" },
     { name = "Mirko Marras", email = "mirko.marras@acm.org" },
-    { name = "Alessandro Soccol", email = "alessandrosoccol@gmail.com" },
     { name = "Giacomo Medda", email = "jackm.medda@gmail.com" },
+    { name = "Alessandro Soccol", email = "alessandrosoccol@gmail.com" },
 ]
 readme = "README.md"
 requires-python = ">=3.9"
@@ -100,7 +100,8 @@ dev = [
   "nbformat"
 ]
 docs = [
-  "sphinx"
+  "furo",
+  "sphinx-copybutton"
 ]
 test = [
   "pytest-xdist",
