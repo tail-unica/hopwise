@@ -11,7 +11,7 @@ Welcome to Hopwise's documentation!
    :caption: Contents:
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 5
    :caption: API REFERENCE:
 
    hopwise/hopwise.config.configurator
