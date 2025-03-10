@@ -45,7 +45,7 @@ class ConvE(KnowledgeRecommender):
         self.embedding_dim2 = self.embedding_size // self.embedding_dim1
         self.hidden_size = config["hidden_size"]
         self.use_bias = config["use_bias"]
-        self.ui_relation = self.n_relations - 1
+        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
 
         # Embeddings
         self.user_embedding = nn.Embedding(self.n_users + self.n_items, self.embedding_size, padding_idx=0)

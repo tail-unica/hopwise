@@ -35,7 +35,7 @@ class Analogy(KnowledgeRecommender):
         self.embedding_size = config["embedding_size"]
         self.device = config["device"]
         self.scalar_share = config["scalar_share"]
-        self.ui_relation = self.n_relations - 1
+        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
 
         self.scalar_dim = int(self.embedding_size * self.scalar_share)
         self.complex_dim = int(self.embedding_size - self.scalar_dim)

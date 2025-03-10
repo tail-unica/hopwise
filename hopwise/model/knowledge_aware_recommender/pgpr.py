@@ -31,7 +31,6 @@ class PGPR(KnowledgeRecommender):
         self.user_num = dataset.user_num
         self.device = config["device"]
         self.topk = config["topk"]
-        self.save_dataset = config["save_dataset"]
 
         # PGPR Configurations
         self.state_history = config["state_history"]
@@ -48,9 +47,12 @@ class PGPR(KnowledgeRecommender):
         self.ui_relation = self.n_relations - 1
 
         # Load Full Knowledge Graph in dict form
-        self.G, self.kg_relation = dataset.ckg_dict_graph()
-        if self.save_dataset:
-            dataset.save()
+        if dataset.G is not None and dataset.kg_relation is not None:
+            self.G, self.kg_relation = dataset.G, dataset.kg_relation
+        else:
+            self.G, self.kg_relation = dataset.ckg_dict_graph()
+            if config["save_dataset"]:
+                dataset.save()
 
         # Items
         self.items = set(range(self.n_items))

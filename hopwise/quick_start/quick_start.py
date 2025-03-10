@@ -118,6 +118,9 @@ def run_hopwise(
         config_file_list=config_file_list,
         config_dict=config_dict,
     )
+
+    checkpoint = None if config["evaluate_on_checkpoint"] is None else config["evaluate_on_checkpoint"]
+
     init_seed(config["seed"], config["reproducibility"])
     # logger initialization
     init_logger(config)
@@ -145,39 +148,49 @@ def run_hopwise(
     # trainer loading and initialization
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
     # model training
-    best_valid_score, best_valid_result = trainer.fit(
-        train_data, valid_data, saved=saved, show_progress=config["show_progress"]
-    )
+    if checkpoint is None:
+        best_valid_score, best_valid_result = trainer.fit(
+            train_data, valid_data, saved=saved, show_progress=config["show_progress"]
+        )
 
-    # model evaluation
-    test_result = trainer.evaluate(test_data, load_best_model=saved, show_progress=config["show_progress"])
-
+        # model evaluation
+        test_result = trainer.evaluate(test_data, load_best_model=saved, show_progress=config["show_progress"])
+    else:
+        test_result = trainer.evaluate(
+            test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
+        )
     environment_tb = get_environment(config)
     logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
 
     # case where we have a kg-aware model and the kg is splitted
+    if not checkpoint:
+        if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.LP in best_valid_result:
+            for task, result in best_valid_result.items():
+                logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
 
-    if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.LP in best_valid_result:
-        for task, result in best_valid_result.items():
-            logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
-    if KnowledgeEvaluationType.REC in test_result and KnowledgeEvaluationType.LP in test_result:
-        for task, result in test_result.items():
-            logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
+        if KnowledgeEvaluationType.REC in test_result and KnowledgeEvaluationType.LP in test_result:
+            for task, result in test_result.items():
+                logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
+        else:
+            if isinstance(best_valid_result, dict) and KnowledgeEvaluationType.REC in best_valid_result:
+                best_valid_result = best_valid_result[KnowledgeEvaluationType.REC]
+
+            logger.info(set_color("best valid ", "yellow") + f": {format_metrics(best_valid_result)}")
+            logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
+        # In the case of KG-aware tasks, we don't care about the final "best_valid_score"
+        # format because it is not used anywhere.
+        result = {
+            "best_valid_score": best_valid_score,
+            "valid_score_bigger": config["valid_metric_bigger"],
+            "best_valid_result": best_valid_result,
+            "test_result": test_result,
+        }
     else:
-        if isinstance(best_valid_result, dict) and KnowledgeEvaluationType.REC in best_valid_result:
-            best_valid_result = best_valid_result[KnowledgeEvaluationType.REC]
-
-        logger.info(set_color("best valid ", "yellow") + f": {format_metrics(best_valid_result)}")
         logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
-
-    # In the case of KG-aware tasks, we don't care about the final "best_valid_score"
-    # format because it is not used anywhere.
-    result = {
-        "best_valid_score": best_valid_score,
-        "valid_score_bigger": config["valid_metric_bigger"],
-        "best_valid_result": best_valid_result,
-        "test_result": test_result,
-    }
+        result = {
+            "valid_score_bigger": config["valid_metric_bigger"],
+            "test_result": test_result,
+        }
 
     if not config["single_spec"]:
         dist.destroy_process_group()

@@ -993,6 +993,16 @@ class PGPRTrainer(Trainer):
         return super()._train_epoch(train_data, epoch_idx, show_progress=show_progress)
 
 
+class CAFETrainer(Trainer):
+    r"""CAFETrainer is designed for CAFE, which is a knowledge-aware recommendation method."""
+
+    def __init__(self, config, model):
+        super().__init__(config, model)
+
+    def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
+        return super()._train_epoch(train_data, epoch_idx, show_progress=show_progress)
+
+
 class KGATTrainer(Trainer):
     r"""KGATTrainer is designed for KGAT, which is a knowledge-aware recommendation method."""
 

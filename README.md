@@ -1,5 +1,13 @@
-# hopwise
+<h1 align="center">
+    hopwise
+</h1>
 
+
+<p align="center">
+🚀 Recbole extension with focus on Knowledge Graphs (KGs) and interpretability/explainability.
+</p>
+
+---
 _hopwise_ is an advanced extension of the Recbole library, designed to enhance recommendation systems with the power of knowledge graphs. By integrating knowledge embedding models, path-based reasoning methods, and path language modeling approaches, hopwise supports both recommendation and link prediction tasks with a focus on interpretability and self-explanation.
 
 ## Installation

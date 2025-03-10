@@ -206,7 +206,12 @@ def data_preparation(config, dataset):
         model = config["model"]
         built_datasets = dataset.build()
 
-        if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING] and model != "PGPR":
+        special_knowledge_aware = ["PGPR", "CAFE"]
+
+        if (
+            model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]
+            and model not in special_knowledge_aware
+        ):
             if isinstance(built_datasets, dict):
                 # then the kg has been split
                 train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets[KnowledgeEvaluationType.LP]
@@ -230,7 +235,7 @@ def data_preparation(config, dataset):
 
                 valid_kg_sampler = KGSampler(valid_kg_dataset, distribution=None)
                 valid_kg_data = get_dataloader(config, "valid")(
-                    config, valid_kg_dataset, valid_kg_sampler, shuffle=False, is_a_kg=True
+                    config, valid_kg_dataset, valid_kg_sampler, shuffle=False, is_a_kg=config["is_a_kg"]
                 )
                 valid_inter_data = get_dataloader(config, "valid")(
                     config, valid_inter_dataset, valid_inter_sampler, shuffle=False
@@ -238,7 +243,7 @@ def data_preparation(config, dataset):
 
                 test_kg_sampler = KGSampler(test_kg_dataset, distribution=None)
                 test_kg_data = get_dataloader(config, "valid")(
-                    config, test_kg_dataset, test_kg_sampler, shuffle=False, is_a_kg=True
+                    config, test_kg_dataset, test_kg_sampler, shuffle=False, is_a_kg=config["is_a_kg"]
                 )
                 test_inter_data = get_dataloader(config, "test")(
                     config, test_inter_dataset, test_inter_sampler, shuffle=False
@@ -262,7 +267,6 @@ def data_preparation(config, dataset):
 
                 train_dataset, valid_dataset, test_dataset = built_datasets
                 train_sampler, valid_sampler, test_sampler = create_samplers(config, dataset, built_datasets)
-
                 train_data = get_dataloader(config, "train")(
                     config, train_dataset, train_sampler, kg_sampler, shuffle=True
                 )
@@ -347,6 +351,8 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
         "DiffRec": _get_user_dataloader,
         "LDiffRec": _get_user_dataloader,
         "PGPR": _get_user_dataloader,
+        "CAFE": _get_user_dataloader,
+        "UCPR": _get_user_dataloader,
     }
 
     if config["model"] in register_table:

@@ -1,3 +1,4 @@
+from hopwise.model.knowledge_aware_recommender.cafe import CAFE
 from hopwise.model.knowledge_aware_recommender.cfkg import CFKG
 from hopwise.model.knowledge_aware_recommender.cke import CKE
 from hopwise.model.knowledge_aware_recommender.kgat import KGAT

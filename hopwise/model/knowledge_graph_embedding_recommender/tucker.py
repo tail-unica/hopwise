@@ -32,7 +32,7 @@ class TuckER(KnowledgeRecommender):
         # load parameters info
         self.embedding_size = config["embedding_size"]
         self.device = config["device"]
-        self.ui_relation = self.n_relations - 1
+        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
         self.label_smoothing = config["label_smoothing"]
         self.input_dropout = config["input_dropout"]
         self.input_dropout1 = config["input_dropout1"]
