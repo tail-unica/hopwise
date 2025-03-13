@@ -730,8 +730,6 @@ class KnowledgeBasedDataset(Dataset):
 
         if show_relation:
             ui_rel_num = len(self.inter_feat)
-            # ui_rel_id = self.relation_num - 1
-            # assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
 
             ui_rel_id = self.field2token_id[self.relation_field][self.ui_relation]
 
@@ -973,9 +971,7 @@ class GraphDict:
         self.kg_relation["user"] = dict()
         self.kg_relation["entity"] = dict()
 
-        for head, relation, tail in tqdm(
-            zip(heads.tolist(), relations.tolist(), tails.tolist()), total=len(heads), desc="Building Graph Dict"
-        ):
+        for head, relation, tail in tqdm(zip(heads, relations, tails), total=len(heads), desc="Building Graph Dict"):
             if relation == self.ui_relation:
                 # UI interaction case
                 if head in self.users and tail in self.items:

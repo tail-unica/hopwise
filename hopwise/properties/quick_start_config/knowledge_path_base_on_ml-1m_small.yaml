@@ -1,19 +1,7 @@
-path_constraint: [
-    [[UI-Relation],[UI-Relation],[UI-Relation]],
-    [[UI-Relation],'cinematography_by_cinematographer','cinematography_by_cinematographer'],
-    [[UI-Relation],'produced_by_prodcompany','produced_by_prodcompany'],
-    [[UI-Relation],'composed_by_composer','composed_by_composer'],
-    [[UI-Relation],'belong_to_category','belong_to_category'],
-    [[UI-Relation],'starred_by_actor','starred_by_actor'],
-    [[UI-Relation],'edited_by_editor','edited_by_editor'],
-    [[UI-Relation],'produced_by_producer','produced_by_producer'],
-    [[UI-Relation],'wrote_by_writter','wrote_by_writter'],
-    [[UI-Relation],'directed_by_director','directed_by_director'],
-    [[UI-Relation],'produced_in_country','produced_in_country'],
-    [[UI-Relation],'related_to_wikipage','related_to_wikipage'],
-]
+# These contraints are used by PGPR and CAFE.
+# While in CAFE are left as they are, in PGPR reverse relations are removed and only not-null relations are considered.
 
-CAFE_metapaths: [
+path_constraint: [
   [[null, 'user'], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["cinematography_by_cinematographer","entity"],["cinematography_by_cinematographer_r","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["produced_by_prodcompany","entity"],["produced_by_prodcompany_r","entity"]],

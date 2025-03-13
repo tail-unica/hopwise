@@ -385,7 +385,6 @@ class Config:
             and eval_lp_args is not None
             and eval_lp_args["knowledge_split"] is not None
         ):
-            self.final_config_dict["is_a_kg"] = True
             metrics_kg = self.final_config_dict["metrics_lp"]
             if isinstance(metrics_kg, str):
                 self.final_config_dict["metrics_lp"] = [metrics_kg]

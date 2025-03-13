@@ -92,9 +92,18 @@ class PGPR(KnowledgeRecommender):
         self.u_p_scales = np.max(u_p_scores, axis=1)
 
         # These are the paths constraint to use when checking for path correctness in _get_reward function
+        # Preprocess the path constraints.
         self.patterns = list()
         for path_constraint in self.path_pattern:
-            self.patterns.append(tuple(["self_loop"]) + tuple(path_constraint))
+            relations = list()
+            for node in path_constraint:
+                path_rel = node[0]
+                if path_rel is not None:
+                    if path_rel.endswith("_r"):
+                        # remove the reverse suffix
+                        path_rel = path_rel[:-2]
+                    relations.append(path_rel)
+            self.patterns.append(tuple(["self_loop"]) + tuple(relations))
 
         # Following is current episode information.
         self._batch_path = None

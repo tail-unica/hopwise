@@ -27,14 +27,11 @@ class CAFE(KnowledgeRecommender):
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
-        import warnings
-
-        warnings.simplefilter("ignore")
 
         # Load parameters info from config
         self.device = config["device"]
         self.load_embeddings = config["load_embeddings"]
-        self.raw_metapaths = config["CAFE_metapaths"]
+        self.raw_metapaths = config["path_contraint"]
 
         # Load CAFE parameters
         self.rank_weight = config["rank_weight"]
@@ -362,7 +359,7 @@ class CAFE(KnowledgeRecommender):
         return counts
 
     def run_program(self, users, path_counts, predicted_paths):
-        results = torch.full((len(users), len(self.items)), -torch.inf)
+        results = torch.full((len(users), self.n_items), -torch.inf)
 
         kg_mask = KGMask(self.G, self.kg_relation)
         program_exe = MetaProgramExecutor(self.model, self.rng, self.device, kg_mask, self.relation2rid)
@@ -374,35 +371,9 @@ class CAFE(KnowledgeRecommender):
             pred_paths_instances[user] = dict()
             program = self.create_heuristic_program(self.metapaths, predicted_paths[user], path_counts[user])
             positives = self.positives[user]
-            positives = positives[positives != 0]  # due to pvadding
+            positives = positives[positives != 0]  # due to padding
             program_exe.execute(program, user, positives)
             paths = program_exe.collect_results(program)
-            # path_scores = []
-            # for path_info in paths:
-            #     user_id = path_info[0][0]
-            #     item_id = path_info[0][-1]
-
-            #     if item_id in self.positives[user_id]:
-            #         continue
-
-            #     path_types = path_info[2]
-            #     relations = path_info[3]
-
-            #     # Reconstruct the path
-            #     reconstructed_path = [("self_loop", 'user', user_id)]
-            #     reconstructed_path.extend([(relations[i], path_types[i], path_info[0][i + 1]) \
-            # for i in range(len(relations))])
-
-            #     # Calculate aggregated score
-            #     agg_score = reduce(lambda x, y: x + y, path_info[1])
-            #     path_instance = (agg_score, np.mean(path_info[1][-1]), reconstructed_path)
-            #     pred_paths_instances[user_id][item_id] = path_instance
-            #     path_scores.append((item_id, agg_score, path_instance))
-
-            # # Sort paths based on aggregated scores and select top-k
-            # sorted_paths = sorted(path_scores, key=lambda x: x[1], reverse=True)[:self.topk_candidates]
-            # topks_products_scores = [[t[0], t[1]] for t in sorted_paths]
-            # pred_paths_topk = [t[2] for t in sorted_paths]
             tmp = [(r[0][-1], reduce(lambda x, y: x * y, r[1])) for r in paths]
             for r in paths:
                 path = [("self_loop", "user", r[0][0])]
