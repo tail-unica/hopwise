@@ -58,7 +58,7 @@ class LightGCN(GeneralRecommender):
         self.restore_item_e = None
 
         # generate intermediate data
-        self.norm_adj_mat = dataset.norm_adjacency_matrix(form="torch_sparse").to(self.device)
+        self.norm_adj_matrix = dataset.norm_adjacency_matrix(form="torch_sparse").to(self.device)
 
         # parameters initialization
         self.apply(xavier_uniform_initialization)

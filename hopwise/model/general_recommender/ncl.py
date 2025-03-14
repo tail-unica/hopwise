@@ -49,7 +49,7 @@ class NCL(GeneralRecommender):
         self.restore_user_e = None
         self.restore_item_e = None
 
-        self.norm_adj_mat = dataset.norm_adjacency_matrix(form="torch_sparse").to(self.device)
+        self.norm_adj_matrix = dataset.norm_adjacency_matrix(form="torch_sparse").to(self.device)
 
         # parameters initialization
         self.apply(xavier_uniform_initialization)
@@ -98,7 +98,7 @@ class NCL(GeneralRecommender):
         all_embeddings = self.get_ego_embeddings()
         embeddings_list = [all_embeddings]
         for layer_idx in range(max(self.n_layers, self.hyper_layers * 2)):
-            all_embeddings = torch.sparse.mm(self.norm_adj_mat, all_embeddings)
+            all_embeddings = torch.sparse.mm(self.norm_adj_matrix, all_embeddings)
             embeddings_list.append(all_embeddings)
 
         lightgcn_all_embeddings = torch.stack(embeddings_list[: self.n_layers + 1], dim=1)
