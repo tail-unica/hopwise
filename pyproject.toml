@@ -113,7 +113,7 @@ test = [
 
 [tool.tox]
 requires = ["tox-uv>=1"]
-env_list = ["3.12", "3.11", "3.10", "3.9", "3.8"]
+env_list = ["3.12", "3.11", "3.10", "3.9"]
 
 [tool.tox.env_run_base]
 description = "uv_sync run base"
