@@ -647,9 +647,16 @@ class Config:
 
         np.bool = np.bool_
         np.int = np.int_
-        np.float = np.float_
-        np.complex = np.complex_
+        if np.__version__.startswith("2."):
+            np.float = np.float64
+            np.complex = np.complex64
+            np.unicode = np.str_
+        else:
+            np.float = np.float_
+            np.complex = np.complex_
+            np.unicode = np.unicode_
+
         np.object = np.object_
         np.str = np.str_
-        np.long = np.int_
-        np.unicode = np.unicode_
+        if not hasattr(np, "long"):
+            np.long = np.int_

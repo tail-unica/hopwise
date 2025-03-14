@@ -23,7 +23,7 @@ import pandas as pd
 import torch
 import torch.nn.utils.rnn as rnn_utils
 import yaml
-from scipy.sparse import coo_matrix
+from scipy.sparse import coo_matrix, diags, dok_matrix
 
 from hopwise.data.interaction import Interaction
 from hopwise.utils import (
@@ -1777,6 +1777,98 @@ class Dataset(torch.utils.data.Dataset):
         if not self.uid_field or not self.iid_field:
             raise ValueError("dataset does not exist uid/iid, thus can not converted to sparse matrix.")
         return self._create_sparse_matrix(self.inter_feat, self.uid_field, self.iid_field, form, value_field)
+
+    def _create_norm_adjacency_matrix(self):
+        r"""Get the normalized interaction matrix of users and items.
+
+        Construct the square matrix from the training data and normalize it
+        using the laplace matrix.
+
+        .. math::
+            A_{hat} = D^{-0.5} \times A \times D^{-0.5}
+
+        Returns:
+            Sparse tensor of the normalized interaction matrix.
+        """
+        # build adj matrix
+        A = dok_matrix((self.user_num + self.item_num, self.user_num + self.item_num), dtype=np.float32)
+        inter_M = self.inter_matrix(form="coo").astype(np.float32)
+        inter_M_t = inter_M.transpose()
+        data_dict = dict(zip(zip(inter_M.row, inter_M.col + self.user_num), [1] * inter_M.nnz))
+        data_dict.update(
+            dict(
+                zip(
+                    zip(inter_M_t.row + self.user_num, inter_M_t.col),
+                    [1] * inter_M_t.nnz,
+                )
+            )
+        )
+        A._dict.update(data_dict)
+
+        # norm adj matrix
+        sumArr = (A > 0).sum(axis=1)
+        diag = np.array(sumArr.flatten())[0] + 1e-7  # add epsilon to avoid divide by zero Warning
+        diag = np.power(diag, -0.5)
+        D = diags(diag)
+        L = D @ A @ D
+
+        # covert norm_adj matrix to tensor
+        L = coo_matrix(L)
+        row = L.row
+        col = L.col
+        i = torch.LongTensor(np.array([row, col]))
+        data = torch.FloatTensor(L.data)
+
+        return torch.sparse.FloatTensor(i, data, torch.Size(L.shape))
+
+    def _create_eye_matrix(self):
+        r"""Construct the identity matrix with the size of item_num + user_num.
+
+        Returns:
+            Sparse tensor of the identity matrix. Shape of (item_num + user_num, item_num + user_num)
+        """
+        num = self.item_num + self.user_num
+        i = torch.LongTensor([range(0, num), range(0, num)])
+        val = torch.FloatTensor([1] * num)
+        return torch.sparse.FloatTensor(i, val)
+
+    def norm_adjacency_matrix(self, form="torch_sparse"):
+        """Get the normalized adjacency matrix of users and items.
+
+        Construct the square matrix from the training data and normalize it
+        using the laplace matrix.
+
+        .. math::
+            A_{hat} = D^{-0.5} \times A \times D^{-0.5}
+
+        Args:
+            form (str, optional): Format of the normalized adjacency matrix. Defaults to ``torch_sparse``.
+
+        Returns:
+            torch.sparse.FloatTensor: Normalized adjacency matrix.
+
+        Raises:
+            NotImplementedError: If the format of the normalized adjacency matrix is not implemented.
+        """
+        if form == "torch_sparse":
+            return self._create_norm_adjacency_matrix()
+        else:
+            raise NotImplementedError(f"Normalized adjacency matrix format [{form}] has not been implemented.")
+
+    def eye_matrix(self, form="torch_sparse"):
+        """Construct the identity matrix with the size of item_num + user_num.
+
+        Args:
+            form (str, optional): Format of the identity matrix. Defaults
+                to ``torch_sparse``.
+
+        Returns:
+            torch.sparse.FloatTensor: Identity matrix.
+        """
+        if form == "torch_sparse":
+            return self._create_eye_matrix()
+        else:
+            raise NotImplementedError(f"Identity matrix format [{form}] has not been implemented.")
 
     def _history_matrix(self, row, value_field=None, max_history_len=None):
         """Get dense matrix describe user/item's history interaction records.
