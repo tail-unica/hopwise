@@ -53,7 +53,7 @@ dependencies = [
     "wandb",
     "igraph",  # it will be used for random walk path sampling
     "colorama>=0.4.4",
-    "scipy==1.12.0",
+    "scipy>=1.12.0",
     "thop",
     "tabulate",
     "tensorboard>=2.5.0",
