@@ -28,7 +28,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from tqdm import tqdm
 
-from hopwise.data.dataloader import FullSortEvalDataLoader
+from hopwise.data.dataloader import FullSortLPEvalDataLoader, FullSortRecEvalDataLoader
 from hopwise.data.interaction import Interaction
 from hopwise.evaluator import Collector, Collector_KG, Evaluator, Evaluator_KG
 from hopwise.utils import (
@@ -524,7 +524,7 @@ class Trainer(AbstractTrainer):
 
         self.model.eval()
 
-        if isinstance(eval_data, FullSortEvalDataLoader):
+        if isinstance(eval_data, FullSortRecEvalDataLoader):
             eval_func = self._full_sort_batch_eval
             if self.item_tensor is None:
                 self.item_tensor = eval_data._dataset.get_item_feature().to(self.device)
@@ -704,7 +704,7 @@ class KGTrainer(Trainer):
                     eval_collector = self.eval_collector_kg
                     evaluator = self.evaluator_kg
 
-                if isinstance(data, FullSortEvalDataLoader):
+                if isinstance(data, FullSortRecEvalDataLoader) or isinstance(data, FullSortLPEvalDataLoader):
                     eval_func = self._full_sort_batch_fn
                     if self.item_tensor is None:
                         self.item_tensor = data._dataset.get_item_feature().to(self.device)
@@ -713,8 +713,8 @@ class KGTrainer(Trainer):
                     evaluator = self.evaluator
                     eval_func = self._neg_sample_batch_eval
 
-                if data.is_a_kg:
-                    self.tot_entity_num = data.heads_num
+                if isinstance(data, FullSortLPEvalDataLoader):
+                    self.tot_entity_num = data.entity_num
 
                 results[task] = self.evaluate_data_loop(
                     data, task, eval_func, eval_collector, evaluator, load_best_model, show_progress
@@ -722,12 +722,12 @@ class KGTrainer(Trainer):
             return results
         else:
             # Evaluate on Validation data or test data if not kg split
-            if isinstance(eval_data, FullSortEvalDataLoader):
+            if isinstance(eval_data, FullSortRecEvalDataLoader) or isinstance(eval_data, FullSortLPEvalDataLoader):
                 eval_func = self._full_sort_batch_fn
 
-                if eval_data.is_a_kg:
+                if isinstance(eval_data, FullSortLPEvalDataLoader):
                     task = KnowledgeEvaluationType.LP
-                    self.tot_entity_num = eval_data.heads_num
+                    self.tot_entity_num = eval_data.source_num
                     eval_collector = self.eval_collector_kg
                     evaluator = self.evaluator_kg
                 else:
@@ -985,6 +985,16 @@ class KGTrainer(Trainer):
 
 class PGPRTrainer(Trainer):
     r"""PGPRTrainer is designed for PGPR, which is a knowledge-aware recommendation method."""
+
+    def __init__(self, config, model):
+        super().__init__(config, model)
+
+    def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
+        return super()._train_epoch(train_data, epoch_idx, show_progress=show_progress)
+
+
+class CAFETrainer(Trainer):
+    r"""CAFETrainer is designed for CAFE, which is a knowledge-aware recommendation method."""
 
     def __init__(self, config, model):
         super().__init__(config, model)

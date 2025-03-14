@@ -40,7 +40,7 @@ class ConvKB(KnowledgeRecommender):
         self.kernel_size = config["kernel_size"]
         self.drop_prob = config["dropout_prob"]
         self.lmbda = config["lambda"]
-        self.ui_relation = self.n_relations - 1
+        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
 
         # Embeddings and Layers
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)

@@ -22,3 +22,5 @@ tempCodeRunnerFile.py
 .env
 dataset/
 hyper/
+*.txt
+*.*emb

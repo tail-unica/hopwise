@@ -100,7 +100,9 @@ dev = [
   "nbformat"
 ]
 docs = [
-  "sphinx"
+  "sphinx",
+  "Furo",
+  "sphinx-copybutton"
 ]
 test = [
   "pytest-xdist",

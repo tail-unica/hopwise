@@ -1,14 +1,15 @@
-# PGPR model parameters
-state_history: 1
-max_acts: 250
-gamma: 0.99
-action_dropout: 0.0
-hidden_sizes: [512,256]
-max_path_len: 3
-weight_factor: 1e-3
-beam_search_hop: [25,5,1]
+# CAFE Parameters
+rank_weight: 10.0
+use_dropout: True
+deep_module: True
+topk_candidates: 10
+sample_size: 500
+kg_reverse_r: True
+topk_paths: 25
+clip_grad_norm:
+  max_norm: 5.0
 
-# The kge embeddings necessary to score paths
+# Embeddings
 additional_feat_suffix: [useremb, entityemb, relationemb]
 
 # To load the pretrained embeddings (Typically from TransE) necessary to score the paths

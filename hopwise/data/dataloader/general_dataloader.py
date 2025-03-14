@@ -166,11 +166,9 @@ class NegSampleEvalDataLoader(NegSampleDataLoader):
             cur_data = self._neg_sampling(transformed_data)
             return cur_data, None, None, None
 
-
 class FullSortEvalDataLoader(AbstractDataLoader):
     """:class:`FullSortEvalDataLoader` is a dataloader for full-sort evaluation. In order to speed up calculation,
-    this dataloader would only return the user part of interactions, positive items and used items.
-    It would not return negative items.
+    this dataloader would only return the data samples with positives, not negatives
 
     Args:
         config (Config): The config of dataloader.
@@ -179,109 +177,21 @@ class FullSortEvalDataLoader(AbstractDataLoader):
         shuffle (bool, optional): Whether the dataloader will be shuffle after a round. Defaults to ``False``.
     """
 
-    def __init__(self, config, dataset, sampler, shuffle=False, is_a_kg=False):
+    def __init__(self, config, dataset, sampler, shuffle=False):
         self.logger = getLogger()
-        self.is_a_kg = is_a_kg
-        self.eval_kg_data = None
-        if self.is_a_kg:
-            self.head_entity_field = dataset.head_entity_field
-            self.relation_field = dataset.relation_field
-            self.tail_entity_field = dataset.tail_entity_field
-            self.head_list = []
-            self.tail_list = []
-            self.relation_list = []
-            self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
-
-            if not self.is_sequential:
-                head2used_tails = sampler.get_used_ids()
-                self.heads_num = len(head2used_tails)
-
-                self.head2tails_num = np.zeros(self.heads_num, dtype=np.int64)
-                self.head2positive_tail = np.array([None] * self.heads_num)
-                self.head2history_tail = np.array([None] * self.heads_num)
-
-                last_entity = None
-                positive_tail = set()
-
-                for head, relation, tail in zip(
-                    dataset.kg_feat[self.head_entity_field].numpy(),
-                    dataset.kg_feat[self.relation_field].numpy(),
-                    dataset.kg_feat[self.tail_entity_field].numpy(),
-                ):
-                    if head != last_entity:
-                        self._set_entity_property(last_entity, head2used_tails[last_entity], positive_tail)
-                        last_entity = head
-                        self.head_list.append(head)
-                        self.tail_list.append(tail)
-                        self.relation_list.append(relation)
-                        positive_tail = set()
-                    positive_tail.add(tail)
-                self._set_entity_property(last_entity, head2used_tails[last_entity], positive_tail)
-                self.head_list = torch.tensor(self.head_list, dtype=torch.int64)
-                self.tail_list = torch.tensor(self.tail_list, dtype=torch.int64)
-                self.relation_list = torch.tensor(self.relation_list, dtype=torch.int64)
-                self.kg_df = dataset.join(
-                    Interaction(
-                        {
-                            self.head_entity_field: self.head_list,
-                            self.relation_field: self.relation_list,
-                            self.tail_entity_field: self.tail_list,
-                        }
-                    )
-                )
-                self.sample_size = len(self.kg_df) if not self.is_sequential else len(dataset)
-        else:
-            self.uid_field = dataset.uid_field
-            self.iid_field = dataset.iid_field
-            self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
-            if not self.is_sequential:
-                user_num = dataset.user_num
-                self.uid_list = []
-                self.uid2items_num = np.zeros(user_num, dtype=np.int64)
-                self.uid2positive_item = np.array([None] * user_num)
-                self.uid2history_item = np.array([None] * user_num)
-
-                dataset.sort(by=self.uid_field, ascending=True)
-                last_uid = None
-                positive_item = set()
-                uid2used_item = sampler.used_ids
-
-                for uid, iid in zip(
-                    dataset.inter_feat[self.uid_field].numpy(),
-                    dataset.inter_feat[self.iid_field].numpy(),
-                ):
-                    if uid != last_uid:
-                        self._set_user_property(last_uid, uid2used_item[last_uid], positive_item)
-                        last_uid = uid
-                        self.uid_list.append(uid)
-                        positive_item = set()
-                    positive_item.add(iid)
-                self._set_user_property(last_uid, uid2used_item[last_uid], positive_item)
-                self.uid_list = torch.tensor(self.uid_list, dtype=torch.int64)
-                self.user_df = dataset.join(Interaction({self.uid_field: self.uid_list}))
-
-                self.sample_size = len(self.user_df) if not self.is_sequential else len(dataset)
 
         if shuffle:
             self.logger.warning("FullSortEvalDataLoader can't shuffle")
             shuffle = False
         super().__init__(config, dataset, sampler, shuffle=shuffle)
 
-    def _set_user_property(self, uid, used_item, positive_item):
-        if uid is None:
+    def _set_source_property(self, source, used_ids, positives):
+        if source is None:
             return
-        history_item = used_item - positive_item
-        self.uid2positive_item[uid] = torch.tensor(list(positive_item), dtype=torch.int64)
-        self.uid2items_num[uid] = len(positive_item)
-        self.uid2history_item[uid] = torch.tensor(list(history_item), dtype=torch.int64)
-
-    def _set_entity_property(self, head, used_tail, positive_tail):
-        if head is None:
-            return
-        history_tail = used_tail - positive_tail
-        self.head2positive_tail[head] = torch.tensor(list(positive_tail), dtype=torch.int64)
-        self.head2tails_num[head] = len(positive_tail)
-        self.head2history_tail[head] = torch.tensor(list(history_tail), dtype=torch.int64)
+        history = used_ids - positives
+        self._sample2positives[source] = torch.tensor(list(positives), dtype=torch.int64)
+        self._sample2positive_num[source] = len(positives)
+        self._sample2history[source] = torch.tensor(list(history), dtype=torch.int64)
 
     def _init_batch_size_and_step(self):
         batch_size = self.config["eval_batch_size"]
@@ -297,37 +207,151 @@ class FullSortEvalDataLoader(AbstractDataLoader):
     def update_config(self, config):
         super().update_config(config)
 
+    def _not_sequential_collate_fn(self, index, source_field):
+        index = np.array(index)
+        source_df = self._source_df[index]
+        source_list = list(source_df[source_field])
+
+        history = self._sample2history[source_list]
+        positives = self._sample2positives[source_list]
+
+        history_source = torch.cat([torch.full_like(hist_iid, i) for i, hist_iid in enumerate(history)])
+        history_target = torch.cat(list(history))
+
+        positive_source = torch.cat([torch.full_like(pos_iid, i) for i, pos_iid in enumerate(positives)])
+        positive_target = torch.cat(list(positives))
+
+        return source_df, (history_source, history_target), positive_source, positive_target
+
+
+class FullSortRecEvalDataLoader(FullSortEvalDataLoader):
+    """:class:`FullSortRecEvalDataLoader` is a dataloader for full-sort evaluation for the recommendation (Rec) task.
+
+    Args:
+        config (Config): The config of dataloader.
+        dataset (Dataset): The dataset of dataloader.
+        sampler (Sampler): The sampler of dataloader.
+        shuffle (bool, optional): Whether the dataloader will be shuffle after a round. Defaults to ``False``.
+    """
+
+    def __init__(self, config, dataset, sampler, shuffle=False):
+        self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
+
+        self.uid_field = dataset.uid_field
+        self.iid_field = dataset.iid_field
+
+        self._build_positive_samples(dataset, sampler, dataset.inter_feat, self.uid_field, self.iid_field)
+        self.uid2items_num = self._sample2positive_num
+        self.uid2positive_item = self._sample2positives
+        self.uid2history_item = self._sample2history
+        self.uid_list = self._source_list
+        self.user_df = self._source_df
+
+        super().__init__(config, dataset, sampler, shuffle=shuffle)
+
+    def _build_positive_samples(self, dataset, sampler, feat, source_field, target_field):
+        source_num = len(dataset.field2id_token[source_field])
+
+        self._source_list = []
+        self._sample2positive_num = np.zeros(source_num, dtype=np.int64)
+        self._sample2positives = np.array([None] * source_num)
+        self._sample2history = np.array([None] * source_num)
+
+        dataset.sort(by=source_field, ascending=True)
+        last_source = None
+        positives = set()
+        used_ids = sampler.used_ids
+
+        for source, target in zip(feat[source_field].numpy(), feat[target_field].numpy()):
+            if source != last_source:
+                self._set_source_property(last_source, used_ids[last_source], positives)
+                last_source = source
+                self._source_list.append(source)
+                positives = set()
+            positives.add(target)
+        self._set_source_property(last_source, used_ids[last_source], positives)
+        self._source_list = torch.tensor(self._source_list, dtype=torch.int64)
+        self._source_df = dataset.join(Interaction({source_field: self._source_list}))
+        self.sample_size = len(self._source_df) if not self.is_sequential else len(dataset)
+
     def collate_fn(self, index):
         index = np.array(index)
         if not self.is_sequential:
-            if self.is_a_kg:
-                kg_df = self.kg_df[index]
-                head_list = list(kg_df[self.head_entity_field])
+            return self._not_sequential_collate_fn(index, self.uid_field)
+        else:
+            interaction = self._dataset[index]
+            transformed_interaction = self.transform(self._dataset, interaction)
+            inter_num = len(transformed_interaction)
+            positive_u = torch.arange(inter_num)
+            positive_i = transformed_interaction[self.iid_field]
 
-                history_tails = self.head2history_tail[head_list]
-                positive_tails = self.head2positive_tail[head_list]
+            return transformed_interaction, None, positive_u, positive_i
 
-                history_h = torch.cat([torch.full_like(hist_iid, i) for i, hist_iid in enumerate(history_tails)])
-                history_t = torch.cat(list(history_tails))
 
-                positive_h = torch.cat([torch.full_like(pos_iid, i) for i, pos_iid in enumerate(positive_tails)])
-                positive_t = torch.cat(list(positive_tails))
+class FullSortLPEvalDataLoader(FullSortEvalDataLoader):
+    """:class:`FullSortLPEvalDataLoader` is a dataloader for full-sort evaluation for the link prediction (LP) task.
 
-                return kg_df, (history_h, history_t), positive_h, positive_t
-            else:
-                user_df = self.user_df[index]
-                uid_list = list(user_df[self.uid_field])
+    Args:
+        config (Config): The config of dataloader.
+        dataset (Dataset): The dataset of dataloader.
+        sampler (Sampler): The sampler of dataloader.
+        shuffle (bool, optional): Whether the dataloader will be shuffle after a round. Defaults to ``False``.
+    """
 
-                history_item = self.uid2history_item[uid_list]
-                positive_item = self.uid2positive_item[uid_list]
+    def __init__(self, config, dataset, sampler, shuffle=False):
+        self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
 
-                history_u = torch.cat([torch.full_like(hist_iid, i) for i, hist_iid in enumerate(history_item)])
-                history_i = torch.cat(list(history_item))
+        self.head_entity_field = dataset.head_entity_field
+        self.tail_entity_field = dataset.tail_entity_field
 
-                positive_u = torch.cat([torch.full_like(pos_iid, i) for i, pos_iid in enumerate(positive_item)])
-                positive_i = torch.cat(list(positive_item))
+        self._build_positive_samples(dataset, sampler, dataset.kg_feat, self.head_entity_field, self.tail_entity_field)
+        self.head2tails_num = self._sample2positive_num
+        self.head2positive_tail = self._sample2positives
+        self.head2history_tail = self._sample2history
+        self.head_list = self._source_list
+        self.kg_df = self._source_df
 
-                return user_df, (history_u, history_i), positive_u, positive_i
+        super().__init__(config, dataset, sampler, shuffle=shuffle)
+
+    def _build_positive_samples(self, dataset, sampler, feat, source_field, target_field):
+        relation_field = dataset.relation_field
+        head_list = list()
+        relation_list = list()
+        tail_list = list()
+        self.source_num = len(dataset.field2id_token[source_field])
+
+        self._sample2positive_num = np.zeros(self.source_num, dtype=np.int64)
+        self._sample2positives = np.array([None] * self.source_num)
+        self._sample2history = np.array([None] * self.source_num)
+
+        last_source = None
+        positives = set()
+        used_ids = sampler.get_used_ids()
+
+        for source, relation, target in zip(
+            feat[source_field].numpy(), feat[relation_field], feat[target_field].numpy()
+        ):
+            if source != last_source:
+                self._set_source_property(last_source, used_ids[last_source], positives)
+                last_source = source
+                head_list.append(source)
+                relation_list.append(relation)
+                tail_list.append(target)
+                positives = set()
+            positives.add(target)
+        self._set_source_property(last_source, used_ids[last_source], positives)
+        self._source_list = torch.tensor(head_list, dtype=torch.int64)
+        tail_list = torch.tensor(tail_list, dtype=torch.int64)
+        relation_list = torch.tensor(relation_list, dtype=torch.int64)
+        self._source_df = dataset.join(
+            Interaction({source_field: self._source_list, relation_field: relation_list, target_field: tail_list})
+        )
+        self.sample_size = len(self._source_df) if not self.is_sequential else len(dataset)
+
+    def collate_fn(self, index):
+        index = np.array(index)
+        if not self.is_sequential:
+            return self._not_sequential_collate_fn(index, self.head_entity_field)
         else:
             interaction = self._dataset[index]
             transformed_interaction = self.transform(self._dataset, interaction)

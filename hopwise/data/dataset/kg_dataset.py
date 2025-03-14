@@ -72,7 +72,8 @@ class KnowledgeBasedDataset(Dataset):
     def __init__(self, config):
         super().__init__(config)
         self.tail_field = None
-        self.is_kg_data = None
+        self.G = None
+        self.kg_relation = None
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
@@ -623,9 +624,11 @@ class KnowledgeBasedDataset(Dataset):
         return np.arange(self.entity_num)
 
     def ckg_dict_graph(self):
-        G = self.ckg_graph(form="dgl", value_field="relation_id")
-        G = GraphDict(G, dataset=self, ui_relation=self.ui_relation)
-        return G, G.kg_relation
+        G = GraphDict(self, self.ui_relation, self.kg_feat, self.inter_feat)
+        self.G = G
+        self.kg_relation = G.kg_relation
+
+        return self.G, self.kg_relation
 
     def kg_graph(self, form="coo", value_field=None):
         """Get graph or sparse matrix that describe relations between entities.
@@ -727,8 +730,9 @@ class KnowledgeBasedDataset(Dataset):
 
         if show_relation:
             ui_rel_num = len(self.inter_feat)
-            ui_rel_id = self.relation_num - 1
-            assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
+
+            ui_rel_id = self.field2token_id[self.relation_field][self.ui_relation]
+
             kg_rel = self.kg_feat[self.relation_field]
             ui_rel = torch.full((2 * ui_rel_num,), ui_rel_id, dtype=kg_rel.dtype)
             edge = torch.cat([ui_rel, kg_rel])
@@ -934,69 +938,72 @@ class KnowledgeBasedDataset(Dataset):
 
 
 class GraphDict:
-    def __init__(self, ckg, dataset, ui_relation):
-        self.dataset = dataset
-        self.relation2id = self.dataset.field2token_id["relation_id"]
-        self.user_num = self.dataset.user_num
-        self.users = self.dataset.inter_feat[self.dataset.uid_field]
-        self.items = self.dataset.inter_feat[self.dataset.iid_field] + self.user_num
+    def __init__(self, dataset, ui_relation, kg_feat, inter_feat):
+        self.relation2id = dataset.field2token_id["relation_id"]
+        self.users = dataset.inter_feat[dataset.uid_field]
+        self.items = dataset.inter_feat[dataset.iid_field]
         self.ui_relation = self.relation2id[ui_relation]
 
         self.G = dict()
         self.kg_relation = dict()
 
-        (src, tgt), rel = ckg.edges(), ckg.edata["relation_id"]
+        # Knowledge graph data
+        hids = kg_feat[dataset.head_entity_field].numpy()
+        kg_rels = kg_feat[dataset.relation_field].numpy()
+        tids = kg_feat[dataset.tail_entity_field].numpy()
 
-        # Build the graph. Consider to save the dataset to prevent the repeated building.
-        self._build_graph(src, rel, tgt)
+        # User Interaction data
+        uids = inter_feat[dataset.uid_field].numpy()
+        ui_ids = np.full((len(uids),), self.ui_relation)
+        iids = inter_feat[dataset.iid_field].numpy()
 
-    def _build_graph(self, src, rel, tgt):
+        # Concatenate data
+        heads = np.concatenate([uids, iids, hids])
+        relations = np.concatenate([ui_ids, ui_ids, kg_rels])
+        tails = np.concatenate([iids, uids, tids])
+
+        # Build the graph
+        self._build_graph(heads, relations, tails)
+
+    def _build_graph(self, heads, relations, tails):
         self.G["user"] = dict()
         self.G["entity"] = dict()
         self.kg_relation["user"] = dict()
         self.kg_relation["entity"] = dict()
 
-        for head, relation, tail in tqdm(
-            zip(src.tolist(), rel.tolist(), tgt.tolist()), total=len(src), desc="Building PGPR Graph Dict"
-        ):
+        for head, relation, tail in tqdm(zip(heads, relations, tails), total=len(heads), desc="Building Graph Dict"):
             if relation == self.ui_relation:
                 # UI interaction case
                 if head in self.users and tail in self.items:
-                    original_tail = tail - self.user_num
-
                     if head not in self.G["user"]:
                         self.G["user"][head] = dict()
                     if relation not in self.G["user"][head]:
                         self.G["user"][head][relation] = list()
 
-                    self.G["user"][head][relation].append(original_tail)
+                    self.G["user"][head][relation].append(tail)
                     self.kg_relation["user"][relation] = "entity"
                 elif head in self.items and tail in self.users:
-                    original_head = head - self.user_num
+                    if head not in self.G["entity"]:
+                        self.G["entity"][head] = dict()
+                    if relation not in self.G["entity"][head]:
+                        self.G["entity"][head][relation] = list()
 
-                    if original_head not in self.G["entity"]:
-                        self.G["entity"][original_head] = dict()
-                    if relation not in self.G["entity"][original_head]:
-                        self.G["entity"][original_head][relation] = list()
-
-                    self.G["entity"][original_head][relation].append(tail)
+                    self.G["entity"][head][relation].append(tail)
                     self.kg_relation["entity"][relation] = "user"
             else:
-                original_head = head - self.user_num
-                original_tail = tail - self.user_num
-
-                if original_head not in self.G["entity"]:
-                    self.G["entity"][original_head] = dict()
-                if relation not in self.G["entity"][original_head]:
-                    self.G["entity"][original_head][relation] = list()
-                if original_tail not in self.G["entity"]:
-                    self.G["entity"][original_tail] = dict()
-                if relation not in self.G["entity"][original_tail]:
-                    self.G["entity"][original_tail][relation] = list()
+                if head not in self.G["entity"]:
+                    self.G["entity"][head] = dict()
+                if relation not in self.G["entity"][head]:
+                    self.G["entity"][head][relation] = list()
+                if tail not in self.G["entity"]:
+                    self.G["entity"][tail] = dict()
+                if relation not in self.G["entity"][tail]:
+                    self.G["entity"][tail][relation] = list()
 
                 # KG case
-                self.G["entity"][original_head][relation].append(original_tail)
-                self.G["entity"][original_tail][relation].append(original_head)
+                self.G["entity"][head][relation].append(tail)
+                self.G["entity"][tail][relation].append(head)
+
                 self.kg_relation["entity"][relation] = "entity"
 
     def __call__(self, eh_type, eh_id=None, relation=None):

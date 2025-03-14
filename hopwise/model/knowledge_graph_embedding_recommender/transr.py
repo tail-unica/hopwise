@@ -34,7 +34,7 @@ class TransR(KnowledgeRecommender):
         self.embedding_size = config["embedding_size"]
         self.margin = config["margin"]
         self.device = config["device"]
-        self.ui_relation = self.n_relations - 1
+        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
 
         # Embeddings
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
