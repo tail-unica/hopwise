@@ -928,7 +928,7 @@ class KnowledgeBasedDataset(Dataset):
 
 
 class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
-    """:class:`UserItemKnowledgeBasedDataset` is based on :class:`~recbole.data.dataset.dataset.KnowledgeBasedDataset`,
+    """:class:`UserItemKnowledgeBasedDataset` is based on :class:`~hopwise.data.dataset.dataset.KnowledgeBasedDataset`,
     and load ``.kg`` and ``.user_link`` and ``.item_link`` additionally.
 
     Entities are remapped together with ``user_id`` and ``item_id`` specially.

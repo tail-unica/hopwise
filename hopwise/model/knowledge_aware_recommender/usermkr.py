@@ -13,11 +13,12 @@ Reference code:
 """
 
 import torch
-from recbole.model.abstract_recommender import KnowledgeRecommender
-from recbole.model.init import xavier_normal_initialization
-from recbole.model.layers import MLPLayers
-from recbole.utils import InputType
 from torch import nn
+
+from hopwise.model.abstract_recommender import KnowledgeRecommender
+from hopwise.model.init import xavier_normal_initialization
+from hopwise.model.layers import MLPLayers
+from hopwise.utils import InputType
 
 
 class UserMKR(KnowledgeRecommender):

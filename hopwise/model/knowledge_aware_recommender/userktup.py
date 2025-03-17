@@ -15,12 +15,13 @@ Reference code:
 
 import torch
 import torch.nn.functional as F
-from recbole.model.abstract_recommender import KnowledgeRecommender
-from recbole.model.init import xavier_uniform_initialization
-from recbole.model.loss import BPRLoss, EmbMarginLoss
-from recbole.utils import InputType
 from torch import nn
 from torch.autograd import Variable
+
+from hopwise.model.abstract_recommender import KnowledgeRecommender
+from hopwise.model.init import xavier_uniform_initialization
+from hopwise.model.loss import BPRLoss, EmbMarginLoss
+from hopwise.utils import InputType
 
 
 class UserKTUP(KnowledgeRecommender):
