@@ -320,7 +320,7 @@ class HopwiseCallback(TrainerCallback):
         self.train_phase = train_phase
 
     def on_train_begin(self, args, state, control, **kwargs):
-        self.hopwise_trainer.eval_collector.data_collect(self.train_data)
+        self.hopwise_trainer.eval_collector.train_data_collect(self.train_data)
         if self.hopwise_trainer.config["train_neg_sample_args"].get("dynamic", False):
             self.train_data.get_model(self.model)
         self.valid_step = 0
