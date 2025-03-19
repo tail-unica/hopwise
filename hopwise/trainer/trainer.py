@@ -378,7 +378,7 @@ class Trainer(AbstractTrainer):
         if saved and self.start_epoch >= self.epochs:
             self._save_checkpoint(-1, verbose=verbose)
 
-        self.eval_collector.data_collect(train_data)
+        self.eval_collector.train_data_collect(train_data)
         if self.config["train_neg_sample_args"].get("dynamic", False):
             train_data.get_model(self.model)
         valid_step = 0
@@ -513,6 +513,8 @@ class Trainer(AbstractTrainer):
         """
         if not eval_data:
             return
+
+        self.eval_collector.eval_data_collect(eval_data)
 
         if load_best_model:
             checkpoint_file = model_file or self.saved_model_file
@@ -804,7 +806,7 @@ class KGTrainer(Trainer):
         if saved and self.start_epoch >= self.epochs:
             self._save_checkpoint(-1, verbose=verbose)
 
-        self.eval_collector.data_collect(train_data)
+        self.eval_collector.train_data_collect(train_data)
         if self.config["train_neg_sample_args"].get("dynamic", False):
             train_data.get_model(self.model)
         valid_step = 0
@@ -1578,7 +1580,7 @@ class NCLTrainer(Trainer):
         if saved and self.start_epoch >= self.epochs:
             self._save_checkpoint(-1)
 
-        self.eval_collector.data_collect(train_data)
+        self.eval_collector.train_data_collect(train_data)
 
         for epoch_idx in range(self.start_epoch, self.epochs):
             # only differences from the original trainer
@@ -1807,7 +1809,7 @@ class HFPathLanguageModelingTrainer(PretrainTrainer):
     ):
         from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
 
-        self.eval_collector.data_collect(train_data)
+        self.eval_collector.train_data_collect(train_data)
 
         training_arguments = self.prepare_training_arguments()
 
@@ -1918,7 +1920,7 @@ class KGGLMTrainer(HFPathLanguageModelingTrainer):
     def pretrain(self, train_data, verbose=True, show_progress=False):
         from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
 
-        self.eval_collector.data_collect(train_data)
+        self.eval_collector.train_data_collect(train_data)
 
         pretrain_path = self._get_pretrained_model_path()
         pretrain_path = pretrain_path.replace(self.hopwise_save_path_suffix, self.huggingface_save_path_suffix)

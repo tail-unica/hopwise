@@ -77,7 +77,7 @@ class Collector:
         self.topk = self.config["topk"]
         self.device = self.config["device"]
 
-    def data_collect(self, train_data):
+    def train_data_collect(self, train_data):
         """Collect the evaluation resource from training data.
 
         Args:
@@ -98,6 +98,18 @@ class Collector:
             row = train_data.dataset.inter_feat[train_data.dataset.uid_field]
             col = train_data.dataset.inter_feat[train_data.dataset.iid_field]
             self.data_struct.set("data.history_index", torch.vstack([row, col]))
+
+    def eval_data_collect(self, eval_data):
+        """Collect the evaluation resource from evaluation data, such as user and item features.
+
+        Args:
+            eval_data (AbstractDataLoader): the evaluation dataloader which contains the evaluation data.
+
+        """
+        if self.register.need("eval_data.user_feat"):
+            if not hasattr(eval_data.dataset, "user_feat") or eval_data.dataset.user_feat is None:
+                raise AttributeError("Evaluation data does not include user features.")
+            self.data_struct.set("eval_data.user_feat", eval_data.dataset.user_feat)
 
     def _average_rank(self, scores):
         """Get the ranking of an ordered tensor, and take the average of the ranking for positions with equal values.
@@ -147,6 +159,10 @@ class Collector:
             positive_u(Torch.Tensor): the row index of positive items for each user.
             positive_i(Torch.Tensor): the positive item id for each user.
         """
+        if self.register.need("rec.users"):
+            uid_field = self.config["USER_ID_FIELD"]
+            self.data_struct.update_tensor("rec.users", interaction[uid_field])
+
         if self.register.need("rec.items"):
             # get topk
             _, topk_idx = torch.topk(scores_tensor, max(self.topk), dim=-1)  # n_users x k
@@ -192,11 +208,8 @@ class Collector:
             load_best_model (bool): whether to load the best model.
         """
 
-        # Train t-SNE embeddings
         if self.config["tsne"] is not None:
             train_tsne(model, self.config["tsne"], load_best_model)
-
-        # Something else...
 
     def eval_collect(self, eval_pred: torch.Tensor, data_label: torch.Tensor):
         """Collect the evaluation resource from total output and label.
