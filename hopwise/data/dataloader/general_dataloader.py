@@ -166,6 +166,7 @@ class NegSampleEvalDataLoader(NegSampleDataLoader):
             cur_data = self._neg_sampling(transformed_data)
             return cur_data, None, None, None
 
+
 class FullSortEvalDataLoader(AbstractDataLoader):
     """:class:`FullSortEvalDataLoader` is a dataloader for full-sort evaluation. In order to speed up calculation,
     this dataloader would only return the data samples with positives, not negatives
@@ -184,6 +185,34 @@ class FullSortEvalDataLoader(AbstractDataLoader):
             self.logger.warning("FullSortEvalDataLoader can't shuffle")
             shuffle = False
         super().__init__(config, dataset, sampler, shuffle=shuffle)
+
+    def check_sequential(self, config):
+        self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
+
+    def _build_positive_samples(self, dataset, sampler, feat, source_field, target_field):
+        source_num = len(dataset.field2id_token[source_field])
+
+        self._source_list = []
+        self._sample2positive_num = np.zeros(source_num, dtype=np.int64)
+        self._sample2positives = np.array([None] * source_num)
+        self._sample2history = np.array([None] * source_num)
+
+        dataset.sort(by=source_field, ascending=True)
+        last_source = None
+        positives = set()
+        used_ids = sampler.used_ids
+
+        for source, target in zip(feat[source_field].numpy(), feat[target_field].numpy()):
+            if source != last_source:
+                self._set_source_property(last_source, used_ids[last_source], positives)
+                last_source = source
+                self._source_list.append(source)
+                positives = set()
+            positives.add(target)
+        self._set_source_property(last_source, used_ids[last_source], positives)
+        self._source_list = torch.tensor(self._source_list, dtype=torch.int64)
+        self._source_df = dataset.join(Interaction({source_field: self._source_list}))
+        self.sample_size = len(self._source_df) if not self.is_sequential else len(dataset)
 
     def _set_source_property(self, source, used_ids, positives):
         if source is None:
@@ -235,7 +264,7 @@ class FullSortRecEvalDataLoader(FullSortEvalDataLoader):
     """
 
     def __init__(self, config, dataset, sampler, shuffle=False):
-        self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
+        self.check_sequential(config)
 
         self.uid_field = dataset.uid_field
         self.iid_field = dataset.iid_field
@@ -248,31 +277,6 @@ class FullSortRecEvalDataLoader(FullSortEvalDataLoader):
         self.user_df = self._source_df
 
         super().__init__(config, dataset, sampler, shuffle=shuffle)
-
-    def _build_positive_samples(self, dataset, sampler, feat, source_field, target_field):
-        source_num = len(dataset.field2id_token[source_field])
-
-        self._source_list = []
-        self._sample2positive_num = np.zeros(source_num, dtype=np.int64)
-        self._sample2positives = np.array([None] * source_num)
-        self._sample2history = np.array([None] * source_num)
-
-        dataset.sort(by=source_field, ascending=True)
-        last_source = None
-        positives = set()
-        used_ids = sampler.used_ids
-
-        for source, target in zip(feat[source_field].numpy(), feat[target_field].numpy()):
-            if source != last_source:
-                self._set_source_property(last_source, used_ids[last_source], positives)
-                last_source = source
-                self._source_list.append(source)
-                positives = set()
-            positives.add(target)
-        self._set_source_property(last_source, used_ids[last_source], positives)
-        self._source_list = torch.tensor(self._source_list, dtype=torch.int64)
-        self._source_df = dataset.join(Interaction({source_field: self._source_list}))
-        self.sample_size = len(self._source_df) if not self.is_sequential else len(dataset)
 
     def collate_fn(self, index):
         index = np.array(index)
@@ -299,9 +303,10 @@ class FullSortLPEvalDataLoader(FullSortEvalDataLoader):
     """
 
     def __init__(self, config, dataset, sampler, shuffle=False):
-        self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
+        self.check_sequential(config)
 
         self.head_entity_field = dataset.head_entity_field
+        self.relation_field = dataset.relation_field
         self.tail_entity_field = dataset.tail_entity_field
 
         self._build_positive_samples(dataset, sampler, dataset.kg_feat, self.head_entity_field, self.tail_entity_field)
