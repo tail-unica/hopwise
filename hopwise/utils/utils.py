@@ -95,6 +95,7 @@ def get_trainer(model_type, model_name):
     register_table = {
         "PEARLM": "HFPathLanguageModelingTrainer",
         "PLM": "HFPathLanguageModelingTrainer",
+        "UserMKR": "MKRTrainer",
     }
 
     try:
