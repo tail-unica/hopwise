@@ -189,7 +189,7 @@ class FullSortEvalDataLoader(AbstractDataLoader):
     def check_sequential(self, config):
         self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
 
-    def _build_positive_samples(self, dataset, sampler, feat, source_field, target_field):
+    def _build_positive_samples(self, dataset, sampler, feat, source_field, target_field, extra_fields=None):
         source_num = len(dataset.field2id_token[source_field])
 
         self._source_list = []
@@ -197,21 +197,34 @@ class FullSortEvalDataLoader(AbstractDataLoader):
         self._sample2positives = np.array([None] * source_num)
         self._sample2history = np.array([None] * source_num)
 
-        dataset.sort(by=source_field, ascending=True)
+        feat.sort(by=source_field, ascending=True)
         last_source = None
         positives = set()
         used_ids = sampler.used_ids
 
-        for source, target in zip(feat[source_field].numpy(), feat[target_field].numpy()):
+        if extra_fields is None:
+            extra_fields = []
+        elif not isinstance(extra_fields, list):
+            extra_fields = [extra_fields]
+
+        feat_extra_fields = [feat[field].numpy() for field in extra_fields]
+        extra_fields_list = {field: [] for field in extra_fields}
+        for source, target, *add_fields_values in zip(
+            feat[source_field].numpy(), feat[target_field].numpy(), *feat_extra_fields
+        ):
             if source != last_source:
                 self._set_source_property(last_source, used_ids[last_source], positives)
                 last_source = source
                 self._source_list.append(source)
                 positives = set()
+                for field, value in zip(extra_fields, add_fields_values):
+                    extra_fields_list[field].append(value)
             positives.add(target)
         self._set_source_property(last_source, used_ids[last_source], positives)
         self._source_list = torch.tensor(self._source_list, dtype=torch.int64)
-        self._source_df = dataset.join(Interaction({source_field: self._source_list}))
+        for field in extra_fields:
+            extra_fields_list[field] = torch.tensor(extra_fields_list[field], dtype=torch.int64)
+        self._source_df = dataset.join(Interaction({source_field: self._source_list, **extra_fields_list}))
         self.sample_size = len(self._source_df) if not self.is_sequential else len(dataset)
 
     def _set_source_property(self, source, used_ids, positives):
@@ -309,7 +322,14 @@ class FullSortLPEvalDataLoader(FullSortEvalDataLoader):
         self.relation_field = dataset.relation_field
         self.tail_entity_field = dataset.tail_entity_field
 
-        self._build_positive_samples(dataset, sampler, dataset.kg_feat, self.head_entity_field, self.tail_entity_field)
+        self._build_positive_samples(
+            dataset,
+            sampler,
+            dataset.kg_feat,
+            self.head_entity_field,
+            self.tail_entity_field,
+            extra_fields=[self.relation_field],
+        )
         self.head2tails_num = self._sample2positive_num
         self.head2positive_tail = self._sample2positives
         self.head2history_tail = self._sample2history
@@ -317,41 +337,6 @@ class FullSortLPEvalDataLoader(FullSortEvalDataLoader):
         self.kg_df = self._source_df
 
         super().__init__(config, dataset, sampler, shuffle=shuffle)
-
-    def _build_positive_samples(self, dataset, sampler, feat, source_field, target_field):
-        relation_field = dataset.relation_field
-        head_list = list()
-        relation_list = list()
-        tail_list = list()
-        self.source_num = len(dataset.field2id_token[source_field])
-
-        self._sample2positive_num = np.zeros(self.source_num, dtype=np.int64)
-        self._sample2positives = np.array([None] * self.source_num)
-        self._sample2history = np.array([None] * self.source_num)
-
-        last_source = None
-        positives = set()
-        used_ids = sampler.get_used_ids()
-
-        for source, relation, target in zip(
-            feat[source_field].numpy(), feat[relation_field], feat[target_field].numpy()
-        ):
-            if source != last_source:
-                self._set_source_property(last_source, used_ids[last_source], positives)
-                last_source = source
-                head_list.append(source)
-                relation_list.append(relation)
-                tail_list.append(target)
-                positives = set()
-            positives.add(target)
-        self._set_source_property(last_source, used_ids[last_source], positives)
-        self._source_list = torch.tensor(head_list, dtype=torch.int64)
-        tail_list = torch.tensor(tail_list, dtype=torch.int64)
-        relation_list = torch.tensor(relation_list, dtype=torch.int64)
-        self._source_df = dataset.join(
-            Interaction({source_field: self._source_list, relation_field: relation_list, target_field: tail_list})
-        )
-        self.sample_size = len(self._source_df) if not self.is_sequential else len(dataset)
 
     def collate_fn(self, index):
         index = np.array(index)
