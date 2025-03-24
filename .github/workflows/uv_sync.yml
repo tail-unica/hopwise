@@ -8,11 +8,11 @@ on: [
 
 jobs:
   check-uv-sync:
-    runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: true
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version:
           - "3.9"
           - "3.10"
@@ -21,6 +21,7 @@ jobs:
         include:
           - python-version: "3.12"
             experimental: true
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -36,4 +37,5 @@ jobs:
       - name: Run Hopwise
         run: |
           uv run run_hopwise.py --epochs=2
+          uv run run_hopwise.py --model=LightGCN --epochs=2
           uv run run_hopwise.py --model=KGAT --epochs=2
