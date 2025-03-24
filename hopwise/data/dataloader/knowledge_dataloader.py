@@ -18,7 +18,7 @@ import numpy as np
 from hopwise.data.dataloader.abstract_dataloader import AbstractDataLoader
 from hopwise.data.dataloader.general_dataloader import FullSortEvalDataLoader, TrainDataLoader
 from hopwise.data.interaction import Interaction
-from hopwise.utils import KGDataLoaderState, PathLanuageModelingTokenType
+from hopwise.utils import KGDataLoaderState, KGPathExplanationTokenType
 
 
 class KGDataLoader(AbstractDataLoader):
@@ -208,8 +208,8 @@ class KnowledgePathEvalDataLoader(FullSortEvalDataLoader):
                 dataset.path_separator.join(
                     [
                         dataset.bos_token,
-                        PathLanuageModelingTokenType.USER.value + str(uid.item()),
-                        PathLanuageModelingTokenType.RELATION.value + str(ui_relation),
+                        KGPathExplanationTokenType.USER.value + str(uid.item()),
+                        KGPathExplanationTokenType.RELATION.value + str(ui_relation),
                     ]
                 )
                 for uid in user_df

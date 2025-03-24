@@ -2,7 +2,7 @@
 # While in CAFE are left as they are, in PGPR reverse relations are removed and only not-null relations are considered.
 
 path_constraint: [
-  [[null, 'user'], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["[UI-Relation]","user"], ["[UI-Relation]","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["cinematography_by_cinematographer","entity"],["cinematography_by_cinematographer_r","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["produced_by_prodcompany","entity"],["produced_by_prodcompany_r","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["composed_by_composer","entity"],["composed_by_composer_r","entity"]],

@@ -43,14 +43,18 @@ class DataStruct:
     def set(self, name: str, value):
         self._data_dict[name] = value
 
-    def update_tensor(self, name: str, value: torch.Tensor):
+    def update_tensor(self, name: str, value):
         if name not in self._data_dict:
-            self._data_dict[name] = value.clone().detach()
-        else:
-            if not isinstance(self._data_dict[name], torch.Tensor):
-                raise ValueError(f"{name} is not a tensor.")
-
+            if isinstance(value, torch.Tensor):
+                self._data_dict[name] = value.clone().detach()
+            else:
+                self._data_dict[name] = value
+        # if not isinstance(self._data_dict[name], torch.Tensor):
+        #     raise ValueError(f"{name} is not a tensor.")
+        elif isinstance(self._data_dict[name], torch.Tensor):
             self._data_dict[name] = torch.cat((self._data_dict[name], value.clone().detach()), dim=0)
+        else:
+            self._data_dict[name] = self._data_dict[name] + value
 
     def __str__(self):
         data_info = "\nContaining:\n"
@@ -98,6 +102,52 @@ class Collector:
             row = train_data.dataset.inter_feat[train_data.dataset.uid_field]
             col = train_data.dataset.inter_feat[train_data.dataset.iid_field]
             self.data_struct.set("data.history_index", torch.vstack([row, col]))
+        if self.register.need("data.timestamp"):
+            # timestamp don't match in .inter file.
+            # this data should belong to the train set
+            self.data_struct.set("data.timestamp", self.timestamp_dict(train_data))
+        if self.register.need("data.max_path_type"):
+            import numpy as np
+
+            self.data_struct.set(
+                "data.max_path_type", np.unique(train_data.dataset.kg_feat[train_data.dataset.relation_field])
+            )
+        if self.register.need("data.node_degree"):
+            self.data_struct.set("data.node_degree", self.node_degree_dict(train_data))
+        if self.register.need("data.max_path_length"):
+            # how many path constraint are set?
+            # 'path_constraint' is hardcoded and may change in the future
+            self.data_struct.set("data.max_path_length", len(self.config["path_constraint"]))
+        if self.register.need("data.rid2relation"):
+            self.data_struct.set("data.rid2relation", train_data.dataset.field2id_token["relation_id"])
+
+    def node_degree_dict(self, train_data):
+        # from pgpr knowledge graph
+        # https: // github.com/giacoballoccu/rep-path-reasoning-recsys/blob/main/models/PGPR/knowledge_graph.py
+        aug_kg, _ = train_data.dataset.ckg_dict_graph()
+        degrees = {}
+        for etype in aug_kg.G:
+            degrees[etype] = {}
+            for eid in aug_kg.G[etype]:
+                count = 0
+                for r in aug_kg.G[etype][eid]:
+                    count += len(aug_kg.G[etype][eid][r])
+                degrees[etype][eid] = count
+        return degrees
+
+    def timestamp_dict(self, train_data):
+        user_pid2timestamp = dict()
+
+        users = train_data.dataset.inter_feat[train_data.dataset.uid_field]
+        products = train_data.dataset.inter_feat[train_data.dataset.iid_field]
+        timestamps = train_data.dataset.inter_feat[train_data.dataset.time_field]
+
+        for user, product, timestamp in zip(users, products, timestamps):
+            if user.item() not in user_pid2timestamp:
+                user_pid2timestamp[user.item()] = list()
+            user_pid2timestamp[user.item()].append((product.item(), timestamp.item()))
+
+        return user_pid2timestamp
 
     def eval_data_collect(self, eval_data):
         """Collect the evaluation resource from evaluation data, such as user and item features.
@@ -146,7 +196,7 @@ class Collector:
 
     def eval_batch_collect(
         self,
-        scores_tensor: torch.Tensor,
+        scores_tensor,
         interaction,
         positive_u: torch.Tensor,
         positive_i: torch.Tensor,
@@ -159,6 +209,10 @@ class Collector:
             positive_u(Torch.Tensor): the row index of positive items for each user.
             positive_i(Torch.Tensor): the positive item id for each user.
         """
+        paths = None
+        if isinstance(scores_tensor, tuple):
+            scores_tensor, paths = scores_tensor
+
         if self.register.need("rec.users"):
             uid_field = self.config["USER_ID_FIELD"]
             self.data_struct.update_tensor("rec.users", interaction[uid_field])
@@ -200,6 +254,11 @@ class Collector:
             self.label_field = self.config["LABEL_FIELD"]
             self.data_struct.update_tensor("data.label", interaction[self.label_field].to(self.device))
 
+        if self.register.need("data.test_batch_users"):
+            self.data_struct.update_tensor("data.test_batch_users", scores_tensor.size(0))
+        if self.register.need("rec.paths"):
+            self.data_struct.update_tensor("rec.paths", paths)
+
     def model_collect(self, model: torch.nn.Module, load_best_model=False):
         """Collect the evaluation resource from model and do something with the model.
 
@@ -234,7 +293,7 @@ class Collector:
             if isinstance(self.data_struct._data_dict[key], torch.Tensor):
                 self.data_struct._data_dict[key] = self.data_struct._data_dict[key].cpu()
         returned_struct = copy.deepcopy(self.data_struct)
-        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label"]:
+        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label", "rec.paths"]:
             if key in self.data_struct:
                 del self.data_struct[key]
         returned_struct.set("topk", self.topk)

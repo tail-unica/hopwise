@@ -119,7 +119,7 @@ class FeatureSource(Enum):
     NET = "net"
 
 
-class PathLanuageModelingTokenType(Enum):
+class KGPathExplanationTokenType(Enum):
     """Type of tokens in paths for Path Language Modeling.
 
     - ``USER``: User tokens.

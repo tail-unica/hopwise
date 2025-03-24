@@ -13,7 +13,7 @@ from transformers import (
 
 from hopwise.model.layers import ConstrainedLogitsProcessorWordLevel
 from hopwise.utils import (
-    PathLanuageModelingTokenType,
+    KGPathExplanationTokenType,
     dict2str,
     early_stopping,
     get_gpu_usage,
@@ -112,8 +112,8 @@ class CumulativeSequenceScoreRanker:
             uid_token = seq[1]
             recommended_token = seq[-2]
             if not (
-                uid_token.startswith(PathLanuageModelingTokenType.USER.value)
-                and recommended_token.startswith(PathLanuageModelingTokenType.ITEM.value)
+                uid_token.startswith(KGPathExplanationTokenType.USER.value)
+                and recommended_token.startswith(KGPathExplanationTokenType.ITEM.value)
             ):
                 continue
 
@@ -145,9 +145,9 @@ def get_user_negatives_and_tokens_ids(used_ids, item_num, tokenizer):
     user_negatives_ids = {uid: items - set(used_ids[uid]) for uid in range(len(used_ids))}
     user_negatives_tokens_ids = {}
     for uid in user_negatives_ids:
-        uid_token = tokenizer.convert_tokens_to_ids(PathLanuageModelingTokenType.USER.value + str(uid))
+        uid_token = tokenizer.convert_tokens_to_ids(KGPathExplanationTokenType.USER.value + str(uid))
         user_negatives_tokens_ids[uid_token] = [
-            tokenizer.convert_tokens_to_ids(PathLanuageModelingTokenType.ITEM.value + str(item))
+            tokenizer.convert_tokens_to_ids(KGPathExplanationTokenType.ITEM.value + str(item))
             for item in user_negatives_ids[uid]
         ]
     return user_negatives_ids, user_negatives_tokens_ids

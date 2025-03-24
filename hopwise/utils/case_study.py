@@ -18,7 +18,7 @@ from hopwise.data.interaction import Interaction
 
 
 @torch.no_grad()
-def full_sort_scores(uid_series, model, test_data, device=None):
+def full_sort_scores(uid_series, model, test_data, device=None, explain=False):
     """Calculate the scores of all items for each user in uid_series.
 
     Note:
@@ -54,7 +54,14 @@ def full_sort_scores(uid_series, model, test_data, device=None):
     # Get scores of all items
     input_interaction = input_interaction.to(device)
     try:
+        # if not explain:
         scores = model.full_sort_predict(input_interaction)
+        if isinstance(scores, tuple):
+            scores, paths = scores
+        # else:
+        #     _, explanations = model.explain(input_interaction)
+        #     return explanations
+
     except NotImplementedError:
         input_interaction = input_interaction.repeat_interleave(dataset.item_num)
         input_interaction.update(test_data.dataset.get_item_feature().to(device).repeat(len(uid_series)))

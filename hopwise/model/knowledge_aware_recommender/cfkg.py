@@ -13,8 +13,8 @@ from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
 from hopwise.model.init import xavier_normal_initialization
-from hopwise.utils import InputType
 from hopwise.model.loss import InnerProductLoss
+from hopwise.utils import InputType
 
 
 class CFKG(KnowledgeRecommender):
@@ -39,7 +39,6 @@ class CFKG(KnowledgeRecommender):
 
         # load parameters info
         self.embedding_size = config["embedding_size"]
-        self.margin = config["margin"]
 
         # define layers and loss
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)

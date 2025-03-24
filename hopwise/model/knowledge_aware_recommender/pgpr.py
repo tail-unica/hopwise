@@ -12,17 +12,22 @@ from collections import defaultdict, namedtuple
 from functools import reduce
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Categorical
 
-from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.utils import InputType
+from hopwise.model.abstract_recommender import ExplainableRecommender, KnowledgeRecommender
+from hopwise.utils import InputType, KGPathExplanationTokenType
 
 
-class PGPR(KnowledgeRecommender):
+class PGPR(KnowledgeRecommender, ExplainableRecommender):
     input_type = InputType.PAIRWISE
+
+    import warnings
+
+    warnings.filterwarnings("ignore")
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
@@ -43,16 +48,12 @@ class PGPR(KnowledgeRecommender):
         self.weight_factor = config["weight_factor"]
         self.path_pattern = config["path_constraint"]
         self.beam_search_hop = config["beam_search_hop"]
+
         # user-item relation
-        self.ui_relation = self.n_relations - 1
+        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
 
         # Load Full Knowledge Graph in dict form
-        if dataset.G is not None and dataset.kg_relation is not None:
-            self.G, self.kg_relation = dataset.G, dataset.kg_relation
-        else:
-            self.G, self.kg_relation = dataset.ckg_dict_graph()
-            if config["save_dataset"]:
-                dataset.save()
+        self.G, self.kg_relation = dataset.ckg_dict_graph()
 
         # Items
         self.items = set(range(self.n_items))
@@ -403,6 +404,20 @@ class PGPR(KnowledgeRecommender):
 
         return self.collect_scores(users, paths, probs)
 
+    def explain(self, interaction):
+        users = interaction[self.USER_ID]
+
+        paths, probs = self.beam_search(users)
+
+        results, explanations = self.collect_scores(users, paths, probs)
+
+        # make explanations as pandas dataframe, then return the results
+        df = pd.DataFrame(explanations, columns=["user", "product", "score", "path"])
+
+        df["path"] = df["path"].apply(self.decode_path)
+
+        return results, df
+
     def beam_search(self, users):
         users = [user.item() for user in users]
         state_pool = self.reset(users)  # numpy of [bs, dim]
@@ -450,6 +465,7 @@ class PGPR(KnowledgeRecommender):
         return path_pool, probs_pool
 
     def collect_scores(self, users, paths, probs):
+        collect_results = list()
         # 1) get all valid paths for each user, compute path score and path probability
         pred_paths = {uid.item(): defaultdict(list) for uid in users}
         path_scores = np.dot(
@@ -458,6 +474,7 @@ class PGPR(KnowledgeRecommender):
         for path, prob in zip(paths, probs):
             if path[-1][1] != "entity":
                 continue
+
             path_uid = path[0][2]
             # check it is a user in the test set batch
             if path_uid not in pred_paths:
@@ -505,17 +522,36 @@ class PGPR(KnowledgeRecommender):
             top_products = top_products[::-1]
             top_paths = top_paths[::-1]
 
-            for product, score in top_products:
+            for (product, score), path in zip(top_products, top_paths):
                 results[i, product] = score
 
-        return results
+                # collect user, product, score and paths.
+                collect_results.append([user, product, score, path])
+
+        return results, collect_results
 
     def decode_path(self, path):
         decoded_path = []
         for node in path:
+            # append relations
             if node[0] != "self_loop":
-                decoded_path.append(self.rid2relation[node[0]])
-            decoded_path.append(f"{node[1]} {node[2]}")
+                decoded_path.append(f"{KGPathExplanationTokenType.RELATION.value}{node[0]}")
+
+            # append everything else
+
+            e_type = node[1]
+            eid = node[2]
+
+            if e_type == "user":
+                e_type = KGPathExplanationTokenType.USER.value
+            elif eid in self.items:
+                e_type = KGPathExplanationTokenType.ITEM.value
+            else:
+                e_type = KGPathExplanationTokenType.ENTITY.value
+
+            # node[1] is the node type, node[2] is the node id
+            decoded_path.append(f"{e_type}{eid}")
+
         return decoded_path
 
 
