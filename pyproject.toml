@@ -146,8 +146,8 @@ commands = [
 
 [tool.uv]
 find-links = [
-  "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html",
-  "https://data.dgl.ai/wheels/torch-2.3/repo.html",
+  # "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html",
+  # "https://data.dgl.ai/wheels/torch-2.3/repo.html",
   "https://data.dgl.ai/wheels/cu121/repo.html",
   "https://data.dgl.ai/wheels/cu118/repo.html",
   "https://data.dgl.ai/wheels/repo.html",
