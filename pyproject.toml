@@ -19,6 +19,10 @@ packages = ["hopwise"]
 [tool.hatch.version]
 path = "hopwise/__init__.py"
 
+[tool.hatch.build.target.sdist.force-include]
+"run_hopwise.py" = "hopwise/run_hopwise.py"
+"run_hopwise_group.py" = "hopwise/run_hopwise_group.py"
+
 [project]
 name = "hopwise"
 description = """
@@ -139,8 +143,10 @@ commands = [
 
 [tool.uv]
 find-links = [
-  "https://data.dgl.ai/wheels/repo.html",
-  "https://data.dgl.ai/wheels/torch-2.4/repo.html"
+  "https://data.dgl.ai/wheels/torch-2.4/repo.html",
+  "https://data.dgl.ai/wheels/cu121/repo.html",
+  "https://data.dgl.ai/wheels/cu118/repo.html",
+  "https://data.dgl.ai/wheels/repo.html"
 ]
 
 [tool.ruff]
@@ -188,5 +194,5 @@ line-ending = "auto"
 convention = "google"
 
 [project.scripts]
-hopwise = "run_hopwise.py"
-hopwise_group = "run_hopwise_group.py"
+hopwise = "hopwise.run_hopwise"
+hopwise_group = "hopwise.run_hopwise_group"
