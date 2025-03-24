@@ -28,7 +28,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from tqdm import tqdm
 
-from hopwise.data.dataloader import FullSortLPEvalDataLoader, FullSortRecEvalDataLoader
+from hopwise.data.dataloader import FullSortLPEvalDataLoader, NegSampleDataLoader
 from hopwise.data.interaction import Interaction
 from hopwise.evaluator import Collector, Collector_KG, Evaluator, Evaluator_KG
 from hopwise.utils import (
@@ -155,8 +155,6 @@ class Trainer(AbstractTrainer):
         self.eval_type = config["eval_type"]
         self.eval_collector = Collector(config)
         self.evaluator = Evaluator(config)
-        self.item_tensor = None
-        self.tot_item_num = None
 
     def _build_optimizer(self, **kwargs):
         r"""Init the Optimizer
@@ -395,7 +393,7 @@ class Trainer(AbstractTrainer):
         if saved and self.start_epoch >= self.epochs:
             self._save_checkpoint(-1, verbose=verbose)
 
-        self.eval_collector.data_collect(train_data)
+        self.eval_collector.train_data_collect(train_data)
         if self.config["train_neg_sample_args"].get("dynamic", False):
             train_data.get_model(self.model)
         valid_step = 0
@@ -475,28 +473,34 @@ class Trainer(AbstractTrainer):
         self._add_hparam_to_tensorboard(self.best_valid_score)
         return self.best_valid_score, self.best_valid_result
 
-    def _full_sort_batch_eval(self, batched_data):
+    def _batch_eval(self, batched_data, tot_item_num, neg_sampling=False, item_tensor=None):
+        if neg_sampling:
+            return self._neg_sample_batch_eval(batched_data, tot_item_num=tot_item_num)
+        else:
+            return self._full_sort_batch_eval(batched_data, tot_item_num, item_tensor)
+
+    def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
         interaction, history_index, positive_u, positive_i = batched_data
         try:
             # Note: interaction without item ids
             scores = self.model.full_sort_predict(interaction.to(self.device))
         except NotImplementedError:
             inter_len = len(interaction)
-            new_inter = interaction.to(self.device).repeat_interleave(self.tot_item_num)
+            new_inter = interaction.to(self.device).repeat_interleave(tot_item_num)
             batch_size = len(new_inter)
-            new_inter.update(self.item_tensor.repeat(inter_len))
+            new_inter.update(item_tensor.repeat(inter_len))
             if batch_size <= self.test_batch_size:
                 scores = self.model.predict(new_inter)
             else:
                 scores = self._split_predict(new_inter, batch_size)
 
-        scores = scores.view(-1, self.tot_item_num)
+        scores = scores.view(-1, tot_item_num)
         scores[:, 0] = -np.inf
         if history_index is not None:
             scores[history_index] = -np.inf
         return interaction, scores, positive_u, positive_i
 
-    def _neg_sample_batch_eval(self, batched_data):
+    def _neg_sample_batch_eval(self, batched_data, tot_item_num=None):
         interaction, row_idx, positive_u, positive_i = batched_data
         batch_size = interaction.length
         if batch_size <= self.test_batch_size:
@@ -509,7 +513,7 @@ class Trainer(AbstractTrainer):
         elif self.config["eval_type"] == EvaluatorType.RANKING:
             col_idx = interaction[self.config["ITEM_ID_FIELD"]]
             batch_user_num = positive_u[-1] + 1
-            scores = torch.full((batch_user_num, self.tot_item_num), -np.inf, device=self.device)
+            scores = torch.full((batch_user_num, tot_item_num), -np.inf, device=self.device)
             scores[row_idx, col_idx] = origin_scores
             return interaction, scores, positive_u, positive_i
 
@@ -531,6 +535,8 @@ class Trainer(AbstractTrainer):
         if not eval_data:
             return
 
+        self.eval_collector.eval_data_collect(eval_data)
+
         if load_best_model:
             checkpoint_file = model_file or self.saved_model_file
             checkpoint = torch.load(checkpoint_file, weights_only=False, map_location=self.device)
@@ -541,14 +547,12 @@ class Trainer(AbstractTrainer):
 
         self.model.eval()
 
-        if isinstance(eval_data, FullSortRecEvalDataLoader):
-            eval_func = self._full_sort_batch_eval
-            if self.item_tensor is None:
-                self.item_tensor = eval_data._dataset.get_item_feature().to(self.device)
-        else:
-            eval_func = self._neg_sample_batch_eval
-        if self.config["eval_type"] == EvaluatorType.RANKING:
-            self.tot_item_num = eval_data._dataset.item_num
+        item_tensor = None
+        tot_item_num = eval_data._dataset.item_num
+        neg_sampling = isinstance(eval_data, NegSampleDataLoader)
+        if not neg_sampling:
+            item_tensor = eval_data._dataset.get_item_feature().to(self.device)
+
         iter_data = (
             tqdm(
                 eval_data,
@@ -563,7 +567,9 @@ class Trainer(AbstractTrainer):
         num_sample = 0
         for batch_idx, batched_data in enumerate(iter_data):
             num_sample += len(batched_data)
-            interaction, scores, positive_u, positive_i = eval_func(batched_data)
+            interaction, scores, positive_u, positive_i = self._batch_eval(
+                batched_data, tot_item_num, neg_sampling=neg_sampling, item_tensor=item_tensor
+            )
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
             self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
@@ -655,7 +661,7 @@ class KGTrainer(Trainer):
         r"""Valid the model with valid data
 
         Args:
-            valid_data (DataLoader): the valid data.
+            valid_data (Dataloader, list[Dataloader]): the valid data.
             show_progress (bool): Show the progress of evaluate epoch. Defaults to ``False``.
 
         Returns:
@@ -680,12 +686,68 @@ class KGTrainer(Trainer):
             valid_score_inter = calculate_valid_score(valid_result_inter, self.valid_metric)
             return {KnowledgeEvaluationType.REC: [valid_score_inter, valid_result_inter]}
 
+    def _batch_eval(self, batched_data, tot_target_num, neg_sampling=False, task=None, target_tensor=None):
+        if neg_sampling:
+            return self._neg_sample_batch_eval(batched_data, tot_item_num=tot_target_num)
+        else:
+            if task == KnowledgeEvaluationType.REC:
+                full_sort_predict_fn = self.model.full_sort_predict
+                predict_fn = self.model.predict
+            else:
+                full_sort_predict_fn = self.model.full_sort_predict_kg
+                predict_fn = self.model.predict_kg
+
+            return self._full_sort_batch_eval(
+                batched_data,
+                full_sort_predict_fn,
+                predict_fn,
+                target_tensor,
+                tot_target_num,
+            )
+
+    def _full_sort_batch_eval(self, batched_data, full_sort_predict_fn, predict_fn, column_tensor, tot_column_num):
+        # in the case of recommendation, positive_h and positive_t are the user and item ids
+        interaction, history_index, positive_h, positive_t = batched_data
+        try:
+            scores = full_sort_predict_fn(interaction.to(self.device))
+        except NotImplementedError:
+            inter_len = len(interaction)
+            new_inter = interaction.to(self.device).repeat_interleave(tot_column_num)
+            batch_size = len(new_inter)
+            new_inter.update(column_tensor.repeat(inter_len))
+            if batch_size <= self.test_batch_size:
+                scores = predict_fn(new_inter)
+            else:
+                scores = self._split_predict_fn(new_inter, batch_size, predict_fn)
+
+        scores = scores.view(-1, tot_column_num)
+        scores[:, 0] = -np.inf
+        if history_index is not None:
+            scores[history_index] = -np.inf
+        return interaction, scores, positive_h, positive_t
+
+    def _split_predict_fn(self, interaction, batch_size, predict_fn):
+        split_interaction = dict()
+        for key, tensor in interaction.interaction.items():
+            split_interaction[key] = tensor.split(self.test_batch_size, dim=0)
+        num_block = (batch_size + self.test_batch_size - 1) // self.test_batch_size
+        result_list = []
+        for i in range(num_block):
+            current_interaction = dict()
+            for key, split_tensor in split_interaction.items():
+                current_interaction[key] = split_tensor[i]
+            result = predict_fn(Interaction(current_interaction).to(self.device))
+            if len(result.shape) == 0:
+                result = result.unsqueeze(0)
+            result_list.append(result)
+        return torch.cat(result_list, dim=0)
+
     @torch.no_grad()
     def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
         r"""Evaluate the model based on the eval data.
 
         Args:
-            eval_data (DataLoader): the eval data
+            eval_data (Dataloader, list[Dataloader]): the eval data.
             load_best_model (bool, optional): whether load the best model in the training process, default: True.
                                               It should be set True, if users want to test the model after training.
             model_file (str, optional): the saved model file, default: None. If users want to test the previously
@@ -708,71 +770,62 @@ class KGTrainer(Trainer):
 
         self.model.eval()
 
-        # Evaluate on test set data if kg data available
+        results = dict()
         if isinstance(eval_data, list):
-            results = dict()
-            tasks = [KnowledgeEvaluationType.REC, KnowledgeEvaluationType.LP]
-            # then the first part is for recommendation and the second part for kg
-            for task, data in zip(tasks, eval_data):
-                if task == KnowledgeEvaluationType.REC:
-                    eval_collector = self.eval_collector
-                    evaluator = self.evaluator
-                else:
-                    eval_collector = self.eval_collector_kg
-                    evaluator = self.evaluator_kg
-
-                if isinstance(data, (FullSortRecEvalDataLoader, FullSortLPEvalDataLoader)):
-                    eval_func = self._full_sort_batch_fn
-                    if self.item_tensor is None:
-                        self.item_tensor = data._dataset.get_item_feature().to(self.device)
-                else:
-                    eval_collector = self.eval_collector
-                    evaluator = self.evaluator
-                    eval_func = self._neg_sample_batch_eval
-
-                if isinstance(data, FullSortLPEvalDataLoader):
-                    self.tot_entity_num = data.entity_num
-
-                results[task] = self.evaluate_data_loop(
-                    data, task, eval_func, eval_collector, evaluator, load_best_model, show_progress
-                )
-            return results
+            task_eval_data = {KnowledgeEvaluationType.REC: eval_data[0], KnowledgeEvaluationType.LP: eval_data[1]}
         else:
-            # Evaluate on Validation data or test data if not kg split
-            if isinstance(eval_data, (FullSortRecEvalDataLoader, FullSortLPEvalDataLoader)):
-                eval_func = self._full_sort_batch_fn
-
-                if isinstance(eval_data, FullSortLPEvalDataLoader):
-                    task = KnowledgeEvaluationType.LP
-                    self.tot_entity_num = eval_data.source_num
-                    eval_collector = self.eval_collector_kg
-                    evaluator = self.evaluator_kg
-                else:
-                    task = KnowledgeEvaluationType.REC
-                    eval_collector = self.eval_collector
-                    evaluator = self.evaluator
-
-                if self.item_tensor is None:
-                    self.item_tensor = eval_data._dataset.get_item_feature().to(self.device)
-
-                if self.tail_tensor is None:
-                    self.tail_tensor = eval_data._dataset.get_tail_feature().to(self.device)
-
+            if isinstance(eval_data, FullSortLPEvalDataLoader):
+                kg_eval_type = KnowledgeEvaluationType.LP
             else:
-                task = KnowledgeEvaluationType.REC
-                eval_collector = self.eval_collector
-                evaluator = self.evaluator
-                eval_func = self._neg_sample_batch_eval
+                kg_eval_type = KnowledgeEvaluationType.REC
 
-            return self.evaluate_data_loop(
-                eval_data, task, eval_func, eval_collector, evaluator, load_best_model, show_progress
+            task_eval_data = {kg_eval_type: eval_data}
+
+        # REC task
+        if KnowledgeEvaluationType.REC in task_eval_data:
+            task = KnowledgeEvaluationType.REC
+            rec_eval_data = task_eval_data[task]
+
+            item_tensor = None
+            tot_item_num = rec_eval_data._dataset.item_num
+            neg_sampling = isinstance(rec_eval_data, NegSampleDataLoader)
+            if not neg_sampling:
+                item_tensor = rec_eval_data._dataset.get_item_feature().to(self.device)
+
+            results[task] = self.evaluate_data_loop(
+                rec_eval_data, task, tot_item_num, item_tensor, show_progress=show_progress
             )
 
-    def evaluate_data_loop(
-        self, eval_data, task, eval_func, eval_collector, evaluator, load_best_model, show_progress
-    ):
-        if self.config["eval_type"] == EvaluatorType.RANKING:
-            self.tot_item_num = eval_data._dataset.item_num
+        # LP task
+        if KnowledgeEvaluationType.LP in task_eval_data:
+            task = KnowledgeEvaluationType.LP
+            kg_eval_data = task_eval_data[task]
+
+            tot_entity_num = kg_eval_data._dataset.entity_num
+            tail_tensor = kg_eval_data._dataset.get_tail_feature().to(self.device)
+
+            results[task] = self.evaluate_data_loop(
+                kg_eval_data,
+                task,
+                tot_entity_num,
+                tail_tensor,
+                show_progress=show_progress,
+            )
+
+        if isinstance(eval_data, list):
+            return results
+        else:
+            return results[kg_eval_type]
+
+    def evaluate_data_loop(self, eval_data, task, tot_target_num, target_tensor, show_progress=True):
+        neg_sampling = isinstance(eval_data, NegSampleDataLoader)
+
+        if task == KnowledgeEvaluationType.REC:
+            eval_collector = self.eval_collector
+            evaluator = self.evaluator
+        else:
+            eval_collector = self.eval_collector_kg
+            evaluator = self.evaluator_kg
 
         iter_data = (
             tqdm(
@@ -788,7 +841,13 @@ class KGTrainer(Trainer):
         num_sample = 0
         for batch_idx, batched_data in enumerate(iter_data):
             num_sample += len(batched_data)
-            interaction, scores, positive_u, positive_i = eval_func(batched_data, task)
+            interaction, scores, positive_u, positive_i = self._batch_eval(
+                batched_data,
+                tot_target_num,
+                neg_sampling=neg_sampling,
+                task=task,
+                target_tensor=target_tensor,
+            )
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
             eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
@@ -821,7 +880,7 @@ class KGTrainer(Trainer):
         if saved and self.start_epoch >= self.epochs:
             self._save_checkpoint(-1, verbose=verbose)
 
-        self.eval_collector.data_collect(train_data)
+        self.eval_collector.train_data_collect(train_data)
         if self.config["train_neg_sample_args"].get("dynamic", False):
             train_data.get_model(self.model)
         valid_step = 0
@@ -947,57 +1006,6 @@ class KGTrainer(Trainer):
 
         self._add_hparam_to_tensorboard(self.best_valid_score)
         return best_valid["score"], best_valid["result"]
-
-    def _full_sort_batch_fn(self, batched_data, task):
-        if task == KnowledgeEvaluationType.REC:
-            return self._full_sort_batch_eval(
-                batched_data, self.model.full_sort_predict, self.model.predict, self.item_tensor, self.tot_item_num
-            )
-        else:
-            return self._full_sort_batch_eval(
-                batched_data,
-                self.model.full_sort_predict_kg,
-                self.model.predict_kg,
-                self.tail_tensor,
-                self.tot_entity_num,
-            )
-
-    def _full_sort_batch_eval(self, batched_data, full_sort_predict_fn, predict_fn, column_tensor, tot_column_num):
-        # in the case of recommendation, positive_h and positive_t are the user and item ids
-        interaction, history_index, positive_h, positive_t = batched_data
-        try:
-            scores = full_sort_predict_fn(interaction.to(self.device))
-        except NotImplementedError:
-            inter_len = len(interaction)
-            new_inter = interaction.to(self.device).repeat_interleave(tot_column_num)
-            batch_size = len(new_inter)
-            new_inter.update(column_tensor.repeat(inter_len))
-            if batch_size <= self.test_batch_size:
-                scores = predict_fn(new_inter)
-            else:
-                scores = self._split_predict_fn(new_inter, batch_size, predict_fn)
-
-        scores = scores.view(-1, tot_column_num)
-        scores[:, 0] = -np.inf
-        if history_index is not None:
-            scores[history_index] = -np.inf
-        return interaction, scores, positive_h, positive_t
-
-    def _split_predict_fn(self, interaction, batch_size, predict_fn):
-        split_interaction = dict()
-        for key, tensor in interaction.interaction.items():
-            split_interaction[key] = tensor.split(self.test_batch_size, dim=0)
-        num_block = (batch_size + self.test_batch_size - 1) // self.test_batch_size
-        result_list = []
-        for i in range(num_block):
-            current_interaction = dict()
-            for key, split_tensor in split_interaction.items():
-                current_interaction[key] = split_tensor[i]
-            result = predict_fn(Interaction(current_interaction).to(self.device))
-            if len(result.shape) == 0:
-                result = result.unsqueeze(0)
-            result_list.append(result)
-        return torch.cat(result_list, dim=0)
 
 
 class PGPRTrainer(Trainer):
@@ -1515,7 +1523,7 @@ class RaCTTrainer(PretrainTrainer):
             return super().fit(train_data, valid_data, verbose, saved, show_progress, callback_fn)
         else:
             raise ValueError(
-                "Please make sure that the 'train_stage' is " "'actor_pretrain', 'critic_pretrain' or 'finetune'!"
+                "Please make sure that the 'train_stage' is 'actor_pretrain', 'critic_pretrain' or 'finetune'!"
             )
 
 
@@ -1595,7 +1603,7 @@ class NCLTrainer(Trainer):
         if saved and self.start_epoch >= self.epochs:
             self._save_checkpoint(-1)
 
-        self.eval_collector.data_collect(train_data)
+        self.eval_collector.train_data_collect(train_data)
 
         for epoch_idx in range(self.start_epoch, self.epochs):
             # only differences from the original trainer
@@ -1824,7 +1832,7 @@ class HFPathLanguageModelingTrainer(PretrainTrainer):
     ):
         from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
 
-        self.eval_collector.data_collect(train_data)
+        self.eval_collector.train_data_collect(train_data)
 
         training_arguments = self.prepare_training_arguments()
 
@@ -1935,7 +1943,7 @@ class KGGLMTrainer(HFPathLanguageModelingTrainer):
     def pretrain(self, train_data, verbose=True, show_progress=False):
         from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
 
-        self.eval_collector.data_collect(train_data)
+        self.eval_collector.train_data_collect(train_data)
 
         pretrain_path = self._get_pretrained_model_path()
         pretrain_path = pretrain_path.replace(self.hopwise_save_path_suffix, self.huggingface_save_path_suffix)
@@ -1982,4 +1990,4 @@ class KGGLMTrainer(HFPathLanguageModelingTrainer):
             elif stage == "finetune":
                 return super().fit(train_data, valid_data, verbose, saved, show_progress, callback_fn)
             else:
-                raise ValueError("Please make sure that the 'train_stage' is " "'lp_pretrain', or 'finetune'!")
+                raise ValueError("Please make sure that the 'train_stage' is 'lp_pretrain', or 'finetune'!")

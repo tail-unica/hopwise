@@ -157,6 +157,9 @@ class ConsumerTopKMetric(AbstractMetric):
         self._ranking_metric = None
         self.sensitive_attribute = config["sensitive_attribute"]
 
+        if self.sensitive_attribute is None:
+            raise ValueError("The sensitive attribute is not specified in the config. Consumer metrics require it.")
+
     @property
     def ranking_metric(self):
         if self._ranking_metric is None:
@@ -207,5 +210,5 @@ class ConsumerTopKMetric(AbstractMetric):
         pos_index, pos_len = self.ranking_metric.used_info(dataobject)
         ranking_result = self.ranking_metric_info(pos_index, pos_len)
         result = self.get_dp(ranking_result, group_mask1, group_mask2)
-        metric_dict = self.topk_result(self.__class__.__name__.lower(), result)
+        metric_dict = self.ranking_metric.topk_result(self.__class__.__name__.lower(), result)
         return metric_dict

@@ -772,12 +772,15 @@ def create_consumer_metric_class(topk_metric):
             return self.ranking_metric.metric_info(pos_index, pos_len)
     else:
 
-        def ranking_metric_info(self, pos_index):
+        def ranking_metric_info(self, pos_index, pos_len):
             return self.ranking_metric.metric_info(pos_index)
 
     consumer_metric_class_name = f"Delta{topk_metric}"
     consumer_metric_class = type(
         consumer_metric_class_name, (ConsumerTopKMetric,), {"ranking_metric_info": ranking_metric_info}
+    )
+    consumer_metric_class.metric_need.extend(
+        [need for need in topk_metric_class.metric_need if need not in consumer_metric_class.metric_need]
     )
 
     def factory_init(self, config):
