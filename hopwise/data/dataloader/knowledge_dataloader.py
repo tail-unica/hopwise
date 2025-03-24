@@ -16,7 +16,7 @@ from logging import getLogger
 import numpy as np
 
 from hopwise.data.dataloader.abstract_dataloader import AbstractDataLoader
-from hopwise.data.dataloader.general_dataloader import FullSortEvalDataLoader, TrainDataLoader
+from hopwise.data.dataloader.general_dataloader import FullSortRecEvalDataLoader, TrainDataLoader
 from hopwise.data.interaction import Interaction
 from hopwise.utils import KGDataLoaderState, KGPathExplanationTokenType
 
@@ -195,7 +195,7 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         return self._dataset.tokenized_dataset
 
 
-class KnowledgePathEvalDataLoader(FullSortEvalDataLoader):
+class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):
     def __init__(self, config, dataset, sampler, shuffle=False):
         super().__init__(config, dataset, sampler, shuffle)
 
