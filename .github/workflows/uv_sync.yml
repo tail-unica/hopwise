@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
         python-version:
@@ -21,6 +21,8 @@ jobs:
         experimental: [false]
         include:
           - python-version: "3.12"
+            experimental: true
+          - os: windows-latest
             experimental: true
 
     steps:
