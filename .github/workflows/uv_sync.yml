@@ -8,6 +8,7 @@ on: [
 
 jobs:
   check-uv-sync:
+    runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: true
@@ -21,7 +22,6 @@ jobs:
         include:
           - python-version: "3.12"
             experimental: true
-    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
