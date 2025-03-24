@@ -19,10 +19,6 @@ packages = ["hopwise"]
 [tool.hatch.version]
 path = "hopwise/__init__.py"
 
-[tool.hatch.build.target.sdist.force-include]
-"run_hopwise.py" = "hopwise/run_hopwise.py"
-"run_hopwise_group.py" = "hopwise/run_hopwise_group.py"
-
 [project]
 name = "hopwise"
 description = """
@@ -60,8 +56,7 @@ classifiers = [
 dependencies = [
     "torch>=2.4.0 ; platform_system != 'Windows'",
     "torch==2.4.* ; platform_system == 'Windows'",
-    "numpy ; python_version != '3.12'",
-    "numpy>1.23.5 ; python_version == '3.12'",
+    "numpy<=1.24.4",
     "pandas< 2.0.0 ; python_version == '3.12'",
     "pandas>=1.3.0, < 2.0.3 ; python_version < '3.12'",
     "transformers",
@@ -79,7 +74,7 @@ dependencies = [
     "datasets",
     "colorlog>=4.7.2",
     "protobuf==3.19.0",
-    "dgl>=2.2.0 ; platform_system != 'Windows'" ,
+    "dgl>=2.4.0 ; platform_system != 'Windows'" ,
     "dgl==2.2.1 ; platform_system == 'Windows'" ,
 ]
 
@@ -143,9 +138,8 @@ commands = [
 
 [tool.uv]
 find-links = [
-  "https://data.dgl.ai/wheels/torch-2.4/repo.html",
-  "https://data.dgl.ai/wheels/cu121/repo.html",
-  "https://data.dgl.ai/wheels/cu118/repo.html",
+  "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html",
+  "https://data.dgl.ai/wheels/torch-2.3/repo.html",
   "https://data.dgl.ai/wheels/repo.html"
 ]
 
@@ -192,7 +186,3 @@ line-ending = "auto"
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
-
-[project.scripts]
-hopwise = "hopwise.run_hopwise"
-hopwise_group = "hopwise.run_hopwise_group"
