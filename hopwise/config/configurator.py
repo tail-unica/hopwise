@@ -651,6 +651,7 @@ class Config:
             np.float = np.float64
             np.complex = np.complex64
             np.unicode = np.str_
+            np.unicode_ = np.unicode
         else:
             np.float = np.float_
             np.complex = np.complex_

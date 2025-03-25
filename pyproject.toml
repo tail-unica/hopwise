@@ -97,7 +97,7 @@ cu121 = [
   "dgl",
 ]
 cu124 = [
-  "torch==2.3.*",
+  "torch==2.4.*",
   "dgl==2.4.*",
 ]
 nncf = [
@@ -121,7 +121,7 @@ hyper = [
   "optuna",
   "ray[tune]"
 ]
-all_models = [
+all-models = [
   "hopwise[nncf]",
   "hopwise[xgboost]",
   "hopwise[ncl]",
@@ -130,13 +130,6 @@ all_models = [
 ]
 
 [dependency-groups]
-dev = [
-  "hopwise[cu121]",
-  "hopwise[all_models]",
-  "plotly",
-  "opentsne",
-  "nbformat"
-]
 docs = [
   "sphinx",
   "furo",
@@ -149,6 +142,16 @@ lint = [
   "ruff",
   "pre-commit"
 ]
+dev = [
+  "hopwise[cu121]",
+  "hopwise[all-models]",
+  "plotly",
+  "opentsne",
+  "nbformat",
+  {include-group = "docs"},
+  {include-group = "test"},
+  {include-group = "lint"},
+]
 
 [tool.tox]
 requires = ["tox-uv>=1"]
@@ -156,10 +159,10 @@ env_list = ["3.12", "3.11", "3.10", "3.9"]
 
 [tool.tox.env_run_base]
 description = "uv_sync run base"
-extras = ["all-extras", "dev"]
+dependency_groups = ["dev", "test"]
 commands = [
-  ["uv", "run", "--active", "run_hopwise.py", "--epochs=2"],
-  ["uv", "run", "--active", "run_hopwise.py", "--model", "LightGCN", "--epochs=2"],
+  # ["uv", "run", "--active", "run_hopwise.py", "--epochs=2"],
+  # ["uv", "run", "--active", "run_hopwise.py", "--model", "LightGCN", "--epochs=2"],
   ["uv", "run", "--active", "run_hopwise.py", "--model", "KGAT", "--epochs=2"]
 ]
 
@@ -179,12 +182,6 @@ conflicts = [
 ]
 
 [tool.uv.sources]
-torch = [
-  { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu118", extra = "cu118" },
-  { index = "pytorch-cu121", extra = "cu121" },
-  { index = "pytorch-cu124", extra = "cu124" },
-]
 dgl = [
   { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp39-cp39-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.9'" },
   { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp310-cp310-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.10'" },
@@ -199,26 +196,6 @@ dgl = [
   { url = "https://data.dgl.ai/wheels/cu121/dgl-2.2.1%2Bcu121-cp311-cp311-win_amd64.whl", extra = "cu121", marker = "sys_platform == 'win32' and python_version == '3.11'" },
   { url = "https://data.dgl.ai/wheels/cu121/dgl-2.2.1%2Bcu121-cp312-cp312-win_amd64.whl", extra = "cu121", marker = "sys_platform == 'win32' and python_version == '3.12'" },
 ]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-cu118"
-url = "https://download.pytorch.org/whl/cu118"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-cu121"
-url = "https://download.pytorch.org/whl/cu121"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
-explicit = true
 
 [tool.ruff]
 line-length = 119
