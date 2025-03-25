@@ -82,7 +82,7 @@ dependencies = [
     "datasets",
     "colorlog>=4.7.2",
     "protobuf==3.19.0",
-    "dgl>=2.2.1",
+    "dgl==2.2.*",
 ]
 
 [project.optional-dependencies]
