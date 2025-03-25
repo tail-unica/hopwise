@@ -85,7 +85,8 @@ dependencies = [
 
 [project.optional-dependencies]
 cpu = [
-  "torch==2.4.*",
+  "torch==2.2.1 ; sys_platform == 'win32'",
+  "torch==2.4.* ; sys_platform == 'linux'",
   "dgl",
 ]
 cu118 = [
