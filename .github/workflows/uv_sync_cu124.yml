@@ -1,7 +1,7 @@
-name: Check UV Sync and Run
+name: Check UV Sync and Run on CUDA 12.4
 
 on: [
-  # push,
+  push,
   pull_request,
   workflow_dispatch
 ]
