@@ -660,3 +660,6 @@ class Config:
         np.str = np.str_
         if not hasattr(np, "long"):
             np.long = np.int_
+
+        if not hasattr(np, "string_"):
+            np.string_ = np.bytes_
