@@ -41,7 +41,7 @@ authors = [
     { name = "Giacomo Medda", email = "jackm.medda@gmail.com" },
 ]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9, <=3.11"
 license = { file = "LICENSE" }
 dynamic = ["version"]
 keywords = [
