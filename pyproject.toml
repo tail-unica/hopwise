@@ -184,10 +184,10 @@ conflicts = [
 
 [tool.uv.sources]
 dgl = [
-  { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp39-cp39-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.9'" },
-  { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp310-cp310-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.10'" },
-  { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp311-cp311-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.11'" },
-  { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp312-cp312-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.12'" },
+  # { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp39-cp39-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.9'" },
+  # { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp310-cp310-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.10'" },
+  # { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp311-cp311-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.11'" },
+  # { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp312-cp312-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.12'" },
   { url = "https://data.dgl.ai/wheels/cu118/dgl-2.2.1%2Bcu118-cp39-cp39-win_amd64.whl", extra = "cu118", marker = "sys_platform == 'win32' and python_version == '3.9'" },
   { url = "https://data.dgl.ai/wheels/cu118/dgl-2.2.1%2Bcu118-cp310-cp310-win_amd64.whl", extra = "cu118", marker = "sys_platform == 'win32' and python_version == '3.10'" },
   { url = "https://data.dgl.ai/wheels/cu118/dgl-2.2.1%2Bcu118-cp311-cp311-win_amd64.whl", extra = "cu118", marker = "sys_platform == 'win32' and python_version == '3.11'" },
