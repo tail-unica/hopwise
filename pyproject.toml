@@ -84,6 +84,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+cpu = [
+  "torch==2.3.*",
+  "dgl",
+]
+cu118 = [
+  "torch==2.3.*",
+  "dgl",
+]
+cu121 = [
+  "torch==2.3.*",
+  "dgl",
+]
+cu124 = [
+  "torch==2.3.*",
+  "dgl==2.4.*",
+]
 nncf = [
   "community",
   "python-louvain"
@@ -114,23 +130,8 @@ all_models = [
 ]
 
 [dependency-groups]
-cpu = [
-  "torch==2.3.*",
-  "dgl",
-]
-cu118 = [
-  "torch==2.3.*",
-  "dgl",
-]
-cu121 = [
-  "torch==2.3.*",
-  "dgl",
-]
-cu124 = [
-  "torch==2.3.*",
-  "dgl==2.4.*",
-]
 dev = [
+  "hopwise[cu121]",
   "hopwise[all_models]",
   "plotly",
   "opentsne",
@@ -143,6 +144,9 @@ docs = [
 ]
 test = [
   "pytest-xdist",
+]
+lint = [
+  "ruff",
   "pre-commit"
 ]
 
@@ -160,7 +164,6 @@ commands = [
 ]
 
 [tool.uv]
-default-groups = ["cu121"]
 find-links = [
   "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html",
   "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html",
