@@ -62,8 +62,8 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "torch>=2.4.0 ; platform_system != 'Windows'",
-    "torch==2.4.* ; platform_system == 'Windows'",
+    "torch>=2.4.0 ; sys_platform != 'win32'",
+    "torch==2.4.* ; sys_platform == 'win32'",
     "numpy<=1.24.4",
     "pandas< 2.0.0 ; python_version == '3.12'",
     "pandas>=1.3.0, < 2.0.3 ; python_version < '3.12'",
@@ -82,8 +82,8 @@ dependencies = [
     "datasets",
     "colorlog>=4.7.2",
     "protobuf==3.19.0",
-    "dgl>=2.4.0 ; platform_system != 'Windows'" ,
-    "dgl==2.2.1 ; platform_system == 'Windows'" ,
+    "dgl>=2.4.0 ; sys_platform != 'win32'" ,
+    "dgl==2.2.1 ; sys_platform == 'win32'" ,
 ]
 
 [project.optional-dependencies]
