@@ -2,6 +2,7 @@ import random
 from itertools import chain, zip_longest
 from string import Formatter
 
+import joblib
 import numpy as np
 from datasets import Dataset as HuggingFaceDataset
 from datasets import DatasetDict
@@ -46,10 +47,10 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
     def __init__(self, config):
         super().__init__(config)
+
         self._path_dataset = None  # path dataset is generated with generate_path_dataset
         self._tokenized_dataset = None  # tokenized dataset is generated with tokenize_path_dataset
-
-        self._init_tokenizer()
+        self._tokenizer = None
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
@@ -67,6 +68,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self.reasoning_template = path_sample_args["reasoning_template"]
         self.restrict_by_phase = path_sample_args["restrict_by_phase"]
         self.max_consecutive_invalid = path_sample_args["MAX_CONSECUTIVE_INVALID"]
+        self.parallel_max_workers = path_sample_args["parallel_max_workers"]
 
         template_fields = list(Formatter().parse(self.reasoning_template))
         self.path_separator = template_fields[1][0]
@@ -102,6 +104,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             return None
         else:
             return self._tokenized_dataset
+
+    @property
+    def tokenizer(self):
+        if self._tokenizer is None:
+            self._init_tokenizer()
+        return self._tokenizer
 
     def __getitem__(self, index):
         """Probably to be removed. It avoids issues with hopwise flops calculation."""
@@ -153,7 +161,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             ],
         )
 
-        self.tokenizer = PreTrainedTokenizerFast(
+        self._tokenizer = PreTrainedTokenizerFast(
             tokenizer_object=tokenizer_object,
             model_max_length=self.context_length,
             eos_token=self.eos_token,
@@ -447,90 +455,23 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             Defaults to 1.
         """
         paths = set()
-        path_hop_length = self.path_hop_length - 1
 
-        iter_users = tqdm(
-            range(1, self.user_num),
-            total=self.user_num - 1,
-            ncols=100,
-            desc=set_color("KG Path Sampling", "red"),
+        kwargs = dict(
+            parallel_max_workers=self.parallel_max_workers,
+            temporal_matrix=temporal_matrix,
+            paths_per_hop=paths_per_hop,
+            path_hop_length=self.path_hop_length,
+            user_num=self.user_num,
+            max_consecutive_invalid=self.max_consecutive_invalid,
+            max_paths_per_user=self.max_paths_per_user,
+            restrict_by_phase=self.restrict_by_phase,
+            collaborative_path=self.collaborative_path,
         )
-        for u in iter_users:
-            pos_iid = np.array(list(used_ids[u]))
-            if temporal_matrix is not None:
-                pos_iid = pos_iid[np.argsort(temporal_matrix[u, pos_iid])]
 
-            # reindex item ids according to the igraph
-            pos_iid += self.user_num
-
-            user_path_sample_size = 0
-            user_invalid_paths = self.max_consecutive_invalid
-
-            def _graph_traversal(g, path, hop, candidates=None):
-                nonlocal paths
-                nonlocal user_path_sample_size
-                nonlocal user_invalid_paths
-
-                if hop == 1:
-                    if candidates is not None:
-                        next_node_candidates = g.es.select(_source=path[-1], _target=candidates)
-                        next_node_candidates = list(
-                            set(e.source if e.source_vertex != path[-1] else e.target for e in next_node_candidates)
-                        )
-                    else:
-                        next_node_candidates = [
-                            v for v in g.neighbors(path[-1]) if g.vs[v]["type"] == self.iid_field and v != path[1]
-                        ]
-                else:
-                    next_node_candidates = []
-                    for node in g.neighbors(path[-1]):
-                        if self.collaborative_path:
-                            type_check = g.vs[node]["type"] in [self.entity_field, self.uid_field]
-                        else:
-                            type_check = g.vs[node]["type"] == self.entity_field
-
-                        # Self-loops are discarded
-                        if node != path[-1] and type_check:
-                            next_node_candidates.append(node)
-
-                next_nodes = np.random.choice(
-                    next_node_candidates, min(len(next_node_candidates), paths_per_hop), replace=False
-                )
-                for node in next_nodes:
-                    new_path = (*path, node)
-                    if hop == 1:
-                        # Path is valid per construction
-                        paths.add(new_path)
-                        user_path_sample_size += 1
-                    else:
-                        _graph_traversal(g, new_path, hop - 1, candidates)
-
-                    if user_path_sample_size == self.max_paths_per_user:
-                        return
-
-            while True:
-                # select new starting node
-                start_node_idx = np.random.randint(pos_iid.shape[0])
-                start_node = pos_iid[start_node_idx]
-
-                if self.restrict_by_phase:
-                    if temporal_matrix is not None:
-                        item_candidates = pos_iid[start_node_idx + 1 :]
-                    else:
-                        item_candidates = np.concatenate([pos_iid[:start_node_idx], pos_iid[start_node_idx + 1 :]])
-                else:
-                    item_candidates = None
-
-                # First hop is the relation user-item already addressed
-                curr_path_sample_size = user_path_sample_size
-                _graph_traversal(graph, (u, start_node), path_hop_length, item_candidates)
-                if user_path_sample_size - curr_path_sample_size == 0:
-                    user_invalid_paths -= paths_per_hop
-                else:
-                    user_invalid_paths = self.max_consecutive_invalid
-
-                if user_path_sample_size == self.max_paths_per_user or user_invalid_paths <= 0:
-                    break
+        user_paths = _generate_paths_constrained_random_walk_parallel(
+            graph, used_ids, self.uid_field, self.iid_field, self.entity_field, **kwargs
+        )
+        paths = set.union(*user_paths)
 
         return paths
 
@@ -835,3 +776,107 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             f"The tokenizer model: {self.tokenizer_model}",
         ]
         return "\n".join(info)
+
+
+def _generate_paths_constrained_random_walk_parallel(graph, used_ids, uid_field, iid_field, entity_field, **kwargs):
+    """Parallel version of the constrained random walk path generation."""
+    parallel_max_workers = kwargs.pop("parallel_max_workers", None)
+    temporal_matrix = kwargs.pop("temporal_matrix", None)
+    paths_per_hop = kwargs.pop("paths_per_hop", None)
+    path_hop_length = kwargs.pop("path_hop_length", None)
+    user_num = kwargs.pop("user_num", None)
+    max_consecutive_invalid = kwargs.pop("max_consecutive_invalid", None)
+    max_paths_per_user = kwargs.pop("max_paths_per_user", None)
+    restrict_by_phase = kwargs.pop("restrict_by_phase", None)
+    collaborative_path = kwargs.pop("collaborative_path", None)
+
+    def process_user(u):
+        user_paths = set()
+
+        pos_iid = np.array(list(used_ids[u]))
+        if temporal_matrix is not None:
+            pos_iid = pos_iid[np.argsort(temporal_matrix[u, pos_iid])]
+
+        # reindex item ids according to the igraph
+        pos_iid += user_num
+
+        user_path_sample_size = 0
+        user_invalid_paths = max_consecutive_invalid
+
+        def _graph_traversal(g, path, hop, candidates=None):
+            nonlocal user_paths
+            nonlocal user_path_sample_size
+            nonlocal user_invalid_paths
+
+            if hop == 1:
+                if candidates is not None:
+                    next_node_candidates = g.es.select(_source=path[-1], _target=candidates)
+                    next_node_candidates = list(
+                        set(e.source if e.source_vertex != path[-1] else e.target for e in next_node_candidates)
+                    )
+                else:
+                    next_node_candidates = [
+                        v for v in g.neighbors(path[-1]) if g.vs[v]["type"] == iid_field and v != path[1]
+                    ]
+            else:
+                next_node_candidates = []
+                for node in g.neighbors(path[-1]):
+                    if collaborative_path:
+                        type_check = g.vs[node]["type"] in [entity_field, uid_field]
+                    else:
+                        type_check = g.vs[node]["type"] == entity_field
+
+                    # Self-loops are discarded
+                    if node != path[-1] and type_check:
+                        next_node_candidates.append(node)
+
+            next_nodes = np.random.choice(
+                next_node_candidates, min(len(next_node_candidates), paths_per_hop), replace=False
+            )
+            for node in next_nodes:
+                new_path = (*path, node)
+                if hop == 1:
+                    # Path is valid per construction
+                    user_paths.add(new_path)
+                    user_path_sample_size += 1
+                else:
+                    _graph_traversal(g, new_path, hop - 1, candidates)
+
+                if user_path_sample_size == max_paths_per_user:
+                    return
+
+        while True:
+            # select new starting node
+            start_node_idx = np.random.randint(pos_iid.shape[0])
+            start_node = pos_iid[start_node_idx]
+
+            if restrict_by_phase:
+                if temporal_matrix is not None:
+                    item_candidates = pos_iid[start_node_idx + 1 :]
+                else:
+                    item_candidates = np.concatenate([pos_iid[:start_node_idx], pos_iid[start_node_idx + 1 :]])
+            else:
+                item_candidates = None
+
+            # First hop is the relation user-item already addressed
+            curr_path_sample_size = user_path_sample_size
+            _graph_traversal(graph, (u, start_node), path_hop_length, item_candidates)
+            if user_path_sample_size - curr_path_sample_size == 0:
+                user_invalid_paths -= paths_per_hop
+            else:
+                user_invalid_paths = max_consecutive_invalid
+
+            if user_path_sample_size == max_paths_per_user or user_invalid_paths <= 0:
+                break
+
+        return user_paths
+
+    iter_users = tqdm(
+        range(1, user_num),
+        total=user_num - 1,
+        ncols=100,
+        desc=set_color("KG Path Sampling", "red"),
+    )
+    return joblib.Parallel(n_jobs=parallel_max_workers, prefer="threads")(
+        joblib.delayed(process_user)(u) for u in iter_users
+    )
