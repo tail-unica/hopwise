@@ -41,7 +41,7 @@ authors = [
     { name = "Giacomo Medda", email = "jackm.medda@gmail.com" },
 ]
 readme = "README.md"
-requires-python = ">=3.9, <=3.11"
+requires-python = ">=3.9"
 license = { file = "LICENSE" }
 dynamic = ["version"]
 keywords = [
@@ -145,8 +145,8 @@ commands = [
 
 [tool.uv]
 find-links = [
-  # "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html",
-  # "https://data.dgl.ai/wheels/torch-2.3/repo.html",
+  "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html",
+  "https://data.dgl.ai/wheels/torch-2.3/repo.html",
   "https://data.dgl.ai/wheels/cu121/repo.html",
   "https://data.dgl.ai/wheels/cu118/repo.html",
   "https://data.dgl.ai/wheels/repo.html",

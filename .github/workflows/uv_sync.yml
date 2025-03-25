@@ -46,6 +46,9 @@ jobs:
 
       - name: Run Hopwise
         run: |
+          # General working example
           uv run run_hopwise.py --epochs=2
+          # Working check for scipy update
           uv run run_hopwise.py --model=LightGCN --epochs=2
+          # Working check for DGL
           uv run run_hopwise.py --model=KGAT --epochs=2
