@@ -84,22 +84,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-cpu = [
-  "torch==2.3.*",
-  "dgl",
-]
-cu118 = [
-  "torch==2.3.*",
-  "dgl",
-]
-cu121 = [
-  "torch==2.3.*",
-  "dgl",
-]
-cu124 = [
-  "torch==2.3.*",
-  "dgl==2.4.*",
-]
 nncf = [
   "community",
   "python-louvain"
@@ -130,6 +114,22 @@ all_models = [
 ]
 
 [dependency-groups]
+cpu = [
+  "torch==2.3.*",
+  "dgl",
+]
+cu118 = [
+  "torch==2.3.*",
+  "dgl",
+]
+cu121 = [
+  "torch==2.3.*",
+  "dgl",
+]
+cu124 = [
+  "torch==2.3.*",
+  "dgl==2.4.*",
+]
 dev = [
   "hopwise[all_models]",
   "plotly",
