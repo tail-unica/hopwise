@@ -85,7 +85,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cpu = [
-  "torch==2.3.*",
+  "torch==2.4.*",
   "dgl",
 ]
 cu118 = [
@@ -161,8 +161,8 @@ env_list = ["3.12", "3.11", "3.10", "3.9"]
 description = "uv_sync run base"
 dependency_groups = ["dev", "test"]
 commands = [
-  # ["uv", "run", "--active", "run_hopwise.py", "--epochs=2"],
-  # ["uv", "run", "--active", "run_hopwise.py", "--model", "LightGCN", "--epochs=2"],
+  ["uv", "run", "--active", "run_hopwise.py", "--epochs=2"],
+  ["uv", "run", "--active", "run_hopwise.py", "--model", "LightGCN", "--epochs=2"],
   ["uv", "run", "--active", "run_hopwise.py", "--model", "KGAT", "--epochs=2"]
 ]
 
