@@ -29,7 +29,7 @@ import numpy as np
 from sklearn.metrics import auc as sk_auc
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from hopwise.evaluator.base_metric import AbstractMetric, ConsumerTopKMetric, LossMetric, TopkMetric
+from hopwise.evaluator.base_metric import AbstractMetric, ConsumerTopKMetric, LossMetric, PathQualityMetric, TopkMetric
 from hopwise.evaluator.utils import _binary_clf_curve
 from hopwise.utils import EvaluatorType
 
@@ -200,6 +200,48 @@ class NDCG(TopkMetric):
 
         result = dcg / idcg
         return result
+
+
+class NDCG_old(TopkMetric):
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        pos_index, pos_len = self.used_info(dataobject)
+        result = self.metric_info(pos_index, pos_len)
+        metric_dict = self.topk_result("ndcg_old", result)
+        return metric_dict
+
+    def metric_info(self, pos_index, pos_len):
+        k = pos_index.shape[1]
+        dcg = self.dcg_at_k(pos_index, k)
+        # Ideal DCG by sorting relevance
+        idcg = self.dcg_at_k(np.sort(pos_index, axis=1)[:, ::-1], k)
+        idcg[idcg == 0] = 1
+        return dcg / idcg
+
+    def dcg_at_k(self, hit_list, k):
+        r = np.asfarray(hit_list)[:, :k]
+        if not r.size:
+            return 0.0
+        return np.sum(r / np.log2(np.arange(2, k + 2)), axis=1)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
 
 
 class Precision(TopkMetric):
@@ -919,4 +961,512 @@ class Novelty(AbstractMetric):
                 novelty_items_topk = [1 - normalized_item_count[pid] for pid in topk_user]
                 novelty_score.append(np.mean(novelty_items_topk))
             metric_dict[f"novelty@{k}"] = round(np.mean(novelty_score), self.decimal_place)
+        return metric_dict
+
+
+# Perceived Path Explanation Quality
+
+
+class LIR(PathQualityMetric):
+    """
+    Time recency of linking interaction
+
+    Args:
+        PathQualityMetric (_type_): _description_
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        timestamp, paths, _, _, _, _ = self.used_info(dataobject)
+        lir_matrix = self.lir_matrix(timestamp)
+        result = self.metric_info(lir_matrix, paths)
+        metric_dict = self.topk_result("lir", result)
+        return metric_dict
+
+    def metric_info(self, lir_matrix, paths):
+        lirs_topk = []
+        for user, _, _, path in paths:
+            e_id = path[1][-1]
+            lirs_topk.append(lir_matrix[user][e_id])
+        if len(lirs_topk) == 0:
+            return 0.0
+        return np.array(lirs_topk)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
+
+
+class Fidelity(PathQualityMetric):
+    """
+    Fidelity
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        _, paths, _, _, _, user_batch_size = self.used_info(dataobject)
+        result = self.metric_info(paths, user_batch_size)
+        metric_dict = self.topk_result("Fidelity", result)
+        return metric_dict
+
+    def metric_info(self, paths, user_batch_size):
+        user_paths = dict()
+        for user, _, _, path in paths:
+            if path is not None:
+                if user not in user_paths:
+                    user_paths[user] = 0
+                user_paths[user] += 1
+        user_paths = np.array(list(user_paths.values()))
+
+        if user_paths.size < user_batch_size:
+            padding = np.zeros(user_batch_size - len(user_paths), dtype=user_paths.dtype)
+            user_paths = np.concatenate([user_paths, padding])
+        return user_paths
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
+
+
+class SEP(PathQualityMetric):
+    """
+    Popularity of Shared Entity
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        _, paths, _, _, node_degree, _ = self.used_info(dataobject)
+        sep_matrix = self.sep_matrix(node_degree)
+        result = self.metric_info(paths, sep_matrix)
+        metric_dict = self.topk_result("SEP", result)
+        return metric_dict
+
+    def metric_info(self, paths, sep_matrix):
+        seps_topk = []
+        for _, _, _, path in paths:
+            shared_entity_id, shared_entity_type = path[-2][-1], path[-2][1]
+            seps_topk.append(sep_matrix[shared_entity_type][shared_entity_id])
+        if not seps_topk:
+            return 0.0
+        return np.array(seps_topk)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
+
+
+class LID(PathQualityMetric):
+    """
+    Diversity of Linked Interaction
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        _, paths, _, _, _, _ = self.used_info(dataobject)
+        result = self.metric_info(paths)
+        metric_dict = self.topk_result("LID", result)
+        return metric_dict
+
+    def metric_info(self, paths):
+        unique_linking_interaction = dict()
+        for user, _, _, path in paths:
+            linked_interaction_id = path[1][-1]
+            if user not in unique_linking_interaction:
+                unique_linking_interaction[user] = [0, set()]
+            unique_linking_interaction[user][0] += 1  # number of path for that specific user
+            unique_linking_interaction[user][1].add(linked_interaction_id)
+
+        lid = []
+        for user in unique_linking_interaction:
+            n_user_paths = unique_linking_interaction[user][0]
+            li = unique_linking_interaction[user][1]
+            if not n_user_paths:
+                lid.append(0.0)
+                continue
+            lid.append(len(li) / n_user_paths)
+
+        return np.array(lid)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
+
+
+class SED(PathQualityMetric):
+    """
+    Diversity of Shared Entities
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        _, paths, _, _, _, _ = self.used_info(dataobject)
+        result = self.metric_info(paths)
+        metric_dict = self.topk_result("SED", result)
+        return metric_dict
+
+    def metric_info(self, paths):
+        unique_shared_entity = dict()
+        for user, _, _, path in paths:
+            shared_entity_id = path[-2][-1]
+            if user not in unique_shared_entity:
+                unique_shared_entity[user] = [0, set()]
+            # number of path for that specific user
+            unique_shared_entity[user][0] += 1
+            unique_shared_entity[user][1].add(shared_entity_id)
+
+        sed = []
+        for user in unique_shared_entity:
+            n_user_paths = unique_shared_entity[user][0]
+            se = unique_shared_entity[user][1]
+            if not n_user_paths:
+                sed.append(0.0)
+                continue
+            sed.append(len(se) / n_user_paths)
+
+        return np.array(list(sed))
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
+
+
+class PTD(PathQualityMetric):
+    """
+    Path Type Diversity
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        _, paths, max_path_type, _, _, _ = self.used_info(dataobject)
+        result = self.metric_info(paths, max_path_type)
+        metric_dict = self.topk_result("PTD", result)
+        return metric_dict
+
+    def metric_info(self, paths, max_path_type):
+        unique_path_type = dict()
+        for user, _, _, path in paths:
+            # Get path type
+            path_type = path[-1][0]
+            if path_type == "self_loop":  # Handle size 3
+                path_type = path[-2][0]
+            # Track number of paths for each user and seen path types
+            if user not in unique_path_type:
+                unique_path_type[user] = [0, set()]
+            # number of path for that specific user
+            unique_path_type[user][0] += 1
+            unique_path_type[user][1].add(path_type)
+
+        ptd = []
+        for user in unique_path_type:
+            n_user_paths = unique_path_type[user][0]
+            pt = unique_path_type[user][1]
+            if not n_user_paths:
+                ptd.append(0.0)
+                continue
+            ptd.append(len(pt) / min(n_user_paths, len(max_path_type)))
+
+        return np.array(ptd)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
+
+
+class PTC(PathQualityMetric):
+    """
+    Path Type Concentration
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        _, paths, max_path_type, _, _, _ = self.used_info(dataobject)
+        result = self.metric_info(paths, max_path_type)
+        metric_dict = self.topk_result("PTC", result)
+        return metric_dict
+
+    def metric_info(self, paths, max_path_type):
+        user_simpson_index = dict()
+        for user, _, _, path in paths:
+            if user not in user_simpson_index:
+                # 0 is N, the second is n_path_for_patterns
+                user_simpson_index[user] = [0, {k: 0 for k in set(max_path_type)}]
+            #  Get path type
+            path_type = path[-1][0]
+
+            if path_type == "self_loop":  # Handle size 3
+                path_type = path[-2][0]
+
+            if path_type not in user_simpson_index[user][1]:
+                user_simpson_index[user][1][path_type] = 0
+
+            user_simpson_index[user][1][path_type] += 1
+            user_simpson_index[user][0] += 1
+
+        ptc = []
+        for user in user_simpson_index:
+            numerator = 0
+            for path_type, n_path_type_ith in user_simpson_index[user][1].items():
+                numerator += n_path_type_ith * (n_path_type_ith - 1)
+
+            if user_simpson_index[user][0] * (user_simpson_index[user][0] - 1) == 0:
+                ptc.append(0)
+                continue
+
+            ptc.append(1 - (numerator / (user_simpson_index[user][0] * (user_simpson_index[user][0] - 1))))
+
+        return np.array(ptc)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
+
+
+class PPT(PathQualityMetric):
+    """
+    Path Pattern Type
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        _, paths, _, max_path_pattern, _, _ = self.used_info(dataobject)
+        rid2r_name = {i: rel for i, rel in enumerate(dataobject.get("data.rid2relation"))}
+        result = self.metric_info(paths, max_path_pattern, rid2r_name)
+        metric_dict = self.topk_result("PPT", result)
+        return metric_dict
+
+    def metric_info(self, paths, max_path_pattern, rid2r_name):
+        unique_path_pattern = dict()
+        for user, _, _, path in paths:
+            if user not in unique_path_pattern:
+                unique_path_pattern[user] = [0, set()]
+            path_pattern = [rid2r_name[path_tuple[0]] for path_tuple in path[1:]]
+            unique_path_pattern[user][0] += 1
+            unique_path_pattern[user][1].add("_".join(path_pattern))
+
+        ppt = []
+        for user in unique_path_pattern:
+            n_paths = unique_path_pattern[user][0]
+            n_path_patterns = len(unique_path_pattern[user][1])
+            ppt.append(n_path_patterns / min(n_paths, max_path_pattern))
+
+        return np.array(ppt)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
+
+
+class LITD(PathQualityMetric):
+    """
+    Linked Interaction Type Diversity
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        _, paths, _, _, _, _ = self.used_info(dataobject)
+        result = self.metric_info(paths)
+        metric_dict = self.topk_result("LITD", result)
+        return metric_dict
+
+    def metric_info(self, paths):
+        unique_linking_interaction_types = dict()
+        for user, _, _, path in paths:
+            if user not in unique_linking_interaction_types:
+                unique_linking_interaction_types[user] = [0, set()]
+            linked_interaction_type = path[1][1]
+            unique_linking_interaction_types[user][0] += 1
+            unique_linking_interaction_types[user][1].add(linked_interaction_type)
+
+        litd = []
+        for user in unique_linking_interaction_types:
+            n_paths = unique_linking_interaction_types[user][0]
+            n_linked_interaction_types = len(unique_linking_interaction_types[user][1])
+            litd.append(n_linked_interaction_types / n_paths)
+        return np.array(litd)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
+
+
+class SETD(PathQualityMetric):
+    """
+    Shared Entities Type Diversity
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        _, paths, _, _, _, _ = self.used_info(dataobject)
+        result = self.metric_info(paths)
+        metric_dict = self.topk_result("SETD", result)
+        return metric_dict
+
+    def metric_info(self, paths):
+        unique_shared_entity_type = dict()
+        for user, _, _, path in paths:
+            if user not in unique_shared_entity_type:
+                unique_shared_entity_type[user] = [0, set()]
+            shared_entity_type = path[-2][1]
+            unique_shared_entity_type[user][0] += 1
+            unique_shared_entity_type[user][1].add(shared_entity_type)
+
+        setd = []
+        for user in unique_shared_entity_type:
+            n_paths = unique_shared_entity_type[user][0]
+            n_shared_entity_types = len(unique_shared_entity_type[user][1])
+            setd.append(n_shared_entity_types / n_paths)
+        return np.array(setd)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
         return metric_dict

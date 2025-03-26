@@ -153,7 +153,7 @@ if __name__ == "__main__":
     parser.add_argument("--params_file", type=str, default=None, help="parameters file")
     parser.add_argument("--output_file", type=str, default="hyper_example.result", help="output file")
     parser.add_argument("--display_file", type=str, default=None, help="visualization file")
-    parser.add_argument("--trials", type=int, default=10, help="Optuna trials number")
+    parser.add_argument("--trials", type=int, default=100, help="Optuna trials number")
     parser.add_argument("--tool", type=str, default="Optuna", help="{ray, hyperopt, optuna}")
     parser.add_argument(
         "--study_name",

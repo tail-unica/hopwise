@@ -31,7 +31,7 @@ class CAFE(KnowledgeRecommender):
         # Load parameters info from config
         self.device = config["device"]
         self.load_embeddings = config["load_embeddings"]
-        self.raw_metapaths = config["path_contraint"]
+        self.raw_metapaths = config["path_constraint"]
 
         # Load CAFE parameters
         self.rank_weight = config["rank_weight"]

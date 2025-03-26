@@ -295,6 +295,8 @@ class Config:
 
         elif self.internal_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE:
             self._update_internal_config_dict(knowledge_base_init)
+            if dataset == "ml-100k" and model in ["PGPR", "CAFE"]:
+                self._update_internal_config_dict(knowledge_path_base_on_ml_100k_init)
         elif self.internal_config_dict["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
             self._update_internal_config_dict(knowledge_path_base_init)
             if dataset == "ml-100k":

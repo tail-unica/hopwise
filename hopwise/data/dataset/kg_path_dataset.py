@@ -14,7 +14,7 @@ from transformers import PreTrainedTokenizerFast
 
 from hopwise.data import Interaction
 from hopwise.data.dataset import KnowledgeBasedDataset
-from hopwise.utils import PathLanuageModelingTokenType, set_color
+from hopwise.utils import KGPathExplanationTokenType, set_color
 
 
 class KnowledgePathDataset(KnowledgeBasedDataset):
@@ -122,10 +122,10 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         entity_range = np.arange(self.item_num, self.entity_num)  # only entities that are not items are considered
         token_vocab = np.concatenate(
             [
-                np.char.add(PathLanuageModelingTokenType.USER.value, np.arange(self.user_num).astype(str)),
-                np.char.add(PathLanuageModelingTokenType.ITEM.value, np.arange(self.item_num).astype(str)),
-                np.char.add(PathLanuageModelingTokenType.ENTITY.value, entity_range.astype(str)),
-                np.char.add(PathLanuageModelingTokenType.RELATION.value, np.arange(self.relation_num).astype(str)),
+                np.char.add(KGPathExplanationTokenType.USER.value, np.arange(self.user_num).astype(str)),
+                np.char.add(KGPathExplanationTokenType.ITEM.value, np.arange(self.item_num).astype(str)),
+                np.char.add(KGPathExplanationTokenType.ENTITY.value, entity_range.astype(str)),
+                np.char.add(KGPathExplanationTokenType.RELATION.value, np.arange(self.relation_num).astype(str)),
             ]
         )
 
@@ -182,12 +182,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 term_id = term
                 if term_type == "node":
                     if vertex_metadata[term_id]["type"] == self.uid_field:
-                        prefix = PathLanuageModelingTokenType.USER.value
+                        prefix = KGPathExplanationTokenType.USER.value
                     elif vertex_metadata[term_id]["type"] == self.iid_field:
                         term_id -= self.user_num
-                        prefix = PathLanuageModelingTokenType.ITEM.value
+                        prefix = KGPathExplanationTokenType.ITEM.value
                     elif vertex_metadata[term_id]["type"] == self.entity_field:
-                        prefix = PathLanuageModelingTokenType.ENTITY.value
+                        prefix = KGPathExplanationTokenType.ENTITY.value
                         term_id -= self.user_num
                     else:
                         raise ValueError(
@@ -195,7 +195,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                             "in igraph during tokenized_kg generation."
                         )
                 else:
-                    prefix = PathLanuageModelingTokenType.RELATION.value
+                    prefix = KGPathExplanationTokenType.RELATION.value
 
                 token_id = token_vocab[prefix + str(term_id)]
                 ret.append(token_id)
@@ -790,19 +790,19 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         graph_max_iid = self.item_num - 1 + self.user_num
         for e in path_entities:
             if graph_min_iid <= e <= graph_max_iid:
-                entity_mapped_list.append(PathLanuageModelingTokenType.ITEM.value + str(e - self.user_num))
+                entity_mapped_list.append(KGPathExplanationTokenType.ITEM.value + str(e - self.user_num))
             elif e < graph_min_iid:
-                entity_mapped_list.append(PathLanuageModelingTokenType.USER.value + str(e))
+                entity_mapped_list.append(KGPathExplanationTokenType.USER.value + str(e))
             else:
-                entity_mapped_list.append(PathLanuageModelingTokenType.ENTITY.value + str(e - self.user_num))
+                entity_mapped_list.append(KGPathExplanationTokenType.ENTITY.value + str(e - self.user_num))
 
-        relation_mapped_list = [PathLanuageModelingTokenType.RELATION.value + str(r) for r in path_relations]
+        relation_mapped_list = [KGPathExplanationTokenType.RELATION.value + str(r) for r in path_relations]
 
         path_string = path_template.format(
-            user=PathLanuageModelingTokenType.USER.value + str(user),
-            pos_iid=PathLanuageModelingTokenType.ITEM.value + str(pos_iid),
+            user=KGPathExplanationTokenType.USER.value + str(user),
+            pos_iid=KGPathExplanationTokenType.ITEM.value + str(pos_iid),
             entity_list=separator.join(entity_mapped_list),
-            rec_iid=PathLanuageModelingTokenType.ITEM.value + str(rec_iid),
+            rec_iid=KGPathExplanationTokenType.ITEM.value + str(rec_iid),
         )
 
         # removes repeated separators due to empty entity list

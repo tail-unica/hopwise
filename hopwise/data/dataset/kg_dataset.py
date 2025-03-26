@@ -20,7 +20,6 @@ import numpy as np
 import pandas as pd
 import torch
 from scipy.sparse import coo_matrix
-from tqdm import tqdm
 
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
@@ -72,8 +71,6 @@ class KnowledgeBasedDataset(Dataset):
     def __init__(self, config):
         super().__init__(config)
         self.tail_field = None
-        self.G = None
-        self.kg_relation = None
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
@@ -216,7 +213,6 @@ class KnowledgeBasedDataset(Dataset):
         group_by = self.config["eval_args"]["group_by"]
 
         datasets = dict()
-
         if knowledge_split_mode == "RS":
             # Manage knowledge graph split
             if not isinstance(knowledge_split_args["RS"], list):
@@ -274,7 +270,6 @@ class KnowledgeBasedDataset(Dataset):
             )
         else:
             raise NotImplementedError(f"The splitting_method [{split_mode}] has not been implemented.")
-
         return datasets[KnowledgeEvaluationType.REC] if KnowledgeEvaluationType.LP not in datasets else datasets
 
     def copy(self, new_inter_feat, data_type):
@@ -625,10 +620,9 @@ class KnowledgeBasedDataset(Dataset):
 
     def ckg_dict_graph(self):
         G = GraphDict(self, self.ui_relation, self.kg_feat, self.inter_feat)
-        self.G = G
-        self.kg_relation = G.kg_relation
+        kg_relation = G.kg_relation
 
-        return self.G, self.kg_relation
+        return G, kg_relation
 
     def kg_graph(self, form="coo", value_field=None):
         """Get graph or sparse matrix that describe relations between entities.
@@ -941,6 +935,7 @@ class GraphDict:
     def __init__(self, dataset, ui_relation, kg_feat, inter_feat):
         self.relation2id = dataset.field2token_id["relation_id"]
         self.inter_num = dataset.inter_num
+        self.inter_num = dataset.inter_num
         self.ui_relation = self.relation2id[ui_relation]
 
         self.G = dict()
@@ -970,13 +965,7 @@ class GraphDict:
         self.kg_relation["user"] = dict()
         self.kg_relation["entity"] = dict()
 
-        iter_triples = tqdm(
-            enumerate(zip(heads, relations, tails)),
-            total=len(heads),
-            desc="Building Graph Dict",
-        )
-
-        for triple_i, (head, relation, tail) in iter_triples:
+        for triple_i, (head, relation, tail) in enumerate(zip(heads, relations, tails)):
             if relation == self.ui_relation:
                 # UI interaction case
                 if triple_i < self.inter_num:
@@ -990,7 +979,20 @@ class GraphDict:
                     self.G[key][head] = dict()
                 if relation not in self.G[key][head]:
                     self.G[key][head][relation] = list()
+                if triple_i < self.inter_num:
+                    key = "user"
+                    relation_key = "entity"
+                else:
+                    key = "entity"
+                    relation_key = "user"
 
+                if head not in self.G[key]:
+                    self.G[key][head] = dict()
+                if relation not in self.G[key][head]:
+                    self.G[key][head][relation] = list()
+
+                self.G[key][head][relation].append(tail)
+                self.kg_relation[key][relation] = relation_key
                 self.G[key][head][relation].append(tail)
                 self.kg_relation[key][relation] = relation_key
             else:

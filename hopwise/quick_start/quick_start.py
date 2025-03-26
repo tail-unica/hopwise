@@ -306,7 +306,7 @@ def objective_function_optuna(config=None, saved=True, trial=None):
     train_data, valid_data, test_data = data_preparation(config, dataset)
     init_seed(config["seed"], config["reproducibility"])
     model_name = config["model"]
-    model = get_model(model_name)(config, train_data._dataset).to(config["device"])
+    model = get_model(model_name)(config, train_data.dataset).to(config["device"])
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
     best_valid_score, best_valid_result = trainer.fit(
         train_data, valid_data, verbose=False, saved=saved, trial=trial, callback_fn=optuna_report
