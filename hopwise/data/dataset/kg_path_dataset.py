@@ -3,6 +3,7 @@ from itertools import chain, zip_longest
 from string import Formatter
 
 import joblib
+import numba
 import numpy as np
 from datasets import Dataset as HuggingFaceDataset
 from datasets import DatasetDict
@@ -48,7 +49,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def __init__(self, config):
         super().__init__(config)
 
-        self._path_dataset = None  # path dataset is generated with generate_path_dataset
+        self._path_dataset = None  # path dataset is generated with generate_user_path_dataset
         self._tokenized_dataset = None  # tokenized dataset is generated with tokenize_path_dataset
         self._tokenizer = None
 
@@ -89,7 +90,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     @property
     def path_dataset(self):
         if self._path_dataset is None:
-            self.logger.warning("Path dataset has not been generated yet, please call generate_path_dataset() first.")
+            self.logger.warning(
+                "Path dataset has not been generated yet, please call generate_user_path_dataset() first."
+            )
             return None
         else:
             return self._path_dataset
@@ -258,14 +261,14 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             tokenized_dataset = DatasetDict({phase: tokenized_dataset})
             self._tokenized_dataset = tokenized_dataset
 
-    def generate_path_dataset(self, used_ids):
+    def generate_user_path_dataset(self, used_ids):
         """Generate path dataset by sampling paths from the knowledge graph.
 
         Paths represent walks in the graph that connect :attr:`hop_length` + 1 entities through
         :attr:`hop_length` relations.
         Each path connects two items that a user interacted with.
 
-        Refer to :meth:`generate_paths` for more details about path generation strategies.
+        Refer to :meth:`generate_user_paths` for more details about path generation strategies.
 
         Args:
             used_ids (numpy.ndarray): The used ids.
@@ -274,7 +277,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             raise ValueError("The data should be prepared before generating the path dataset.")
 
         if self._path_dataset is None:
-            generated_paths = self.generate_paths(used_ids)
+            generated_paths = self.generate_user_paths(used_ids)
 
             path_string = ""
             for path in generated_paths:
@@ -282,7 +285,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
             self._path_dataset = path_string
 
-    def generate_paths(self, used_ids):
+    def generate_user_paths(self, used_ids):
         """Generate paths from the knowledge graph.
 
         It currently supports four sampling strategies:
@@ -330,18 +333,20 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 graph.es["weight"] = [1.0] * graph.ecount()
 
             max_tries_per_iid = self.config["path_sample_args"]["MAX_RW_TRIES_PER_IID"]
-            generated_paths = self._generate_paths_weighted_random_walk(
+            generated_paths = self._generate_user_paths_weighted_random_walk(
                 graph, used_ids, temporal_matrix=temporal_matrix, max_tries_per_iid=max_tries_per_iid
             )
         elif self.strategy == "constrained-rw":
             max_paths_per_hop = self.config["path_sample_args"]["MAX_RW_PATHS_PER_HOP"]
-            generated_paths = self._generate_paths_constrained_random_walk(
+            generated_paths = self._generate_user_paths_constrained_random_walk(
                 graph, used_ids, temporal_matrix=temporal_matrix, paths_per_hop=max_paths_per_hop
             )
         elif self.strategy == "simple":
-            generated_paths = self._generate_paths_all_simple(graph, used_ids, temporal_matrix=temporal_matrix)
+            generated_paths = self._generate_user_paths_all_simple(graph, used_ids, temporal_matrix=temporal_matrix)
         elif self.strategy == "metapath":
-            generated_paths = self._generate_paths_from_metapaths(graph, used_ids, temporal_matrix=temporal_matrix)
+            generated_paths = self._generate_user_paths_from_metapaths(
+                graph, used_ids, temporal_matrix=temporal_matrix
+            )
         else:
             raise NotImplementedError(f"Path generation method [{self.strategy}] has not been implemented.")
 
@@ -353,7 +358,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         return paths_with_relations
 
-    def _generate_paths_weighted_random_walk(self, graph, used_ids, temporal_matrix=None, max_tries_per_iid=50):
+    def _generate_user_paths_weighted_random_walk(self, graph, used_ids, temporal_matrix=None, max_tries_per_iid=50):
         """Generate paths from the knowledge graph using weighted random walk.
 
         The last hop is not sampled, but it is selected according to the item candidates from temporal matrix
@@ -374,12 +379,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             collaborative_path=self.collaborative_path,
         )
 
-        user_paths = _generate_paths_weighted_random_walk_parallel(graph, used_ids, self.iid_field, **kwargs)
+        user_paths = _generate_user_paths_weighted_random_walk_parallel(graph, used_ids, self.iid_field, **kwargs)
         paths = set.union(*user_paths)
 
         return paths
 
-    def _generate_paths_constrained_random_walk(self, graph, used_ids, temporal_matrix=None, paths_per_hop=1):
+    def _generate_user_paths_constrained_random_walk(self, graph, used_ids, temporal_matrix=None, paths_per_hop=1):
         """Generate paths from the knowledge graph using constrained random walks, similar to DGL random walk based on
         metapaths (https://docs.dgl.ai/en/1.1.x/generated/dgl.sampling.random_walk.html).
 
@@ -404,14 +409,14 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             collaborative_path=self.collaborative_path,
         )
 
-        user_paths = _generate_paths_constrained_random_walk_parallel(
+        user_paths = _generate_user_paths_constrained_random_walk_parallel(
             graph, used_ids, self.iid_field, self.entity_field, **kwargs
         )
         paths = set.union(*user_paths)
 
         return paths
 
-    def _generate_paths_all_simple(self, graph, used_ids, temporal_matrix=None):
+    def _generate_user_paths_all_simple(self, graph, used_ids, temporal_matrix=None):
         """Generate paths from the knowledge graph by extracting all simple paths for a randomly sampled item.
         Refer to igraph's https://python.igraph.org/en/stable/api/igraph.Graph.html#get_all_simple_paths.
 
@@ -431,12 +436,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             collaborative_path=self.collaborative_path,
         )
 
-        user_paths = _generate_paths_all_simple_parallel(graph, used_ids, **kwargs)
+        user_paths = _generate_user_paths_all_simple_parallel(graph, used_ids, **kwargs)
         paths = set.union(*user_paths)
 
         return paths
 
-    def _generate_paths_from_metapaths(self, graph, used_ids, temporal_matrix=None):
+    def _generate_user_paths_from_metapaths(self, graph, used_ids, temporal_matrix=None):
         """Generate paths from pre-defined metapaths. Refer to DGL's random walk based on metapaths
         https://docs.dgl.ai/en/1.1.x/generated/dgl.sampling.random_walk.html for more details.
         """
@@ -637,13 +642,14 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def _add_paths_relations(self, graph, paths):
         complete_path_length = self.path_hop_length * 2 + 1
         paths_with_relations = np.full((len(paths), complete_path_length), fill_value=self.PATH_PADDING, dtype=int)
-        for i, path in enumerate(paths):
-            for node_idx in range(len(path) - 1):
-                edge = graph.es.find(_source=path[node_idx], _target=path[node_idx + 1])
-                edge_token = self.field2token_id[self.relation_field][edge["type"]]
+        relation_token_id = self.field2token_id[self.relation_field]
+        relation_map = np.zeros((len(graph.vs), len(graph.vs)), dtype=int)
+        for edge in graph.es:
+            relation_map[edge.source, edge.target] = relation_token_id[edge["type"]]
+            if not graph.is_directed():
+                relation_map[edge.target, edge.source] = relation_token_id[edge["type"]]
 
-                start_path, end_path = node_idx * 2, node_idx * 2 + 3
-                paths_with_relations[i, start_path:end_path] = [path[node_idx], edge_token, path[node_idx + 1]]
+        _add_paths_relations_parallel(np.array(list(paths)), paths_with_relations, relation_map)
 
         return paths_with_relations
 
@@ -684,7 +690,7 @@ def _parallel_sampling(sampling_func_factory):
 
 
 @_parallel_sampling
-def _generate_paths_constrained_random_walk_parallel(graph, used_ids, iid_field, entity_field, **kwargs):
+def _generate_user_paths_constrained_random_walk_parallel(graph, used_ids, iid_field, entity_field, **kwargs):
     """Parallel version of the constrained random walk path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
     paths_per_hop = kwargs.pop("paths_per_hop", None)
@@ -777,7 +783,7 @@ def _generate_paths_constrained_random_walk_parallel(graph, used_ids, iid_field,
 
 
 @_parallel_sampling
-def _generate_paths_weighted_random_walk_parallel(graph, used_ids, iid_field, **kwargs):
+def _generate_user_paths_weighted_random_walk_parallel(graph, used_ids, iid_field, **kwargs):
     """Parallel version of the weighted random walk path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
     max_tries_per_iid = kwargs.pop("max_tries_per_iid", None)
@@ -863,7 +869,7 @@ def _generate_paths_weighted_random_walk_parallel(graph, used_ids, iid_field, **
 
 
 @_parallel_sampling
-def _generate_paths_all_simple_parallel(graph, used_ids, **kwargs):
+def _generate_user_paths_all_simple_parallel(graph, used_ids, **kwargs):
     """Parallel version of the simple path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
     path_hop_length = kwargs.pop("path_hop_length", None)
@@ -927,3 +933,15 @@ def _generate_paths_all_simple_parallel(graph, used_ids, **kwargs):
         return user_paths
 
     return process_user
+
+
+@numba.jit(nopython=True, parallel=True)
+def _add_paths_relations_parallel(paths, paths_with_relations, relation_map):
+    for path_idx in numba.prange(paths.shape[0]):
+        path = paths[path_idx]
+        for node_idx in np.arange(path.shape[0] - 1):
+            start_path = node_idx * 2
+            edge_id = relation_map[path[node_idx], path[node_idx + 1]]
+            paths_with_relations[path_idx, start_path] = path[node_idx]
+            paths_with_relations[path_idx, start_path + 1] = edge_id
+            paths_with_relations[path_idx, start_path + 2] = path[node_idx + 1]

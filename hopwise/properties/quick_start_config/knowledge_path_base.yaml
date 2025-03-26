@@ -26,7 +26,7 @@ path_sample_args:
     parallel_max_workers: -1    # (int) Maximum number of workers for parallel processing.
 tokenizer:                                  # (dict) Tokenizer parameters.
     model: WordLevel                        # (str) Tokenizer model.
-    template: "{bos_token}:0 $A:0 {eos_token}"                # (str) Template for the tokenizer.
+    template: "{bos_token} $A {eos_token}"                # (str) Template for the tokenizer.
 path_generation_args:
     paths_per_user: 10          # (int) Number of paths generated per user.
     language_model:

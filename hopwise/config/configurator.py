@@ -494,7 +494,7 @@ class Config:
         default_path_sample_args = {
             "temporal_causality": False,
             "collaborative_path": True,
-            "strategy": "simple",
+            "strategy": "constrained-rw",
             "path_token_seaprator": " ",
             "restrict_by_phase": False,
             "MAX_CONSECUTIVE_INVALID": 10,

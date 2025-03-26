@@ -2,8 +2,10 @@ learning_rate: 2e-4
 weight_decay: 0.01
 warmup_steps: 250               # (int) Number of warmup steps for learning rate scheduler.
 context_length: 24              # (int) Maximum length of the context.
-save_step: 1                    # (int) Number of steps to save the model during pre-training.
-pretrain_epochs: 10             # (int) Number of epochs for pre-training.
+save_step: 50                   # (int) Number of steps to save the model during pre-training.
+pretrain_epochs: 150            # (int) Number of epochs for pre-training.
+train_stage: 'lp_pretrain'      # (str) The training stage. Range in ['lp_pretrain', 'finetune'].
+pre_model_path: ''              # (str) The path of pretrained model.
 path_sample_args:
     restrict_by_phase: False    # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.
 
