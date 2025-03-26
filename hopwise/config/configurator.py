@@ -495,7 +495,7 @@ class Config:
             "temporal_causality": False,
             "collaborative_path": True,
             "strategy": "simple",
-            "reasoning_template": "{user} {pos_iid} {entity_list} {rec_iid}",
+            "path_token_seaprator": " ",
             "restrict_by_phase": False,
             "MAX_CONSECUTIVE_INVALID": 10,
             "MAX_RW_TRIES_PER_IID": 50,

@@ -205,7 +205,7 @@ class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):
         ui_relation = dataset.field2token_id[dataset.relation_field][dataset.ui_relation]
         inference_path_dataset = {
             self.uid_field: [
-                dataset.path_separator.join(
+                dataset.path_token_separator.join(
                     [
                         dataset.bos_token,
                         PathLanuageModelingTokenType.USER.value + str(uid.item()),
