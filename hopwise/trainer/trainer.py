@@ -23,7 +23,7 @@ from time import time
 
 import numpy as np
 import torch
-from torch import amp, optim
+from torch import optim
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from tqdm import tqdm
@@ -45,6 +45,23 @@ from hopwise.utils import (
     set_color,
 )
 from hopwise.utils.enum_type import KnowledgeEvaluationType
+
+try:
+    grad_scaler = torch.GradScaler
+    autocast = torch.autocast
+except AttributeError:
+
+    def grad_scaler(device, **kwargs):
+        if torch.cuda.is_available():
+            return torch.cuda.amp.GradScaler(**kwargs)
+        else:
+            return torch.cuda.amp.GradScaler(**kwargs)
+
+    def autocast(device_type=None, **kwargs):
+        if torch.cuda.is_available():
+            return torch.cuda.amp.autocast(**kwargs)
+        else:
+            return torch.cpu.amp.autocast(**kwargs)
 
 
 class AbstractTrainer:
@@ -214,7 +231,7 @@ class Trainer(AbstractTrainer):
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
 
-        scaler = torch.GradScaler(self.device, enabled=self.enable_scaler)
+        scaler = grad_scaler(self.device, enabled=self.enable_scaler)
         for batch_idx, batch_interaction in enumerate(iter_data):
             interaction = batch_interaction.to(self.device)
             self.optimizer.zero_grad()
@@ -223,7 +240,7 @@ class Trainer(AbstractTrainer):
                 self.set_reduce_hook()
                 sync_loss = self.sync_grad_loss()
 
-            with torch.autocast(device_type=self.device.type, enabled=self.enable_amp):
+            with autocast(device_type=self.device.type, enabled=self.enable_amp):
                 losses = loss_func(interaction)
 
             if isinstance(losses, tuple):
@@ -1692,7 +1709,7 @@ class NCLTrainer(Trainer):
             if show_progress
             else train_data
         )
-        scaler = amp.GradScaler(enabled=self.enable_scaler)
+        scaler = grad_scaler(enabled=self.enable_scaler)
 
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
@@ -1705,7 +1722,7 @@ class NCLTrainer(Trainer):
                 self.set_reduce_hook()
                 sync_loss = self.sync_grad_loss()
 
-            with amp.autocast(device_type=self.device.type, enabled=self.enable_amp):
+            with autocast(device_type=self.device.type, enabled=self.enable_amp):
                 losses = loss_func(interaction)
 
             if isinstance(losses, tuple):

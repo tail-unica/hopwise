@@ -80,8 +80,10 @@ For example, to install NNCF:
 ```sh
 uv sync --extra nncf
 ```
-🚀 Usage
 
+> 📢 **Windows:** For proper DGL installation, please follow the [official DGL installation guide](https://www.dgl.ai/pages/start.html). Windows builds may encounter DLL linking issues with standard installation methods. Pre-built packages from the official source are recommended.
+
+🚀 Usage
 
 Run the project with the following command:
 ```sh

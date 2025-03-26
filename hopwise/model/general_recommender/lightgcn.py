@@ -17,8 +17,6 @@ Reference code:
     https://github.com/kuandeng/LightGCN
 """  # noqa: E501
 
-import numpy as np
-import scipy.sparse as sp
 import torch
 
 from hopwise.model.abstract_recommender import GeneralRecommender
@@ -43,9 +41,6 @@ class LightGCN(GeneralRecommender):
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
 
-        # load dataset info
-        self.interaction_matrix = dataset.inter_matrix(form="coo").astype(np.float32)
-
         # load parameters info
         self.latent_dim = config["embedding_size"]  # int type:the embedding size of lightGCN
         self.n_layers = config["n_layers"]  # int type:the layer num of lightGCN
@@ -63,53 +58,11 @@ class LightGCN(GeneralRecommender):
         self.restore_item_e = None
 
         # generate intermediate data
-        self.norm_adj_matrix = self.get_norm_adj_mat().to(self.device)
+        self.norm_adj_matrix = dataset.norm_adjacency_matrix(form="torch_sparse").to(self.device)
 
         # parameters initialization
         self.apply(xavier_uniform_initialization)
         self.other_parameter_name = ["restore_user_e", "restore_item_e"]
-
-    def get_norm_adj_mat(self):
-        r"""Get the normalized interaction matrix of users and items.
-
-        Construct the square matrix from the training data and normalize it
-        using the laplace matrix.
-
-        .. math::
-            A_{hat} = D^{-0.5} \times A \times D^{-0.5}
-
-        Returns:
-            Sparse tensor of the normalized interaction matrix.
-        """
-        # build adj matrix
-        A = sp.dok_matrix((self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32)
-        inter_M = self.interaction_matrix
-        inter_M_t = self.interaction_matrix.transpose()
-        data_dict = dict(zip(zip(inter_M.row, inter_M.col + self.n_users), [1] * inter_M.nnz))
-        data_dict.update(
-            dict(
-                zip(
-                    zip(inter_M_t.row + self.n_users, inter_M_t.col),
-                    [1] * inter_M_t.nnz,
-                )
-            )
-        )
-        A._update(data_dict)
-        # norm adj matrix
-        sumArr = (A > 0).sum(axis=1)
-        # add epsilon to avoid divide by zero Warning
-        diag = np.array(sumArr.flatten())[0] + 1e-7
-        diag = np.power(diag, -0.5)
-        D = sp.diags(diag)
-        L = D * A * D
-        # covert norm_adj matrix to tensor
-        L = sp.coo_matrix(L)
-        row = L.row
-        col = L.col
-        i = torch.LongTensor(np.array([row, col]))
-        data = torch.FloatTensor(L.data)
-        SparseL = torch.sparse.FloatTensor(i, data, torch.Size(L.shape))
-        return SparseL
 
     def get_ego_embeddings(self):
         r"""Get the embedding of users and items and combine to an embedding matrix.
