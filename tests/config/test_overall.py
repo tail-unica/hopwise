@@ -27,9 +27,10 @@ def run_params(parm_dict, extra_dict=None):
                 config_dict.update(extra_dict)
             try:
                 run_hopwise(model="BPR", dataset="ml-100k", config_dict=config_dict)
-            except Exception:
+            except Exception as e:
                 print(f"\ntest `{name}`={parm} ... fail.\n")
                 logging.critical(f"\ntest `{name}`={parm} ... fail.\n")
+                logging.critical(f"\nError {e}.\n")
                 return False
     return True
 
