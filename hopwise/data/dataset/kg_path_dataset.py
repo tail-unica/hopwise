@@ -266,7 +266,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         Paths represent walks in the graph that connect :attr:`hop_length` + 1 entities through
         :attr:`hop_length` relations.
-        Each path connects two items that a user interacted with.
+        Each path connects two items. In the common scenario, the first item is a positive item
+        for the user and the second item is a recommendation candidate.
 
         Refer to :meth:`generate_user_paths` for more details about path generation strategies.
 
@@ -664,7 +665,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return "\n".join(info)
 
 
-def _parallel_sampling(sampling_func_factory):
+def _user_parallel_sampling(sampling_func_factory):
     """Decorator to parallelize path sampling functions."""
 
     def wrapper(*args, **kwargs):
@@ -689,7 +690,7 @@ def _parallel_sampling(sampling_func_factory):
     return wrapper
 
 
-@_parallel_sampling
+@_user_parallel_sampling
 def _generate_user_paths_constrained_random_walk_parallel(graph, used_ids, iid_field, entity_field, **kwargs):
     """Parallel version of the constrained random walk path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
@@ -782,7 +783,7 @@ def _generate_user_paths_constrained_random_walk_parallel(graph, used_ids, iid_f
     return process_user
 
 
-@_parallel_sampling
+@_user_parallel_sampling
 def _generate_user_paths_weighted_random_walk_parallel(graph, used_ids, iid_field, **kwargs):
     """Parallel version of the weighted random walk path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
@@ -868,7 +869,7 @@ def _generate_user_paths_weighted_random_walk_parallel(graph, used_ids, iid_fiel
     return process_user
 
 
-@_parallel_sampling
+@_user_parallel_sampling
 def _generate_user_paths_all_simple_parallel(graph, used_ids, **kwargs):
     """Parallel version of the simple path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)

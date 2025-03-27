@@ -15,13 +15,15 @@ We only recommend building customized datasets by inheriting.
 Customized datasets named ``[Model Name]Dataset`` can be automatically called.
 """
 
+import joblib
 import numpy as np
 import torch
+from tqdm import tqdm
 
-from hopwise.data.dataset import KGSeqDataset, SequentialDataset
+from hopwise.data.dataset import KGSeqDataset, KnowledgePathDataset, SequentialDataset
 from hopwise.data.interaction import Interaction
 from hopwise.sampler import SeqSampler
-from hopwise.utils.enum_type import FeatureType
+from hopwise.utils import FeatureType, set_color
 
 
 class GRU4RecKGDataset(KGSeqDataset):
@@ -39,16 +41,16 @@ class DIENDataset(SequentialDataset):
     It is different from :class:`SequentialDataset` in `data_augmentation`.
     It add users' negative item list to interaction.
 
-    The original version of sampling negative item list is implemented by Zhichao Feng (fzcbupt@gmail.com) in 2021/2/25,
-    and he updated the codes in 2021/3/19. In 2021/7/9, Yupeng refactored SequentialDataset & SequentialDataLoader,
-    then refactored DIENDataset, either.
+    The original version of sampling negative item list is implemented by Zhichao Feng (fzcbupt@gmail.com) in
+    2021/2/25, and he updated the codes in 2021/3/19. In 2021/7/9,
+    Yupeng refactored SequentialDataset & SequentialDataLoader, then refactored DIENDataset, either.
 
     Attributes:
         augmentation (bool): Whether the interactions should be augmented in hopwise.
         seq_sample (hopwise.sampler.SeqSampler): A sampler used to sample negative item sequence.
         neg_item_list_field (str): Field name for negative item sequence.
         neg_item_list (torch.tensor): all users' negative item history sequence.
-    """  # noqa: E501
+    """
 
     def __init__(self, config):
         super().__init__(config)
@@ -135,3 +137,67 @@ class DIENDataset(SequentialDataset):
 
         new_data.update(Interaction(new_dict))
         self.inter_feat = new_data
+
+
+class KGGLMDataset(KnowledgePathDataset):
+    def _get_field_from_config(self):
+        super()._get_field_from_config()
+        self.train_stage = self.config["train_stage"]
+
+        path_sample_args = self.config["path_sample_args"]
+        self.pretrain_hop_length = path_sample_args["pretrain_hop_length"]
+        self.pretrain_hop_length = tuple(map(int, self.pretrain_hop_length[1:-1].split(",")))
+        self.pretrain_paths = path_sample_args["pretrain_paths"]
+
+    def generate_user_path_dataset(self, used_ids):
+        if self.train_stage == "lp_pretrain":
+            self.generate_pretrain_dataset()
+        else:
+            super().generate_user_path_dataset(used_ids)
+
+    def generate_pretrain_dataset(self):
+        """Generate pretrain dataset for KGGLM model."""
+
+        if self._path_dataset is None:
+            graph = self._create_ckg_igraph(show_relation=True, directed=False)
+            kg_rel_num = len(self.relations)
+            graph.es["weight"] = [0.0] * (self.inter_num) + [1.0] * kg_rel_num
+
+            graph_min_iid = 1 + self.user_num
+            min_hop, max_hop = self.pretrain_hop_length
+
+            paths = set()
+            iter_paths = tqdm(
+                range(self.pretrain_paths),
+                ncols=100,
+                total=self.pretrain_paths,
+                desc=set_color("KGGLM Pre-training Path Sampling", "red"),
+            )
+
+            def _generate_paths_random_walks():
+                start_node = np.random.randint(graph_min_iid, len(graph.vs))
+                path_hop_length = np.random.randint(min_hop, max_hop + 1)
+
+                while True:
+                    generated_path = graph.random_walk(start_node, path_hop_length - 1, weights="weight")
+                    generated_path = tuple(generated_path)
+                    if generated_path not in paths:
+                        break
+
+                paths.add(generated_path)
+
+            if not self.parallel_max_workers:
+                for _ in iter_paths:
+                    _generate_paths_random_walks()
+            else:
+                joblib.Parallel(n_jobs=self.parallel_max_workers, prefer="threads")(
+                    joblib.delayed(_generate_paths_random_walks)() for _ in iter_paths
+                )
+
+            paths_with_relations = self._add_paths_relations(graph, paths)
+
+            path_string = ""
+            for path in paths_with_relations:
+                path_string += self._format_path(path) + "\n"
+
+            self._path_dataset = path_string
