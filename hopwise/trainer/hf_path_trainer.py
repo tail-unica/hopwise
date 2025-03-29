@@ -91,33 +91,37 @@ class CumulativeSequenceScoreRanker:
 
         # TODO: is it really necessary this scorer?
         #       the ordering is made on the last 5 tokens, but original sequences_scores values are likely more robust
-        generation_outputs.scores = normalize_tuple(generation_outputs.scores)
-        generation_outputs.sequences_scores = self.calculate_sequence_scores(
-            generation_outputs.scores, generation_outputs.sequences
-        )
+        normalized_scores = normalize_tuple(generation_outputs.scores)
+        normalized_sequences_scores = self.calculate_sequence_scores(normalized_scores, generation_outputs.sequences)
         ######################################################
 
-        device = generation_outputs.sequences.device
-        num_return_sequences = generation_outputs.sequences.shape[0] // user_num
-        batch_user_index = torch.arange(user_num, device=device).repeat_interleave(num_return_sequences)
-        sorted_indices = generation_outputs.sequences_scores.argsort(descending=True)
-        sorted_sequences = generation_outputs.sequences[sorted_indices]
-        sorted_sequences_scores = generation_outputs.sequences_scores[sorted_indices]
+        sequences = generation_outputs.sequences
+        num_return_sequences = sequences.shape[0] // user_num
+        batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
+
+        valid_sequences = torch.isnan(normalized_sequences_scores).logical_not()
+        sequences = generation_outputs.sequences[valid_sequences]
+        normalized_sequences_scores = normalized_sequences_scores[valid_sequences]
+        batch_user_index = batch_user_index[valid_sequences]
+
+        sorted_indices = normalized_sequences_scores.argsort(descending=True)
+        sorted_sequences = sequences[sorted_indices]
+        sorted_sequences_scores = normalized_sequences_scores[sorted_indices]
         sorted_batch_user_index = batch_user_index[sorted_indices]
         for user_index, sequence, sequence_score in zip(
             sorted_batch_user_index, sorted_sequences, sorted_sequences_scores
         ):
             seq = self.tokenizer.decode(sequence).split(" ")
 
-            uid_token = seq[1]
-            recommended_token = seq[-2]
+            uid_token = seq[0]
+            recommended_token = seq[-1]
             if not (
                 uid_token.startswith(PathLanuageModelingTokenType.USER.value)
                 and recommended_token.startswith(PathLanuageModelingTokenType.ITEM.value)
             ):
                 continue
 
-            uid = int(seq[1][1:])
+            uid = int(uid_token[1:])
             recommended_item = int(recommended_token[1:])
             if (
                 torch.isfinite(scores[user_index, recommended_item])  # already scored
@@ -184,13 +188,11 @@ class HFPathTrainer(Trainer):
         self.callback_handler.callbacks = callbacks
 
         self.hopwise_config = hopwise_config
-        self.model = model
 
         self.paths_per_user = paths_per_user
         # self.N_RET_SEQ_LP = n_sequences_lp
         self.path_generation_args = path_generation_args
         # self.N_BEAMS_LP = n_beams_lp
-        self.paths_per_user = paths_per_user
 
         self.path_hop_length = path_hop_length
         self.eval_device = eval_device
@@ -200,11 +202,11 @@ class HFPathTrainer(Trainer):
             used_ids, hopwise_dataset.item_num, self.processing_class
         )
 
-        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 for [BOS] and [EOS]
-        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 2
+        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations
+        self.token_sequence_length = (1 + path_hop_length) + path_hop_length
 
         # TODO: add inference template as config param and use that instead of the hardcoded values
-        ranker_max_new_tokens = self.token_sequence_length - 3
+        ranker_max_new_tokens = self.token_sequence_length - 2
         self.ranker_rec = CumulativeSequenceScoreRanker(
             self.processing_class,
             used_ids,
@@ -234,7 +236,7 @@ class HFPathTrainer(Trainer):
         #     tokenizer, kg_positives=self.positive_triplets, K=10, max_new_tokens=self.SEQUENCE_LEN_LP
         # )
         # self.test_dataset_lp = Dataset.from_dict(self.inference_paths_lp)
-        print(f"Sequence length rec: {self.token_sequence_length}")  # , lp: {self.SEQUENCE_LEN_LP}")
+        # print(f"Sequence length rec: {self.token_sequence_length}")  # , lp: {self.SEQUENCE_LEN_LP}")
 
         self.logits_processor_rec = LogitsProcessorList(
             [
@@ -262,9 +264,11 @@ class HFPathTrainer(Trainer):
         #     ]
         # )
 
-    def _full_sort_batch_eval(self, model, inputs, task="rec"):
-        if isinstance(model, torch.nn.DataParallel):
-            model = model.module
+    def _full_sort_batch_eval(self, inputs, task="rec"):
+        if isinstance(self.model, torch.nn.DataParallel):
+            model = self.model.module
+        else:
+            model = self.model
 
         if task == "rec":
             sequence_len = self.token_sequence_length
@@ -298,6 +302,8 @@ class HFPathTrainer(Trainer):
 
 
 class HopwiseCallback(TrainerCallback):
+    """It handles the training and evaluation communication with the hopwise and HuggingFace trainers."""
+
     def __init__(
         self,
         hopwise_trainer,
@@ -309,7 +315,6 @@ class HopwiseCallback(TrainerCallback):
         callback_fn=None,
         train_phase="finetune",
     ):
-        """It handles the training and evaluation communication with the hopwise and HuggingFace trainers."""
         self.hopwise_trainer = hopwise_trainer
         self.train_data = train_data
         self.valid_data = valid_data
@@ -322,7 +327,7 @@ class HopwiseCallback(TrainerCallback):
     def on_train_begin(self, args, state, control, **kwargs):
         self.hopwise_trainer.eval_collector.train_data_collect(self.train_data)
         if self.hopwise_trainer.config["train_neg_sample_args"].get("dynamic", False):
-            self.train_data.get_model(self.model)
+            self.train_data.get_model(self.hopwise_trainer.model)
         self.valid_step = 0
 
     def on_train_end(self, args, state, control, **kwargs):

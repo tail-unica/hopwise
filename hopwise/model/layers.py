@@ -1558,7 +1558,8 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         self.max_sequence_length = max_sequence_length
         self.tokenizer = tokenizer
         self.num_return_sequences = num_return_sequences
-        self.eos_token_ids = [self.tokenizer.convert_tokens_to_ids(self.tokenizer.eos_token)]
+        self.eos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.eos_token)
+        self.bos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.bos_token)
         self.pos_candidates_cache = LFUCache(pos_candidates_cache_size)
         self.mask_cache = LFUCache(mask_cache_size)
         self.task = task
@@ -1574,36 +1575,39 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     def mask_non_eos_tokens(self, scores):
         """Apply masking to all tokens except EOS tokens."""
         scores[:] = -math.inf
-        scores[:, self.eos_token_ids] = 0.0
+        scores[:, self.eos_token_id] = 0.0
 
     def __call__(self, input_ids, scores):
         current_len = input_ids.shape[-1]
-        if current_len == self.max_sequence_length - 1:
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
+
+        if has_bos_token and current_len == self.max_sequence_length - 1:
             self.mask_non_eos_tokens(scores)
         else:
             mask_list = []
 
             for idx in range(scores.shape[0]):
                 if self.task == self.RECOMMENDATION_TASK:
-                    key, candidate_tokens = self.process_scores_rec(input_ids, idx, current_len)
-                    banned_mask = self.get_banned_mask(key, candidate_tokens)
-                    mask_list.append(banned_mask)
+                    key, candidate_tokens = self.process_scores_rec(input_ids, idx)
                 elif self.task == self.LINK_PREDICTION_TASK:
-                    candidate_tokens = self.process_scores_lp(input_ids, idx, current_len)
-                    if candidate_tokens is not None:
-                        scores[idx, candidate_tokens] = -math.inf
+                    key, candidate_tokens = self.process_scores_lp(input_ids, idx)
 
-            if self.task == self.RECOMMENDATION_TASK:
-                banned_tokens_mask = np.vstack(mask_list)
-                scores[banned_tokens_mask] = -math.inf
+                banned_mask = self.get_banned_mask(key, candidate_tokens)
+                mask_list.append(banned_mask)
+
+            banned_tokens_mask = np.vstack(mask_list)
+            scores[banned_tokens_mask] = -math.inf
 
         return scores
 
-    def process_scores_rec(self, input_ids, idx, current_len):
+    def process_scores_rec(self, input_ids, idx):
         """Process each score based on input length and update mask list."""
-        key = self.get_current_key(input_ids, idx, current_len)
-        if current_len == self.max_sequence_length - 2:
-            current_uid = input_ids[idx, 1].item()
+        current_len = input_ids.shape[-1]
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
+
+        key = self.get_current_key(input_ids, idx)
+        if current_len == self.max_sequence_length - 1 - has_bos_token:
+            current_uid = input_ids[idx, int(has_bos_token)].item()
             uid_cond_key = (current_uid, *key)
 
             candidate_tokens = self.pos_candidates_cache.get(uid_cond_key)
@@ -1618,22 +1622,27 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
         return key, candidate_tokens
 
-    def process_scores_lp(self, input_ids, idx, current_len):
+    def process_scores_lp(self, input_ids, idx):
         """Process each score based on input length or skip."""
-        candidate_tokens = None
-        if current_len % 2 == 1:
-            key = self.get_current_key(input_ids, idx, 1)
+        current_len = input_ids.shape[-1]
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
+
+        key, candidate_tokens = None, None
+        if current_len % 2 == has_bos_token:
+            key = self.get_current_key(input_ids, idx)
             candidate_tokens = self.get_candidates_lp(key)
 
-        return candidate_tokens
+        return key, candidate_tokens
 
-    @staticmethod
-    def get_current_key(input_ids, idx, current_len):
-        if current_len % 2 == 1:
-            # if current length is odd, the next token is an entity
+    def get_current_key(self, input_ids, idx):
+        current_len = input_ids.shape[-1]
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
+
+        if current_len % 2 == has_bos_token:  # bos_token determines if the current length is even or odd
+            # The next token is an entity
             return input_ids[idx, -2].item(), input_ids[idx, -1].item()
         else:
-            # if current length is even, the next token is a relation
+            # The next token is a relation
             return (input_ids[idx, -1].item(),)
 
     def get_candidates_rec(self, key1, key2=None):

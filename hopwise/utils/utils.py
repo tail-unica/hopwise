@@ -92,50 +92,21 @@ def get_trainer(model_type, model_name):
     Returns:
         Trainer: trainer class
     """
-    register_table = {
-        "PEARLM": "HFPathLanguageModelingTrainer",
-        "PLM": "HFPathLanguageModelingTrainer",
-    }
+    register_table = {}
 
     try:
         return getattr(importlib.import_module("hopwise.trainer"), model_name + "Trainer")
     except AttributeError:
         if model_name in register_table:
             return getattr(importlib.import_module("hopwise.trainer"), register_table[model_name])
+        elif model_type == ModelType.PATH_LANGUAGE_MODELING:
+            return getattr(importlib.import_module("hopwise.trainer"), "HFPathLanguageModelingTrainer")
         elif model_type == ModelType.KNOWLEDGE:
             return getattr(importlib.import_module("hopwise.trainer"), "KGTrainer")
         elif model_type == ModelType.TRADITIONAL:
             return getattr(importlib.import_module("hopwise.trainer"), "TraditionalTrainer")
         else:
             return getattr(importlib.import_module("hopwise.trainer"), "Trainer")
-
-
-def get_hyper_trainer(model_type, model_name):
-    r"""Automatically select trainer class based on model type and model name
-
-    Args:
-        model_type (ModelType): model type
-        model_name (str): model name
-
-    Returns:
-        Trainer: trainer class
-    """
-    register_table = {
-        "PEARLM": "HFPathLanguageModelingTrainer",
-        "PLM": "HFPathLanguageModelingTrainer",
-    }
-
-    try:
-        return getattr(importlib.import_module("hopwise.trainer.hyper_trainer"), model_name + "Trainer")
-    except AttributeError:
-        if model_name in register_table:
-            pass
-        elif model_type == ModelType.KNOWLEDGE:
-            return getattr(importlib.import_module("hopwise.trainer.hyper_trainer"), "KGTrainer_optuna")
-        elif model_type == ModelType.TRADITIONAL:
-            pass
-        else:
-            pass
 
 
 def early_stopping(value, best, cur_step, max_step, bigger=True):
