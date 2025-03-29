@@ -152,6 +152,13 @@ class KGGLMDataset(KnowledgePathDataset):
     def generate_user_path_dataset(self, used_ids):
         if self.train_stage == "lp_pretrain":
             self.generate_pretrain_dataset()
+            if self.config["save_dataloaders"] or self.config["save_dataset"]:
+                self.config["save_dataloaders"] = False
+                self.config["save_dataset"] = False
+                self.logger.warning(
+                    "Pretraining dataset and dataloaders for KGGLM will not be saved. "
+                    "Only with train-stage = finetune, the dataset and dataloaders will be saved."
+                )
         else:
             super().generate_user_path_dataset(used_ids)
 

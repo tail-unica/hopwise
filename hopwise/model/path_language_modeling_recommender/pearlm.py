@@ -7,15 +7,13 @@ from transformers import AutoConfig, GPT2LMHeadModel
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from hopwise.data import Interaction
+from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
 from hopwise.utils import InputType, ModelType
-
-# from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
 
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("ENTITY", 1), ("RELATION", 2)])
 
 
-# class PEARLM(PathLanguageModelingRecommender):
-class PEARLM(GPT2LMHeadModel):  # , PathLanguageModelingRecommender):
+class PEARLM(PathLanguageModelingRecommender):
     """PEARLM is a path-language-modeling recommender. It learns the sequence of entity-relation triplets
     from a knowledge graph as a next-token prediction task.
     """
@@ -24,7 +22,8 @@ class PEARLM(GPT2LMHeadModel):  # , PathLanguageModelingRecommender):
     type = ModelType.PATH_LANGUAGE_MODELING
 
     def __init__(self, config, dataset):
-        # PathLanguageModelingRecommender.__init__(self, config, dataset)
+        super().__init__(config, dataset)
+
         tokenizer = dataset.tokenizer
         transformers_config = AutoConfig.from_pretrained(
             "distilgpt2",
@@ -40,7 +39,7 @@ class PEARLM(GPT2LMHeadModel):  # , PathLanguageModelingRecommender):
                 "n_layer": config["num_layers"],
             },
         )
-        GPT2LMHeadModel.__init__(self, transformers_config)
+        self.hf_model = GPT2LMHeadModel(transformers_config)
 
         self.max_hop_length = dataset.path_hop_length
 
@@ -53,11 +52,11 @@ class PEARLM(GPT2LMHeadModel):  # , PathLanguageModelingRecommender):
         self.token_type_ids = torch.tensor(
             [[TokenType.SPECIAL.value] + middle_token_types + [TokenType.SPECIAL.value]],
             dtype=torch.long,
-            device=self.type_embeddings.weight.device,
+            device=self.device,
         )
 
         self.loss = nn.CrossEntropyLoss()
-        self.post_init()
+        self.hf_model.post_init()
 
     def get_type_embeds(self, batch_size):
         self.token_type_ids = self.token_type_ids.to(self.type_embeddings.weight.device)
@@ -92,7 +91,7 @@ class PEARLM(GPT2LMHeadModel):  # , PathLanguageModelingRecommender):
         if inputs_embeds is not None:
             inputs_embeds += type_embeds
 
-        transformer_outputs = self.transformer(
+        transformer_outputs = self.hf_model.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -105,11 +104,11 @@ class PEARLM(GPT2LMHeadModel):  # , PathLanguageModelingRecommender):
             use_cache=use_cache and labels is None,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict or self.config.use_return_dict,
+            return_dict=return_dict or self.hf_model.config.use_return_dict,
         )
 
         sequence_output = transformer_outputs[0]
-        prediction_scores = self.lm_head(sequence_output)
+        prediction_scores = self.hf_model.lm_head(sequence_output)
 
         lm_loss = None
         if labels is not None:

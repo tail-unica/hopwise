@@ -1797,11 +1797,22 @@ class HFPathLanguageModelingTrainer(Trainer):
         return TrainingArguments(**train_args)
 
     def init_hf_trainer(
-        self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None
+        self,
+        train_data,
+        valid_data=None,
+        verbose=True,
+        saved=True,
+        show_progress=False,
+        hf_callbacks=None,
+        callback_fn=None,
+        training_args=None,
     ):
         from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
 
-        training_arguments = self.prepare_training_arguments()
+        training_args = training_args or {}
+
+        hf_callbacks = hf_callbacks or []
+        training_arguments = self.prepare_training_arguments(**training_args)
 
         callbacks = [
             HopwiseCallback(
@@ -1812,14 +1823,15 @@ class HFPathLanguageModelingTrainer(Trainer):
                 saved=saved,
                 show_progress=show_progress,
                 callback_fn=callback_fn,
-            )
+            ),
+            *hf_callbacks,
         ]
 
         self.hf_trainer = HFPathTrainer(
             train_data,
             self.config,
             callbacks,
-            model=self.model,
+            model=self.model.hf_model,
             args=training_arguments,
             path_hop_length=self.path_hop_length,
             paths_per_user=self.paths_per_user,
@@ -1924,10 +1936,6 @@ class HFPathLanguageModelingTrainer(Trainer):
             self.logger.info(message_output)
 
         self.model.eval()
-        if isinstance(self.model, torch.nn.DataParallel):
-            model = self.model.module
-        else:
-            model = self.model
 
         if self.config["eval_type"] == EvaluatorType.RANKING:
             self.tot_item_num = eval_data._dataset.item_num
@@ -1951,7 +1959,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             inputs = self.hf_trainer.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(
                 self.hf_trainer.eval_device
             )
-            scores = self.hf_trainer._full_sort_batch_eval(model, inputs, task=task)
+            scores = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
 
             scores = scores.view(-1, self.tot_item_num)
             scores[:, 0] = -np.inf
@@ -1976,43 +1984,59 @@ class KGGLMTrainer(HFPathLanguageModelingTrainer, PretrainTrainer):
     """
 
     def _get_pretrained_model_path(self, epoch_label=None):
-        epoch_label = str(epoch_label) if epoch_label is not None else "pretrained"
+        epoch_label = f"pretrained-{epoch_label}" if epoch_label is not None else "pretrained"
         return os.path.join(
             self.checkpoint_dir,
-            self.HOPWISE_SAVE_PATH_SUFFIX
+            self.HUGGINGFACE_SAVE_PATH_SUFFIX
             + "{}-{}-{}.pth".format(self.config["model"], self.config["dataset"], epoch_label),
         )
 
     def pretrain(self, train_data, verbose=True, show_progress=False):
-        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
+        from transformers import TrainerCallback
 
         pretrain_path = self._get_pretrained_model_path()
-        pretrain_path = pretrain_path.replace(self.HOPWISE_SAVE_PATH_SUFFIX, self.HUGGINGFACE_SAVE_PATH_SUFFIX)
         pretrain_args = dict(
             output_dir=pretrain_path,
             num_train_epochs=self.pretrain_epochs,
             save_steps=self.save_step,
             eval_strategy="no",
+            load_best_model_at_end=False,
         )
-        training_arguments = self.prepare_training_arguments(**pretrain_args)
 
-        callbacks = [HopwiseCallback(self, train_data, verbose=verbose, show_progress=show_progress)]
+        class PretrainSaveCallback(TrainerCallback):
+            def __init__(self, hopwise_trainer):
+                self.hopwise_trainer = hopwise_trainer
 
-        self.hf_trainer = HFPathTrainer(
+            def on_epoch_end(self, args, state, control, **kwargs):
+                if control.should_save:
+                    epoch_idx = int(state.epoch)
+                    pretrain_path = self.hopwise_trainer._get_pretrained_model_path(epoch_idx)
+                    self.hopwise_trainer.hf_trainer.args.output_dir = pretrain_path
+
+        self.init_hf_trainer(
             train_data,
-            self.config,
-            callbacks,
-            model=self.model,
-            args=training_arguments,
-            path_hop_length=self.path_hop_length,
-            paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_lm_args,
-            eval_device=self.device,
+            verbose=verbose,
+            saved=True,
+            show_progress=show_progress,
+            hf_callbacks=[PretrainSaveCallback(self)],
+            training_args=pretrain_args,
         )
 
         self.hf_trainer.train()
 
         return self.best_valid_score, self.best_valid_result
+
+    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False, task="rec"):
+        if load_best_model and self.model.train_stage == "lp_pretrain":
+            self.hf_trainer.state.best_model_checkpoint = self.hf_trainer.args.output_dir
+
+        return super().evaluate(
+            eval_data,
+            load_best_model=load_best_model,
+            model_file=model_file,
+            show_progress=show_progress,
+            task=task,
+        )
 
     def fit(
         self,
@@ -2024,7 +2048,7 @@ class KGGLMTrainer(HFPathLanguageModelingTrainer, PretrainTrainer):
         callback_fn=None,
     ):
         if self.model.train_stage == "lp_pretrain":
-            self.pretrain(train_data, verbose, show_progress)
+            return self.pretrain(train_data, verbose, show_progress)
         elif self.model.train_stage == "finetune":
             return super().fit(train_data, valid_data, verbose, saved, show_progress, callback_fn)
         else:
