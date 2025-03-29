@@ -1864,6 +1864,8 @@ class HFPathLanguageModelingTrainer(Trainer):
         torch.save(state, saved_model_file, pickle_protocol=4)
         if verbose:
             self.logger.info(set_color("Saving current", "blue") + f": {saved_model_file}")
+            hf_output_dir = self.hopwise_trainer.hf_trainer.args.output_dir
+            self.logger.info(set_color("HuggingFace model is saved at", "blue") + f": {hf_output_dir}")
 
     def resume_checkpoint(self, resume_file):
         """
