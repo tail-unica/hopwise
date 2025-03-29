@@ -1579,7 +1579,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
     def __call__(self, input_ids, scores):
         current_len = input_ids.shape[-1]
-        has_bos_token = self.bos_token_id in input_ids[:, 0]
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
 
         if has_bos_token and current_len == self.max_sequence_length - 1:
             self.mask_non_eos_tokens(scores)
@@ -1603,7 +1603,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     def process_scores_rec(self, input_ids, idx):
         """Process each score based on input length and update mask list."""
         current_len = input_ids.shape[-1]
-        has_bos_token = self.bos_token_id in input_ids[:, 0]
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
 
         key = self.get_current_key(input_ids, idx)
         if current_len == self.max_sequence_length - 1 - has_bos_token:
@@ -1625,7 +1625,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     def process_scores_lp(self, input_ids, idx):
         """Process each score based on input length or skip."""
         current_len = input_ids.shape[-1]
-        has_bos_token = self.bos_token_id in input_ids[:, 0]
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
 
         key, candidate_tokens = None, None
         if current_len % 2 == has_bos_token:
@@ -1636,7 +1636,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
     def get_current_key(self, input_ids, idx):
         current_len = input_ids.shape[-1]
-        has_bos_token = self.bos_token_id in input_ids[:, 0]
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
 
         if current_len % 2 == has_bos_token:  # bos_token determines if the current length is even or odd
             # The next token is an entity
