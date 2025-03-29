@@ -8,7 +8,6 @@ from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from hopwise.data import Interaction
 from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
-from hopwise.utils import InputType, ModelType
 
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("ENTITY", 1), ("RELATION", 2)])
 
@@ -17,9 +16,6 @@ class PEARLM(PathLanguageModelingRecommender):
     """PEARLM is a path-language-modeling recommender. It learns the sequence of entity-relation triplets
     from a knowledge graph as a next-token prediction task.
     """
-
-    input_type = InputType.PATHWISE
-    type = ModelType.PATH_LANGUAGE_MODELING
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)

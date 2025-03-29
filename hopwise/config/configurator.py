@@ -495,7 +495,7 @@ class Config:
             "temporal_causality": False,
             "collaborative_path": True,
             "strategy": "constrained-rw",
-            "path_token_seaprator": " ",
+            "path_token_separator": " ",
             "restrict_by_phase": False,
             "MAX_CONSECUTIVE_INVALID": 10,
             "MAX_RW_TRIES_PER_IID": 50,

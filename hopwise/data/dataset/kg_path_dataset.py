@@ -142,23 +142,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         tokenizer_object.train_from_iterator(token_vocab, trainer=tokenizer_trainer)
 
-        # Dyanmically formats the sequence template with the special tokens
-        # template_tokens = [parsed_string[1] for parsed_string in Formatter().parse(self.sequence_template)]
-        # try:
-        #     template_token_map = {token: getattr(self, token) for token in template_tokens}
-        #     sequence_template = self.sequence_template.format(**template_token_map)
-        # except AttributeError:
-        #     raise AttributeError(
-        #         f"The tokenizer sequence template with the field names [{template_tokens}] is not valid."
-        #     )
-
-        # tokenizer_object.post_processor = token_processors.TemplateProcessing(
-        #     single=sequence_template,
-        #     special_tokens=[
-        #         (spec_token, tokenizer_object.token_to_id(spec_token)) for spec_token in template_token_map.values()
-        #     ],
-        # )
-
         self._tokenizer = PreTrainedTokenizerFast(
             tokenizer_object=tokenizer_object,
             model_max_length=self.context_length,
