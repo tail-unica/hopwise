@@ -82,6 +82,8 @@ dependencies = [
     "datasets",
     "colorlog>=4.7.2",
     "protobuf==3.19.0",
+    "joblib",
+    "numba",
 ]
 
 [project.optional-dependencies]

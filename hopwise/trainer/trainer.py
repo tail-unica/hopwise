@@ -1746,11 +1746,14 @@ class NCLTrainer(Trainer):
         return total_loss
 
 
-class HFPathLanguageModelingTrainer(PretrainTrainer):
+class HFPathLanguageModelingTrainer(Trainer):
     r"""HFPathLanguageModelingTrainer is designed for path-based knowledge-aware recommendation methods.
     It is specifically designed to communicate with the Hugging Face Trainer to use language models and functionalities
     as tokenizers and beam search.
     """
+
+    HOPWISE_SAVE_PATH_SUFFIX = "hopwise-"
+    HUGGINGFACE_SAVE_PATH_SUFFIX = "huggingface-"
 
     def __init__(self, config, model):
         super().__init__(config, model)
@@ -1760,16 +1763,13 @@ class HFPathLanguageModelingTrainer(PretrainTrainer):
         self.paths_per_user = path_gen_args["paths_per_user"]
         self.path_gen_lm_args = path_gen_args["language_model"]
 
-        self.hopwise_save_path_suffix = "hopwise-"
-        self.huggingface_save_path_suffix = "huggingface-"
-
         dirname, basename = os.path.split(self.saved_model_file)
-        self.saved_model_file = os.path.join(dirname, self.hopwise_save_path_suffix + basename)
+        self.saved_model_file = os.path.join(dirname, self.HOPWISE_SAVE_PATH_SUFFIX + basename)
 
     def prepare_training_arguments(self, **kwargs):
         from transformers import TrainingArguments
 
-        output_dir = self.saved_model_file.replace(self.hopwise_save_path_suffix, self.huggingface_save_path_suffix)
+        output_dir = self.saved_model_file.replace(self.HOPWISE_SAVE_PATH_SUFFIX, self.HUGGINGFACE_SAVE_PATH_SUFFIX)
 
         train_args = dict(
             output_dir=output_dir,
@@ -1796,6 +1796,55 @@ class HFPathLanguageModelingTrainer(PretrainTrainer):
         train_args.update(kwargs)
         return TrainingArguments(**train_args)
 
+    def init_hf_trainer(
+        self,
+        train_data,
+        valid_data=None,
+        verbose=True,
+        saved=True,
+        show_progress=False,
+        hf_callbacks=None,
+        callback_fn=None,
+        training_args=None,
+    ):
+        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
+
+        training_args = training_args or {}
+
+        hf_callbacks = hf_callbacks or []
+        training_arguments = self.prepare_training_arguments(**training_args)
+
+        callbacks = [
+            HopwiseCallback(
+                self,
+                train_data,
+                valid_data=valid_data,
+                verbose=verbose,
+                saved=saved,
+                show_progress=show_progress,
+                callback_fn=callback_fn,
+            ),
+            *hf_callbacks,
+        ]
+
+        self.hf_trainer = HFPathTrainer(
+            train_data,
+            self.config,
+            callbacks,
+            model=self.model.hf_model,
+            args=training_arguments,
+            path_hop_length=self.path_hop_length,
+            paths_per_user=self.paths_per_user,
+            path_generation_args=self.path_gen_lm_args,
+            eval_device=self.device,
+        )
+
+    @property
+    def processing_class(self):
+        if hasattr(self, "hf_trainer"):
+            return self.hf_trainer.processing_class
+        return None
+
     def _save_checkpoint(self, epoch, verbose=True, **kwargs):
         r"""Store the model parameters information and training information.
 
@@ -1815,11 +1864,39 @@ class HFPathLanguageModelingTrainer(PretrainTrainer):
         torch.save(state, saved_model_file, pickle_protocol=4)
         if verbose:
             self.logger.info(set_color("Saving current", "blue") + f": {saved_model_file}")
+            hf_output_dir = self.hopwise_trainer.hf_trainer.args.output_dir
+            self.logger.info(set_color("HuggingFace model is saved at", "blue") + f": {hf_output_dir}")
 
     def resume_checkpoint(self, resume_file):
-        # TODO: use the resume_from_checkpoint parameter of the HF train function
-        raise NotImplementedError()
-        return super().resume_checkpoint(resume_file)
+        """
+        Load the model parameters and training information based on the directory name,
+        and navigate into subdirectories if necessary.
+        Also handles both HuggingFace and Hopwise formats by reading corresponding files.
+
+        Args:
+            resume_file (str): the path to the directory containing the checkpoint files or subdirectories
+        """
+        from transformers import AutoModel, AutoTokenizer
+
+        if not hasattr(self, "hf_trainer"):
+            raise ValueError("The HuggingFace Trainer has not been initialized. Please call `init_hf_trainer` first.")
+
+        if os.path.basename(resume_file).startswith(self.HUGGINGFACE_SAVE_PATH_SUFFIX):
+            hf_resume_file = resume_file
+            hopwise_resume_file = resume_file.replace(self.HUGGINGFACE_SAVE_PATH_SUFFIX, self.HOPWISE_SAVE_PATH_SUFFIX)
+        elif os.path.basename(resume_file).startswith(self.HOPWISE_SAVE_PATH_SUFFIX):
+            hopwise_resume_file = resume_file
+            hf_resume_file = resume_file.replace(self.HOPWISE_SAVE_PATH_SUFFIX, self.HUGGINGFACE_SAVE_PATH_SUFFIX)
+        else:
+            raise ValueError(f"The directory name [{resume_file}] does not indicate a HuggingFace or Hopwise model.")
+
+        checkpoint = torch.load(hopwise_resume_file, map_location=self.device)
+        self.start_epoch = checkpoint["epoch"] + 1
+        self.cur_step = checkpoint["cur_step"]
+        self.best_valid_score = checkpoint["best_valid_score"]
+
+        self.model = AutoModel.from_pretrained(hf_resume_file)
+        self.hf_trainer.processing_class.tokenizer = AutoTokenizer.from_pretrained(hf_resume_file)
 
     def fit(
         self,
@@ -1830,37 +1907,17 @@ class HFPathLanguageModelingTrainer(PretrainTrainer):
         show_progress=False,
         callback_fn=None,
     ):
-        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
-
         self.eval_collector.train_data_collect(train_data)
 
-        training_arguments = self.prepare_training_arguments()
-
-        callbacks = [
-            HopwiseCallback(
-                self,
-                train_data,
-                valid_data=valid_data,
-                verbose=verbose,
-                saved=saved,
-                show_progress=show_progress,
-                callback_fn=callback_fn,
-            )
-        ]
-
-        self.hf_trainer = HFPathTrainer(
+        self.init_hf_trainer(
             train_data,
-            self.config,
-            callbacks,
-            model=self.model,
-            args=training_arguments,
-            path_hop_length=self.path_hop_length,
-            paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_lm_args,
-            eval_device=self.device,
+            valid_data=valid_data,
+            verbose=verbose,
+            saved=saved,
+            show_progress=show_progress,
+            callback_fn=callback_fn,
         )
 
-        # hf_train_output = self.hf_trainer.train()
         self.hf_trainer.train()
 
         return self.best_valid_score, self.best_valid_result
@@ -1881,10 +1938,6 @@ class HFPathLanguageModelingTrainer(PretrainTrainer):
             self.logger.info(message_output)
 
         self.model.eval()
-        if isinstance(self.model, torch.nn.DataParallel):
-            model = self.model.module
-        else:
-            model = self.model
 
         if self.config["eval_type"] == EvaluatorType.RANKING:
             self.tot_item_num = eval_data._dataset.item_num
@@ -1908,7 +1961,7 @@ class HFPathLanguageModelingTrainer(PretrainTrainer):
             inputs = self.hf_trainer.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(
                 self.hf_trainer.eval_device
             )
-            scores = self.hf_trainer._full_sort_batch_eval(model, inputs, task=task)
+            scores = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
 
             scores = scores.view(-1, self.tot_item_num)
             scores[:, 0] = -np.inf
@@ -1927,52 +1980,65 @@ class HFPathLanguageModelingTrainer(PretrainTrainer):
         return result
 
 
-class KGGLMTrainer(HFPathLanguageModelingTrainer):
+class KGGLMTrainer(HFPathLanguageModelingTrainer, PretrainTrainer):
     r"""KGGLM is designed for KGGLM, which is a path-based language model for knowledge-aware recommendation.
     It includes two training stages: link prediction pre-training and recommendation path generation fine-tuning.
     """
 
     def _get_pretrained_model_path(self, epoch_label=None):
-        epoch_label = str(epoch_label) if epoch_label is not None else "pretrained"
+        epoch_label = f"pretrained-{epoch_label}" if epoch_label is not None else "pretrained"
         return os.path.join(
             self.checkpoint_dir,
-            self.hopwise_save_path_suffix
+            self.HUGGINGFACE_SAVE_PATH_SUFFIX
             + "{}-{}-{}.pth".format(self.config["model"], self.config["dataset"], epoch_label),
         )
 
     def pretrain(self, train_data, verbose=True, show_progress=False):
-        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
-
-        self.eval_collector.train_data_collect(train_data)
+        from transformers import TrainerCallback
 
         pretrain_path = self._get_pretrained_model_path()
-        pretrain_path = pretrain_path.replace(self.hopwise_save_path_suffix, self.huggingface_save_path_suffix)
         pretrain_args = dict(
             output_dir=pretrain_path,
             num_train_epochs=self.pretrain_epochs,
             save_steps=self.save_step,
             eval_strategy="no",
+            load_best_model_at_end=False,
         )
-        training_arguments = self.prepare_training_arguments(**pretrain_args)
 
-        callbacks = [HopwiseCallback(self, train_data, verbose=verbose, show_progress=show_progress)]
+        class PretrainSaveCallback(TrainerCallback):
+            def __init__(self, hopwise_trainer):
+                self.hopwise_trainer = hopwise_trainer
 
-        self.hf_trainer = HFPathTrainer(
+            def on_epoch_end(self, args, state, control, **kwargs):
+                if control.should_save:
+                    epoch_idx = int(state.epoch)
+                    pretrain_path = self.hopwise_trainer._get_pretrained_model_path(epoch_idx)
+                    self.hopwise_trainer.hf_trainer.args.output_dir = pretrain_path
+
+        self.init_hf_trainer(
             train_data,
-            self.config,
-            callbacks,
-            model=self.model,
-            args=training_arguments,
-            path_hop_length=self.path_hop_length,
-            paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_lm_args,
-            eval_device=self.device,
+            verbose=verbose,
+            saved=True,
+            show_progress=show_progress,
+            hf_callbacks=[PretrainSaveCallback(self)],
+            training_args=pretrain_args,
         )
 
-        # hf_train_output = self.hf_trainer.train()
         self.hf_trainer.train()
 
         return self.best_valid_score, self.best_valid_result
+
+    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False, task="rec"):
+        if load_best_model and self.model.train_stage == "lp_pretrain":
+            self.hf_trainer.state.best_model_checkpoint = self.hf_trainer.args.output_dir
+
+        return super().evaluate(
+            eval_data,
+            load_best_model=load_best_model,
+            model_file=model_file,
+            show_progress=show_progress,
+            task=task,
+        )
 
     def fit(
         self,
@@ -1983,11 +2049,9 @@ class KGGLMTrainer(HFPathLanguageModelingTrainer):
         show_progress=False,
         callback_fn=None,
     ):
-        train_stages = ["lp_pretrain", "finetune"]
-        for stage in train_stages:
-            if stage == "lp_pretrain":
-                self.pretrain(train_data, verbose, show_progress)
-            elif stage == "finetune":
-                return super().fit(train_data, valid_data, verbose, saved, show_progress, callback_fn)
-            else:
-                raise ValueError("Please make sure that the 'train_stage' is 'lp_pretrain', or 'finetune'!")
+        if self.model.train_stage == "lp_pretrain":
+            return self.pretrain(train_data, verbose, show_progress)
+        elif self.model.train_stage == "finetune":
+            return super().fit(train_data, valid_data, verbose, saved, show_progress, callback_fn)
+        else:
+            raise ValueError(f"Please make sure that the 'train_stage' is in [{self.model.TRAIN_STAGES}]!")
