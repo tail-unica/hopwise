@@ -22,6 +22,7 @@ tempCodeRunnerFile.py
 .aider*
 .env
 dataset/
+!hopwise/data/dataset
 hyper/
 *.txt
 *.*emb
