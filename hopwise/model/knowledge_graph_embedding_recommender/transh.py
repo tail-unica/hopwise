@@ -35,12 +35,12 @@ class TransH(KnowledgeRecommender):
         self.embedding_size = config["embedding_size"]
         self.margin = config["margin"]
         self.device = config["device"]
-
+        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
         # Embeddings
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
-        self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
-        self.norm_vec = nn.Embedding(self.n_relations + 1, self.embedding_size)
+        self.relation_embedding = nn.Embedding(self.n_relations, self.embedding_size)
+        self.norm_vec = nn.Embedding(self.n_relations, self.embedding_size)
 
         # Loss
         self.rec_loss = nn.TripletMarginLoss(margin=self.margin, p=2, reduction="mean")
@@ -89,7 +89,7 @@ class TransH(KnowledgeRecommender):
         user_e, pos_item_e, neg_item_e, rec_r_e = self._get_rec_embedding(user, pos_item, neg_item)
         head_e, pos_tail_e, neg_tail_e, relation_e = self._get_kg_embedding(head, pos_tail, neg_tail, relation)
 
-        relation_user = torch.tensor([self.n_relations] * user_e.shape[0], device=self.device)
+        relation_user = torch.tensor([self.ui_relation] * user_e.shape[0], device=self.device)
         # Projections
         user_e = self.project(user_e, relation_user)
         head_e = self.project(head_e, relation)
@@ -118,7 +118,7 @@ class TransH(KnowledgeRecommender):
         rec_r_e = self.relation_embedding.weight[-1]
         rec_r_e = rec_r_e.expand_as(user_e)
 
-        relation_ids = torch.tensor([self.n_relations] * user_e.shape[0], device=self.device)
+        relation_ids = torch.tensor([self.ui_relation] * user_e.shape[0], device=self.device)
 
         return self.forward(user_e, rec_r_e, item_e, relation_ids)
 
@@ -132,8 +132,8 @@ class TransH(KnowledgeRecommender):
         item_indices = torch.tensor(range(self.n_items)).to(self.device)
         all_item_e = self.entity_embedding.weight[item_indices]
 
-        relation_ids_user = torch.tensor([self.n_relations] * user_e.shape[0], device=self.device)
-        relation_ids_item = torch.tensor([self.n_relations] * all_item_e.shape[0], device=self.device)
+        relation_ids_user = torch.tensor([self.ui_relation] * user_e.shape[0], device=self.device)
+        relation_ids_item = torch.tensor([self.ui_relation] * all_item_e.shape[0], device=self.device)
 
         h_r = self.project(user_e, relation_ids_user) + rec_r_e
         h_r = h_r.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)

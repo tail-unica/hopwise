@@ -16,7 +16,7 @@ from logging import getLogger
 import numpy as np
 
 from hopwise.data.dataloader.abstract_dataloader import AbstractDataLoader
-from hopwise.data.dataloader.general_dataloader import FullSortEvalDataLoader, TrainDataLoader
+from hopwise.data.dataloader.general_dataloader import FullSortRecEvalDataLoader, TrainDataLoader
 from hopwise.data.interaction import Interaction
 from hopwise.utils import KGDataLoaderState, PathLanuageModelingTokenType
 
@@ -186,16 +186,16 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
     def get_path_dataset(self):
         """Get path dataset with the used ids based on the dataloader phase.
 
-        Pleaser refer to :meth:`~hopwise.data.dataset.kg_path_dataset.KnowledgePathDataset.generate_path_dataset` and
-        :meth:`~hopwise.data.dataset.kg_path_dataset.KnowledgePathDataset.tokenize_path_dataset` for more details.
+        Pleaser refer to :meth:`~hopwise.data.dataset.kg_path_dataset.KnowledgePathDataset.generate_user_path_dataset
+        and :meth:`~hopwise.data.dataset.kg_path_dataset.KnowledgePathDataset.tokenize_path_dataset` for more details.
         """
-        self._dataset.generate_path_dataset(self.general_dataloader._sampler.used_ids)
+        self._dataset.generate_user_path_dataset(self.general_dataloader._sampler.used_ids)
         self._dataset.tokenize_path_dataset(phase=self.general_dataloader._sampler.phase)
 
         return self._dataset.tokenized_dataset
 
 
-class KnowledgePathEvalDataLoader(FullSortEvalDataLoader):
+class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):
     def __init__(self, config, dataset, sampler, shuffle=False):
         super().__init__(config, dataset, sampler, shuffle)
 
@@ -205,9 +205,8 @@ class KnowledgePathEvalDataLoader(FullSortEvalDataLoader):
         ui_relation = dataset.field2token_id[dataset.relation_field][dataset.ui_relation]
         inference_path_dataset = {
             self.uid_field: [
-                dataset.path_separator.join(
+                dataset.path_token_separator.join(
                     [
-                        dataset.bos_token,
                         PathLanuageModelingTokenType.USER.value + str(uid.item()),
                         PathLanuageModelingTokenType.RELATION.value + str(ui_relation),
                     ]

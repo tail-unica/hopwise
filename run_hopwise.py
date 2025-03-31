@@ -20,6 +20,8 @@ if __name__ == "__main__":
     parser.add_argument("--ip", type=str, default="localhost", help="the ip of master node")
     parser.add_argument("--port", type=str, default="5678", help="the port of master node")
     parser.add_argument("--world_size", type=int, default=-1, help="total number of jobs")
+    parser.add_argument("--mode", default="train", choices=["train", "evaluate"], help="run mode")
+    parser.add_argument("--checkpoint", default=None, help="checkpoint (.pth) file")
     parser.add_argument(
         "--group_offset",
         type=int,
@@ -34,6 +36,8 @@ if __name__ == "__main__":
     run(
         args.model,
         args.dataset,
+        args.mode,
+        args.checkpoint,
         config_file_list=config_file_list,
         nproc=args.nproc,
         world_size=args.world_size,

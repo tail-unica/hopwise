@@ -1,4 +1,4 @@
-name: Check UV Sync and Run
+name: Check UV Sync and Run on CUDA 12.4
 
 on: [
   # push,
@@ -8,18 +8,17 @@ on: [
 
 jobs:
   check-uv-sync:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        python-version:
-          - "3.9"
-          - "3.10"
-          - "3.11"
+        os: [ubuntu-latest]
+        python-version: ["3.9", "3.10", "3.11"]
         experimental: [false]
         include:
           - python-version: "3.12"
+            os: ubuntu-latest
             experimental: true
 
     steps:
@@ -31,9 +30,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install the project
-        run: uv sync --all-extras --dev
+        run: uv sync --extra cu124 --extra all-models --extra hyper --group lint --group test --no-dev
 
       - name: Run Hopwise
         run: |
+          # General working example
           uv run run_hopwise.py --epochs=2
+          # Working check for scipy update
+          uv run run_hopwise.py --model=LightGCN --epochs=2
+          # Working check for DGL
           uv run run_hopwise.py --model=KGAT --epochs=2

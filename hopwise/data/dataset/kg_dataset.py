@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 import torch
 from scipy.sparse import coo_matrix
+from tqdm import tqdm
 
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
@@ -72,7 +73,8 @@ class KnowledgeBasedDataset(Dataset):
     def __init__(self, config):
         super().__init__(config)
         self.tail_field = None
-        self.is_kg_data = None
+        self.G = None
+        self.kg_relation = None
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
@@ -276,7 +278,7 @@ class KnowledgeBasedDataset(Dataset):
 
         return datasets[KnowledgeEvaluationType.REC] if KnowledgeEvaluationType.LP not in datasets else datasets
 
-    def copy(self, new_inter_feat, data_type):
+    def copy(self, new_inter_feat, data_type=KnowledgeEvaluationType.REC):
         """Given a new interaction feature, return a new :class:`Dataset` object,
         whose interaction feature is updated with ``new_inter_feat``, and all the other attributes the same.
 
@@ -564,11 +566,12 @@ class KnowledgeBasedDataset(Dataset):
             self.kg_feat = pd.concat([self.kg_feat, reverse_kg_feat])
 
         # Add UI-relation pairs in the relation field
-        kg_rel_num = len(self.field2id_token[self.relation_field])
-        self.field2token_id[self.relation_field][self.ui_relation] = kg_rel_num
-        self.field2id_token[self.relation_field] = np.append(
-            self.field2id_token[self.relation_field], self.ui_relation
-        )
+        if self.ui_relation not in self.field2token_id[self.relation_field]:
+            kg_rel_num = len(self.field2id_token[self.relation_field])
+            self.field2token_id[self.relation_field][self.ui_relation] = kg_rel_num
+            self.field2id_token[self.relation_field] = np.append(
+                self.field2id_token[self.relation_field], self.ui_relation
+            )
 
     def _remap_ID_all(self):
         super()._remap_ID_all()
@@ -620,6 +623,13 @@ class KnowledgeBasedDataset(Dataset):
         numpy.ndarray: List of entity id, including virtual entities.
         """
         return np.arange(self.entity_num)
+
+    def ckg_dict_graph(self):
+        G = GraphDict(self, self.ui_relation, self.kg_feat, self.inter_feat)
+        self.G = G
+        self.kg_relation = G.kg_relation
+
+        return self.G, self.kg_relation
 
     def kg_graph(self, form="coo", value_field=None):
         """Get graph or sparse matrix that describe relations between entities.
@@ -721,8 +731,9 @@ class KnowledgeBasedDataset(Dataset):
 
         if show_relation:
             ui_rel_num = len(self.inter_feat)
-            ui_rel_id = self.relation_num - 1
-            assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
+
+            ui_rel_id = self.field2token_id[self.relation_field][self.ui_relation]
+
             kg_rel = self.kg_feat[self.relation_field]
             ui_rel = torch.full((2 * ui_rel_num,), ui_rel_id, dtype=kg_rel.dtype)
             edge = torch.cat([ui_rel, kg_rel])
@@ -1126,3 +1137,86 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             self._reset_ent_remapID(field, entity_id_map, new_entity_id2token, new_entity_token2id)
         self.field2id_token[self.entity_field] = new_entity_id2token
         self.field2token_id[self.entity_field] = new_entity_token2id
+
+
+class GraphDict:
+    def __init__(self, dataset, ui_relation, kg_feat, inter_feat):
+        self.relation2id = dataset.field2token_id["relation_id"]
+        self.inter_num = dataset.inter_num
+        self.ui_relation = self.relation2id[ui_relation]
+
+        self.G = dict()
+        self.kg_relation = dict()
+
+        # Knowledge graph data
+        hids = kg_feat[dataset.head_entity_field].numpy()
+        kg_rels = kg_feat[dataset.relation_field].numpy()
+        tids = kg_feat[dataset.tail_entity_field].numpy()
+
+        # User Interaction data
+        uids = inter_feat[dataset.uid_field].numpy()
+        ui_ids = np.full((len(uids),), self.ui_relation)
+        iids = inter_feat[dataset.iid_field].numpy()
+
+        # Concatenate data
+        heads = np.concatenate([uids, iids, hids])
+        relations = np.concatenate([ui_ids, ui_ids, kg_rels])
+        tails = np.concatenate([iids, uids, tids])
+
+        # Build the graph
+        self._build_graph(heads, relations, tails)
+
+    def _build_graph(self, heads, relations, tails):
+        self.G["user"] = dict()
+        self.G["entity"] = dict()
+        self.kg_relation["user"] = dict()
+        self.kg_relation["entity"] = dict()
+
+        iter_triples = tqdm(
+            enumerate(zip(heads, relations, tails)),
+            total=len(heads),
+            desc="Building Graph Dict",
+        )
+
+        for triple_i, (head, relation, tail) in iter_triples:
+            if relation == self.ui_relation:
+                # UI interaction case
+                if triple_i < self.inter_num:
+                    key = "user"
+                    relation_key = "entity"
+                else:
+                    key = "entity"
+                    relation_key = "user"
+
+                if head not in self.G[key]:
+                    self.G[key][head] = dict()
+                if relation not in self.G[key][head]:
+                    self.G[key][head][relation] = list()
+
+                self.G[key][head][relation].append(tail)
+                self.kg_relation[key][relation] = relation_key
+            else:
+                if head not in self.G["entity"]:
+                    self.G["entity"][head] = dict()
+                if relation not in self.G["entity"][head]:
+                    self.G["entity"][head][relation] = list()
+                if tail not in self.G["entity"]:
+                    self.G["entity"][tail] = dict()
+                if relation not in self.G["entity"][tail]:
+                    self.G["entity"][tail][relation] = list()
+
+                # KG case
+                self.G["entity"][head][relation].append(tail)
+                self.G["entity"][tail][relation].append(head)
+
+                self.kg_relation["entity"][relation] = "entity"
+
+    def __call__(self, eh_type, eh_id=None, relation=None):
+        data = self.G
+        if eh_type is not None:
+            data = data.get(eh_type, None)
+        if eh_id is not None:
+            data = data.get(eh_id, None)
+        if relation is not None:
+            data = data.get(relation, None)
+        return data

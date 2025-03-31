@@ -14,6 +14,7 @@ docs/build/
 wandb/*
 /ray_log*
 config/
+!hopwise/config/
 .venv/
 venv/
 testModules.py
@@ -21,4 +22,7 @@ tempCodeRunnerFile.py
 .aider*
 .env
 dataset/
+!hopwise/data/dataset
 hyper/
+*.txt
+*.*emb

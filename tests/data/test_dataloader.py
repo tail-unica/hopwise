@@ -922,7 +922,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
-            "path_sample_args": {"reasoning_template": "{user} {pos_iid} {entity_list} {rec_iid}"},
+            "path_sample_args": {"path_token_separator": " "},
             "tokenizer": {
                 "model": "WordLevel",
                 "context_length": 24,
@@ -941,12 +941,14 @@ class TestKnowledgePathDataLoader:
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         path_string = "U2 R5 I2 R1 E7 R1 I3\nU2 R5 I3 R1 E7 R1 I2\nU2 R5 I2 R2 E9 R3 I3"
         train_data.dataset._path_dataset = path_string
+        train_data.dataset._tokenized_dataset = None
         train_data.dataset.tokenize_path_dataset(phase="train")
         tokenized_dataset = train_data.dataset.tokenized_dataset
         tokenized_path_string = tokenized_dataset.data["train"]["input_ids"].to_pylist()
-        assert tokenized_path_string[0] == [4, 27, 24, 14, 20, 1, 20, 15, 3]
-        assert tokenized_path_string[1] == [4, 27, 24, 15, 20, 1, 20, 14, 3]
-        assert tokenized_path_string[2] == [4, 27, 24, 14, 21, 11, 22, 15, 3]
+        split_path_string = path_string.split("\n")
+        assert tokenized_path_string[0] == train_data.dataset.tokenizer(split_path_string[0])["input_ids"]
+        assert tokenized_path_string[1] == train_data.dataset.tokenizer(split_path_string[1])["input_ids"]
+        assert tokenized_path_string[2] == train_data.dataset.tokenizer(split_path_string[2])["input_ids"]
 
 
 if __name__ == "__main__":

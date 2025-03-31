@@ -19,26 +19,17 @@ from logging import getLogger
 import torch.distributed as dist
 
 from hopwise.config import Config
-from hopwise.data import (
-    create_dataset,
-    data_preparation,
-)
+from hopwise.data import create_dataset, data_preparation
 from hopwise.data.transform import construct_transform
-from hopwise.utils import (
-    get_environment,
-    get_flops,
-    get_model,
-    get_trainer,
-    init_logger,
-    init_seed,
-    set_color,
-)
+from hopwise.utils import get_environment, get_flops, get_model, get_trainer, init_logger, init_seed, set_color
 from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
 def run(
     model,
     dataset,
+    run="train",
+    checkpoint=None,
     config_file_list=None,
     config_dict=None,
     saved=True,
@@ -52,6 +43,8 @@ def run(
         res = run_hopwise(
             model=model,
             dataset=dataset,
+            run=run,
+            checkpoint=checkpoint,
             config_file_list=config_file_list,
             config_dict=config_dict,
             saved=saved,
@@ -82,7 +75,7 @@ def run(
 
         mp.spawn(
             run_hopwises,
-            args=(model, dataset, config_file_list, kwargs),
+            args=(model, dataset, run, checkpoint, config_file_list, kwargs),
             nprocs=nproc,
             join=True,
         )
@@ -95,6 +88,8 @@ def run(
 def run_hopwise(
     model=None,
     dataset=None,
+    run="train",
+    checkpoint=None,
     config_file_list=None,
     config_dict=None,
     saved=True,
@@ -106,35 +101,38 @@ def run_hopwise(
     Args:
         model (str, optional): Model name. Defaults to ``None``.
         dataset (str, optional): Dataset name. Defaults to ``None``.
+        run (str, optional): The running mode, 'train' or 'evaluate'. Defaults to ``'train'``.
+        checkpoint (str, optional): The path of the saved model file. Defaults to ``None``.
         config_file_list (list, optional): Config files used to modify experiment parameters. Defaults to ``None``.
         config_dict (dict, optional): Parameters dictionary used to modify experiment parameters. Defaults to ``None``.
         saved (bool, optional): Whether to save the model. Defaults to ``True``.
         queue (torch.multiprocessing.Queue, optional): The queue used to pass the result to the main process. Defaults to ``None``.
     """  # noqa: E501
-    # configurations initialization
-    config = Config(
-        model=model,
-        dataset=dataset,
-        config_file_list=config_file_list,
-        config_dict=config_dict,
-    )
-    init_seed(config["seed"], config["reproducibility"])
-    # logger initialization
-    init_logger(config)
-    logger = getLogger()
-    logger.info(sys.argv)
-    logger.info(config)
 
-    # dataset filtering
-    dataset = create_dataset(config)
-    logger.info(dataset)
+    if checkpoint is not None:
+        config, model, dataset, train_data, valid_data, test_data = load_data_and_model(model_file=checkpoint)
+        logger = get_logger(config)
+        logger.info(f"A checkpoint is provided from which to resume training {checkpoint}")
+    else:
+        # configurations initialization
+        config = Config(
+            model=model,
+            dataset=dataset,
+            config_file_list=config_file_list,
+            config_dict=config_dict,
+        )
+        logger = get_logger(config)
+        # dataset filtering
+        dataset = create_dataset(config)
+        logger.info(dataset)
 
-    # dataset splitting
-    train_data, valid_data, test_data = data_preparation(config, dataset)
+        # dataset splitting
+        train_data, valid_data, test_data = data_preparation(config, dataset)
 
-    # model loading and initialization
-    init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
-    model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
+        # model loading and initialization
+        init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
+        model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
+
     logger.info(model)
 
     transform = construct_transform(config)
@@ -144,40 +142,59 @@ def run_hopwise(
 
     # trainer loading and initialization
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
-    # model training
-    best_valid_score, best_valid_result = trainer.fit(
-        train_data, valid_data, saved=saved, show_progress=config["show_progress"]
-    )
 
-    # model evaluation
-    test_result = trainer.evaluate(test_data, load_best_model=saved, show_progress=config["show_progress"])
+    if run == "train":
+        best_valid_score, best_valid_result = trainer.fit(
+            train_data, valid_data, saved=saved, show_progress=config["show_progress"]
+        )
 
-    environment_tb = get_environment(config)
-    logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
+        # model evaluation
+        test_result = trainer.evaluate(test_data, load_best_model=saved, show_progress=config["show_progress"])
 
-    # case where we have a kg-aware model and the kg is splitted
+        environment_tb = get_environment(config)
+        logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
 
-    if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.LP in best_valid_result:
-        for task, result in best_valid_result.items():
-            logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
-    if KnowledgeEvaluationType.REC in test_result and KnowledgeEvaluationType.LP in test_result:
-        for task, result in test_result.items():
-            logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
-    else:
-        if isinstance(best_valid_result, dict) and KnowledgeEvaluationType.REC in best_valid_result:
-            best_valid_result = best_valid_result[KnowledgeEvaluationType.REC]
+        if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.LP in best_valid_result:
+            for task, result in best_valid_result.items():
+                logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
 
-        logger.info(set_color("best valid ", "yellow") + f": {format_metrics(best_valid_result)}")
+        if KnowledgeEvaluationType.REC in test_result and KnowledgeEvaluationType.LP in test_result:
+            for task, result in test_result.items():
+                logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
+        else:
+            if isinstance(best_valid_result, dict) and KnowledgeEvaluationType.REC in best_valid_result:
+                best_valid_result = best_valid_result[KnowledgeEvaluationType.REC]
+
+            logger.info(set_color("best valid ", "yellow") + f": {format_metrics(best_valid_result)}")
+            logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
+        # In the case of KG-aware tasks, we don't care about the final "best_valid_score"
+        # format because it is not used anywhere.
+        result = {
+            "best_valid_score": best_valid_score,
+            "valid_score_bigger": config["valid_metric_bigger"],
+            "best_valid_result": best_valid_result,
+            "test_result": test_result,
+        }
+
+    elif run == "evaluate":
+        if checkpoint is None:
+            raise ValueError("Checkpoint is needed for evaluation")
+
+        test_result = trainer.evaluate(
+            test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
+        )
+
+        environment_tb = get_environment(config)
+        logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
+
         logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
 
-    # In the case of KG-aware tasks, we don't care about the final "best_valid_score"
-    # format because it is not used anywhere.
-    result = {
-        "best_valid_score": best_valid_score,
-        "valid_score_bigger": config["valid_metric_bigger"],
-        "best_valid_result": best_valid_result,
-        "test_result": test_result,
-    }
+        result = {
+            "valid_score_bigger": config["valid_metric_bigger"],
+            "test_result": test_result,
+        }
+    else:
+        raise ValueError(f"Invalid run mode: {run}")
 
     if not config["single_spec"]:
         dist.destroy_process_group()
@@ -186,6 +203,17 @@ def run_hopwise(
         queue.put(result)  # for multiprocessing, e.g., mp.spawn
 
     return result  # for the single process
+
+
+def get_logger(config):
+    init_seed(config["seed"], config["reproducibility"])
+    # logger initialization
+    init_logger(config)
+    logger = getLogger()
+    logger.info(sys.argv)
+    logger.info(config)
+
+    return logger
 
 
 def format_metrics(metrics):
@@ -200,7 +228,7 @@ def run_hopwises(rank, *args):
     kwargs["config_dict"] = kwargs.get("config_dict", {})
     kwargs["config_dict"]["local_rank"] = rank
     run_hopwise(
-        *args[:3],
+        *args[:5],
         **kwargs,
     )
 

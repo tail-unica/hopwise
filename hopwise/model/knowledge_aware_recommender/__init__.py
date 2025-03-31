@@ -1,3 +1,4 @@
+from hopwise.model.knowledge_aware_recommender.cafe import CAFE
 from hopwise.model.knowledge_aware_recommender.cfkg import CFKG
 from hopwise.model.knowledge_aware_recommender.cke import CKE
 from hopwise.model.knowledge_aware_recommender.kgat import KGAT
@@ -7,5 +8,6 @@ from hopwise.model.knowledge_aware_recommender.kgnnls import KGNNLS
 from hopwise.model.knowledge_aware_recommender.ktup import KTUP
 from hopwise.model.knowledge_aware_recommender.mcclk import MCCLK
 from hopwise.model.knowledge_aware_recommender.mkr import MKR
+from hopwise.model.knowledge_aware_recommender.pgpr import PGPR
 from hopwise.model.knowledge_aware_recommender.ripplenet import RippleNet
 from hopwise.model.knowledge_aware_recommender.userkgat import UserKGAT

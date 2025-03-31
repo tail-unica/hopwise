@@ -1,0 +1,17 @@
+# These contraints are used by PGPR and CAFE.
+# While in CAFE are left as they are, in PGPR reverse relations are removed and only not-null relations are considered.
+
+path_constraint: [
+  [[null, 'user'], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["cinematography_by_cinematographer","entity"],["cinematography_by_cinematographer_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["produced_by_prodcompany","entity"],["produced_by_prodcompany_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["composed_by_composer","entity"],["composed_by_composer_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["belong_to_category","entity"],["belong_to_category_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["starred_by_actor","entity"],["starred_by_actor_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["produced_in_country","entity"],["produced_in_country_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["edited_by_editor","entity"],["edited_by_editor_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["produced_by_producer","entity"],["produced_by_producer_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["wrote_by_writter","entity"],["wrote_by_writter_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["directed_by_director","entity"],["directed_by_director_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["related_to_wikipage","entity"],["related_to_wikipage_r","entity"]],
+]

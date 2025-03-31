@@ -213,9 +213,15 @@ def data_preparation(config, dataset):
         dataset._change_feat_format()
     else:
         model_type = config["MODEL_TYPE"]
+        model = config["model"]
         built_datasets = dataset.build()
 
-        if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]:
+        special_knowledge_aware = ["PGPR", "CAFE"]
+
+        if (
+            model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]
+            and model not in special_knowledge_aware
+        ):
             if isinstance(built_datasets, dict):
                 # then the kg has been split
                 train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets[KnowledgeEvaluationType.LP]
@@ -238,18 +244,18 @@ def data_preparation(config, dataset):
                 )
 
                 valid_kg_sampler = KGSampler(valid_kg_dataset, distribution=None)
-                valid_kg_data = get_dataloader(config, "valid")(
-                    config, valid_kg_dataset, valid_kg_sampler, shuffle=False, is_a_kg=True
+                valid_kg_data = get_dataloader(config, "valid", task=KnowledgeEvaluationType.LP)(
+                    config, valid_kg_dataset, valid_kg_sampler, shuffle=False
                 )
-                valid_inter_data = get_dataloader(config, "valid")(
+                valid_inter_data = get_dataloader(config, "valid", task=KnowledgeEvaluationType.REC)(
                     config, valid_inter_dataset, valid_inter_sampler, shuffle=False
                 )
 
                 test_kg_sampler = KGSampler(test_kg_dataset, distribution=None)
-                test_kg_data = get_dataloader(config, "valid")(
-                    config, test_kg_dataset, test_kg_sampler, shuffle=False, is_a_kg=True
+                test_kg_data = get_dataloader(config, "valid", task=KnowledgeEvaluationType.LP)(
+                    config, test_kg_dataset, test_kg_sampler, shuffle=False
                 )
-                test_inter_data = get_dataloader(config, "test")(
+                test_inter_data = get_dataloader(config, "test", task=KnowledgeEvaluationType.REC)(
                     config, test_inter_dataset, test_inter_sampler, shuffle=False
                 )
 
@@ -271,7 +277,6 @@ def data_preparation(config, dataset):
 
                 train_dataset, valid_dataset, test_dataset = built_datasets
                 train_sampler, valid_sampler, test_sampler = create_samplers(config, dataset, built_datasets)
-
                 train_data = get_dataloader(config, "train")(
                     config, train_dataset, train_sampler, kg_sampler, shuffle=True
                 )
@@ -325,7 +330,7 @@ def data_preparation(config, dataset):
     return train_data, valid_data, test_data
 
 
-def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"]):  # noqa: PLR0911
+def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"], task=KnowledgeEvaluationType.REC):  # noqa: PLR0911
     """Return a dataloader class according to :attr:`config` and :attr:`phase`.
 
     Args:
@@ -346,15 +351,18 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
         )
 
     register_table = {
-        "MultiDAE": _get_AE_dataloader,
-        "MultiVAE": _get_AE_dataloader,
-        "MacridVAE": _get_AE_dataloader,
-        "CDAE": _get_AE_dataloader,
-        "ENMF": _get_AE_dataloader,
-        "RaCT": _get_AE_dataloader,
-        "RecVAE": _get_AE_dataloader,
-        "DiffRec": _get_AE_dataloader,
-        "LDiffRec": _get_AE_dataloader,
+        "MultiDAE": _get_user_dataloader,
+        "MultiVAE": _get_user_dataloader,
+        "MacridVAE": _get_user_dataloader,
+        "CDAE": _get_user_dataloader,
+        "ENMF": _get_user_dataloader,
+        "RaCT": _get_user_dataloader,
+        "RecVAE": _get_user_dataloader,
+        "DiffRec": _get_user_dataloader,
+        "LDiffRec": _get_user_dataloader,
+        "PGPR": _get_user_dataloader,
+        "CAFE": _get_user_dataloader,
+        "UCPR": _get_user_dataloader,
     }
 
     if config["model"] in register_table:
@@ -362,6 +370,7 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
 
     model_type = config["MODEL_TYPE"]
     if phase == "train":
+        # Return Dataloader based on the modeltype
         if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
         elif model_type == ModelType.PATH_LANGUAGE_MODELING:
@@ -374,13 +383,15 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
             if model_type == ModelType.PATH_LANGUAGE_MODELING:
                 return KnowledgePathEvalDataLoader
             else:
-                return FullSortEvalDataLoader
+                if task is KnowledgeEvaluationType.LP:
+                    return FullSortLPEvalDataLoader
+                return FullSortRecEvalDataLoader
         else:
             return NegSampleEvalDataLoader
 
 
-def _get_AE_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"]):
-    """Customized function for VAE models to get correct dataloader class.
+def _get_user_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"]):
+    """Customized function for models that needs only users
 
     Args:
         config (Config): An instance object of Config, used to record parameter information.
@@ -404,7 +415,7 @@ def _get_AE_dataloader(config, phase: Literal["train", "valid", "test", "evaluat
     else:
         eval_mode = config["eval_args"]["mode"][phase]
         if eval_mode == "full":
-            return FullSortEvalDataLoader
+            return FullSortRecEvalDataLoader
         else:
             return NegSampleEvalDataLoader
 

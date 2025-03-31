@@ -1,0 +1,28 @@
+# CAFE Parameters
+rank_weight: 10.0
+use_dropout: True
+deep_module: True
+topk_candidates: 10
+sample_size: 500
+kg_reverse_r: True
+topk_paths: 25
+clip_grad_norm:
+  max_norm: 5.0
+
+# Embeddings
+additional_feat_suffix: [useremb, entityemb, relationemb]
+
+# To load the pretrained embeddings (Typically from TransE) necessary to score the paths
+load_col:
+    useremb: [userid, user_embedding]
+    entityemb: [entityid, entity_embedding]
+    relationemb: [relationid, relation_embedding]
+
+alias_of_user_id: [userid]
+alias_of_entity_id: [entityid]
+alias_of_relation_id: [relationid]
+
+preload_weight:
+  userid: user_embedding
+  entityid: entity_embedding
+  relationid: relation_embedding

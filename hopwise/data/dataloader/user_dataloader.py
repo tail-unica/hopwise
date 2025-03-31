@@ -41,6 +41,7 @@ class UserDataLoader(AbstractDataLoader):
             self.logger.warning("UserDataLoader must shuffle the data.")
 
         self.uid_field = dataset.uid_field
+
         self.user_list = Interaction({self.uid_field: torch.arange(dataset.user_num)})
         self.sample_size = len(self.user_list)
         super().__init__(config, dataset, sampler, shuffle=shuffle)

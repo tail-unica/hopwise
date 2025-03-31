@@ -38,6 +38,7 @@ class RotatE(KnowledgeRecommender):
         self.embedding_size = config["embedding_size"]
         self.margin = config["margin"]
         self.device = config["device"]
+        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
 
         # Embeddings
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
@@ -46,7 +47,7 @@ class RotatE(KnowledgeRecommender):
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
         self.entity_embedding_im = nn.Embedding(self.n_entities, self.embedding_size)
 
-        self.relation_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
+        self.relation_embedding = nn.Embedding(self.n_relations, self.embedding_size)
 
         # Loss
         self.loss = nn.BCEWithLogitsLoss()
@@ -74,7 +75,7 @@ class RotatE(KnowledgeRecommender):
         neg_item_re = self.entity_embedding(negative_items)
         neg_item_im = self.entity_embedding_im(negative_items)
 
-        relation_user = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation_user = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
         rec_r_e = self.relation_embedding(relation_user)
 
         return user_re, user_im, rec_r_e, pos_item_re, pos_item_im, neg_item_re, neg_item_im
@@ -130,7 +131,7 @@ class RotatE(KnowledgeRecommender):
     def predict(self, interaction):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
-        relation_user = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation_user = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
 
         user_re = self.user_embedding(user)
         user_im = self.user_embedding_im(user)
@@ -157,7 +158,7 @@ class RotatE(KnowledgeRecommender):
 
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
-        relation_user = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation_user = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
         item_indices = torch.tensor(range(self.n_items)).to(self.device)
 
         user_re = self.user_embedding(user)

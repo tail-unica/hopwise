@@ -33,7 +33,7 @@ class ComplEx(KnowledgeRecommender):
         # load parameters info
         self.embedding_size = config["embedding_size"]
         self.device = config["device"]
-
+        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
         # define layers and loss
         self.user_re_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.user_im_embedding = nn.Embedding(self.n_users, self.embedding_size)
@@ -41,8 +41,8 @@ class ComplEx(KnowledgeRecommender):
         self.entity_re_embedding = nn.Embedding(self.n_entities, self.embedding_size)
         self.entity_im_embedding = nn.Embedding(self.n_entities, self.embedding_size)
 
-        self.relation_re_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
-        self.relation_im_embedding = nn.Embedding(self.n_relations + 1, self.embedding_size)
+        self.relation_re_embedding = nn.Embedding(self.n_relations, self.embedding_size)
+        self.relation_im_embedding = nn.Embedding(self.n_relations, self.embedding_size)
 
         self.loss = nn.BCEWithLogitsLoss()
 
@@ -61,7 +61,7 @@ class ComplEx(KnowledgeRecommender):
         return (x * y * z).sum(dim=-1)
 
     def _get_rec_embeddings(self, user, positive_items, negative_items):
-        relation_users = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation_users = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
         user_re_e = self.user_re_embedding(user)
         user_im_e = self.user_im_embedding(user)
 
@@ -129,7 +129,7 @@ class ComplEx(KnowledgeRecommender):
     def predict(self, interaction):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
-        relation = torch.tensor([self.n_relations] * user.shape[0], device=self.device)
+        relation = torch.tensor([self.ui_relation] * user.shape[0], device=self.device)
 
         user_re_e = self.user_re_embedding(user)
         user_im_e = self.user_im_embedding(user)
