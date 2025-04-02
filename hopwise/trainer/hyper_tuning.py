@@ -14,6 +14,7 @@
 
 import datetime
 import os
+import warnings
 from ast import literal_eval
 from enum import Enum
 from functools import partial
@@ -21,7 +22,7 @@ from functools import partial
 import numpy as np
 
 from hopwise.config import Config
-from hopwise.utils.utils import dict2str
+from hopwise.utils import dict2str, set_color
 
 
 def _recursiveFindNodes(root, node_type="switch"):
@@ -430,6 +431,7 @@ class HyperTuning:
         Args:
             trial (optuna.trial): the trial object
         """
+        import optuna
 
         params = {}
         for para_name in self.space:
@@ -449,7 +451,25 @@ class HyperTuning:
             elif para_type == "loguniform":
                 low = para_value[0]
                 high = para_value[1]
-                params[para_name] = trial.suggest_float(para_name, np.exp(low), np.exp(high), log=True)
+
+                low = np.exp(low)
+                high = np.exp(high)
+
+                if isinstance(trial.study.sampler, optuna.samplers.GridSampler):
+                    warnings.warn(
+                        set_color(
+                            "GridSampler doesn't fully support loguniform distributions and only extremes are used. "
+                            "https://optuna.readthedocs.io/en/stable/reference/samplers/generated/optuna.samplers.GridSampler.html\n\n"
+                            "Values lower than 1 will be replaced with 1.",
+                            color="yellow",
+                        ),
+                        UserWarning,
+                    )
+
+                    low = max(low, 1)
+                    high = max(high, 1)
+
+                params[para_name] = trial.suggest_float(para_name, low, high, log=True)
             else:
                 raise ValueError(f"  Illegal param type [{para_type}]")
 
@@ -495,7 +515,7 @@ class HyperTuning:
 
                 fp.write("Test result:\n" + dict2str(self.params2result[params]["test_result"]) + "\n\n")
 
-                if self.tuner == "optuna":
+                if self.tuner == self.TUNER_TYPES.OPTUNA:
                     if not hasattr(self, "study"):
                         raise ValueError("Optuna study not created. Call `run` method first.")
 
