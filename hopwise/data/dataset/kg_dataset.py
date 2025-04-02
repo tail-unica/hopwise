@@ -272,7 +272,7 @@ class KnowledgeBasedDataset(Dataset):
             raise NotImplementedError(f"The splitting_method [{split_mode}] has not been implemented.")
         return datasets[KnowledgeEvaluationType.REC] if KnowledgeEvaluationType.LP not in datasets else datasets
 
-    def copy(self, new_inter_feat, data_type):
+    def copy(self, new_inter_feat, data_type=KnowledgeEvaluationType.REC):
         """Given a new interaction feature, return a new :class:`Dataset` object,
         whose interaction feature is updated with ``new_inter_feat``, and all the other attributes the same.
 

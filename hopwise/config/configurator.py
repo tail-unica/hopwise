@@ -496,8 +496,8 @@ class Config:
         default_path_sample_args = {
             "temporal_causality": False,
             "collaborative_path": True,
-            "strategy": "simple",
-            "reasoning_template": "{user} {pos_iid} {entity_list} {rec_iid}",
+            "strategy": "constrained-rw",
+            "path_token_separator": " ",
             "restrict_by_phase": False,
             "MAX_CONSECUTIVE_INVALID": 10,
             "MAX_RW_TRIES_PER_IID": 50,
@@ -649,9 +649,20 @@ class Config:
 
         np.bool = np.bool_
         np.int = np.int_
-        np.float = np.float_
-        np.complex = np.complex_
+        if np.__version__.startswith("2."):
+            np.float = np.float64
+            np.complex = np.complex64
+            np.unicode = np.str_
+            np.unicode_ = np.unicode
+        else:
+            np.float = np.float_
+            np.complex = np.complex_
+            np.unicode = np.unicode_
+
         np.object = np.object_
         np.str = np.str_
-        np.long = np.int_
-        np.unicode = np.unicode_
+        if not hasattr(np, "long"):
+            np.long = np.int_
+
+        if not hasattr(np, "string_"):
+            np.string_ = np.bytes_
