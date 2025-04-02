@@ -124,7 +124,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         # Pre-tokenizer definition based on :attr:`path_token_separator`
         tokenizer_object.pre_tokenizer = pre_tokenizers.Split(self.path_token_separator, "removed")
 
-        # The token vocabulary is generated and passed to the tokenizer trainer
         entity_range = np.arange(self.item_num, self.entity_num)  # only entities that are not items are considered
         token_vocab = np.concatenate(
             [
@@ -361,7 +360,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             collaborative_path=self.collaborative_path,
         )
 
-        user_paths = _generate_user_paths_weighted_random_walk_parallel(graph, used_ids, self.iid_field, **kwargs)
+        user_paths = _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, self.iid_field, **kwargs)
         paths = set.union(*user_paths)
 
         return paths
@@ -391,7 +390,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             collaborative_path=self.collaborative_path,
         )
 
-        user_paths = _generate_user_paths_constrained_random_walk_parallel(
+        user_paths = _generate_user_paths_constrained_random_walk_per_user(
             graph, used_ids, self.iid_field, self.entity_field, **kwargs
         )
         paths = set.union(*user_paths)
@@ -418,7 +417,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             collaborative_path=self.collaborative_path,
         )
 
-        user_paths = _generate_user_paths_all_simple_parallel(graph, used_ids, **kwargs)
+        user_paths = _generate_user_paths_all_simple_per_user(graph, used_ids, **kwargs)
         paths = set.union(*user_paths)
 
         return paths
@@ -622,8 +621,13 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return path_string
 
     def _add_paths_relations(self, graph, paths):
+        n_paths = len(paths)
+        paths_array = np.full((n_paths, self.path_hop_length + 1), fill_value=self.PATH_PADDING, dtype=int)
+        for i, path in enumerate(paths):
+            paths_array[i, : len(path)] = path
+
         complete_path_length = self.path_hop_length * 2 + 1
-        paths_with_relations = np.full((len(paths), complete_path_length), fill_value=self.PATH_PADDING, dtype=int)
+        paths_with_relations = np.full((n_paths, complete_path_length), fill_value=self.PATH_PADDING, dtype=int)
         relation_token_id = self.field2token_id[self.relation_field]
         relation_map = np.zeros((len(graph.vs), len(graph.vs)), dtype=int)
         for edge in graph.es:
@@ -631,7 +635,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             if not graph.is_directed():
                 relation_map[edge.target, edge.source] = relation_token_id[edge["type"]]
 
-        _add_paths_relations_parallel(np.array(list(paths)), paths_with_relations, relation_map)
+        _add_paths_relations_parallel(paths_array, paths_with_relations, relation_map)
 
         return paths_with_relations
 
@@ -672,7 +676,7 @@ def _user_parallel_sampling(sampling_func_factory):
 
 
 @_user_parallel_sampling
-def _generate_user_paths_constrained_random_walk_parallel(graph, used_ids, iid_field, entity_field, **kwargs):
+def _generate_user_paths_constrained_random_walk_per_user(graph, used_ids, iid_field, entity_field, **kwargs):
     """Parallel version of the constrained random walk path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
     paths_per_hop = kwargs.pop("paths_per_hop", None)
@@ -737,7 +741,8 @@ def _generate_user_paths_constrained_random_walk_parallel(graph, used_ids, iid_f
 
         while True:
             # select new starting node
-            start_node_idx = np.random.randint(pos_iid.shape[0])
+            temporal_start = int(temporal_matrix is not None)
+            start_node_idx = np.random.randint(pos_iid.shape[0] - temporal_start)
             start_node = pos_iid[start_node_idx]
 
             if restrict_by_phase:
@@ -765,7 +770,7 @@ def _generate_user_paths_constrained_random_walk_parallel(graph, used_ids, iid_f
 
 
 @_user_parallel_sampling
-def _generate_user_paths_weighted_random_walk_parallel(graph, used_ids, iid_field, **kwargs):
+def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_field, **kwargs):
     """Parallel version of the weighted random walk path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
     max_tries_per_iid = kwargs.pop("max_tries_per_iid", None)
@@ -795,7 +800,8 @@ def _generate_user_paths_weighted_random_walk_parallel(graph, used_ids, iid_fiel
                 iid_tries = max_tries_per_iid
 
                 # select new starting node
-                start_node_idx = np.random.randint(pos_iid.shape[0])
+                temporal_start = int(temporal_matrix is not None)
+                start_node_idx = np.random.randint(pos_iid.shape[0] - temporal_start)
                 start_node = pos_iid[start_node_idx]
 
             if restrict_by_phase:
@@ -819,6 +825,7 @@ def _generate_user_paths_weighted_random_walk_parallel(graph, used_ids, iid_fiel
                     reachable_candidates = set(
                         e.source if e.source_vertex["type"] == iid_field else e.target for e in reachable_candidates
                     )
+                    reachable_candidates = set([e for e in reachable_candidates if e != start_node])
                 else:
                     reachable_candidates = [
                         v
@@ -851,7 +858,7 @@ def _generate_user_paths_weighted_random_walk_parallel(graph, used_ids, iid_fiel
 
 
 @_user_parallel_sampling
-def _generate_user_paths_all_simple_parallel(graph, used_ids, **kwargs):
+def _generate_user_paths_all_simple_per_user(graph, used_ids, **kwargs):
     """Parallel version of the simple path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
     path_hop_length = kwargs.pop("path_hop_length", None)
@@ -874,8 +881,9 @@ def _generate_user_paths_all_simple_parallel(graph, used_ids, **kwargs):
         pos_iid += user_num
 
         user_path_sample_size = 0
-        pos_iid_idxs = np.arange(pos_iid.shape[0])
-        pos_iid_mask = np.ones(pos_iid.shape[0], dtype=bool)
+        temporal_start = int(temporal_matrix is not None)
+        pos_iid_idxs = np.arange(pos_iid.shape[0] - temporal_start)
+        pos_iid_mask = np.ones(pos_iid.shape[0] - temporal_start, dtype=bool)
         while True:
             # select new starting node
             pos_iid_prob_mask = np.where(pos_iid_mask, pos_iid_mask / pos_iid_mask.sum(), 0)
@@ -923,6 +931,8 @@ def _add_paths_relations_parallel(paths, paths_with_relations, relation_map):
         path = paths[path_idx]
         for node_idx in np.arange(path.shape[0] - 1):
             start_path = node_idx * 2
+            if path[node_idx] == -1 or path[node_idx + 1] == -1:
+                break
             edge_id = relation_map[path[node_idx], path[node_idx + 1]]
             paths_with_relations[path_idx, start_path] = path[node_idx]
             paths_with_relations[path_idx, start_path + 1] = edge_id

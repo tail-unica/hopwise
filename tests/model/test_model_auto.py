@@ -918,7 +918,7 @@ class TestKnowledgeRecommender(unittest.TestCase):
         quick_test(config_dict)
 
 
-class TestKnowledgeGraphEmbedding(unittest.TestCase):
+class TestKnowledgeGraphEmbeddingRecommender(unittest.TestCase):
     def test_transe(self):
         config_dict = {"model": "TransE", "embedding_size": 64, "margin": 1.0}
         quick_test(config_dict)
@@ -1002,6 +1002,11 @@ class TestKnowledgeGraphEmbedding(unittest.TestCase):
             "epochs": 5,
         }
         quick_test(config_dict)
+
+
+class TestPathLanguageModelingRecommender(unittest.TestCase):
+    def test_pearlm(self):
+        raise NotImplementedError()
 
 
 if __name__ == "__main__":
