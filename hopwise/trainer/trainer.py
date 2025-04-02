@@ -372,9 +372,7 @@ class Trainer(AbstractTrainer):
 
         self.tensorboard.add_hparams(hparam_dict, {"hparam/best_valid_result": best_valid_result})
 
-    def fit(
-        self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, trial=None
-    ):
+    def fit(self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None):
         r"""Train the model based on the train data and the valid data.
 
         Args:
@@ -458,7 +456,7 @@ class Trainer(AbstractTrainer):
                     self.best_valid_result = valid_result
 
                 if callback_fn:
-                    callback_fn(epoch_idx, valid_score, trial=trial)
+                    callback_fn(epoch_idx, valid_score)
 
                 if stop_flag:
                     stop_output = "Finished training, best eval result in epoch %d" % (
@@ -859,9 +857,7 @@ class KGTrainer(Trainer):
         self.wandblogger.log_eval_metrics(result, head="eval")
         return result
 
-    def fit(
-        self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, trial=None
-    ):
+    def fit(self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None):
         r"""Train the model based on the train data and the valid data.
 
         Args:
@@ -980,7 +976,7 @@ class KGTrainer(Trainer):
                         self.best_valid_result = valid_result
 
                     if callback_fn:
-                        callback_fn(epoch_idx, valid_score, trial=trial)
+                        callback_fn(epoch_idx, valid_score)
 
                     if task == KnowledgeEvaluationType.REC and stop_flag:
                         stop_output = "Finished training, best eval result in epoch %d" % (
