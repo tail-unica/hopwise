@@ -1543,7 +1543,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     def __init__(
         self,
         tokenized_kg,
-        force_token_map,
+        tokenized_ignored_ids,
         max_sequence_length,
         tokenizer,
         num_return_sequences,
@@ -1554,7 +1554,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     ):
         super().__init__(**kwargs)
         self.tokenized_kg = tokenized_kg
-        self.force_token_map = force_token_map
+        self.tokenized_ignored_ids = tokenized_ignored_ids
         self.max_sequence_length = max_sequence_length
         self.tokenizer = tokenizer
         self.num_return_sequences = num_return_sequences
@@ -1579,31 +1579,46 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
     def __call__(self, input_ids, scores):
         current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
 
         if has_bos_token and current_len == self.max_sequence_length - 1:
             self.mask_non_eos_tokens(scores)
         else:
             mask_list = []
+            if self.task == self.RECOMMENDATION_TASK:
+                last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
+                _, input_ids_indices, input_ids_inv = np.unique(
+                    input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True
+                )
+                unique_input_ids = input_ids[input_ids_indices]
+                full_mask = np.zeros((unique_input_ids.shape[0], self.tokenizer.vocab_size), dtype=bool)
+            elif self.task == self.LINK_PREDICTION_TASK:
+                unique_input_ids = input_ids
 
-            for idx in range(scores.shape[0]):
+            for idx in range(unique_input_ids.shape[0]):
                 if self.task == self.RECOMMENDATION_TASK:
-                    key, candidate_tokens = self.process_scores_rec(input_ids, idx)
+                    key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
+                    banned_mask = self.get_banned_mask(key, candidate_tokens)
+                    full_mask[idx] = banned_mask
+
                 elif self.task == self.LINK_PREDICTION_TASK:
-                    key, candidate_tokens = self.process_scores_lp(input_ids, idx)
+                    key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
 
-                banned_mask = self.get_banned_mask(key, candidate_tokens)
-                mask_list.append(banned_mask)
+                    banned_mask = self.get_banned_mask(key, candidate_tokens)
+                    mask_list.append(banned_mask)
 
-            banned_tokens_mask = np.vstack(mask_list)
-            scores[banned_tokens_mask] = -math.inf
+            if self.task == self.RECOMMENDATION_TASK:
+                scores[full_mask[input_ids_inv]] = -math.inf
+            else:
+                banned_tokens_mask = np.vstack(mask_list)
+                scores[banned_tokens_mask] = -math.inf
 
         return scores
 
     def process_scores_rec(self, input_ids, idx):
         """Process each score based on input length and update mask list."""
         current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
 
         key = self.get_current_key(input_ids, idx)
         if current_len == self.max_sequence_length - 1 - has_bos_token:
@@ -1614,8 +1629,8 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
             if candidate_tokens is None:
                 candidate_tokens = self.get_candidates_rec(*key)
 
-                current_uid_forced_tokens = self.force_token_map[current_uid]
-                candidate_tokens = list(candidate_tokens.intersection(current_uid_forced_tokens))
+                user_used_ids = self.tokenized_ignored_ids[current_uid]
+                candidate_tokens = list(candidate_tokens - user_used_ids)
                 self.pos_candidates_cache[uid_cond_key] = candidate_tokens
         else:
             candidate_tokens = list(self.get_candidates_rec(*key))
@@ -1625,7 +1640,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     def process_scores_lp(self, input_ids, idx):
         """Process each score based on input length or skip."""
         current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
 
         key, candidate_tokens = None, None
         if current_len % 2 == has_bos_token:
@@ -1634,12 +1649,15 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
         return key, candidate_tokens
 
-    def get_current_key(self, input_ids, idx):
+    def is_next_token_entity(self, input_ids):
         current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any()
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
 
-        if current_len % 2 == has_bos_token:  # bos_token determines if the current length is even or odd
-            # The next token is an entity
+        # bos_token determines if the current length is even or odd
+        return current_len % 2 == has_bos_token
+
+    def get_current_key(self, input_ids, idx):
+        if self.is_next_token_entity(input_ids):
             return input_ids[idx, -2].item(), input_ids[idx, -1].item()
         else:
             # The next token is a relation
@@ -1657,7 +1675,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
                 return set(self.tokenized_kg[key1].keys())  # return relations given head
 
     def get_candidates_lp(self, key):
-        return self.force_token_map[key] + self.special_tokens_ids
+        return self.tokenized_ignored_ids[key] + self.special_tokens_ids
 
     def get_banned_mask(self, key, candidate_tokens):
         """Retrieve or cache the banned token mask for a specific key."""
@@ -1674,7 +1692,7 @@ class PrefixConstrainedLogitsProcessorWordLevel(ConstrainedLogitsProcessorWordLe
     def __init__(
         self,
         tokenized_kg,
-        force_token_map,
+        tokenized_ignored_ids,
         total_length,
         tokenizer,
         num_return_sequences,
@@ -1685,7 +1703,7 @@ class PrefixConstrainedLogitsProcessorWordLevel(ConstrainedLogitsProcessorWordLe
     ):
         super().__init__(
             tokenized_kg,
-            force_token_map,
+            tokenized_ignored_ids,
             total_length,
             tokenizer,
             num_return_sequences,

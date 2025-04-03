@@ -1827,7 +1827,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             train_data,
             self.config,
             callbacks,
-            model=self.model.hf_model,
+            model=self.model,
             args=training_arguments,
             path_hop_length=self.path_hop_length,
             paths_per_user=self.paths_per_user,
@@ -1860,7 +1860,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         torch.save(state, saved_model_file, pickle_protocol=4)
         if verbose:
             self.logger.info(set_color("Saving current", "blue") + f": {saved_model_file}")
-            hf_output_dir = self.hopwise_trainer.hf_trainer.args.output_dir
+            hf_output_dir = self.hf_trainer.args.output_dir
             self.logger.info(set_color("HuggingFace model is saved at", "blue") + f": {hf_output_dir}")
 
     def resume_checkpoint(self, resume_file):
@@ -1923,6 +1923,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         valid_score = calculate_valid_score(valid_result, self.valid_metric)
         return valid_score, valid_result
 
+    @torch.no_grad()
     def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False, task="rec"):
         if not eval_data:
             return

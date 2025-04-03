@@ -12,14 +12,14 @@ from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("ENTITY", 1), ("RELATION", 2)])
 
 
-class PEARLM(PathLanguageModelingRecommender):
+class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
     """PEARLM is a path-language-modeling recommender. It learns the sequence of entity-relation triplets
     from a knowledge graph as a next-token prediction task.
     """
 
-    def __init__(self, config, dataset):
-        super().__init__(config, dataset)
+    call_super_init = False
 
+    def __init__(self, config, dataset):
         tokenizer = dataset.tokenizer
         transformers_config = AutoConfig.from_pretrained(
             "distilgpt2",
@@ -35,7 +35,9 @@ class PEARLM(PathLanguageModelingRecommender):
                 "n_layer": config["num_layers"],
             },
         )
-        self.hf_model = GPT2LMHeadModel(transformers_config)
+        PathLanguageModelingRecommender.__init__(self, config, dataset)
+        GPT2LMHeadModel.__init__(self, transformers_config)
+        self.to(config["device"])
 
         self.max_hop_length = dataset.path_hop_length
 
@@ -52,7 +54,7 @@ class PEARLM(PathLanguageModelingRecommender):
         )
 
         self.loss = nn.CrossEntropyLoss()
-        self.hf_model.post_init()
+        self.post_init()
 
     def get_type_embeds(self, batch_size):
         self.token_type_ids = self.token_type_ids.to(self.type_embeddings.weight.device)
@@ -87,7 +89,7 @@ class PEARLM(PathLanguageModelingRecommender):
         if inputs_embeds is not None:
             inputs_embeds += type_embeds
 
-        transformer_outputs = self.hf_model.transformer(
+        transformer_outputs = self.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -100,11 +102,11 @@ class PEARLM(PathLanguageModelingRecommender):
             use_cache=use_cache and labels is None,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict or self.hf_model.config.use_return_dict,
+            return_dict=return_dict or self.config.use_return_dict,
         )
 
         sequence_output = transformer_outputs[0]
-        prediction_scores = self.hf_model.lm_head(sequence_output)
+        prediction_scores = self.lm_head(sequence_output)
 
         lm_loss = None
         if labels is not None:
