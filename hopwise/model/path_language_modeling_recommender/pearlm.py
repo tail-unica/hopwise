@@ -17,8 +17,6 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
     from a knowledge graph as a next-token prediction task.
     """
 
-    call_super_init = False
-
     def __init__(self, config, dataset):
         tokenizer = dataset.tokenizer
         transformers_config = AutoConfig.from_pretrained(

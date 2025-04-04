@@ -28,7 +28,7 @@ class AbstractRecommender(nn.Module):
         self.logger = getLogger()
 
         if not _skip_nn_module_init:
-            nn.Module.__init__()
+            super().__init__()
 
     def calculate_loss(self, interaction):
         r"""Calculate the training loss for a batch data.
