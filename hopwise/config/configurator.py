@@ -249,6 +249,7 @@ class Config:
         )
         sequential_embedding_model_init = os.path.join(quick_start_config_path, "sequential_embedding_model.yaml")
         knowledge_base_init = os.path.join(quick_start_config_path, "knowledge_base.yaml")
+        knowledge_base_on_ml_100k_init = os.path.join(quick_start_config_path, "knowledge_base_on_ml-100k.yaml")
         knowledge_path_base_init = os.path.join(quick_start_config_path, "knowledge_path_base.yaml")
         knowledge_path_base_on_ml_100k_init = os.path.join(
             quick_start_config_path, "knowledge_path_base_on_ml-100k.yaml"
@@ -295,6 +296,8 @@ class Config:
 
         elif self.internal_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE:
             self._update_internal_config_dict(knowledge_base_init)
+            if dataset == "ml-100k":
+                self._update_internal_config_dict(knowledge_base_on_ml_100k_init)
         elif self.internal_config_dict["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
             self._update_internal_config_dict(knowledge_path_base_init)
             if dataset == "ml-100k":

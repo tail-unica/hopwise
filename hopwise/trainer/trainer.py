@@ -372,9 +372,7 @@ class Trainer(AbstractTrainer):
 
         self.tensorboard.add_hparams(hparam_dict, {"hparam/best_valid_result": best_valid_result})
 
-    def fit(
-        self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, trial=None
-    ):
+    def fit(self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None):
         r"""Train the model based on the train data and the valid data.
 
         Args:
@@ -458,7 +456,7 @@ class Trainer(AbstractTrainer):
                     self.best_valid_result = valid_result
 
                 if callback_fn:
-                    callback_fn(epoch_idx, valid_score, trial=trial)
+                    callback_fn(epoch_idx, valid_score)
 
                 if stop_flag:
                     stop_output = "Finished training, best eval result in epoch %d" % (
@@ -859,9 +857,7 @@ class KGTrainer(Trainer):
         self.wandblogger.log_eval_metrics(result, head="eval")
         return result
 
-    def fit(
-        self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, trial=None
-    ):
+    def fit(self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None):
         r"""Train the model based on the train data and the valid data.
 
         Args:
@@ -980,7 +976,7 @@ class KGTrainer(Trainer):
                         self.best_valid_result = valid_result
 
                     if callback_fn:
-                        callback_fn(epoch_idx, valid_score, trial=trial)
+                        callback_fn(epoch_idx, valid_score)
 
                     if task == KnowledgeEvaluationType.REC and stop_flag:
                         stop_output = "Finished training, best eval result in epoch %d" % (
@@ -1831,7 +1827,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             train_data,
             self.config,
             callbacks,
-            model=self.model.hf_model,
+            model=self.model,
             args=training_arguments,
             path_hop_length=self.path_hop_length,
             paths_per_user=self.paths_per_user,
@@ -1864,7 +1860,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         torch.save(state, saved_model_file, pickle_protocol=4)
         if verbose:
             self.logger.info(set_color("Saving current", "blue") + f": {saved_model_file}")
-            hf_output_dir = self.hopwise_trainer.hf_trainer.args.output_dir
+            hf_output_dir = self.hf_trainer.args.output_dir
             self.logger.info(set_color("HuggingFace model is saved at", "blue") + f": {hf_output_dir}")
 
     def resume_checkpoint(self, resume_file):
@@ -1927,6 +1923,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         valid_score = calculate_valid_score(valid_result, self.valid_metric)
         return valid_score, valid_result
 
+    @torch.no_grad()
     def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False, task="rec"):
         if not eval_data:
             return
