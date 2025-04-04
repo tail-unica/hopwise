@@ -189,7 +189,8 @@ class FullSortEvalDataLoader(AbstractDataLoader):
     def check_sequential(self, config):
         self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
 
-    def _build_positive_samples(self, dataset, sampler, feat, source_field, target_field, extra_fields=None):
+    def _build_positive_samples(self, dataset, sampler, feat, target_field, extra_fields=None):
+        source_field = self._source_field
         source_num = len(dataset.field2id_token[source_field])
 
         self._source_list = []
@@ -265,6 +266,19 @@ class FullSortEvalDataLoader(AbstractDataLoader):
 
         return source_df, (history_source, history_target), positive_source, positive_target
 
+    def collate_fn(self, index):
+        index = np.array(index)
+        if not self.is_sequential:
+            return self._not_sequential_collate_fn(index, self._source_field)
+        else:
+            interaction = self._dataset[index]
+            transformed_interaction = self.transform(self._dataset, interaction)
+            inter_num = len(transformed_interaction)
+            positive_u = torch.arange(inter_num)
+            positive_i = transformed_interaction[self.iid_field]
+
+            return transformed_interaction, None, positive_u, positive_i
+
 
 class FullSortRecEvalDataLoader(FullSortEvalDataLoader):
     """:class:`FullSortRecEvalDataLoader` is a dataloader for full-sort evaluation for the recommendation (Rec) task.
@@ -281,8 +295,9 @@ class FullSortRecEvalDataLoader(FullSortEvalDataLoader):
 
         self.uid_field = dataset.uid_field
         self.iid_field = dataset.iid_field
+        self._source_field = self.uid_field
 
-        self._build_positive_samples(dataset, sampler, dataset.inter_feat, self.uid_field, self.iid_field)
+        self._build_positive_samples(dataset, sampler, dataset.inter_feat, self.iid_field)
         self.uid2items_num = self._sample2positive_num
         self.uid2positive_item = self._sample2positives
         self.uid2history_item = self._sample2history
@@ -290,19 +305,6 @@ class FullSortRecEvalDataLoader(FullSortEvalDataLoader):
         self.user_df = self._source_df
 
         super().__init__(config, dataset, sampler, shuffle=shuffle)
-
-    def collate_fn(self, index):
-        index = np.array(index)
-        if not self.is_sequential:
-            return self._not_sequential_collate_fn(index, self.uid_field)
-        else:
-            interaction = self._dataset[index]
-            transformed_interaction = self.transform(self._dataset, interaction)
-            inter_num = len(transformed_interaction)
-            positive_u = torch.arange(inter_num)
-            positive_i = transformed_interaction[self.iid_field]
-
-            return transformed_interaction, None, positive_u, positive_i
 
 
 class FullSortLPEvalDataLoader(FullSortEvalDataLoader):
@@ -321,12 +323,12 @@ class FullSortLPEvalDataLoader(FullSortEvalDataLoader):
         self.head_entity_field = dataset.head_entity_field
         self.relation_field = dataset.relation_field
         self.tail_entity_field = dataset.tail_entity_field
+        self._source_field = self.head_entity_field
 
         self._build_positive_samples(
             dataset,
             sampler,
             dataset.kg_feat,
-            self.head_entity_field,
             self.tail_entity_field,
             extra_fields=[self.relation_field],
         )
@@ -337,16 +339,3 @@ class FullSortLPEvalDataLoader(FullSortEvalDataLoader):
         self.kg_df = self._source_df
 
         super().__init__(config, dataset, sampler, shuffle=shuffle)
-
-    def collate_fn(self, index):
-        index = np.array(index)
-        if not self.is_sequential:
-            return self._not_sequential_collate_fn(index, self.head_entity_field)
-        else:
-            interaction = self._dataset[index]
-            transformed_interaction = self.transform(self._dataset, interaction)
-            inter_num = len(transformed_interaction)
-            positive_u = torch.arange(inter_num)
-            positive_i = transformed_interaction[self.iid_field]
-
-            return transformed_interaction, None, positive_u, positive_i
