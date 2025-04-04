@@ -24,5 +24,6 @@ tempCodeRunnerFile.py
 dataset/
 !hopwise/data/dataset
 hyper/
+model/
 *.txt
 *.*emb

@@ -9,9 +9,17 @@ topk_paths: 25
 clip_grad_norm:
   max_norm: 5.0
 
+save_dataset: True
+save_dataloaders: True
+epochs: 50
+eval_step: 50
+topk: [10]
+valid_metric: 'ndcg@10'
+metrics: ['NDCG', 'NDCG_old', 'MRR', 'Hit', 'Precision', 'Recall', GiniIndex, Serendipity, Novelty, ItemCoverage]
+
+
 # Embeddings
 additional_feat_suffix: [useremb, entityemb, relationemb]
-
 # To load the pretrained embeddings (Typically from TransE) necessary to score the paths
 load_col:
     useremb: [userid, user_embedding]
