@@ -979,11 +979,30 @@ class LIR(PathQualityMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        timestamp, paths, _, _, _, _ = self.used_info(dataobject)
+        paths = self.used_info(dataobject)
+        timestamp = dataobject.get("data.timestamp")
+
         lir_matrix = self.lir_matrix(timestamp)
         result = self.metric_info(lir_matrix, paths)
         metric_dict = self.topk_result("lir", result)
         return metric_dict
+
+    def lir_matrix(self, uid_timestamp):
+        matrix = dict()
+        for uid in uid_timestamp.keys():
+            interactions = [type_id_time for type_id_time in uid_timestamp[uid]]
+            interactions.sort(key=lambda x: x[1])
+            # Skips users with only one review in train (can happen with lastfm)
+            if len(uid_timestamp[uid]) <= 1:
+                continue
+            ema_timestamps = self.normalized_ema([x[1] for x in interactions])
+            pid_lir = {}
+            for i in range(len(interactions)):
+                pid = interactions[i][0]
+                lir = ema_timestamps[i]
+                pid_lir[pid] = lir
+            matrix[uid] = pid_lir
+        return matrix
 
     def metric_info(self, lir_matrix, paths):
         lirs_topk = []
@@ -1021,7 +1040,9 @@ class Fidelity(PathQualityMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        _, paths, _, _, _, user_batch_size = self.used_info(dataobject)
+        paths = self.used_info(dataobject)
+        user_batch_size = dataobject.get("data.test_batch_users")
+
         result = self.metric_info(paths, user_batch_size)
         metric_dict = self.topk_result("Fidelity", result)
         return metric_dict
@@ -1067,11 +1088,29 @@ class SEP(PathQualityMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        _, paths, _, _, node_degree, _ = self.used_info(dataobject)
+        paths = self.used_info(dataobject)
+        node_degree = dataobject.get("data.node_degree")
+
         sep_matrix = self.sep_matrix(node_degree)
         result = self.metric_info(paths, sep_matrix)
         metric_dict = self.topk_result("SEP", result)
         return metric_dict
+
+    def sep_matrix(self, node_degree):
+        # Precompute entity distribution
+        SEP_matrix = {}
+
+        for node_type, eid_degree in node_degree.items():
+            eid_degree_tuples = list(zip(eid_degree.keys(), eid_degree.values()))
+            eid_degree_tuples.sort(key=lambda x: x[1])
+            ema_es = self.normalized_ema([x[1] for x in eid_degree_tuples])
+            pid_weight = {}
+            for idx in range(len(ema_es)):
+                pid = eid_degree_tuples[idx][0]
+                pid_weight[pid] = ema_es[idx]
+
+            SEP_matrix[node_type] = pid_weight
+        return SEP_matrix
 
     def metric_info(self, paths, sep_matrix):
         seps_topk = []
@@ -1109,7 +1148,7 @@ class LID(PathQualityMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        _, paths, _, _, _, _ = self.used_info(dataobject)
+        paths = self.used_info(dataobject)
         result = self.metric_info(paths)
         metric_dict = self.topk_result("LID", result)
         return metric_dict
@@ -1161,7 +1200,8 @@ class SED(PathQualityMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        _, paths, _, _, _, _ = self.used_info(dataobject)
+        paths = self.used_info(dataobject)
+
         result = self.metric_info(paths)
         metric_dict = self.topk_result("SED", result)
         return metric_dict
@@ -1214,7 +1254,9 @@ class PTD(PathQualityMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        _, paths, max_path_type, _, _, _ = self.used_info(dataobject)
+        paths = self.used_info(dataobject)
+        max_path_type = dataobject.get("data.max_path_type")
+
         result = self.metric_info(paths, max_path_type)
         metric_dict = self.topk_result("PTD", result)
         return metric_dict
@@ -1271,7 +1313,9 @@ class PTC(PathQualityMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        _, paths, max_path_type, _, _, _ = self.used_info(dataobject)
+        paths = self.used_info(dataobject)
+        max_path_type = dataobject.get("data.max_path_type")
+
         result = self.metric_info(paths, max_path_type)
         metric_dict = self.topk_result("PTC", result)
         return metric_dict
@@ -1335,7 +1379,9 @@ class PPT(PathQualityMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        _, paths, _, max_path_pattern, _, _ = self.used_info(dataobject)
+        paths = self.used_info(dataobject)
+        max_path_pattern = dataobject.get("data.max_path_length")
+
         rid2r_name = {i: rel for i, rel in enumerate(dataobject.get("data.rid2relation"))}
         result = self.metric_info(paths, max_path_pattern, rid2r_name)
         metric_dict = self.topk_result("PPT", result)
@@ -1346,6 +1392,7 @@ class PPT(PathQualityMetric):
         for user, _, _, path in paths:
             if user not in unique_path_pattern:
                 unique_path_pattern[user] = [0, set()]
+            breakpoint()
             path_pattern = [rid2r_name[path_tuple[0]] for path_tuple in path[1:]]
             unique_path_pattern[user][0] += 1
             unique_path_pattern[user][1].add("_".join(path_pattern))
@@ -1385,7 +1432,7 @@ class LITD(PathQualityMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        _, paths, _, _, _, _ = self.used_info(dataobject)
+        paths = self.used_info(dataobject)
         result = self.metric_info(paths)
         metric_dict = self.topk_result("LITD", result)
         return metric_dict
@@ -1433,7 +1480,7 @@ class SETD(PathQualityMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        _, paths, _, _, _, _ = self.used_info(dataobject)
+        paths = self.used_info(dataobject)
         result = self.metric_info(paths)
         metric_dict = self.topk_result("SETD", result)
         return metric_dict

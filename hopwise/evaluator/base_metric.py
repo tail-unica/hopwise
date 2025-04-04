@@ -215,8 +215,7 @@ class ConsumerTopKMetric(AbstractMetric):
 
 
 class PathQualityMetric(AbstractMetric):
-    # TODO:
-    # - add support for gender and age based metrics
+    # TODO: add support for gender and age based metrics
     """:class:`PathQualityMetric` is a base object of path-based metrics. If you want to
     implement a path based metric, you can inherit this class.
 
@@ -241,16 +240,8 @@ class PathQualityMetric(AbstractMetric):
         self.topk = config["topk"]
 
     def used_info(self, dataobject):
-        # training data timestamp
-        timestamp = dataobject.get("data.timestamp")
         paths = dataobject.get("rec.paths")
-        # how many unique relations we have? is a number
-        max_path_type = dataobject.get("data.max_path_type")
-        node_degree = dataobject.get("data.node_degree")
-        user_batch_size = dataobject.get("data.test_batch_users")
-        # how many path constraint we have? is a number
-        max_path_pattern = dataobject.get("data.max_path_length")
-        return timestamp, paths, max_path_type, max_path_pattern, node_degree, user_batch_size
+        return paths
 
     def normalized_ema(self, values):
         import pandas as pd
@@ -265,39 +256,6 @@ class PathQualityMetric(AbstractMetric):
         min_res = min(ema_vals)
         max_res = max(ema_vals)
         return [(x - min_res) / (max_res - min_res) for x in ema_vals]
-
-    def lir_matrix(self, uid_timestamp):
-        matrix = dict()
-        for uid in uid_timestamp.keys():
-            interactions = [type_id_time for type_id_time in uid_timestamp[uid]]
-            interactions.sort(key=lambda x: x[1])
-            # Skips users with only one review in train (can happen with lastfm)
-            if len(uid_timestamp[uid]) <= 1:
-                continue
-            ema_timestamps = self.normalized_ema([x[1] for x in interactions])
-            pid_lir = {}
-            for i in range(len(interactions)):
-                pid = interactions[i][0]
-                lir = ema_timestamps[i]
-                pid_lir[pid] = lir
-            matrix[uid] = pid_lir
-        return matrix
-
-    def sep_matrix(self, node_degree):
-        # Precompute entity distribution
-        SEP_matrix = {}
-
-        for node_type, eid_degree in node_degree.items():
-            eid_degree_tuples = list(zip(eid_degree.keys(), eid_degree.values()))
-            eid_degree_tuples.sort(key=lambda x: x[1])
-            ema_es = self.normalized_ema([x[1] for x in eid_degree_tuples])
-            pid_weight = {}
-            for idx in range(len(ema_es)):
-                pid = eid_degree_tuples[idx][0]
-                pid_weight[pid] = ema_es[idx]
-
-            SEP_matrix[node_type] = pid_weight
-        return SEP_matrix
 
     def metric_info(self, **kwargs):
         """Calculate the value of the metric.

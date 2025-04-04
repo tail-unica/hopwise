@@ -24,9 +24,11 @@ from hopwise.utils import FeatureSource, FeatureType, InputType, ModelType, set_
 class AbstractRecommender(nn.Module):
     r"""Base class for all models"""
 
-    def __init__(self):
+    def __init__(self, _skip_nn_module_init=False):
         self.logger = getLogger()
-        super().__init__()
+
+        if not _skip_nn_module_init:
+            super().__init__()
 
     def calculate_loss(self, interaction):
         r"""Calculate the training loss for a batch data.
@@ -187,8 +189,8 @@ class KnowledgeRecommender(AbstractRecommender):
 
     type = ModelType.KNOWLEDGE
 
-    def __init__(self, config, dataset):
-        super().__init__()
+    def __init__(self, config, dataset, _skip_nn_module_init=False):
+        super().__init__(_skip_nn_module_init=_skip_nn_module_init)
 
         # load dataset info
         self.USER_ID = config["USER_ID_FIELD"]
@@ -205,7 +207,8 @@ class KnowledgeRecommender(AbstractRecommender):
         self.n_relations = dataset.num(self.RELATION_ID)
 
         # load parameters info
-        self.device = config["device"]
+        if not _skip_nn_module_init:
+            self.device = config["device"]
 
 
 class ExplainableRecommender:
@@ -254,6 +257,9 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
 
     type = ModelType.PATH_LANGUAGE_MODELING
     input_type = InputType.PATHWISE
+
+    def __init__(self, config, dataset, _skip_nn_module_init=True):
+        super().__init__(config, dataset, _skip_nn_module_init=_skip_nn_module_init)
 
 
 class ContextRecommender(AbstractRecommender):

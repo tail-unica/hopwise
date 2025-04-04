@@ -24,26 +24,45 @@ By integrating **knowledge embedding models**, **path-based reasoning methods**,
 
 ### 🔍 **Added New Path Reasoning Models**
 ✔️ **PEARLM**
+
+
 ✔️ **KGGLM**
+
+
 ✔️ **PGPR**
+
+
 ✔️ **CAFE**
 
 🛠️ _Future Plans:_ We aim to add **UCPR** (even though it's quite slow ⏳).
 
 ### 🧩 **Added 14 Knowledge Graph Embedding Models**
 ✔️ **TransE**
+
 ✔️ **TransH**
+
 ✔️ **TransD**
+
 ✔️ **TransR**
+
 ✔️ **TorusE**
+
 ✔️ **ComplEx**
+
 ✔️ **Analogy**
+
 ✔️ **TuckER**
+
 ✔️ **RESCAL**
+
 ✔️ **DistMult**
+
 ✔️ **ConvE**
+
 ✔️ **ConvKB**
+
 ✔️ **RotatE**
+
 ✔️ **HolE**
 
 ---

@@ -109,9 +109,7 @@ class Collector:
         if self.register.need("data.max_path_type"):
             import numpy as np
 
-            self.data_struct.set(
-                "data.max_path_type", np.unique(train_data.dataset.kg_feat[train_data.dataset.relation_field])
-            )
+            self.data_struct.set("data.max_path_type", np.arange(train_data.dataset.relation_num))
         if self.register.need("data.node_degree"):
             self.data_struct.set("data.node_degree", self.node_degree_dict(train_data))
         if self.register.need("data.max_path_length"):

@@ -233,7 +233,7 @@ def run_hopwises(rank, *args):
     )
 
 
-def objective_function(config_dict=None, config_file_list=None, saved=True):
+def objective_function(config_dict=None, config_file_list=None, saved=True, callback_fn=None):
     r"""The default objective_function used in HyperTuning
 
     Args:
@@ -241,7 +241,6 @@ def objective_function(config_dict=None, config_file_list=None, saved=True):
         config_file_list (list, optional): Config files used to modify experiment parameters. Defaults to ``None``.
         saved (bool, optional): Whether to save the model. Defaults to ``True``.
     """
-    from ray import tune
 
     config = Config(config_dict=config_dict, config_file_list=config_file_list)
     init_seed(config["seed"], config["reproducibility"])
@@ -256,60 +255,8 @@ def objective_function(config_dict=None, config_file_list=None, saved=True):
     model_name = config["model"]
     model = get_model(model_name)(config, train_data.dataset).to(config["device"])
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
-    best_valid_score, best_valid_result = trainer.fit(train_data, valid_data, verbose=False, saved=saved)
-    test_result = trainer.evaluate(test_data, load_best_model=saved)
-
-    tune.report(**test_result)
-
-    return {
-        "model": model_name,
-        "best_valid_score": best_valid_score,
-        "valid_score_bigger": config["valid_metric_bigger"],
-        "best_valid_result": best_valid_result,
-        "test_result": test_result,
-    }
-
-
-def optuna_report(epoch_idx, valid_score, **kwargs):
-    r"""Report the intermediate value of the objective function.
-
-    Args:
-        valid_score (float): The intermediate value of the objective function.
-        epoch_idx (int): The epoch.
-    """
-    import optuna
-
-    trial = kwargs.get("trial")
-
-    trial.report(valid_score, epoch_idx)
-
-    # Handle pruning based on the intermediate value.
-    if trial.should_prune():
-        raise optuna.exceptions.TrialPruned()
-
-
-def objective_function_optuna(config=None, saved=True, trial=None):
-    r"""The default objective_function used in HyperTuning
-
-    Args:
-        config_dict (dict, optional): Parameters dictionary used to modify experiment parameters. Defaults to ``None``.
-        config_file_list (list, optional): Config files used to modify experiment parameters. Defaults to ``None``.
-        saved (bool, optional): Whether to save the model. Defaults to ``True``.
-    """
-    init_seed(config["seed"], config["reproducibility"])
-    logger = getLogger()
-    for hdlr in logger.handlers[:]:  # remove all old handlers
-        logger.removeHandler(hdlr)
-    init_logger(config)
-    logging.basicConfig(level=logging.ERROR)
-    dataset = create_dataset(config)
-    train_data, valid_data, test_data = data_preparation(config, dataset)
-    init_seed(config["seed"], config["reproducibility"])
-    model_name = config["model"]
-    model = get_model(model_name)(config, train_data.dataset).to(config["device"])
-    trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
     best_valid_score, best_valid_result = trainer.fit(
-        train_data, valid_data, verbose=False, saved=saved, trial=trial, callback_fn=optuna_report
+        train_data, valid_data, verbose=False, saved=saved, callback_fn=callback_fn
     )
     if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.REC in best_valid_score:
         best_valid_score, best_valid_result = (
@@ -317,9 +264,6 @@ def objective_function_optuna(config=None, saved=True, trial=None):
             best_valid_result[KnowledgeEvaluationType.REC],
         )
     test_result = trainer.evaluate(test_data, load_best_model=saved)
-
-    for key, value in test_result.items():
-        trial.set_user_attr(key, value)
 
     return {
         "model": model_name,

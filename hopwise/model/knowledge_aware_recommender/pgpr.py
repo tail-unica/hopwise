@@ -405,18 +405,26 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         return self.collect_scores(users, paths, probs)
 
     def explain(self, interaction):
+        """Support function used for case study.
+
+        Args:
+            interaction : test interaction data
+
+        Returns:
+            pd.Dataframe: explanation results with columns: "user", "product", "score", "path"
+        """
         users = interaction[self.USER_ID]
 
         paths, probs = self.beam_search(users)
 
-        results, explanations = self.collect_scores(users, paths, probs)
+        _, explanations = self.collect_scores(users, paths, probs)
 
         # make explanations as pandas dataframe, then return the results
         df = pd.DataFrame(explanations, columns=["user", "product", "score", "path"])
 
         df["path"] = df["path"].apply(self.decode_path)
 
-        return results, df
+        return df
 
     def beam_search(self, users):
         users = [user.item() for user in users]
