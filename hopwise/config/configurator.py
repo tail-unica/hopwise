@@ -152,7 +152,8 @@ class Config:
                 nested_cmd_dict = param
                 for nested_key in reversed(key.split(self.NESTED_KEY_SEPARATOR)):
                     nested_cmd_dict = {nested_key: nested_cmd_dict}
-                config_dict = self.deep_dict_update(config_dict, nested_cmd_dict)
+                self.deep_dict_update(config_dict, nested_cmd_dict)
+                del config_dict[key]
             else:
                 config_dict[key] = value
         return config_dict
