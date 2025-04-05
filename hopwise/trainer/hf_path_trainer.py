@@ -99,6 +99,9 @@ class CumulativeSequenceScoreRanker:
         num_return_sequences = sequences.shape[0] // user_num
         batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
 
+        valid_sequences_mask = torch.logical_not(torch.isfinite(normalized_sequences_scores))
+        normalized_sequences_scores = torch.where(valid_sequences_mask, -torch.inf, normalized_sequences_scores)
+
         sorted_indices = normalized_sequences_scores.argsort(descending=True)
         sorted_sequences = sequences[sorted_indices]
         sorted_sequences_scores = normalized_sequences_scores[sorted_indices]
@@ -125,7 +128,7 @@ class CumulativeSequenceScoreRanker:
                 continue
 
             scores[user_index, recommended_item] = sequence_score
-            if user_index not in user_topk_sequences:
+            if uid not in user_topk_sequences:
                 user_topk_sequences[uid] = [seq]
             else:
                 user_topk_sequences[uid].append(seq)
@@ -288,7 +291,7 @@ class HFPathTrainer(Trainer):
         )
         scores, user_topk_sequences = ranker.get_sequences(inputs["input_ids"].shape[0], outputs)
 
-        return scores
+        return scores, user_topk_sequences
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)

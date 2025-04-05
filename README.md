@@ -1,7 +1,7 @@
 <h1 align="center">🚀 hopwise</h1>
 
 <p align="center">
-  <b>RecBole extension with a focus on Knowledge Graphs (KGs) and interpretability/explainability.</b>
+  <b>RecBole extension with a focus on Knowledge Graphs (KGs) and explainability.</b>
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 ## ✨ Overview
 
 **hopwise** is an advanced extension of the RecBole library, designed to enhance recommendation systems with the power of **knowledge graphs**.
-By integrating **knowledge embedding models**, **path-based reasoning methods**, and **path language modeling approaches**, hopwise supports both **recommendation** and **link prediction** tasks with a focus on **interpretability and self-explanation**.
+By integrating **knowledge embedding models**, **path-based reasoning methods**, and **path language modeling approaches**, hopwise supports both **recommendation** and **link prediction** tasks with a focus on **explainability**.
 
 ---
 
@@ -63,25 +63,26 @@ To install the project, you need to use `uv`. Follow the steps below to set up t
 git clone https://github.com/tail-unica/hopwise.git
 cd hopwise
 ```
-2️⃣ Install uv and set the Python version
+2️⃣ Install **uv** and create a virtual environment.<br>
+We suggest installing **uv** as a [standalone application](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) instead of using pip to avoid issues and let **uv** create a dedicated virtual environment.<br>
+Once installed, create the virtual environment
 ```sh
-pip install uv
-uv set python-version 3.9  # or 3.10, 3.11
+uv venv --python PYTHON_VERSION --prompt hopwise
 ```
+`PYTHON_VERSION` must be one of 3.9, 3.10, 3.11, while `--prompt hopwise` customizes the virtual environment name that appears on the shell.
 
 3️⃣ Install project dependencies
 ```sh
 uv sync
 ```
-
-4️⃣ Some models require extra dependencies.
+Some models require extra dependencies.
 Check out pyproject.toml for optional dependencies.
 For example, to install NNCF:
 ```sh
 uv sync --extra nncf
 ```
 
-> 📢 **Windows:** For proper DGL installation, please follow the [official DGL installation guide](https://www.dgl.ai/pages/start.html). Windows builds may encounter DLL linking issues with standard installation methods. Pre-built packages from the official source are recommended.
+> 📢 **Windows:** For proper DGL installation, please follow the [official DGL installation guide](https://www.dgl.ai/pages/start.html). Windows builds may encounter DLL linking issues with standard installation methods. Pre-built packages from the official source are recommended. Otherwise, using the Windows Subsystem for Linux (WSL) might be feasible as a solution.
 
 🚀 Usage
 

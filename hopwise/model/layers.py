@@ -1676,6 +1676,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
     def get_candidates_lp(self, key):
         return list(self.tokenized_ignored_ids[key]) + self.special_tokens_ids
+
     def get_banned_mask(self, key, candidate_tokens):
         """Retrieve or cache the banned token mask for a specific key."""
         banned_mask = self.mask_cache.get(key)
