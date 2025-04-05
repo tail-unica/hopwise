@@ -1,4 +1,5 @@
 import random
+import warnings
 from itertools import chain, zip_longest
 
 import joblib
@@ -675,6 +676,19 @@ def _user_parallel_sampling(sampling_func_factory):
     return wrapper
 
 
+def _check_temporal_causality_feasibility(temporal_matrix, pos_iid):
+    """Check if temporal causality is feasible for the given positive item ids."""
+    temporal_start = int(temporal_matrix is not None)
+    if pos_iid.shape[0] - temporal_start <= 0:
+        warnings.warn(
+            "Some users have only one positive item, thus path sampling with temporal causality is not feasible. "
+            "The current user will be skipped.",
+            RuntimeWarning,
+        )
+        return None
+    return pos_iid.shape[0] - temporal_start
+
+
 @_user_parallel_sampling
 def _generate_user_paths_constrained_random_walk_per_user(graph, used_ids, iid_field, entity_field, **kwargs):
     """Parallel version of the constrained random walk path generation."""
@@ -740,9 +754,12 @@ def _generate_user_paths_constrained_random_walk_per_user(graph, used_ids, iid_f
                     return
 
         while True:
+            pos_iid_range = _check_temporal_causality_feasibility(temporal_matrix, pos_iid)
+            if pos_iid_range is None:
+                return set()
+
             # select new starting node
-            temporal_start = int(temporal_matrix is not None)
-            start_node_idx = np.random.randint(pos_iid.shape[0] - temporal_start)
+            start_node_idx = np.random.randint(pos_iid_range)
             start_node = pos_iid[start_node_idx]
 
             if restrict_by_phase:
@@ -799,9 +816,12 @@ def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_fiel
             if iid_tries == 0:
                 iid_tries = max_tries_per_iid
 
+                pos_iid_range = _check_temporal_causality_feasibility(temporal_matrix, pos_iid)
+                if pos_iid_range is None:
+                    return set()
+
                 # select new starting node
-                temporal_start = int(temporal_matrix is not None)
-                start_node_idx = np.random.randint(pos_iid.shape[0] - temporal_start)
+                start_node_idx = np.random.randint(pos_iid_range)
                 start_node = pos_iid[start_node_idx]
 
             if restrict_by_phase:
@@ -881,9 +901,14 @@ def _generate_user_paths_all_simple_per_user(graph, used_ids, **kwargs):
         pos_iid += user_num
 
         user_path_sample_size = 0
-        temporal_start = int(temporal_matrix is not None)
-        pos_iid_idxs = np.arange(pos_iid.shape[0] - temporal_start)
-        pos_iid_mask = np.ones(pos_iid.shape[0] - temporal_start, dtype=bool)
+
+        pos_iid_range = _check_temporal_causality_feasibility(temporal_matrix, pos_iid)
+        if pos_iid_range is None:
+            return set()
+
+        # select new starting node
+        pos_iid_idxs = np.arange(pos_iid_range)
+        pos_iid_mask = np.ones(pos_iid_range, dtype=bool)
         while True:
             # select new starting node
             pos_iid_prob_mask = np.where(pos_iid_mask, pos_iid_mask / pos_iid_mask.sum(), 0)
