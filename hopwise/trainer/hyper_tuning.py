@@ -226,7 +226,7 @@ class HyperTuning:
             elif isinstance(algo, str):
                 if "-" in algo:
                     search_alg, scheduler = algo.split("-")
-                    search_alg = search.SEARCH_ALG_IMPORT.get(algo, None)
+                    search_alg = search.SEARCH_ALG_IMPORT.get(search_alg, None)
                     self.algo = {"search_alg": search_alg, "scheduler": scheduler}
                 else:
                     search_alg = search.SEARCH_ALG_IMPORT.get(algo, None)

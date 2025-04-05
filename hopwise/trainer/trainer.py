@@ -1957,7 +1957,8 @@ class HFPathLanguageModelingTrainer(Trainer):
 
             inputs, user_topk_sequences = self.hf_trainer.processing_class(
                 interaction, return_tensors="pt", add_special_tokens=False
-            ).to(self.hf_trainer.eval_device)
+            )
+            inputs = inputs.to(self.device)
             scores = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
 
             scores = scores.view(-1, self.tot_item_num)
