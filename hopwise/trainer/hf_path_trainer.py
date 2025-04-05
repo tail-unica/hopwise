@@ -290,9 +290,8 @@ class HFPathTrainer(Trainer):
             **self.path_generation_args,
         )
         scores, user_topk_sequences = ranker.get_sequences(inputs["input_ids"].shape[0], outputs)
-        breakpoint()
 
-        return scores
+        return scores, user_topk_sequences
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)
