@@ -16,7 +16,6 @@ Reference code:
 """
 
 import numpy as np
-import scipy.sparse as sp
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -245,9 +244,9 @@ class KGIN(KnowledgeRecommender):
         self.temperature = config["temperature"]
 
         # load dataset info
-        self.inter_matrix = dataset.inter_matrix(form="coo").astype(np.float32)  # [n_users, n_items]
         # inter_matrix: [n_users, n_entities]; inter_graph: [n_users + n_entities, n_users + n_entities]
-        self.interact_mat, _ = self.get_norm_inter_matrix(mode="si")
+        self.interact_mat, _ = dataset._create_norm_adjacency_matrix(symmetric=False)
+        self.interact_mat = self.interact_mat.to(self.device)
         self.kg_graph = dataset.kg_graph(form="coo", value_field="relation_id")  # [n_entities, n_entities]
         # edge_index: [2, -1]; edge_type: [-1,]
         self.edge_index, self.edge_type = self.get_edges(self.kg_graph)
@@ -279,70 +278,6 @@ class KGIN(KnowledgeRecommender):
 
         # parameters initialization
         self.apply(xavier_uniform_initialization)
-
-    def get_norm_inter_matrix(self, mode="bi"):
-        # Get the normalized interaction matrix of users and items.
-
-        def _bi_norm_lap(A):
-            # D^{-1/2}AD^{-1/2}
-            rowsum = np.array(A.sum(1))
-
-            d_inv_sqrt = np.power(rowsum, -0.5).flatten()
-            d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.0
-            d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
-
-            # bi_lap = adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt)
-            bi_lap = d_mat_inv_sqrt.dot(A).dot(d_mat_inv_sqrt)
-            return bi_lap.tocoo()
-
-        def _si_norm_lap(A):
-            # D^{-1}A
-            rowsum = np.array(A.sum(1))
-
-            d_inv = np.power(rowsum, -1).flatten()
-            d_inv[np.isinf(d_inv)] = 0.0
-            d_mat_inv = sp.diags(d_inv)
-
-            norm_adj = d_mat_inv.dot(A)
-            return norm_adj.tocoo()
-
-        # build adj matrix
-        A = sp.dok_matrix(
-            (self.n_users + self.n_entities, self.n_users + self.n_entities),
-            dtype=np.float32,
-        )
-        inter_M = self.inter_matrix
-        inter_M_t = self.inter_matrix.transpose()
-        data_dict = dict(zip(zip(inter_M.row, inter_M.col + self.n_users), [1] * inter_M.nnz))
-        data_dict.update(
-            dict(
-                zip(
-                    zip(inter_M_t.row + self.n_users, inter_M_t.col),
-                    [1] * inter_M_t.nnz,
-                )
-            )
-        )
-        A._update(data_dict)
-        # norm adj matrix
-        if mode == "bi":
-            L = _bi_norm_lap(A)
-        elif mode == "si":
-            L = _si_norm_lap(A)
-        else:
-            raise NotImplementedError(f"Normalize mode [{mode}] has not been implemented.")
-        # covert norm_inter_graph to tensor
-        i = torch.LongTensor(np.array([L.row, L.col]))
-        data = torch.FloatTensor(L.data)
-        norm_graph = torch.sparse.FloatTensor(i, data, L.shape)
-
-        # interaction: user->item, [n_users, n_entities]
-        L_ = L.tocsr()[: self.n_users, self.n_users :].tocoo()
-        # covert norm_inter_matrix to tensor
-        i_ = torch.LongTensor(np.array([L_.row, L_.col]))
-        data_ = torch.FloatTensor(L_.data)
-        norm_matrix = torch.sparse.FloatTensor(i_, data_, L_.shape)
-
-        return norm_matrix.to(self.device), norm_graph.to(self.device)
 
     def get_edges(self, graph):
         index = torch.LongTensor(np.array([graph.row, graph.col]))

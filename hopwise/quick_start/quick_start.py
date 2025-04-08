@@ -260,11 +260,12 @@ def objective_function(config_dict=None, config_file_list=None, saved=True, call
     best_valid_score, best_valid_result = trainer.fit(
         train_data, valid_data, verbose=False, saved=saved, callback_fn=callback_fn
     )
-    if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.REC in best_valid_score:
-        best_valid_score, best_valid_result = (
-            best_valid_score[KnowledgeEvaluationType.REC],
-            best_valid_result[KnowledgeEvaluationType.REC],
-        )
+    if best_valid_result is not None:
+        if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.REC in best_valid_score:
+            best_valid_score, best_valid_result = (
+                best_valid_score[KnowledgeEvaluationType.REC],
+                best_valid_result[KnowledgeEvaluationType.REC],
+            )
     test_result = trainer.evaluate(test_data, load_best_model=saved)
 
     return {

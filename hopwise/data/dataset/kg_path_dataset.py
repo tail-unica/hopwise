@@ -72,7 +72,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         # Tokenizer parameters
         self.tokenizer_model = self.config["tokenizer"]["model"]
-        self.sequence_template = self.config["tokenizer"]["template"]
 
         # Special tokens
         self.unk_token = self.config["tokenizer"]["special_tokens"]["unk_token"]
@@ -589,12 +588,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
     def _format_path(self, path):
         """Format the path to a string according to :class:`~hopwise.utils.enum_type.PathLanuageModelingTokenType`.
-        The template used for formatting expects the following fields:
-
-        user: Starting user node of the path.
-        pos_iid: Positive item that `user` interacted with.
-        entity_list: List of entities in the path. It can include user and item entities.
-        rec_iid: Item sampled as recommendation candidate.
 
         Args:
             path (list): The path to be formatted.

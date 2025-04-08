@@ -46,7 +46,7 @@ class TestConsumerTopKMetrics(unittest.TestCase):
         name = "deltahit"
         Metric = metrics_dict[name](config)
         group1_mask, group2_mask = Metric.get_group_mask(user_feat, users)
-        ranking_result = Metric.ranking_metric_info(pos_idx)
+        ranking_result = Metric.ranking_metric_info(pos_idx, pos_len)
         self.assertEqual(
             Metric.get_dp(ranking_result, group1_mask, group2_mask).tolist(),
             np.array(
@@ -93,7 +93,7 @@ class TestConsumerTopKMetrics(unittest.TestCase):
         name = "deltamrr"
         Metric = metrics_dict[name](config)
         group1_mask, group2_mask = Metric.get_group_mask(user_feat, users)
-        ranking_result = Metric.ranking_metric_info(pos_idx)
+        ranking_result = Metric.ranking_metric_info(pos_idx, pos_len)
         self.assertEqual(
             Metric.get_dp(ranking_result, group1_mask, group2_mask).tolist(),
             np.array(
@@ -148,7 +148,7 @@ class TestConsumerTopKMetrics(unittest.TestCase):
         name = "deltaprecision"
         Metric = metrics_dict[name](config)
         group1_mask, group2_mask = Metric.get_group_mask(user_feat, users)
-        ranking_result = Metric.ranking_metric_info(pos_idx)
+        ranking_result = Metric.ranking_metric_info(pos_idx, pos_len)
         print(ranking_result)
         self.assertEqual(
             Metric.get_dp(ranking_result, group1_mask, group2_mask).tolist(),

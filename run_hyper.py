@@ -39,7 +39,7 @@ def tune(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("params_file", type=str, help="parameters file")
-    parser.add_argument("--config_files", type=str, default=None, help="fixed config files")
+    parser.add_argument("--config_fpipiles", type=str, default=None, help="fixed config files")
     parser.add_argument("--output_path", type=str, default="saved/hyper", help="output file")
     parser.add_argument("--display_file", type=str, default=None, help="visualization file")
     parser.add_argument("--max_evals", type=int, default=10, help="max evaluations")

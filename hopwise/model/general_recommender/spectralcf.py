@@ -12,8 +12,6 @@ Reference code:
     https://github.com/lzheng21/SpectralCF
 """
 
-import numpy as np
-import scipy.sparse as sp
 import torch
 
 from hopwise.model.abstract_recommender import GeneralRecommender
@@ -56,9 +54,8 @@ class SpectralCF(GeneralRecommender):
 
         # generate intermediate data
         # "A_hat = I + L" is equivalent to "A_hat = U U^T + U \Lambda U^T"
-        self.interaction_matrix = dataset.inter_matrix(form="coo").astype(np.float32)
-        I = self.get_eye_mat(self.n_items + self.n_users)  # noqa: E741
-        L = self.get_laplacian_matrix()
+        I = dataset._create_eye_matrix()  # noqa: E741
+        L = I - dataset._create_norm_adjacency_matrix(symmetric=False)
         A_hat = I + L
         self.A_hat = A_hat.to(self.device)
 
@@ -84,62 +81,6 @@ class SpectralCF(GeneralRecommender):
         self.other_parameter_name = ["restore_user_e", "restore_item_e"]
         # parameters initialization
         self.apply(xavier_uniform_initialization)
-
-    def get_laplacian_matrix(self):
-        r"""Get the laplacian matrix of users and items.
-
-        .. math::
-            L = I - D^{-1} \times A
-
-        Returns:
-            Sparse tensor of the laplacian matrix.
-        """
-        # build adj matrix
-        A = sp.dok_matrix((self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32)
-        inter_M = self.interaction_matrix
-        inter_M_t = self.interaction_matrix.transpose()
-        data_dict = dict(zip(zip(inter_M.row, inter_M.col + self.n_users), [1] * inter_M.nnz))
-        data_dict.update(
-            dict(
-                zip(
-                    zip(inter_M_t.row + self.n_users, inter_M_t.col),
-                    [1] * inter_M_t.nnz,
-                )
-            )
-        )
-        A._update(data_dict)
-
-        # norm adj matrix
-        sumArr = (A > 0).sum(axis=1)
-        diag = np.array(sumArr.flatten())[0] + 1e-7
-        diag = np.power(diag, -1)
-        D = sp.diags(diag)
-        A_tilde = D * A
-
-        # covert norm_adj matrix to tensor
-        A_tilde = sp.coo_matrix(A_tilde)
-        row = A_tilde.row
-        col = A_tilde.col
-        i = torch.LongTensor([row, col])
-        data = torch.FloatTensor(A_tilde.data)
-        A_tilde = torch.sparse.FloatTensor(i, data, torch.Size(A_tilde.shape))
-
-        # generate laplace matrix
-        L = self.get_eye_mat(self.n_items + self.n_users) - A_tilde
-        return L
-
-    def get_eye_mat(self, num):
-        r"""Construct the identity matrix with the size of  n_items+n_users.
-
-        Args:
-            num: number of column of the square matrix
-
-        Returns:
-            Sparse tensor of the identity matrix. Shape of (n_items+n_users, n_items+n_users)
-        """
-        i = torch.LongTensor([range(0, num), range(0, num)])
-        val = torch.FloatTensor([1] * num)
-        return torch.sparse.FloatTensor(i, val)
 
     def get_ego_embeddings(self):
         r"""Get the embedding of users and items and combine to an embedding matrix.

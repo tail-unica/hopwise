@@ -616,6 +616,38 @@ class KnowledgeBasedDataset(Dataset):
         """
         return self.kg_feat[self.relation_field].numpy()
 
+    def _create_norm_adjacency_matrix(self, size=None, symmetric=True):
+        """Get the normalized interaction matrix of users and entities (items) and
+        the normalized adjacency matrix of the collaborative knowledge graph.
+
+        Uses :func:`~hopwise.data.dataset.dataset.Dataset._create_norm_adjacency_matrix`
+        to get the normalized adjacency matrix of the collaborative knowledge graph
+        and then extract the normalized interaction matrix of users and entities (items).
+
+        Returns:
+            tuple: tuple of:
+            - normalized interaction matrix of users and entities (items)
+            - normalized adjacency matrix of the collaborative knowledge graph.
+
+        """
+        if size is None:
+            size = self.user_num + self.entity_num
+
+        norm_graph = super()._create_norm_adjacency_matrix(size=size, symmetric=symmetric)
+        if not norm_graph.is_coalesced():
+            norm_graph = norm_graph.coalesce()
+
+        row, col = norm_graph.indices().cpu().numpy()
+        values = norm_graph.values().cpu().numpy()
+        mat = coo_matrix((values, (row, col)), shape=tuple(norm_graph.shape))
+        norm_matrix = mat.tocsr()[: self.user_num, self.user_num :].tocoo()
+
+        indices = torch.LongTensor(np.array([norm_matrix.row, norm_matrix.col]))
+        data = torch.FloatTensor(norm_matrix.data)
+        norm_matrix = torch.sparse.FloatTensor(indices, data, norm_matrix.shape)
+
+        return norm_matrix, norm_graph
+
     @property
     def entities(self):
         """Returns:

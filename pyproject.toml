@@ -84,6 +84,7 @@ dependencies = [
     "protobuf==3.19.0",
     "joblib",
     "numba",
+    "scikit-learn",
 ]
 
 [project.optional-dependencies]
@@ -119,6 +120,9 @@ lightgbm = [
 ldiffrec = [
   "kmeans-pytorch"
 ]
+kgin = [
+  "torch-scatter",
+]
 hyper = [
   "hyperopt==0.2.5",
   "optuna",
@@ -130,6 +134,7 @@ all-models = [
   "hopwise[ncl]",
   "hopwise[lightgbm]",
   "hopwise[ldiffrec]",
+  "hopwise[kgin]",
 ]
 
 [dependency-groups]
@@ -174,6 +179,8 @@ find-links = [
   "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html",
   "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html",
   "https://data.dgl.ai/wheels/torch-2.3/repo.html",
+  "https://data.pyg.org/whl/torch-2.4.0+cu124.html",
+  "https://data.pyg.org/whl/torch-2.3.0+cu121.html"
 ]
 conflicts = [
   [

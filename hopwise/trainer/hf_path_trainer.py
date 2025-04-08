@@ -349,7 +349,8 @@ class HopwiseCallback(TrainerCallback):
         )
 
     def on_epoch_end(self, args, state, control, **kwargs):
-        self.progress_bar.close()
+        if self.show_progress:
+            self.progress_bar.close()
         training_end_time = time()
         # Retrieve training loss and other information
         if state.log_history:
@@ -380,7 +381,8 @@ class HopwiseCallback(TrainerCallback):
 
     def on_step_end(self, args, state, control, **kwargs):
         control.should_log = True
-        self.progress_bar.update(1)
+        if self.show_progress:
+            self.progress_bar.update(1)
         if self.hopwise_trainer.gpu_available and self.show_progress:
             gpu_usage = get_gpu_usage(self.hopwise_trainer.device)
             self.progress_bar.set_postfix_str(set_color("GPU RAM: " + gpu_usage, "yellow"))
