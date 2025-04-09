@@ -389,30 +389,34 @@ class TestContextRecommender(unittest.TestCase):
         quick_test(config_dict)
 
     def test_xgboost(self):
-        config_dict = {
-            "model": "XGBoost",
-            "threshold": {"rating": 4},
-            "xgb_params": {
-                "booster": "gbtree",
-                "objective": "binary:logistic",
-                "eval_metric": ["auc", "logloss"],
-            },
-            "xgb_num_boost_round": 1,
-        }
-        quick_test(config_dict)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            config_dict = {
+                "model": "XGBoost",
+                "threshold": {"rating": 4},
+                "xgb_params": {
+                    "booster": "gbtree",
+                    "objective": "binary:logistic",
+                    "eval_metric": ["auc", "logloss"],
+                },
+                "xgb_num_boost_round": 1,
+                "checkpoint_dir": tmpdirname,
+            }
+            quick_test(config_dict)
 
     def test_lightgbm(self):
-        config_dict = {
-            "model": "LightGBM",
-            "threshold": {"rating": 4},
-            "lgb_params": {
-                "boosting": "gbdt",
-                "objective": "binary",
-                "metric": ["auc", "binary_logloss"],
-            },
-            "lgb_num_boost_round": 1,
-        }
-        quick_test(config_dict)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            config_dict = {
+                "model": "LightGBM",
+                "threshold": {"rating": 4},
+                "lgb_params": {
+                    "boosting": "gbdt",
+                    "objective": "binary",
+                    "metric": ["auc", "binary_logloss"],
+                },
+                "lgb_num_boost_round": 1,
+                "checkpoint_dir": tmpdirname,
+            }
+            quick_test(config_dict)
 
     def test_fignn(self):
         config_dict = {
@@ -768,26 +772,41 @@ class TestSequentialRecommender(unittest.TestCase):
         }
         quick_test(config_dict)
 
-    # def test_gru4reckg(self):
-    #     config_dict = {
-    #         'model': 'GRU4RecKG',
-    #     }
-    #     quick_test(config_dict)
+    def test_gru4reckg(self):
+        config_dict = {"model": "GRU4RecKG", "train_neg_sample_args": None, "embedding_size": 4}
+        quick_test(config_dict)
 
-    # def test_s3rec(self):
-    #     config_dict = {
-    #         'model': 'S3Rec',
-    #         'train_stage': 'pretrain',
-    #         'save_step': 1,
-    #     }
-    #     quick_test(config_dict)
-    #
-    #     config_dict = {
-    #         'model': 'S3Rec',
-    #         'train_stage': 'finetune',
-    #         'pre_model_path': './saved/S3Rec-test-1.pth',
-    #     }
-    #     quick_test(config_dict)
+    def test_gru4reckg_with_BPR_loss(self):
+        config_dict = {"model": "GRU4RecKG", "loss_type": "BPR", "embedding_size": 4}
+        quick_test(config_dict)
+
+    def test_ksr(self):
+        config_dict = {"model": "KSR", "train_neg_sample_args": None, "kg_embedding_size": 4}
+        quick_test(config_dict)
+
+    def test_ksr_with_BPR_loss(self):
+        config_dict = {"model": "KSR", "loss_type": "BPR", "kg_embedding_size": 4}
+        quick_test(config_dict)
+
+    def test_s3rec(self):
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            config_dict = {
+                "model": "S3Rec",
+                "train_stage": "pretrain",
+                "save_step": 1,
+                "pretrain_epochs": 1,
+                "checkpoint_dir": tmpdirname,
+                "train_neg_sample_args": None,
+            }
+            quick_test(config_dict)
+
+            config_dict = {
+                "model": "S3Rec",
+                "train_stage": "finetune",
+                "pre_model_path": os.path.join(tmpdirname, "S3Rec-test-1.pth"),
+                "train_neg_sample_args": None,
+            }
+            quick_test(config_dict)
 
 
 class TestKnowledgeRecommender(unittest.TestCase):
@@ -915,6 +934,18 @@ class TestKnowledgeRecommender(unittest.TestCase):
     def test_kgin(self):
         config_dict = {
             "model": "KGIN",
+        }
+        quick_test(config_dict)
+
+    def test_pgpr(self):
+        config_dict = {
+            "model": "PGPR",
+        }
+        quick_test(config_dict)
+
+    def test_cafe(self):
+        config_dict = {
+            "model": "CAFE",
         }
         quick_test(config_dict)
 

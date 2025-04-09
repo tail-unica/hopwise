@@ -634,7 +634,7 @@ class HyperTuning:
                 num_samples=self.max_evals,
                 scheduler=scheduler,
                 search_alg=search_alg,
-                local_dir=self.output_path,
+                storage_path=self.output_path,
                 name=self.study_name,
                 log_to_file=self.study_name,
             )

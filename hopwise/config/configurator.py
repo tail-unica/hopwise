@@ -298,10 +298,10 @@ class Config:
                 self._update_internal_config_dict(DIN_init)
                 if dataset == "ml-100k":
                     self._update_internal_config_dict(DIN_on_ml_100k_init)
-            elif model in ["GRU4RecKG", "KSR"]:
-                self._update_internal_config_dict(sequential_embedding_model_init)
             else:
                 self._update_internal_config_dict(sequential_init)
+                if model in ["GRU4RecKG", "KSR"]:
+                    self._update_internal_config_dict(sequential_embedding_model_init)
                 if dataset == "ml-100k" and model in [
                     "GRU4RecF",
                     "SASRecF",

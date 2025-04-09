@@ -39,12 +39,12 @@ load_col:
 unload_col: ~
 
 # Preprocessing
-alias_of_user_id: ~
-alias_of_item_id: ~
-alias_of_entity_id: ~
-alias_of_relation_id: ~
-preload_weight: ~
-normalize_field: ~
+# alias_of_user_id: ~
+# alias_of_item_id: ~
+# alias_of_entity_id: ~
+# alias_of_relation_id: ~
+# preload_weight: ~
+# normalize_field: ~
 normalize_all: True
 
 path_hop_length: 3
@@ -71,3 +71,23 @@ tokenizer:
         bos_token: "[BOS]"
         sep_token: "[SEP]"
         cls_token: "[CLS]"
+
+
+path_constraint: [
+  [[null, 'user'], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"]],
+  # [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.prequel","entity"]],
+  # [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.sequel","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.prequel","entity"], ["film.film.prequel","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.sequel","entity"], ["film.film.sequel","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.actor","entity"],["film.actor.film","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.actor.film","entity"],["film.actor.film","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film_subject.films","entity"],["film.film_subject.films","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.subjects","entity"],["film.film.subjects","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.rating","entity"],["film.content_rating.film","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.genre","entity"],["film.film_genre.films_in_this_genre","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.written_by","entity"],["film.writer.film","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.directed_by","entity"],["film.director.film","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.cinematography","entity"],["film.cinematographer.film","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.produced_by","entity"],["film.producer.film","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.production_companies","entity"],["film.production_company.films","entity"]],
+]

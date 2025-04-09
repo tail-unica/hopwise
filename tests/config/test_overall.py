@@ -9,6 +9,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.append(os.getcwd())
@@ -19,19 +20,20 @@ from hopwise.quick_start import run_hopwise
 
 
 def run_params(parm_dict, extra_dict=None):
-    config_dict = {"epochs": 1, "state": "INFO"}
-    for name, parms in parm_dict.items():
-        for parm in parms:
-            config_dict[name] = parm
-            if extra_dict is not None:
-                config_dict.update(extra_dict)
-            try:
-                run_hopwise(model="BPR", dataset="ml-100k", config_dict=config_dict)
-            except Exception as e:
-                print(f"\ntest `{name}`={parm} ... fail.\n")
-                logging.critical(f"\ntest `{name}`={parm} ... fail.\n")
-                logging.critical(f"\nError {e}.\n")
-                return False
+    with tempfile.TemporaryDirectory() as tempdir:
+        config_dict = {"epochs": 1, "state": "INFO", "checkpoint_dir": tempdir}
+        for name, parms in parm_dict.items():
+            for parm in parms:
+                config_dict[name] = parm
+                if extra_dict is not None:
+                    config_dict.update(extra_dict)
+                try:
+                    run_hopwise(model="BPR", dataset="ml-100k", config_dict=config_dict, saved=False)
+                except Exception as e:
+                    print(f"\ntest `{name}`={parm} ... fail.\n")
+                    logging.critical(f"\ntest `{name}`={parm} ... fail.\n")
+                    logging.critical(f"\nError {e}.\n")
+                    return False
     return True
 
 
@@ -89,7 +91,10 @@ class TestOverallConfig(unittest.TestCase):
         self.assertTrue(run_params({"stopping_step": [0, 1, 2]}))
 
     def test_checkpoint_dir(self):
-        self.assertTrue(run_params({"checkpoint_dir": ["saved_1/", "./saved_2"]}))
+        with tempfile.TemporaryDirectory() as tempdir:
+            self.assertTrue(
+                run_params({"checkpoint_dir": [os.path.join(tempdir, "saved_1"), os.path.join(tempdir, "saved_2")]})
+            )
 
     def test_eval_batch_size(self):
         self.assertTrue(run_params({"eval_batch_size": [1, 100]}))
@@ -154,8 +159,4 @@ class TestOverallConfig(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # suite = unittest.TestSuite()
-    # suite.addTest(TestOverallConfig('test_split_ratio'))
-    # runner = unittest.TextTestRunner(verbosity=2)
-    # runner.run(suite)
     unittest.main(verbosity=1)

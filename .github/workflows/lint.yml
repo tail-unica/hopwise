@@ -1,0 +1,40 @@
+name: Lint
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        required: true
+        type: string
+      os:
+        required: true
+        type: string
+
+jobs:
+  lint:
+    runs-on: ${{ inputs.os }}
+    outputs:
+      lint_status: ${{ steps.test_code_format.outputs.status }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install dependencies
+        run: |
+          uv pip install ruff
+      - uses: astral-sh/ruff-action@v3
+      - name: Test code format
+        id: test_code_format
+        run: |
+          ruff check --fix
+          ruff format
+          echo "status=success" >> $GITHUB_OUTPUT
+      - name: Apply code-format changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Format code with ruff

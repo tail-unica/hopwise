@@ -1,0 +1,80 @@
+name: Sync with uv and test
+
+on:
+  workflow_call:
+    inputs:
+      env:
+        required: true
+        type: string
+      python-version:
+        required: true
+        type: string
+      os:
+        required: true
+        type: string
+      experimental:
+        required: true
+        type: boolean
+
+jobs:
+  sync:
+    runs-on: ${{ inputs.os }}
+    continue-on-error: ${{ inputs.experimental }}
+    outputs:
+      sync_status: ${{ steps.sync_step.outputs.status }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - id: sync_step
+        name: Install the project
+        run: |
+          uv sync --group ${{ inputs.env }}
+
+          # install torch-sparse
+          if [ "${{ inputs.env }}" == "cu124" || ]; then
+            uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
+          elif [ "${{ inputs.env }}" == "cpu" ]; then
+            uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
+          elif [ "${{ inputs.env }}" == "cu118" ]; then
+            uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu118.html
+          else
+            uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.3.1+cu121.html
+          fi
+
+          echo "status=success" >> $GITHUB_OUTPUT
+  test:
+    needs: sync
+    runs-on: ${{ inputs.os }}
+    continue-on-error: ${{ inputs.experimental }}
+    outputs:
+      test_status: ${{ steps.test_project.outputs.status }}
+
+    steps:
+      - name: Test Overall
+        run: |
+          python -m pytest -v -n auto tests/config
+      - name: Test metrics
+        run: |
+          python -m pytest -v -n auto tests/metrics
+      - name: Test data
+        run: |
+          python -m pytest -v -n auto tests/data
+      - name: Test evaluation_setting
+        run: |
+          python -m pytest -v -n auto tests/evaluation_setting
+      - name: Test model
+        run: |
+          python -m pytest -v -n auto tests/model/test_model_auto.py
+      - name: Test hyper_tuning
+        run: |
+          python -m pytest -v tests/hyper_tuning/test_hyper_tuning.py
+      - name: Output test status
+        id: test_project
+        run: |
+          echo "status=success" >> $GITHUB_OUTPUT

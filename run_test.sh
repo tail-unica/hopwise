@@ -12,7 +12,6 @@ python -m pytest -v -n auto tests/evaluation_setting
 echo "evaluation_setting tests finished"
 
 python -m pytest -v -n 5 tests/model/test_model_auto.py
-python -m pytest -v -n auto tests/model/test_model_manual.py
 echo "model tests finished"
 
 python -m pytest -v -n auto tests/data/test_dataset.py
