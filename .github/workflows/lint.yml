@@ -11,20 +11,18 @@ on:
         type: string
 
 jobs:
-  sync:
-    uses: ./.github/workflows/sync.yml
-    with:
-      env: cu121
-      python-version: ${{ inputs.python-version }}
-      os: ${{ inputs.os }}
-      experimental: false
   lint:
-    needs: sync
     runs-on: ${{ inputs.os }}
     outputs:
       lint_status: ${{ steps.test_code_format.outputs.status }}
 
     steps:
+      - uses: ./.github/workflows/sync.yml
+        with:
+          env: cu121
+          python-version: ${{ inputs.python-version }}
+          os: ${{ inputs.os }}
+          experimental: false
       - uses: astral-sh/ruff-action@v3
       - name: Test code format
         id: test_code_format

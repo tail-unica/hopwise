@@ -27,11 +27,17 @@ jobs:
   test:
     needs: sync
     runs-on: ${{ inputs.os }}
-    continue-on-error: ${{ inputs.experimental }}
     outputs:
       test_status: ${{ steps.test_project.outputs.status }}
 
     steps:
+      - name: Install project
+        uses: ./.github/workflows/sync.yml
+        with:
+          env: ${{ inputs.env }}
+          python-version: ${{ inputs.python-version }}
+          os: ${{ inputs.os }}
+          experimental: ${{ inputs.experimental }}
       - name: Test Overall
         run: |
           uv run -m pytest -v -n auto tests/config
