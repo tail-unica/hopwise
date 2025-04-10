@@ -223,8 +223,7 @@ class Dataset(torch.utils.data.Dataset):
             return None
         else:
             raise ValueError(
-                f"Neither [{self.dataset_path}] exists in the device "
-                f"nor [{self.dataset_name}] a known dataset name."
+                f"Neither [{self.dataset_path}] exists in the device nor [{self.dataset_name}] a known dataset name."
             )
 
     def _download(self):
@@ -512,7 +511,7 @@ class Dataset(torch.utils.data.Dataset):
             isin = np.isin(alias, self._rest_fields, assume_unique=True)
             if isin.all() is False:
                 raise ValueError(
-                    f"`alias_of_{alias_name}` should not contain " f"non-token-like field {list(alias[~isin])}."
+                    f"`alias_of_{alias_name}` should not contain non-token-like field {list(alias[~isin])}."
                 )
             self._rest_fields = np.setdiff1d(self._rest_fields, alias, assume_unique=True)
 
@@ -1645,7 +1644,7 @@ class Dataset(torch.utils.data.Dataset):
         """Saving this :class:`Dataset` object to :attr:`config['checkpoint_dir']`."""
         save_dir = self.config["checkpoint_dir"]
         ensure_dir(save_dir)
-        file = os.path.join(save_dir, f'{self.config["dataset"]}-{self.__class__.__name__}.pth')
+        file = os.path.join(save_dir, f"{self.config['dataset']}-{self.__class__.__name__}.pth")
         self.logger.info(set_color("Saving filtered dataset into ", "pink") + f"[{file}]")
         with open(file, "wb") as f:
             pickle.dump(self, f)

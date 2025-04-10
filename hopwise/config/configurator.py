@@ -361,7 +361,7 @@ class Config:
             elif self.final_config_dict["loss_type"] in ["BPR"]:
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
         else:
-            raise ValueError("Either Model has attr 'input_type'," "or arg 'loss_type' should exist in config.")
+            raise ValueError("Either Model has attr 'input_type',or arg 'loss_type' should exist in config.")
 
         metrics = self.final_config_dict["metrics"]
         if isinstance(metrics, str):
@@ -586,8 +586,7 @@ class Config:
                 }
             elif distribution not in ["uniform", "popularity"]:
                 raise ValueError(
-                    f"The distribution [{distribution}] of train_neg_sample_args "
-                    f"should in ['uniform', 'popularity']"
+                    f"The distribution [{distribution}] of train_neg_sample_args should in ['uniform', 'popularity']"
                 )
 
     def _set_eval_neg_sample_args(self, phase: Literal["valid", "test"]):

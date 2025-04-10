@@ -399,8 +399,7 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         if hidden_size % n_heads != 0:
             raise ValueError(
-                "The hidden size (%d) is not a multiple of the number of attention "
-                "heads (%d)" % (hidden_size, n_heads)
+                "The hidden size (%d) is not a multiple of the number of attention heads (%d)" % (hidden_size, n_heads)
             )
 
         self.num_attention_heads = n_heads
@@ -646,8 +645,7 @@ class LightMultiHeadAttention(nn.Module):
         super().__init__()
         if hidden_size % n_heads != 0:
             raise ValueError(
-                "The hidden size (%d) is not a multiple of the number of attention "
-                "heads (%d)" % (hidden_size, n_heads)
+                "The hidden size (%d) is not a multiple of the number of attention heads (%d)" % (hidden_size, n_heads)
             )
 
         self.num_attention_heads = n_heads

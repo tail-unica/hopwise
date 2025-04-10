@@ -49,7 +49,6 @@ jobs:
       experimental: ${{ matrix.experimental }}
 
   lint:
-    needs: sync_and_test
     uses: ./.github/workflows/lint.yml
     with:
       python-version: 3.10

@@ -13,8 +13,8 @@ from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
 from hopwise.model.init import xavier_normal_initialization
-from hopwise.utils import InputType
 from hopwise.model.loss import InnerProductLoss
+from hopwise.utils import InputType
 
 
 class CFKG(KnowledgeRecommender):
