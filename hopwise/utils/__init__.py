@@ -34,7 +34,7 @@ __all__ = [
     "InputType",
     "FeatureType",
     "FeatureSource",
-    "KGPathExplanationTokenType",
+    "PathLanguageModelingTokenType",
     "init_seed",
     "general_arguments",
     "training_arguments",

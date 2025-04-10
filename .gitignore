@@ -1,6 +1,7 @@
 # Saved models
 /saved*
 *.pth
+.tox
 
 .vscode/
 .idea/
@@ -27,3 +28,4 @@ hyper/
 model/
 *.txt
 *.*emb
+!tests/test_data/test/*.*emb

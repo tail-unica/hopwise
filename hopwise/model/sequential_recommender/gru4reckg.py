@@ -29,7 +29,7 @@ class GRU4RecKG(SequentialRecommender):
         super().__init__(config, dataset)
 
         # load dataset info
-        self.entity_embedding_matrix = dataset.get_preload_weight("ent_id")
+        self.entity_embedding_matrix = dataset.get_preload_weight("entity_embedding_id")
 
         # load parameters info
         self.embedding_size = config["embedding_size"]

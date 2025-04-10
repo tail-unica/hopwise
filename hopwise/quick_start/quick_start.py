@@ -21,7 +21,16 @@ import torch.distributed as dist
 from hopwise.config import Config
 from hopwise.data import create_dataset, data_preparation
 from hopwise.data.transform import construct_transform
-from hopwise.utils import get_environment, get_flops, get_model, get_trainer, init_logger, init_seed, set_color
+from hopwise.utils import (
+    calculate_valid_score,
+    get_environment,
+    get_flops,
+    get_model,
+    get_trainer,
+    init_logger,
+    init_seed,
+    set_color,
+)
 from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
@@ -147,54 +156,47 @@ def run_hopwise(
         best_valid_score, best_valid_result = trainer.fit(
             train_data, valid_data, saved=saved, show_progress=config["show_progress"]
         )
-
-        # model evaluation
-        test_result = trainer.evaluate(test_data, load_best_model=saved, show_progress=config["show_progress"])
-
-        environment_tb = get_environment(config)
-        logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
-
-        if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.LP in best_valid_result:
-            for task, result in best_valid_result.items():
-                logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
-
-        if KnowledgeEvaluationType.REC in test_result and KnowledgeEvaluationType.LP in test_result:
-            for task, result in test_result.items():
-                logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
-        else:
-            if isinstance(best_valid_result, dict) and KnowledgeEvaluationType.REC in best_valid_result:
-                best_valid_result = best_valid_result[KnowledgeEvaluationType.REC]
-
-            logger.info(set_color("best valid ", "yellow") + f": {format_metrics(best_valid_result)}")
-            logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
-        # In the case of KG-aware tasks, we don't care about the final "best_valid_score"
-        # format because it is not used anywhere.
-        result = {
-            "best_valid_score": best_valid_score,
-            "valid_score_bigger": config["valid_metric_bigger"],
-            "best_valid_result": best_valid_result,
-            "test_result": test_result,
-        }
-
     elif run == "evaluate":
         if checkpoint is None:
             raise ValueError("Checkpoint is needed for evaluation")
 
-        test_result = trainer.evaluate(
+        best_valid_result = trainer.evaluate(
             test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
         )
-
-        environment_tb = get_environment(config)
-        logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
-
-        logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
-
-        result = {
-            "valid_score_bigger": config["valid_metric_bigger"],
-            "test_result": test_result,
-        }
+        best_valid_score = calculate_valid_score(best_valid_result, trainer.valid_metric)
     else:
         raise ValueError(f"Invalid run mode: {run}")
+
+    # model evaluation
+    test_result = trainer.evaluate(
+        test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
+    )
+
+    environment_tb = get_environment(config)
+    logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
+
+    if best_valid_result is not None:
+        if KnowledgeEvaluationType.REC in best_valid_result or KnowledgeEvaluationType.LP in best_valid_result:
+            for task, result in best_valid_result.items():
+                logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
+        else:
+            logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
+
+    if test_result is not None:
+        if KnowledgeEvaluationType.REC in test_result or KnowledgeEvaluationType.LP in test_result:
+            for task, result in test_result.items():
+                logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
+        else:
+            logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
+
+    # In the case of KG-aware tasks, we don't care about the final "best_valid_score"
+    # format because it is not used anywhere.
+    result = {
+        "best_valid_score": best_valid_score,
+        "valid_score_bigger": config["valid_metric_bigger"],
+        "best_valid_result": best_valid_result,
+        "test_result": test_result,
+    }
 
     if not config["single_spec"]:
         dist.destroy_process_group()
@@ -258,11 +260,12 @@ def objective_function(config_dict=None, config_file_list=None, saved=True, call
     best_valid_score, best_valid_result = trainer.fit(
         train_data, valid_data, verbose=False, saved=saved, callback_fn=callback_fn
     )
-    if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.REC in best_valid_score:
-        best_valid_score, best_valid_result = (
-            best_valid_score[KnowledgeEvaluationType.REC],
-            best_valid_result[KnowledgeEvaluationType.REC],
-        )
+    if best_valid_result is not None:
+        if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.REC in best_valid_score:
+            best_valid_score, best_valid_result = (
+                best_valid_score[KnowledgeEvaluationType.REC],
+                best_valid_result[KnowledgeEvaluationType.REC],
+            )
     test_result = trainer.evaluate(test_data, load_best_model=saved)
 
     return {

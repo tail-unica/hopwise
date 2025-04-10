@@ -49,20 +49,20 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         self.path_pattern = config["path_constraint"]
         self.beam_search_hop = config["beam_search_hop"]
 
-        # user-item relation
-        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
+        self.fix_scores_sorting_bug = config["fix_scores_sorting_bug"]
 
-        # Load Full Knowledge Graph in dict form
-        self.G, self.kg_relation = dataset.ckg_dict_graph()
+        # user-item relation
+        self.ui_relation_id = dataset.field2token_id["relation_id"][dataset.ui_relation]
+
+        self.graph_dict = dataset.ckg_dict_graph()
 
         # Items
-        self.items = set(range(self.n_items))
         self.positives = dataset.history_item_matrix()[0]
 
         # Load Knowledge Graph Embedding Checkpoint
-        self.user_embedding = dataset.get_preload_weight("userid")
-        self.entity_embedding = dataset.get_preload_weight("entityid")
-        self.relation_embedding = dataset.get_preload_weight("relationid")
+        self.user_embedding = dataset.get_preload_weight("user_embedding_id")
+        self.entity_embedding = dataset.get_preload_weight("entity_embedding_id")
+        self.relation_embedding = dataset.get_preload_weight("relation_embedding_id")
         self.embedding_size = self.user_embedding.shape[1]
         self.state_gen = KGState(self.embedding_size, self.state_history)
 
@@ -73,7 +73,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         self.critic = nn.Linear(self.hidden_sizes[1], 1)
 
         # Self Loop Embedding
-        self.self_loop_embedding = (np.zeros(self.embedding_size), 0.0)
+        self.self_loop_embedding = np.zeros(self.embedding_size)
 
         # Map Relation ID to relation name to check has pattern constraint
         self.rid2relation = {v: k for k, v in dataset.field2token_id["relation_id"].items()}
@@ -88,7 +88,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
         # Normalization score
         u_p_scores = np.dot(
-            self.user_embedding + self.relation_embedding[self.ui_relation], self.entity_embedding[list(self.items)].T
+            self.user_embedding + self.relation_embedding[self.ui_relation_id], self.entity_embedding[: self.n_items].T
         )
         self.u_p_scales = np.max(u_p_scores, axis=1)
 
@@ -210,6 +210,12 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         pattern = tuple([self.rid2relation[v[0]] if v[0] != "self_loop" else v[0] for v in path])
         return pattern in self.patterns
 
+    def _get_next_node_type(self, current_node_type, relation_id):
+        if current_node_type == "entity" and relation_id == self.ui_relation_id:
+            return "user"
+        else:
+            return "entity"
+
     def reset(self, user):
         self._batch_path = [[("self_loop", "user", uid)] for uid in user]
         self._done = False
@@ -235,12 +241,15 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         if isinstance(curr_node_id, torch.Tensor):
             curr_node_id = curr_node_id.item()
 
-        relations_nodes = self.G(curr_node_type, curr_node_id)
+        try:
+            relations_nodes = self.graph_dict[curr_node_type][curr_node_id]
+        except KeyError:
+            relations_nodes = []
         candidate_acts = []  # list of tuples of (relation, node_type, node_id)
         visited_nodes = set([(v[1], v[2]) for v in path])
 
         for r in relations_nodes:
-            next_node_type = self.kg_relation[curr_node_type][r]
+            next_node_type = self._get_next_node_type(curr_node_type, r)
             next_node_ids = relations_nodes[r]
             next_node_ids = [n for n in next_node_ids if (next_node_type, n) not in visited_nodes]  # filter
             candidate_acts.extend(zip([r] * len(next_node_ids), next_node_ids))
@@ -260,13 +269,13 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
         scores = []
         for r, next_node_id in candidate_acts:
-            next_node_type = self.kg_relation[curr_node_type][r]
+            next_node_type = self._get_next_node_type(curr_node_type, r)
             if next_node_type == "user":
                 src_embed = user_embed
-            elif next_node_type == "entity" and next_node_id in self.items:
-                src_embed = user_embed + self.relation_embedding[self.ui_relation]
+            elif next_node_type == "entity" and next_node_id < self.n_items:
+                src_embed = user_embed + self.relation_embedding[self.ui_relation_id]
             else:
-                src_embed = user_embed + self.relation_embedding[self.ui_relation] + self.relation_embedding[r]
+                src_embed = user_embed + self.relation_embedding[self.ui_relation_id] + self.relation_embedding[r]
 
             score = np.matmul(src_embed, self.node_type2emb[next_node_type][next_node_id])
             # This trimming may filter out target products!
@@ -277,7 +286,10 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
         # choose actions with larger scores
         candidate_idxs = np.argsort(scores)[-self.max_acts :]
-        candidate_acts = sorted([candidate_acts[i] for i in candidate_idxs], key=lambda x: (x[0], x[1]))
+        if self.fix_scores_sorting_bug:
+            candidate_acts = [candidate_acts[i] for i in candidate_idxs[::-1]]
+        else:
+            candidate_acts = sorted([candidate_acts[i] for i in candidate_idxs], key=lambda x: (x[0], x[1]))
         actions.extend(candidate_acts)
         return actions
 
@@ -303,7 +315,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         if last_relation != "self_loop":
             last_relation_embed = self.relation_embedding[last_relation]
         else:
-            last_relation_embed = self.self_loop_embedding[0]
+            last_relation_embed = self.self_loop_embedding
 
         if len(path) == 2:
             state = self.state_gen(
@@ -315,7 +327,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         older_node_embed = self.node_type2emb[older_node_type][older_node_id]
 
         if older_relation == "self_loop":
-            older_relation_embed = self.self_loop_embedding[0]
+            older_relation_embed = self.self_loop_embedding
         else:
             older_relation_embed = self.relation_embedding[older_relation]
 
@@ -339,10 +351,10 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         target_score = 0.0
         _, curr_node_type, curr_node_id = path[-1]
 
-        if curr_node_type == "entity" and curr_node_id in self.items:
+        if curr_node_type == "entity" and curr_node_id < self.n_items:
             # Give soft reward for other reached products.
             uid = path[0][-1]
-            u_vec = self.user_embedding[uid] + self.relation_embedding[self.ui_relation]
+            u_vec = self.user_embedding[uid] + self.relation_embedding[self.ui_relation_id]
             p_vec = self.entity_embedding[curr_node_id]
             score = np.dot(u_vec, p_vec) / self.u_p_scales[uid]
             target_score = max(score, 0.0)
@@ -364,7 +376,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
             if relation == "self_loop":
                 next_node_type = curr_node_type
             else:
-                next_node_type = self.kg_relation[curr_node_type][relation]
+                next_node_type = self._get_next_node_type(curr_node_type, relation)
             self._batch_path[i].append((relation, next_node_type, next_node_id))
 
         self._done = self._is_done()  # must run before get actions, etc.
@@ -459,7 +471,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
                     if relation == "self_loop":
                         next_node_type = path[-1][1]
                     else:
-                        next_node_type = self.kg_relation[path[-1][1]][relation]
+                        next_node_type = self._get_next_node_type(path[-1][1], relation)
 
                     new_path = path + [(relation, next_node_type, next_node_id)]
 
@@ -477,7 +489,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         # 1) get all valid paths for each user, compute path score and path probability
         pred_paths = {uid.item(): defaultdict(list) for uid in users}
         path_scores = np.dot(
-            self.user_embedding + self.relation_embedding[self.ui_relation], self.entity_embedding[: self.n_items].T
+            self.user_embedding + self.relation_embedding[self.ui_relation_id], self.entity_embedding[: self.n_items].T
         )
         for path, prob in zip(paths, probs):
             if path[-1][1] != "entity":
@@ -490,7 +502,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
             path_pid = path[-1][2]
             # check it is a product
-            if path_pid not in self.items:
+            if not (path_pid < self.n_items):
                 continue
 
             if path_pid in self.positives[path_uid]:
@@ -511,7 +523,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
                 best_pred_paths[user].append(sorted_path)
 
         # 3) Fill the results tensor
-        results = torch.full((len(users), len(self.items)), -torch.inf)
+        results = torch.full((len(users), self.n_items), -torch.inf)
 
         for i, user in enumerate(best_pred_paths):
             # sort by score

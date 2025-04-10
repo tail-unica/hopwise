@@ -53,7 +53,6 @@ tokenizer:                      # (dict) Tokenizer parameters.
         bos_token: "[BOS]"      # (str) Beginning of sequence token.
         sep_token: "[SEP]"      # (str) Separator token.
         cls_token: "[CLS]"      # (str) Classification token.
-    template: "{bos_token}:0 $A:0 {eos_token}"                # (str) Template for the tokenizer.
 
 # Selectively Loading
 load_col:                       # (dict) The suffix of atomic files: (list) field names to be loaded.

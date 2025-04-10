@@ -1584,34 +1584,28 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         if has_bos_token and current_len == self.max_sequence_length - 1:
             self.mask_non_eos_tokens(scores)
         else:
-            mask_list = []
-            if self.task == self.RECOMMENDATION_TASK:
+            unique_input_ids = input_ids
+            if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
                 last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
                 _, input_ids_indices, input_ids_inv = np.unique(
                     input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True
                 )
                 unique_input_ids = input_ids[input_ids_indices]
-                full_mask = np.zeros((unique_input_ids.shape[0], self.tokenizer.vocab_size), dtype=bool)
-            elif self.task == self.LINK_PREDICTION_TASK:
-                unique_input_ids = input_ids
 
+            full_mask = np.zeros((unique_input_ids.shape[0], self.tokenizer.vocab_size), dtype=bool)
             for idx in range(unique_input_ids.shape[0]):
                 if self.task == self.RECOMMENDATION_TASK:
                     key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
-                    banned_mask = self.get_banned_mask(key, candidate_tokens)
-                    full_mask[idx] = banned_mask
-
                 elif self.task == self.LINK_PREDICTION_TASK:
                     key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
 
-                    banned_mask = self.get_banned_mask(key, candidate_tokens)
-                    mask_list.append(banned_mask)
+                banned_mask = self.get_banned_mask(key, candidate_tokens)
+                full_mask[idx] = banned_mask
 
-            if self.task == self.RECOMMENDATION_TASK:
+            if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
                 scores[full_mask[input_ids_inv]] = -math.inf
             else:
-                banned_tokens_mask = np.vstack(mask_list)
-                scores[banned_tokens_mask] = -math.inf
+                scores[full_mask] = -math.inf
 
         return scores
 
@@ -1673,9 +1667,12 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
                 return self.tokenized_kg[key1][key2]  # return tail given head + relation
             else:
                 return set(self.tokenized_kg[key1].keys())  # return relations given head
+        else:
+            raise ValueError(f"Key {key1} ('{self.tokenizer.convert_ids_to_tokens(key1)}') not found in tokenized_kg")
 
     def get_candidates_lp(self, key):
         return list(self.tokenized_ignored_ids[key]) + self.special_tokens_ids
+
     def get_banned_mask(self, key, candidate_tokens):
         """Retrieve or cache the banned token mask for a specific key."""
         banned_mask = self.mask_cache.get(key)

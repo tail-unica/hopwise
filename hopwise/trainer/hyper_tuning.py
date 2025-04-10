@@ -12,17 +12,15 @@
 ############################
 """
 
-import datetime
 import os
-import warnings
 from ast import literal_eval
+from datetime import datetime
 from enum import Enum
 from functools import partial
 
 import numpy as np
 
-from hopwise.config import Config
-from hopwise.utils import dict2str, set_color
+from hopwise.utils import dict2str
 
 
 def _recursiveFindNodes(root, node_type="switch"):
@@ -228,10 +226,11 @@ class HyperTuning:
             elif isinstance(algo, str):
                 if "-" in algo:
                     search_alg, scheduler = algo.split("-")
+                    search_alg = search.SEARCH_ALG_IMPORT.get(search_alg, None)
                     self.algo = {"search_alg": search_alg, "scheduler": scheduler}
                 else:
-                    search_alg = search_alg if hasattr(search, algo) else None
-                    scheduler = scheduler if hasattr(schedulers, algo) else None
+                    search_alg = search.SEARCH_ALG_IMPORT.get(algo, None)
+                    scheduler = algo if algo in schedulers.SCHEDULER_IMPORT else None
                     self.algo = {
                         "search_alg": search_alg,
                         "scheduler": scheduler,
@@ -299,7 +298,7 @@ class HyperTuning:
                 return tune.quniform(low, high, q)
 
             def loguniform(name, low, high):
-                return tune.loguniform(low, high)
+                return tune.uniform(np.exp(low), np.exp(high))
         elif self.tuner == self.TUNER_TYPES.OPTUNA:
 
             def choice(name, values):
@@ -431,8 +430,6 @@ class HyperTuning:
         Args:
             trial (optuna.trial): the trial object
         """
-        import optuna
-
         params = {}
         for para_name in self.space:
             para_type, _, *para_value = self.space[para_name]
@@ -452,24 +449,7 @@ class HyperTuning:
                 low = para_value[0]
                 high = para_value[1]
 
-                low = np.exp(low)
-                high = np.exp(high)
-
-                if isinstance(trial.study.sampler, optuna.samplers.GridSampler):
-                    warnings.warn(
-                        set_color(
-                            "GridSampler doesn't fully support loguniform distributions and only extremes are used. "
-                            "https://optuna.readthedocs.io/en/stable/reference/samplers/generated/optuna.samplers.GridSampler.html\n\n"
-                            "Values lower than 1 will be replaced with 1.",
-                            color="yellow",
-                        ),
-                        UserWarning,
-                    )
-
-                    low = max(low, 1)
-                    high = max(high, 1)
-
-                params[para_name] = trial.suggest_float(para_name, low, high, log=True)
+                params[para_name] = np.exp(trial.suggest_float(para_name, low, high))
             else:
                 raise ValueError(f"  Illegal param type [{para_type}]")
 
@@ -616,32 +596,45 @@ class HyperTuning:
 
             def ray_objective(params):
                 result_dict = self.trial(params)
-                tune.report(result_dict["test_result"])
+                ray.train.report({"hyper_score": result_dict["hyper_score"]})
 
                 return result_dict
 
-            fixed_config = Config(config_file_list=self.fixed_config_file_list)
-            valid_metric = fixed_config["valid_metric"]
-
-            ray.init()
+            if not ray.is_initialized():
+                ray.init()
             tune.register_trainable("ray-trial", ray_objective)
             if self.algo["scheduler"] is not None:
                 scheduler = tune.create_scheduler(
                     self.algo["scheduler"],
-                    metric=valid_metric,
+                    metric="hyper_score",
                     mode="min",
                     max_t=self.max_evals,
                     grace_period=1,
                     reduction_factor=2,
                 )
+            else:
+                scheduler = None
+
+            if self.algo["search_alg"] is not None:
+                from ray.tune import search
+
+                if self.algo["search_alg"]() is search.BasicVariantGenerator:
+                    search_alg = search.BasicVariantGenerator()
+                else:
+                    search_alg = self.algo["search_alg"]()(
+                        metric="hyper_score",
+                        mode="min",
+                    )
+            else:
+                search_alg = None
 
             tune.run(
                 ray_objective,
                 config=self.space,
                 num_samples=self.max_evals,
                 scheduler=scheduler,
-                search_alg=self.algo["search_alg"],
-                local_dir=self.output_path,
+                search_alg=search_alg,
+                storage_path=self.output_path,
                 name=self.study_name,
                 log_to_file=self.study_name,
             )

@@ -1778,20 +1778,32 @@ class Dataset(torch.utils.data.Dataset):
             raise ValueError("dataset does not exist uid/iid, thus can not converted to sparse matrix.")
         return self._create_sparse_matrix(self.inter_feat, self.uid_field, self.iid_field, form, value_field)
 
-    def _create_norm_adjacency_matrix(self):
+    def _create_norm_adjacency_matrix(self, size=None, symmetric=True):
         r"""Get the normalized interaction matrix of users and items.
 
         Construct the square matrix from the training data and normalize it
         using the laplace matrix.
 
-        .. math::
-            A_{hat} = D^{-0.5} \times A \times D^{-0.5}
+        Args:
+            size (int, optional): Size of the normalized interaction matrix. Defaults to ``None``.
+                If ``None``, the size is set to ``self.user_num + self.item_num``.
+            symmetric (bool, optional): Whether to use symmetric normalization. Defaults to ``True``.
+                If ``True``, the normalized interaction matrix is calculated as:
+                .. math::
+                    A_{hat} = D^{-0.5} \times A \times D^{-0.5}
+                If ``False``, the normalized interaction matrix is calculated as:
+                .. math::
+                    A_{hat} = D^{-1} \times A
+                where :math:`A` is the adjacency matrix, and :math:`D` is the diagonal degree matrix.
 
         Returns:
             Sparse tensor of the normalized interaction matrix.
         """
+        if size is None:
+            size = self.user_num + self.item_num
+
         # build adj matrix
-        A = dok_matrix((self.user_num + self.item_num, self.user_num + self.item_num), dtype=np.float32)
+        A = dok_matrix((size, size), dtype=np.float32)
         inter_M = self.inter_matrix(form="coo").astype(np.float32)
         inter_M_t = inter_M.transpose()
         data_dict = dict(zip(zip(inter_M.row, inter_M.col + self.user_num), [1] * inter_M.nnz))
@@ -1808,11 +1820,16 @@ class Dataset(torch.utils.data.Dataset):
         # norm adj matrix
         sumArr = (A > 0).sum(axis=1)
         diag = np.array(sumArr.flatten())[0] + 1e-7  # add epsilon to avoid divide by zero Warning
-        diag = np.power(diag, -0.5)
-        D = diags(diag)
-        L = D @ A @ D
+        if symmetric:
+            diag = np.power(diag, -0.5)
+            D = diags(diag)
+            L = D @ A @ D
+        else:
+            diag = np.power(diag, -1)
+            D = diags(diag)
+            L = D @ A
 
-        # covert norm_adj matrix to tensor
+        # convert norm_adj matrix to tensor
         L = coo_matrix(L)
         row = L.row
         col = L.col

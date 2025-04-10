@@ -13,7 +13,7 @@ from transformers import (
 
 from hopwise.model.layers import ConstrainedLogitsProcessorWordLevel
 from hopwise.utils import (
-    KGPathExplanationTokenType,
+    PathLanguageModelingTokenType,
     dict2str,
     early_stopping,
     get_gpu_usage,
@@ -99,6 +99,9 @@ class CumulativeSequenceScoreRanker:
         num_return_sequences = sequences.shape[0] // user_num
         batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
 
+        valid_sequences_mask = torch.logical_not(torch.isfinite(normalized_sequences_scores))
+        normalized_sequences_scores = torch.where(valid_sequences_mask, -torch.inf, normalized_sequences_scores)
+
         sorted_indices = normalized_sequences_scores.argsort(descending=True)
         sorted_sequences = sequences[sorted_indices]
         sorted_sequences_scores = normalized_sequences_scores[sorted_indices]
@@ -111,8 +114,8 @@ class CumulativeSequenceScoreRanker:
             uid_token = seq[0]
             recommended_token = seq[-1]
             if not (
-                uid_token.startswith(KGPathExplanationTokenType.USER.value)
-                and recommended_token.startswith(KGPathExplanationTokenType.ITEM.value)
+                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
+                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
             ):
                 continue
 
@@ -125,7 +128,7 @@ class CumulativeSequenceScoreRanker:
                 continue
 
             scores[user_index, recommended_item] = sequence_score
-            if user_index not in user_topk_sequences:
+            if uid not in user_topk_sequences:
                 user_topk_sequences[uid] = [seq]
             else:
                 user_topk_sequences[uid].append(seq)
@@ -142,8 +145,8 @@ def get_tokenized_used_ids(used_ids, tokenizer):
     Returns:
         dict: A dictionary where keys are tokenized user ids and values are lists of tokenized item ids.
     """
-    user_token_type = KGPathExplanationTokenType.USER.value
-    item_token_type = KGPathExplanationTokenType.ITEM.value
+    user_token_type = PathLanguageModelingTokenType.USER.value
+    item_token_type = PathLanguageModelingTokenType.ITEM.value
 
     tokenized_used_ids = {}
     for uid in range(used_ids.shape[0]):
@@ -165,8 +168,6 @@ class HFPathTrainer(Trainer):
         path_hop_length=3,
         paths_per_user=10,
         path_generation_args=None,
-        # paths_per_head=50,  # n_sequences_lp
-        # n_beams_lp=50,
         eval_device="cpu",
     ):
         hopwise_dataset = hopwise_train_data.dataset
@@ -187,9 +188,7 @@ class HFPathTrainer(Trainer):
         self.hopwise_config = hopwise_config
 
         self.paths_per_user = paths_per_user
-        # self.N_RET_SEQ_LP = n_sequences_lp
         self.path_generation_args = path_generation_args
-        # self.N_BEAMS_LP = n_beams_lp
 
         self.path_hop_length = path_hop_length
         self.eval_device = eval_device
@@ -210,29 +209,6 @@ class HFPathTrainer(Trainer):
             max_new_tokens=ranker_max_new_tokens,
         )
 
-        # Link Prediction Data
-        # self.SEQUENCE_LEN_LP = 3 + 1
-        # self.test_set_lp = get_set_lp(dataset_name, "test")
-        # heads_lp = [head for head, rel in self.test_set_lp.keys()]
-        # relations_lp = [rel for head, rel in self.test_set_lp.keys()]
-
-        # self.product_entities = [int(h) for h in get_dataset_id2eid(dataset_name, "product").values()]
-        # self.all_entities, self.positive_triplets, self.positive_triplets_token_ids = (
-        #     get_kg_positives_and_tokens_ids_lp(dataset_name, tokenizer)
-        # )
-
-        # def init_condition_fn_lp(head, rel):
-        #     return f"[BOS] E{head} R{rel}" if head not in self.product_entities else f"[BOS] P{head} R{rel}"
-
-        # self.inference_paths_lp = {
-        #     "eid_rid": [init_condition_fn_lp(head, rel) for head, rel in zip(heads_lp, relations_lp)]
-        # }
-        # self.ranker_lp = RankerLP(
-        #     tokenizer, kg_positives=self.positive_triplets, K=10, max_new_tokens=self.SEQUENCE_LEN_LP
-        # )
-        # self.test_dataset_lp = Dataset.from_dict(self.inference_paths_lp)
-        # print(f"Sequence length rec: {self.token_sequence_length}")  # , lp: {self.SEQUENCE_LEN_LP}")
-
         self.logits_processor_rec = LogitsProcessorList(
             [
                 ConstrainedLogitsProcessorWordLevel(
@@ -245,19 +221,6 @@ class HFPathTrainer(Trainer):
                 )
             ]
         )
-
-        # self.logits_processor_lp = LogitsProcessorList(
-        #     [
-        #         ConstrainedLogitsProcessorLP(
-        #             tokenized_kg=tokenized_kg,
-        #             positive_token_map=self.positive_triplets_token_ids,
-        #             tokenizer=tokenizer,
-        #             total_length=self.SEQUENCE_LEN_LP,
-        #             num_return_sequences=self.paths_per_user,
-        #             eos_token_ids=[self.processing_class.convert_tokens_to_ids(self.processing_class.eos_token)],
-        #         )
-        #     ]
-        # )
 
     def _full_sort_batch_eval(self, inputs, task="rec"):
         if isinstance(self.model, torch.nn.DataParallel):
@@ -288,7 +251,7 @@ class HFPathTrainer(Trainer):
         )
         scores, user_topk_sequences = ranker.get_sequences(inputs["input_ids"].shape[0], outputs)
 
-        return scores
+        return scores, user_topk_sequences
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)
@@ -346,7 +309,8 @@ class HopwiseCallback(TrainerCallback):
         )
 
     def on_epoch_end(self, args, state, control, **kwargs):
-        self.progress_bar.close()
+        if self.show_progress:
+            self.progress_bar.close()
         training_end_time = time()
         # Retrieve training loss and other information
         if state.log_history:
@@ -377,7 +341,8 @@ class HopwiseCallback(TrainerCallback):
 
     def on_step_end(self, args, state, control, **kwargs):
         control.should_log = True
-        self.progress_bar.update(1)
+        if self.show_progress:
+            self.progress_bar.update(1)
         if self.hopwise_trainer.gpu_available and self.show_progress:
             gpu_usage = get_gpu_usage(self.hopwise_trainer.device)
             self.progress_bar.set_postfix_str(set_color("GPU RAM: " + gpu_usage, "yellow"))
