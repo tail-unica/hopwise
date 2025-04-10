@@ -17,6 +17,7 @@ jobs:
       lint_status: ${{ steps.test_code_format.outputs.status }}
 
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/workflows/sync.yml
         with:
           env: cu121
