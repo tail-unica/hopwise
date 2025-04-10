@@ -7,13 +7,10 @@
 # @Author : Xingyu Pan
 # @Email  : xy_pan@foxmail.com
 
+import logging
 import os
-import sys
 import tempfile
 import unittest
-
-sys.path.append(os.getcwd())
-import logging
 import warnings
 
 from hopwise.quick_start import run_hopwise
@@ -28,11 +25,11 @@ def run_params(parm_dict, extra_dict=None):
                 if extra_dict is not None:
                     config_dict.update(extra_dict)
                 try:
-                    run_hopwise(model="BPR", dataset="ml-100k", config_dict=config_dict, saved=False)
-                except Exception as e:
+                    run_hopwise(model="BPR", dataset="ml-100k", config_dict=config_dict)
+                except Exception:
                     print(f"\ntest `{name}`={parm} ... fail.\n")
-                    logging.critical(f"\ntest `{name}`={parm} ... fail.\n")
-                    logging.critical(f"\nError {e}.\n")
+                    logging.critical(f"\ntest `{name}`={parm} ... fail.\n", exc_info=True)
+
                     return False
     return True
 

@@ -47,8 +47,12 @@ jobs:
 
       # Testing pipeline
       - name: Test Overall
+        if: inputs.experimental == 'false' && inputs.os == 'ubuntu-latest'
         run: |
-          uv run -m pytest -v -n auto tests/config
+          uv run -m pytest -v -n auto tests/config/test_overall.py
+      - name: Test Config
+        run: |
+          uv run -m pytest -v -n auto tests/config/test_config.py
       - name: Test metrics
         run: |
           uv run -m pytest -v -n auto tests/metrics

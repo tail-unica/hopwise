@@ -347,6 +347,8 @@ class Dataset(torch.utils.data.Dataset):
         For those additional features, e.g. pretrained entity embedding, user can set them
         as ``config['additional_feat_suffix']``, then they will be loaded and stored in
         :attr:`feat_name_list`. See :doc:`../user_guide/data/data_settings` for details.
+        If ``config['preload_weight']`` and ``config['preload_weight_path']`` are set,
+        those additional features will be loaded from ``config['preload_weight_path']``.
 
         Args:
             token (str): dataset name.
@@ -357,7 +359,14 @@ class Dataset(torch.utils.data.Dataset):
         for suf in self.config["additional_feat_suffix"]:
             if hasattr(self, f"{suf}_feat"):
                 raise ValueError(f"{suf}_feat already exist.")
-            feat_path = os.path.join(dataset_path, f"{token}.{suf}")
+            preload_fields = self.config["preload_weight"]
+            load_col = self.config["load_col"]
+            if preload_fields is not None and any(col in load_col[suf] for col in preload_fields):
+                feat_path = self.config["preload_weight_path"] or dataset_path
+            else:
+                feat_path = dataset_path
+
+            feat_path = os.path.join(feat_path, f"{token}.{suf}")
             if os.path.isfile(feat_path):
                 feat = self._load_feat(feat_path, suf)
             else:
@@ -372,8 +381,8 @@ class Dataset(torch.utils.data.Dataset):
             source (FeatureSource): source of input file.
 
         Returns:
-            tuple: tuple of parsed ``load_col`` and ``unload_col``, see :doc:`../user_guide/data/data_args` for details.
-        """  # noqa: E501
+            tuple: tuple of parsed ``load_col`` and ``unload_col``, details on :doc:`../user_guide/data/data_args`.
+        """
         if isinstance(source, FeatureSource):
             source = source.value
         if self.config["load_col"] is None:
