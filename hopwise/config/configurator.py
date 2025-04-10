@@ -467,9 +467,9 @@ class Config:
                 raise ValueError(
                     f"train_neg_sample_args:[{self.final_config_dict['train_neg_sample_args']}] should be a dict."
                 )
-            for op_args in default_train_neg_sample_args:
+            for op_args, op_args_values in default_train_neg_sample_args.items():
                 if op_args not in self.final_config_dict["train_neg_sample_args"]:
-                    self.final_config_dict["train_neg_sample_args"][op_args] = default_train_neg_sample_args[op_args]
+                    self.final_config_dict["train_neg_sample_args"][op_args] = op_args_values
 
         # eval_args checking
         default_eval_args = {
