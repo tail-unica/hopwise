@@ -17,28 +17,35 @@ on:
         type: boolean
 
 jobs:
-  sync:
-    uses: ./.github/workflows/sync.yml
-    with:
-      env: ${{ inputs.env }}
-      python-version: ${{ inputs.python-version }}
-      os: ${{ inputs.os }}
-      experimental: ${{ inputs.experimental }}
-  test:
-    needs: sync
+  sync_and_test:
     runs-on: ${{ inputs.os }}
-    outputs:
-      test_status: ${{ steps.test_project.outputs.status }}
 
     steps:
       - uses: actions/checkout@v4
-      - name: Install project
-        uses: ./.github/workflows/sync.yml
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
         with:
-          env: ${{ inputs.env }}
           python-version: ${{ inputs.python-version }}
-          os: ${{ inputs.os }}
-          experimental: ${{ inputs.experimental }}
+
+      # Sync pipeline
+      - name: Install the project
+        run: |
+          uv sync --group ${{ inputs.env }}
+
+      - if: ${{ inputs.env == 'cu124' }}
+        run: |
+          uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
+      - if: ${{ inputs.env == 'cpu' }}
+        run: |
+          uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
+      - if: ${{ inputs.env == 'cu118' }}
+        run: |
+          uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu118.html
+      - if: ${{ inputs.env == 'cu121' }}
+        run: |
+          uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.3.1+cu121.html
+
+      # Testing pipeline
       - name: Test Overall
         run: |
           uv run -m pytest -v -n auto tests/config
@@ -58,7 +65,3 @@ jobs:
       - name: Test hyper_tuning
         run: |
           uv run -m pytest -v tests/hyper_tuning/test_hyper_tuning.py
-      - name: Output test status
-        id: test_project
-        run: |
-          echo "status=success" >> $GITHUB_OUTPUT
