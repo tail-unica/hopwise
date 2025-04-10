@@ -235,7 +235,7 @@ def run_hopwises(rank, *args):
     )
 
 
-def objective_function(config_dict=None, config_file_list=None, saved=True, callback_fn=None):
+def objective_function(config_dict=None, config_file_list=None, saved=True, show_progress=False, callback_fn=None):
     r"""The default objective_function used in HyperTuning
 
     Args:
@@ -258,7 +258,12 @@ def objective_function(config_dict=None, config_file_list=None, saved=True, call
     model = get_model(model_name)(config, train_data.dataset).to(config["device"])
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
     best_valid_score, best_valid_result = trainer.fit(
-        train_data, valid_data, verbose=False, saved=saved, callback_fn=callback_fn
+        train_data,
+        valid_data,
+        verbose=show_progress,
+        show_progress=show_progress,
+        saved=saved,
+        callback_fn=callback_fn,
     )
     if best_valid_result is not None:
         if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.REC in best_valid_score:

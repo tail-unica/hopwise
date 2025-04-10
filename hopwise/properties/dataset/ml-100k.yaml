@@ -57,6 +57,7 @@ tokenizer:                      # (dict) Tokenizer parameters.
 # Selectively Loading
 load_col:                       # (dict) The suffix of atomic files: (list) field names to be loaded.
     inter: [user_id, item_id, rating, timestamp]
+    user: [user_id, gender, age]
 unload_col: ~                   # (dict) The suffix of atomic files: (list) field names NOT to be loaded.
 unused_col: ~                   # (dict) The suffix of atomic files: (list) field names which are loaded but not used.
 

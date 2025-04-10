@@ -23,7 +23,7 @@ from hopwise.utils import InputType, KGPathExplanationTokenType
 
 
 class PGPR(KnowledgeRecommender, ExplainableRecommender):
-    input_type = InputType.PAIRWISE
+    input_type = InputType.USERWISE
 
     import warnings
 

@@ -111,8 +111,8 @@ class CumulativeSequenceScoreRanker:
         ):
             seq = self.tokenizer.decode(sequence).split(" ")
 
-            uid_token = seq[0]
-            recommended_token = seq[-1]
+            uid_token = seq[1]
+            recommended_token = seq[-2]
             if not (
                 uid_token.startswith(PathLanguageModelingTokenType.USER.value)
                 and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
@@ -197,10 +197,10 @@ class HFPathTrainer(Trainer):
         tokenized_used_ids = get_tokenized_used_ids(used_ids, self.processing_class)
 
         # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations
-        self.token_sequence_length = (1 + path_hop_length) + path_hop_length
+        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 2
 
         # TODO: add inference template as config param and use that instead of the hardcoded values
-        ranker_max_new_tokens = self.token_sequence_length - 2
+        ranker_max_new_tokens = self.token_sequence_length - 3
         self.ranker_rec = CumulativeSequenceScoreRanker(
             self.processing_class,
             used_ids,

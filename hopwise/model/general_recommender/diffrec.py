@@ -14,7 +14,6 @@ Reference code:
 import copy
 import enum
 import math
-import typing
 
 import numpy as np
 import torch
@@ -37,7 +36,7 @@ class DNN(nn.Module):
 
     def __init__(
         self,
-        dims: typing.List,
+        dims: list,
         emb_size: int,
         time_type="cat",
         act_func="tanh",
@@ -80,7 +79,7 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
     We implement the the DiffRec model with only user dataloader.
     """
 
-    input_type = InputType.LISTWISE
+    input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)

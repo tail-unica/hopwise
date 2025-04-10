@@ -47,10 +47,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
     def __init__(self, config):
         super().__init__(config)
-
         self._path_dataset = None  # path dataset is generated with generate_user_path_dataset
         self._tokenized_dataset = None  # tokenized dataset is generated with tokenize_path_dataset
         self._tokenizer = None
+        self.add_negatives_to_paths = (
+            False if config["add_negative_to_paths"] is None else config["add_negative_to_paths"]
+        )
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
@@ -259,11 +261,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         if self._path_dataset is None:
             generated_paths = self.generate_user_paths(used_ids)
+            if self.add_negatives_to_paths:
+                generated_paths = _add_negatives(generated_paths, used_ids, self.item_num)
 
             path_string = ""
             for path in generated_paths:
                 path_string += self._format_path(path) + "\n"
-
             self._path_dataset = path_string
 
     def generate_user_paths(self, used_ids):
@@ -612,6 +615,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         interleaved_entities_relations = zip_longest(remapped_path_nodes, relation_mapped_list)
         path_string = self.path_token_separator.join(list(chain(*interleaved_entities_relations))[:-1])
 
+        if self.add_negatives_to_paths:
+            path_string += f" {PathLanguageModelingTokenType.ITEM.value + str(path[-1])}"
+
         return path_string
 
     def _add_paths_relations(self, graph, paths):
@@ -955,3 +961,28 @@ def _add_paths_relations_parallel(paths, paths_with_relations, relation_map):
             paths_with_relations[path_idx, start_path] = path[node_idx]
             paths_with_relations[path_idx, start_path + 1] = edge_id
             paths_with_relations[path_idx, start_path + 2] = path[node_idx + 1]
+
+
+# @numba.jit(nopython=True, parallel=True)
+def _add_negatives(paths, used_ids, n_items):
+    """For each path, append at the end a negative item.
+    Args:
+        paths (list or ndarray): Array of paths of size (num_paths, sequence length).
+        used_ids (dict-like): Dictionary-like structure mapping user IDs to their positive items.
+    Returns:
+        ndarray: Paths with negative items appended
+    """
+    user_neg = []
+    for path in paths:
+        user_id = path[0]
+
+        user_pos_items = used_ids[user_id]
+        all_items = set(range(1, n_items))
+        negatives = list(all_items - user_pos_items)
+        neg_item = np.random.choice(negatives)
+        user_neg.append(neg_item)
+
+    user_neg = np.array(user_neg).reshape(-1, 1)
+    paths = np.hstack((paths, user_neg))
+
+    return paths

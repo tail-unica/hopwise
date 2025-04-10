@@ -533,7 +533,7 @@ class Trainer(AbstractTrainer):
         if not eval_data:
             return
 
-        self.eval_collector.eval_data_collect(eval_data)
+        # self.eval_collector.eval_data_collect(eval_data)
 
         if load_best_model:
             checkpoint_file = model_file or self.saved_model_file
@@ -1012,7 +1012,7 @@ class PGPRTrainer(Trainer):
     def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
         return super()._train_epoch(train_data, epoch_idx, show_progress=show_progress)
 
-    def _full_sort_batch_eval(self, batched_data):
+    def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
         paths = None
 
         interaction, history_index, positive_u, positive_i = batched_data
@@ -1025,15 +1025,15 @@ class PGPRTrainer(Trainer):
 
         except NotImplementedError:
             inter_len = len(interaction)
-            new_inter = interaction.to(self.device).repeat_interleave(self.tot_item_num)
+            new_inter = interaction.to(self.device).repeat_interleave(tot_item_num)
             batch_size = len(new_inter)
-            new_inter.update(self.item_tensor.repeat(inter_len))
+            new_inter.update(item_tensor.repeat(inter_len))
             if batch_size <= self.test_batch_size:
                 scores = self.model.predict(new_inter)
             else:
                 scores = self._split_predict(new_inter, batch_size)
 
-        scores = scores.view(-1, self.tot_item_num)
+        scores = scores.view(-1, tot_item_num)
         scores[:, 0] = -np.inf
         if history_index is not None:
             scores[history_index] = -np.inf
@@ -1052,6 +1052,37 @@ class CAFETrainer(Trainer):
 
     def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
         return super()._train_epoch(train_data, epoch_idx, show_progress=show_progress)
+
+    def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
+        paths = None
+
+        interaction, history_index, positive_u, positive_i = batched_data
+        try:
+            # Note: interaction without item ids
+            scores = self.model.full_sort_predict(interaction.to(self.device))
+            if isinstance(scores, tuple):
+                # then the first is the score, the second are paths
+                scores, paths = scores
+
+        except NotImplementedError:
+            inter_len = len(interaction)
+            new_inter = interaction.to(self.device).repeat_interleave(tot_item_num)
+            batch_size = len(new_inter)
+            new_inter.update(item_tensor.repeat(inter_len))
+            if batch_size <= self.test_batch_size:
+                scores = self.model.predict(new_inter)
+            else:
+                scores = self._split_predict(new_inter, batch_size)
+
+        scores = scores.view(-1, tot_item_num)
+        scores[:, 0] = -np.inf
+        if history_index is not None:
+            scores[history_index] = -np.inf
+
+        if paths is not None:
+            return interaction, (scores, paths), positive_u, positive_i
+        else:
+            return interaction, scores, positive_u, positive_i
 
 
 class KGATTrainer(Trainer):
@@ -1933,7 +1964,6 @@ class HFPathLanguageModelingTrainer(Trainer):
         callback_fn=None,
     ):
         self.eval_collector.train_data_collect(train_data)
-
         self.init_hf_trainer(
             train_data,
             valid_data=valid_data,

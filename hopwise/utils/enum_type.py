@@ -81,6 +81,7 @@ class InputType(Enum):
     PAIRWISE = 2
     LISTWISE = 3
     PATHWISE = 4
+    USERWISE = 5
 
 
 class FeatureType(Enum):

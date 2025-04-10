@@ -23,7 +23,7 @@ from hopwise.utils import InputType
 
 
 class CAFE(KnowledgeRecommender):
-    input_type = InputType.PAIRWISE
+    input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
@@ -53,7 +53,7 @@ class CAFE(KnowledgeRecommender):
 
         # Topk Candidates
         self.topk_user_products = self._compute_top_items()
-
+        self.dataset = dataset  # to remove
         # Turn into torch, so that the weight is updated.
         self.user_embedding = torch.from_numpy(self.user_embedding).to(device=self.device, dtype=torch.float32)
         self.entity_embedding = torch.from_numpy(self.entity_embedding).to(self.device, dtype=torch.float32)

@@ -191,7 +191,6 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         """
         self._dataset.generate_user_path_dataset(self.general_dataloader._sampler.used_ids)
         self._dataset.tokenize_path_dataset(phase=self.general_dataloader._sampler.phase)
-
         return self._dataset.tokenized_dataset
 
 
