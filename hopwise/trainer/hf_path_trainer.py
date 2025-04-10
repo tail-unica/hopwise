@@ -13,7 +13,7 @@ from transformers import (
 
 from hopwise.model.layers import ConstrainedLogitsProcessorWordLevel
 from hopwise.utils import (
-    PathLanuageModelingTokenType,
+    PathLanguageModelingTokenType,
     dict2str,
     early_stopping,
     get_gpu_usage,
@@ -99,6 +99,9 @@ class CumulativeSequenceScoreRanker:
         num_return_sequences = sequences.shape[0] // user_num
         batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
 
+        valid_sequences_mask = torch.logical_not(torch.isfinite(normalized_sequences_scores))
+        normalized_sequences_scores = torch.where(valid_sequences_mask, -torch.inf, normalized_sequences_scores)
+
         sorted_indices = normalized_sequences_scores.argsort(descending=True)
         sorted_sequences = sequences[sorted_indices]
         sorted_sequences_scores = normalized_sequences_scores[sorted_indices]
@@ -111,8 +114,8 @@ class CumulativeSequenceScoreRanker:
             uid_token = seq[0]
             recommended_token = seq[-1]
             if not (
-                uid_token.startswith(PathLanuageModelingTokenType.USER.value)
-                and recommended_token.startswith(PathLanuageModelingTokenType.ITEM.value)
+                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
+                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
             ):
                 continue
 
@@ -125,7 +128,7 @@ class CumulativeSequenceScoreRanker:
                 continue
 
             scores[user_index, recommended_item] = sequence_score
-            if user_index not in user_topk_sequences:
+            if uid not in user_topk_sequences:
                 user_topk_sequences[uid] = [seq]
             else:
                 user_topk_sequences[uid].append(seq)
@@ -142,8 +145,8 @@ def get_tokenized_used_ids(used_ids, tokenizer):
     Returns:
         dict: A dictionary where keys are tokenized user ids and values are lists of tokenized item ids.
     """
-    user_token_type = PathLanuageModelingTokenType.USER.value
-    item_token_type = PathLanuageModelingTokenType.ITEM.value
+    user_token_type = PathLanguageModelingTokenType.USER.value
+    item_token_type = PathLanguageModelingTokenType.ITEM.value
 
     tokenized_used_ids = {}
     for uid in range(used_ids.shape[0]):
@@ -288,7 +291,7 @@ class HFPathTrainer(Trainer):
         )
         scores, user_topk_sequences = ranker.get_sequences(inputs["input_ids"].shape[0], outputs)
 
-        return scores
+        return scores, user_topk_sequences
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)
@@ -346,7 +349,8 @@ class HopwiseCallback(TrainerCallback):
         )
 
     def on_epoch_end(self, args, state, control, **kwargs):
-        self.progress_bar.close()
+        if self.show_progress:
+            self.progress_bar.close()
         training_end_time = time()
         # Retrieve training loss and other information
         if state.log_history:
@@ -377,7 +381,8 @@ class HopwiseCallback(TrainerCallback):
 
     def on_step_end(self, args, state, control, **kwargs):
         control.should_log = True
-        self.progress_bar.update(1)
+        if self.show_progress:
+            self.progress_bar.update(1)
         if self.hopwise_trainer.gpu_available and self.show_progress:
             gpu_usage = get_gpu_usage(self.hopwise_trainer.device)
             self.progress_bar.set_postfix_str(set_color("GPU RAM: " + gpu_usage, "yellow"))

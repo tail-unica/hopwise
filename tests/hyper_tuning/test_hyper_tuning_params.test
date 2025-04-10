@@ -1,0 +1,6 @@
+learning_rate loguniform -8,0
+weight_decay uniform 0,1
+train_neg_sample_args.alpha quniform 1,5,1
+embedding_size choice [64,128]
+train_batch_size choice [512,1024,2048]
+mlp_hidden_size choice ['[64,64,64]','[128,128]']

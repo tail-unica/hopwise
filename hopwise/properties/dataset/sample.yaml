@@ -79,7 +79,6 @@ tokenizer:                      # (dict) Tokenizer parameters.
         bos_token: "[BOS]"      # (str) Beginning of sequence token.
         sep_token: "[SEP]"      # (str) Separator token.
         cls_token: "[CLS]"      # (str) Classification token.
-    template: "{bos_token}:0 $A:0 {eos_token}"                # (str) Template for the tokenizer.
 
 # Benchmark .inter file
 benchmark_filename: ~           # (list) List of pre-split user-item interaction suffix.
