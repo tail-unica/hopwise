@@ -1829,7 +1829,7 @@ class Dataset(torch.utils.data.Dataset):
             D = diags(diag)
             L = D @ A
 
-        # covert norm_adj matrix to tensor
+        # convert norm_adj matrix to tensor
         L = coo_matrix(L)
         row = L.row
         col = L.col

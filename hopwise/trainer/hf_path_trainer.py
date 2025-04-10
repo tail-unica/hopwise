@@ -13,7 +13,7 @@ from transformers import (
 
 from hopwise.model.layers import ConstrainedLogitsProcessorWordLevel
 from hopwise.utils import (
-    PathLanuageModelingTokenType,
+    PathLanguageModelingTokenType,
     dict2str,
     early_stopping,
     get_gpu_usage,
@@ -114,8 +114,8 @@ class CumulativeSequenceScoreRanker:
             uid_token = seq[0]
             recommended_token = seq[-1]
             if not (
-                uid_token.startswith(PathLanuageModelingTokenType.USER.value)
-                and recommended_token.startswith(PathLanuageModelingTokenType.ITEM.value)
+                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
+                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
             ):
                 continue
 
@@ -145,8 +145,8 @@ def get_tokenized_used_ids(used_ids, tokenizer):
     Returns:
         dict: A dictionary where keys are tokenized user ids and values are lists of tokenized item ids.
     """
-    user_token_type = PathLanuageModelingTokenType.USER.value
-    item_token_type = PathLanuageModelingTokenType.ITEM.value
+    user_token_type = PathLanguageModelingTokenType.USER.value
+    item_token_type = PathLanguageModelingTokenType.ITEM.value
 
     tokenized_used_ids = {}
     for uid in range(used_ids.shape[0]):

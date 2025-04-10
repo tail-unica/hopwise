@@ -15,7 +15,7 @@ from transformers import PreTrainedTokenizerFast
 
 from hopwise.data import Interaction
 from hopwise.data.dataset import KnowledgeBasedDataset
-from hopwise.utils import PathLanuageModelingTokenType, set_color
+from hopwise.utils import PathLanguageModelingTokenType, set_color
 
 
 class KnowledgePathDataset(KnowledgeBasedDataset):
@@ -127,10 +127,10 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         entity_range = np.arange(self.item_num, self.entity_num)  # only entities that are not items are considered
         token_vocab = np.concatenate(
             [
-                np.char.add(PathLanuageModelingTokenType.USER.value, np.arange(self.user_num).astype(str)),
-                np.char.add(PathLanuageModelingTokenType.ITEM.value, np.arange(self.item_num).astype(str)),
-                np.char.add(PathLanuageModelingTokenType.ENTITY.value, entity_range.astype(str)),
-                np.char.add(PathLanuageModelingTokenType.RELATION.value, np.arange(self.relation_num).astype(str)),
+                np.char.add(PathLanguageModelingTokenType.USER.value, np.arange(self.user_num).astype(str)),
+                np.char.add(PathLanguageModelingTokenType.ITEM.value, np.arange(self.item_num).astype(str)),
+                np.char.add(PathLanguageModelingTokenType.ENTITY.value, entity_range.astype(str)),
+                np.char.add(PathLanguageModelingTokenType.RELATION.value, np.arange(self.relation_num).astype(str)),
             ]
         )
 
@@ -170,12 +170,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 term_id = term
                 if term_type == "node":
                     if vertex_metadata[term_id]["type"] == self.uid_field:
-                        prefix = PathLanuageModelingTokenType.USER.value
+                        prefix = PathLanguageModelingTokenType.USER.value
                     elif vertex_metadata[term_id]["type"] == self.iid_field:
                         term_id -= self.user_num
-                        prefix = PathLanuageModelingTokenType.ITEM.value
+                        prefix = PathLanguageModelingTokenType.ITEM.value
                     elif vertex_metadata[term_id]["type"] == self.entity_field:
-                        prefix = PathLanuageModelingTokenType.ENTITY.value
+                        prefix = PathLanguageModelingTokenType.ENTITY.value
                         term_id -= self.user_num
                     else:
                         raise ValueError(
@@ -183,7 +183,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                             "in igraph during tokenized_kg generation."
                         )
                 else:
-                    prefix = PathLanuageModelingTokenType.RELATION.value
+                    prefix = PathLanguageModelingTokenType.RELATION.value
 
                 token_id = token_vocab[prefix + str(term_id)]
                 ret.append(token_id)
@@ -587,7 +587,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return user_check and pos_iid_check and valid_path and check_rec_iid
 
     def _format_path(self, path):
-        """Format the path to a string according to :class:`~hopwise.utils.enum_type.PathLanuageModelingTokenType`.
+        """Format the path to a string according to :class:`~hopwise.utils.enum_type.PathLanguageModelingTokenType`.
 
         Args:
             path (list): The path to be formatted.
@@ -601,13 +601,13 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         graph_max_iid = self.item_num - 1 + self.user_num
         for node in path_nodes:
             if graph_min_iid <= node <= graph_max_iid:
-                remapped_path_nodes.append(PathLanuageModelingTokenType.ITEM.value + str(node - self.user_num))
+                remapped_path_nodes.append(PathLanguageModelingTokenType.ITEM.value + str(node - self.user_num))
             elif node < graph_min_iid:
-                remapped_path_nodes.append(PathLanuageModelingTokenType.USER.value + str(node))
+                remapped_path_nodes.append(PathLanguageModelingTokenType.USER.value + str(node))
             else:
-                remapped_path_nodes.append(PathLanuageModelingTokenType.ENTITY.value + str(node - self.user_num))
+                remapped_path_nodes.append(PathLanguageModelingTokenType.ENTITY.value + str(node - self.user_num))
 
-        relation_mapped_list = [PathLanuageModelingTokenType.RELATION.value + str(r) for r in path_relations]
+        relation_mapped_list = [PathLanguageModelingTokenType.RELATION.value + str(r) for r in path_relations]
 
         interleaved_entities_relations = zip_longest(remapped_path_nodes, relation_mapped_list)
         path_string = self.path_token_separator.join(list(chain(*interleaved_entities_relations))[:-1])
