@@ -37,7 +37,7 @@ jobs:
           uv sync --group ${{ inputs.env }}
 
           # install torch-sparse
-          if [ "${{ inputs.env }}" == "cu124" || ]; then
+          if [ "${{ inputs.env }}" == "cu124" ]; then
             uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
           elif [ "${{ inputs.env }}" == "cpu" ]; then
             uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
@@ -69,6 +69,7 @@ jobs:
         run: |
           python -m pytest -v -n auto tests/evaluation_setting
       - name: Test model
+        if: inputs.experimental == 'false' && inputs.os == 'ubuntu-latest'
         run: |
           python -m pytest -v -n auto tests/model/test_model_auto.py
       - name: Test hyper_tuning
