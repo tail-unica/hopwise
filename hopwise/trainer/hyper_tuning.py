@@ -161,7 +161,9 @@ class HyperTuning:
         early_stop=10,
         output_path=None,
         timeout=None,
+        show_progress=False,
         study_name=None,
+        load_previous_study=False,
     ):
         self.tuner = self.TUNER_TYPES[tuner.upper()]
         self.best_score = None
@@ -171,11 +173,13 @@ class HyperTuning:
         self.params_list = []
         self.score_list = []
 
+        self.show_progress = show_progress
         self.objective_function = objective_function
         self.max_evals = max_evals
         self.timeout = timeout
         self.fixed_config_file_list = fixed_config_file_list
         self.display_file = display_file
+        self.load_previous_study = load_previous_study
         self.output_path = output_path or "."
         if not os.path.exists(self.output_path):
             os.makedirs(self.output_path)
@@ -513,7 +517,9 @@ class HyperTuning:
         params_str = self.params2str(params)
         self.params_list.append(params_str)
         print("running parameters:", config_dict)
-        result_dict = self.objective_function(config_dict, self.fixed_config_file_list)
+        result_dict = self.objective_function(
+            config_dict, self.fixed_config_file_list, show_progress=self.show_progress
+        )
         self.params2result[params_str] = result_dict
         model, score, bigger = (
             result_dict["model"],
@@ -647,6 +653,7 @@ class HyperTuning:
                 storage=f"sqlite:///{os.path.join(self.output_path, self.study_name)}.db",
                 pruner=self.algo["pruner"],
                 sampler=self.algo["sampler"],
+                load_if_exists=self.load_previous_study,
             )
 
             update_objective_function = True

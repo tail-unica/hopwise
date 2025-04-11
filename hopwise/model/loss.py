@@ -18,6 +18,34 @@ import torch.nn.functional as F
 from torch import nn
 
 
+class SSMLoss(nn.Module):
+    """Samples Softmax Loss (SSM) according to the implementation in"""
+
+    def __init__(self, cosine_sim=True, temperature=1.0, eps=1e-7):
+        super().__init__()
+        self.cosine_sim = cosine_sim
+        self.temperature = temperature
+        self.eps = eps
+
+    def forward(self, user_emb, pos_item_emb, neg_item_emb):
+        if self.cosine_sim:
+            user_emb = nn.functional.normalize(user_emb, p=2, dim=-1)
+            pos_item_emb = nn.functional.normalize(pos_item_emb, p=2, dim=-1)
+            neg_item_emb = nn.functional.normalize(neg_item_emb, p=2, dim=-1)
+
+        pos_score = torch.mul(user_emb, pos_item_emb).sum(dim=1, keepdim=True)
+        neg_score = torch.einsum("ijk, ik->ij", neg_item_emb, user_emb)
+
+        # Temperatue-aware
+        pos_score = torch.exp(pos_score / self.temperature)
+        neg_score = torch.exp(neg_score / self.temperature).sum(dim=1, keepdim=True)
+
+        total_score = pos_score + neg_score
+        nce_loss = -(pos_score / total_score + self.eps).log().sum()
+
+        return nce_loss
+
+
 class BPRLoss(nn.Module):
     """BPRLoss, based on Bayesian Personalized Ranking
 

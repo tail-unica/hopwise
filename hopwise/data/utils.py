@@ -282,7 +282,6 @@ def data_preparation(config, dataset):
             train_data = get_dataloader(config, "train")(
                 config, train_dataset, train_sampler, shuffle=config["shuffle"]
             )
-
             valid_data = get_dataloader(config, "valid")(config, valid_dataset, valid_sampler, shuffle=False)
             test_data = get_dataloader(config, "test")(config, test_dataset, test_sampler, shuffle=False)
 
@@ -340,23 +339,8 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
             DeprecationWarning,
         )
 
-    register_table = {
-        "MultiDAE": _get_user_dataloader,
-        "MultiVAE": _get_user_dataloader,
-        "MacridVAE": _get_user_dataloader,
-        "CDAE": _get_user_dataloader,
-        "ENMF": _get_user_dataloader,
-        "RaCT": _get_user_dataloader,
-        "RecVAE": _get_user_dataloader,
-        "DiffRec": _get_user_dataloader,
-        "LDiffRec": _get_user_dataloader,
-        "PGPR": _get_user_dataloader,
-        "CAFE": _get_user_dataloader,
-        "UCPR": _get_user_dataloader,
-    }
-
-    if config["model"] in register_table:
-        return register_table[config["model"]](config, phase)
+    if config["MODEL_INPUT_TYPE"] == InputType.USERWISE:
+        return _get_user_dataloader(config, phase)
 
     model_type = config["MODEL_TYPE"]
     if phase == "train":

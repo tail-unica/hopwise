@@ -10,6 +10,8 @@
 import argparse
 from datetime import datetime
 
+from setproctitle import setproctitle
+
 from hopwise.quick_start import objective_function
 from hopwise.trainer import HyperTuning
 
@@ -24,10 +26,12 @@ def tune(args):
         early_stop=10,
         max_evals=args.max_evals,
         params_file=args.params_file,
-        fixed_config_file_list=config_file_list,
+        fixed_config_file_list=args.config_file_list,
         display_file=args.display_file,
         output_path=args.output_path,
         study_name=args.study_name,
+        show_progress=args.show_progress,
+        load_previous_study=args.load_previous_study,
     )
     ht.run()
     ht.export_result(output_path=args.output_path)
@@ -38,11 +42,21 @@ def tune(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("params_file", type=str, help="parameters file")
+    parser.add_argument("--params_file", type=str, help="parameters file")
     parser.add_argument("--config_files", type=str, default=None, help="fixed config files")
     parser.add_argument("--output_path", type=str, default="saved/hyper", help="output file")
     parser.add_argument("--display_file", type=str, default=None, help="visualization file")
     parser.add_argument("--max_evals", type=int, default=10, help="max evaluations")
+    parser.add_argument(
+        "--load_previous_study",
+        type=bool,
+        default=True,
+        help="if true and study_name exists in sqlite db, load previous study",
+    )
+    parser.add_argument("--proc_title", type=str, default=None, help="processor title, shown in top, nvidia-smi, ecc.")
+    parser.add_argument(
+        "--show_progress", type=bool, default=True, help="whether to show progress bar during training and evaluation"
+    )
     tool_action = parser.add_argument(
         "--tool", type=str, default="optuna", choices=["hyperopt", "ray", "optuna"], help="tuning tool"
     )
@@ -66,6 +80,10 @@ if __name__ == "__main__":
     )
     args, _ = parser.parse_known_args()
 
-    config_file_list = args.config_files.strip().split(" ") if args.config_files else None
+    args.config_file_list = args.config_files.strip().split(" ") if args.config_files else None
+
+    if args.proc_title is None:
+        args.proc_title = f"[hopwise - hyper] {args.study_name}"
+    setproctitle(args.proc_title)
 
     tune(args)

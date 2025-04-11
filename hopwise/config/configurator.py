@@ -267,9 +267,6 @@ class Config:
         knowledge_base_init = os.path.join(quick_start_config_path, "knowledge_base.yaml")
         knowledge_base_on_ml_100k_init = os.path.join(quick_start_config_path, "knowledge_base_on_ml-100k.yaml")
         knowledge_path_base_init = os.path.join(quick_start_config_path, "knowledge_path_base.yaml")
-        knowledge_path_base_on_ml_100k_init = os.path.join(
-            quick_start_config_path, "knowledge_path_base_on_ml-100k.yaml"
-        )
 
         self.internal_config_dict = dict()
         for file in [
@@ -317,7 +314,7 @@ class Config:
         elif self.internal_config_dict["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
             self._update_internal_config_dict(knowledge_path_base_init)
             if dataset == "ml-100k":
-                self._update_internal_config_dict(knowledge_path_base_on_ml_100k_init)
+                self._update_internal_config_dict(knowledge_base_on_ml_100k_init)
 
         for file in [
             dataset_init_file,

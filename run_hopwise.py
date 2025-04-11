@@ -9,6 +9,8 @@
 
 import argparse
 
+from setproctitle import setproctitle
+
 from hopwise.quick_start import run
 
 if __name__ == "__main__":
@@ -21,6 +23,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=str, default="5678", help="the port of master node")
     parser.add_argument("--world_size", type=int, default=-1, help="total number of jobs")
     parser.add_argument("--mode", default="train", choices=["train", "evaluate"], help="run mode")
+    parser.add_argument("--proc_title", type=str, default=None, help="processor title, shown in top, nvidia-smi, ecc.")
     parser.add_argument("--checkpoint", default=None, help="checkpoint (.pth) file")
     parser.add_argument(
         "--group_offset",
@@ -30,6 +33,10 @@ if __name__ == "__main__":
     )
 
     args, _ = parser.parse_known_args()
+
+    if args.proc_title is None:
+        args.proc_title = f"[hopwise] {args.model} {args.dataset} {args.mode}"
+    setproctitle(args.proc_title)
 
     config_file_list = args.config_files.strip().split(" ") if args.config_files else None
 

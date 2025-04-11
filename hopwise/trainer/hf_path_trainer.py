@@ -111,8 +111,8 @@ class CumulativeSequenceScoreRanker:
         ):
             seq = self.tokenizer.decode(sequence).split(" ")
 
-            uid_token = seq[0]
-            recommended_token = seq[-1]
+            uid_token = seq[1]
+            recommended_token = seq[-2]
             if not (
                 uid_token.startswith(PathLanguageModelingTokenType.USER.value)
                 and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
@@ -168,8 +168,6 @@ class HFPathTrainer(Trainer):
         path_hop_length=3,
         paths_per_user=10,
         path_generation_args=None,
-        # paths_per_head=50,  # n_sequences_lp
-        # n_beams_lp=50,
         eval_device="cpu",
     ):
         hopwise_dataset = hopwise_train_data.dataset
@@ -190,9 +188,7 @@ class HFPathTrainer(Trainer):
         self.hopwise_config = hopwise_config
 
         self.paths_per_user = paths_per_user
-        # self.N_RET_SEQ_LP = n_sequences_lp
         self.path_generation_args = path_generation_args
-        # self.N_BEAMS_LP = n_beams_lp
 
         self.path_hop_length = path_hop_length
         self.eval_device = eval_device
@@ -201,10 +197,10 @@ class HFPathTrainer(Trainer):
         tokenized_used_ids = get_tokenized_used_ids(used_ids, self.processing_class)
 
         # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations
-        self.token_sequence_length = (1 + path_hop_length) + path_hop_length
+        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 2
 
         # TODO: add inference template as config param and use that instead of the hardcoded values
-        ranker_max_new_tokens = self.token_sequence_length - 2
+        ranker_max_new_tokens = self.token_sequence_length - 3
         self.ranker_rec = CumulativeSequenceScoreRanker(
             self.processing_class,
             used_ids,
@@ -212,29 +208,6 @@ class HFPathTrainer(Trainer):
             topk=10,
             max_new_tokens=ranker_max_new_tokens,
         )
-
-        # Link Prediction Data
-        # self.SEQUENCE_LEN_LP = 3 + 1
-        # self.test_set_lp = get_set_lp(dataset_name, "test")
-        # heads_lp = [head for head, rel in self.test_set_lp.keys()]
-        # relations_lp = [rel for head, rel in self.test_set_lp.keys()]
-
-        # self.product_entities = [int(h) for h in get_dataset_id2eid(dataset_name, "product").values()]
-        # self.all_entities, self.positive_triplets, self.positive_triplets_token_ids = (
-        #     get_kg_positives_and_tokens_ids_lp(dataset_name, tokenizer)
-        # )
-
-        # def init_condition_fn_lp(head, rel):
-        #     return f"[BOS] E{head} R{rel}" if head not in self.product_entities else f"[BOS] P{head} R{rel}"
-
-        # self.inference_paths_lp = {
-        #     "eid_rid": [init_condition_fn_lp(head, rel) for head, rel in zip(heads_lp, relations_lp)]
-        # }
-        # self.ranker_lp = RankerLP(
-        #     tokenizer, kg_positives=self.positive_triplets, K=10, max_new_tokens=self.SEQUENCE_LEN_LP
-        # )
-        # self.test_dataset_lp = Dataset.from_dict(self.inference_paths_lp)
-        # print(f"Sequence length rec: {self.token_sequence_length}")  # , lp: {self.SEQUENCE_LEN_LP}")
 
         self.logits_processor_rec = LogitsProcessorList(
             [
@@ -248,19 +221,6 @@ class HFPathTrainer(Trainer):
                 )
             ]
         )
-
-        # self.logits_processor_lp = LogitsProcessorList(
-        #     [
-        #         ConstrainedLogitsProcessorLP(
-        #             tokenized_kg=tokenized_kg,
-        #             positive_token_map=self.positive_triplets_token_ids,
-        #             tokenizer=tokenizer,
-        #             total_length=self.SEQUENCE_LEN_LP,
-        #             num_return_sequences=self.paths_per_user,
-        #             eos_token_ids=[self.processing_class.convert_tokens_to_ids(self.processing_class.eos_token)],
-        #         )
-        #     ]
-        # )
 
     def _full_sort_batch_eval(self, inputs, task="rec"):
         if isinstance(self.model, torch.nn.DataParallel):
