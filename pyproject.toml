@@ -152,6 +152,7 @@ lint = [
 ]
 dev = [
   "hopwise[all-models]",
+  "hopwise[hyper]",
   "plotly",
   "opentsne",
   "nbformat",
