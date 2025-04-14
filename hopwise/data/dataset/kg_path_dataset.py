@@ -5,10 +5,9 @@ from itertools import chain, zip_longest
 import joblib
 import numba
 import numpy as np
-from datasets import Dataset as HuggingFaceDataset
-from datasets import DatasetDict
 from tokenizers import Tokenizer, pre_tokenizers
 from tokenizers import models as token_models
+from tokenizers import processors as token_processors
 from tokenizers import trainers as token_trainers
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerFast
@@ -48,8 +47,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def __init__(self, config):
         super().__init__(config)
 
-        self._path_dataset = None  # path dataset is generated with generate_user_path_dataset
-        self._tokenized_dataset = None  # tokenized dataset is generated with tokenize_path_dataset
+        self._path_dataset = None
         self._tokenizer = None
 
     def _get_field_from_config(self):
@@ -59,6 +57,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         # Path sampling parameters
         self.path_hop_length = self.config["path_hop_length"]
+        assert self.path_hop_length % 2 == 1, "Path hop length must be odd"
         self.max_paths_per_user = self.config["MAX_PATHS_PER_USER"]
 
         path_sample_args = self.config["path_sample_args"]
@@ -74,14 +73,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self.tokenizer_model = self.config["tokenizer"]["model"]
 
         # Special tokens
-        self.unk_token = self.config["tokenizer"]["special_tokens"]["unk_token"]
-        self.pad_token = self.config["tokenizer"]["special_tokens"]["pad_token"]
-        self.eos_token = self.config["tokenizer"]["special_tokens"]["eos_token"]
-        self.bos_token = self.config["tokenizer"]["special_tokens"]["bos_token"]
-        self.sep_token = self.config["tokenizer"]["special_tokens"]["sep_token"]
-        self.cls_token = self.config["tokenizer"]["special_tokens"]["cls_token"]
-        self.mask_token = self.config["tokenizer"]["special_tokens"]["mask_token"]
-        self.special_tokens = list(self.config["tokenizer"]["special_tokens"].values())
+        if self.config["tokenizer"]["special_tokens"] is not None:
+            for token_name, token_value in self.config["tokenizer"]["special_tokens"].items():
+                setattr(self, token_name, token_value)
+            self.special_tokens = list(self.config["tokenizer"]["special_tokens"].values())
+        else:
+            self.special_tokens = []
 
         self.logger.debug(set_color("tokenizer", "blue") + f": {self.tokenizer_model}")
 
@@ -96,14 +93,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             return self._path_dataset
 
     @property
-    def tokenized_dataset(self):
-        if self._tokenized_dataset is None:
-            self.logger.warning("Path dataset has not been tokenized yet, please call tokenize_path_dataset() first.")
-            return None
-        else:
-            return self._tokenized_dataset
-
-    @property
     def tokenizer(self):
         if self._tokenizer is None:
             self._init_tokenizer()
@@ -116,7 +105,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return df
 
     def _init_tokenizer(self):
-        """Initialize tokenizer for the dataset."""
+        """Initialize tokenizer. The tokenizer is created in the dataset to be shared across dataloaders.u"""
         tokenizer_model_class = getattr(token_models, self.tokenizer_model)
 
         tokenizer_object = Tokenizer(tokenizer_model_class(unk_token=self.unk_token))
@@ -140,6 +129,14 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         )
 
         tokenizer_object.train_from_iterator(token_vocab, trainer=tokenizer_trainer)
+
+        tokenizer_object.post_processor = token_processors.TemplateProcessing(
+            single=f"{self.bos_token} $A {self.eos_token}",
+            special_tokens=[
+                (spec_token, tokenizer_object.token_to_id(spec_token))
+                for spec_token in [self.bos_token, self.eos_token]
+            ],
+        )
 
         self._tokenizer = PreTrainedTokenizerFast(
             tokenizer_object=tokenizer_object,
@@ -223,23 +220,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             tokenized_kg[tail_token][relation_token].add(head_token)
 
         return tokenized_kg
-
-    def tokenize_path_dataset(self, phase="train"):
-        """Tokenize the path dataset.
-
-        Args:
-            phase (str, optional): The phase for which the path dataset is used. Defaults to "train".
-        """
-
-        if self._tokenized_dataset is None:
-
-            def tokenization(example):
-                return self.tokenizer(example["path"], truncation=True, padding=True, max_length=self.context_length)
-
-            hf_path_dataset = HuggingFaceDataset.from_dict({"path": self.path_dataset.split("\n")})
-            tokenized_dataset = hf_path_dataset.map(tokenization, batched=True, remove_columns=["path"])
-            tokenized_dataset = DatasetDict({phase: tokenized_dataset})
-            self._tokenized_dataset = tokenized_dataset
 
     def generate_user_path_dataset(self, used_ids):
         """Generate path dataset by sampling paths from the knowledge graph.

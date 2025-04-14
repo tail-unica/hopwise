@@ -71,7 +71,7 @@ class CumulativeSequenceScoreRanker:
         self.topk = topk
 
     def calculate_sequence_scores(self, normalized_tuple, sequences):
-        last_5_tokens = sequences[:, -self.max_new_tokens :]
+        last_5_tokens = sequences[:, -self.max_new_tokens - 1 : -1]
         sequence_scores = []
         # Iterate over each tensor in the normalized tuple
         for i in range(self.max_new_tokens):
@@ -109,7 +109,7 @@ class CumulativeSequenceScoreRanker:
         for user_index, sequence, sequence_score in zip(
             sorted_batch_user_index, sorted_sequences, sorted_sequences_scores
         ):
-            seq = self.tokenizer.decode(sequence).split(" ")
+            seq = self.tokenizer.decode(sequence[1:-1]).split(" ")
 
             uid_token = seq[0]
             recommended_token = seq[-1]
@@ -178,7 +178,7 @@ class HFPathTrainer(Trainer):
             model=model,
             args=args,
             callbacks=None,
-            train_dataset=hopwise_dataset.tokenized_dataset["train"],
+            train_dataset=hopwise_train_data.tokenized_dataset["train"],
             eval_dataset="none",
             processing_class=tokenizer,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
@@ -200,11 +200,11 @@ class HFPathTrainer(Trainer):
         used_ids = hopwise_train_data.general_dataloader._sampler.used_ids
         tokenized_used_ids = get_tokenized_used_ids(used_ids, self.processing_class)
 
-        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations
-        self.token_sequence_length = (1 + path_hop_length) + path_hop_length
+        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
+        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 2
 
         # TODO: add inference template as config param and use that instead of the hardcoded values
-        ranker_max_new_tokens = self.token_sequence_length - 2
+        ranker_max_new_tokens = self.token_sequence_length - 4
         self.ranker_rec = CumulativeSequenceScoreRanker(
             self.processing_class,
             used_ids,
@@ -335,7 +335,7 @@ class HopwiseCallback(TrainerCallback):
     def on_epoch_begin(self, args, state, control, **kwargs):
         self.training_start_time = time()
 
-        len_hf_dataloader = len(self.train_data.dataset.tokenized_dataset["train"])
+        len_hf_dataloader = len(self.train_data.tokenized_dataset["train"])
         steps_in_epoch = len_hf_dataloader // self.hopwise_trainer.config["train_batch_size"]
         steps_in_epoch += int(len_hf_dataloader % self.hopwise_trainer.config["train_batch_size"] > 0)
         self.progress_bar = (
