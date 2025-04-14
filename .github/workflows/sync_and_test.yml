@@ -12,7 +12,7 @@ on:
       os:
         required: true
         type: string
-      experimental:
+      experimental_or_skip_heavy_tests:
         required: true
         type: boolean
 
@@ -47,7 +47,7 @@ jobs:
 
       # Testing pipeline
       - name: Test Overall
-        if: inputs.experimental == 'false' && inputs.os == 'ubuntu-latest'
+        if: ${{ inputs.experimental_or_skip_heavy_tests == 'false' && inputs.os == 'ubuntu-latest' }}
         run: |
           uv run -m pytest -v -n auto tests/config/test_overall.py
       - name: Test Config
@@ -63,7 +63,7 @@ jobs:
         run: |
           uv run -m pytest -v -n auto tests/evaluation_setting
       - name: Test model
-        if: inputs.experimental == 'false' && inputs.os == 'ubuntu-latest'
+        if: ${{ inputs.experimental_or_skip_heavy_tests == 'false' && inputs.os == 'ubuntu-latest' }}
         run: |
           uv run -m pytest -v -n auto tests/model/test_model_auto.py
       - name: Test hyper_tuning
