@@ -71,12 +71,12 @@ class CumulativeSequenceScoreRanker:
         self.topk = topk
 
     def calculate_sequence_scores(self, normalized_tuple, sequences):
-        last_5_tokens = sequences[:, -self.max_new_tokens - 1 : -1]
+        new_sequence_tokens = sequences[:, -self.max_new_tokens - 1 : -1]
         sequence_scores = []
         # Iterate over each tensor in the normalized tuple
         for i in range(self.max_new_tokens):
-            # Get the probabilities corresponding to the ith token in last_5_tokens
-            probs = normalized_tuple[i].gather(1, last_5_tokens[:, [i]])
+            # Get the probabilities corresponding to the ith token in new_sequence_tokens
+            probs = normalized_tuple[i].gather(1, new_sequence_tokens[:, [i]])
             sequence_scores.append(probs)
         # Convert the list of tensors into a single tensor
         sequence_scores = torch.cat(sequence_scores, dim=-1)

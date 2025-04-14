@@ -105,7 +105,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return df
 
     def _init_tokenizer(self):
-        """Initialize tokenizer. The tokenizer is created in the dataset to be shared across dataloaders.u"""
+        """Initialize tokenizer. The tokenizer is created in the dataset to be shared across dataloaders."""
         tokenizer_model_class = getattr(token_models, self.tokenizer_model)
 
         tokenizer_object = Tokenizer(tokenizer_model_class(unk_token=self.unk_token))
