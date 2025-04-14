@@ -34,16 +34,16 @@ jobs:
 
       - if: ${{ inputs.env == 'cu124' }}
         run: |
-          uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
       - if: ${{ inputs.env == 'cpu' }}
         run: |
-          uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
       - if: ${{ inputs.env == 'cu118' }}
         run: |
-          uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu118.html
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cu118.html
       - if: ${{ inputs.env == 'cu121' }}
         run: |
-          uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.3.1+cu121.html
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.3.1+cu121.html
 
       # Testing pipeline
       - name: Test Overall
