@@ -121,19 +121,12 @@ class KnowledgeBasedDataset(Dataset):
         relation_kg_num = Counter(self.kg_feat[self.relation_field].values) if relation_kg_num_interval else Counter()
 
         while True:
-            ban_head_entities = self._get_illegal_ids_by_inter_num(
-                field=self.head_entity_field,
+            ban_entities = self._get_illegal_ids_by_inter_num(
+                field=f"{self.head_entity_field}-{self.tail_entity_field}",
                 feat=None,
                 inter_num=entity_kg_num,
                 inter_interval=entity_kg_num_interval,
             )
-            ban_tail_entities = self._get_illegal_ids_by_inter_num(
-                field=self.tail_entity_field,
-                feat=None,
-                inter_num=entity_kg_num,
-                inter_interval=entity_kg_num_interval,
-            )
-            ban_entities = ban_head_entities | ban_tail_entities
             ban_relations = self._get_illegal_ids_by_inter_num(
                 field=self.relation_field,
                 feat=None,
@@ -1228,50 +1221,35 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             return
 
         entity_kg_num = Counter()
-        if entity_kg_num_interval is not None:
+        if entity_kg_num_interval is not None or user_entity_kg_num_interval is not None:
             head_entity_kg_num = Counter(self.kg_feat[self.head_entity_field].values)
             tail_entity_kg_num = Counter(self.kg_feat[self.tail_entity_field].values)
             entity_kg_num = head_entity_kg_num + tail_entity_kg_num
         relation_kg_num = Counter(self.kg_feat[self.relation_field].values) if relation_kg_num_interval else Counter()
 
         while True:
-            item_ban_head_entities = self._get_illegal_ids_by_inter_num(
-                field=self.head_entity_field,
+            item_entity_kg_num = Counter({k: v for k, v in entity_kg_num.items() if k not in self.entity2user})
+
+            item_ban_entities = self._get_illegal_ids_by_inter_num(
+                field=f"{self.head_entity_field}-{self.tail_entity_field}",
                 feat=None,
-                inter_num=entity_kg_num,
-                inter_interval=entity_kg_num_interval,
-            )
-            item_ban_tail_entities = self._get_illegal_ids_by_inter_num(
-                field=self.tail_entity_field,
-                feat=None,
-                inter_num=entity_kg_num,
+                inter_num=item_entity_kg_num,
                 inter_interval=entity_kg_num_interval,
             )
 
-            item_ban_head_entities = {ent for ent in item_ban_head_entities if ent not in self.entity2user}
-            item_ban_tail_entities = {ent for ent in item_ban_tail_entities if ent not in self.entity2user}
             if user_entity_kg_num_interval is None:
-                ban_entities = item_ban_head_entities | item_ban_head_entities
+                ban_entities = item_ban_entities
             else:
-                user_ban_head_entities = self._get_illegal_ids_by_inter_num(
-                    field=self.head_entity_field,
+                user_entity_kg_num = Counter({k: v for k, v in entity_kg_num.items() if k in self.entity2user})
+
+                user_ban_entities = self._get_illegal_ids_by_inter_num(
+                    field=f"{self.head_entity_field}-{self.tail_entity_field}",
                     feat=None,
-                    inter_num=entity_kg_num,
-                    inter_interval=user_entity_kg_num_interval,
-                )
-                user_ban_tail_entities = self._get_illegal_ids_by_inter_num(
-                    field=self.tail_entity_field,
-                    feat=None,
-                    inter_num=entity_kg_num,
+                    inter_num=user_entity_kg_num,
                     inter_interval=user_entity_kg_num_interval,
                 )
 
-                user_ban_head_entities = {ent for ent in user_ban_head_entities if ent in self.entity2user}
-                user_ban_tail_entities = {ent for ent in user_ban_tail_entities if ent in self.entity2user}
-
-                ban_entities = (
-                    item_ban_head_entities | item_ban_tail_entities | user_ban_head_entities | user_ban_tail_entities
-                )
+                ban_entities = item_ban_entities | user_ban_entities
 
             ban_relations = self._get_illegal_ids_by_inter_num(
                 field=self.relation_field,
