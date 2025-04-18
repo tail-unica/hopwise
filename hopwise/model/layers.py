@@ -1575,9 +1575,13 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         scores[:] = -math.inf
         scores[:, self.eos_token_id] = 0.0
 
+    def is_bos_token_in_input(self, input_ids):
+        """Check if the input contains a BOS token. Checking the first sequence is enough."""
+        return (input_ids[0, 0] == self.bos_token_id).item()
+
     def __call__(self, input_ids, scores):
         current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
+        has_bos_token = self.is_bos_token_in_input(input_ids)
 
         if has_bos_token and current_len == self.max_sequence_length - 1:
             self.mask_non_eos_tokens(scores)
@@ -1590,7 +1594,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
                 )
                 unique_input_ids = input_ids[input_ids_indices]
 
-            full_mask = np.zeros((unique_input_ids.shape[0], self.tokenizer.vocab_size), dtype=bool)
+            full_mask = np.zeros((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
             for idx in range(unique_input_ids.shape[0]):
                 if self.task == self.RECOMMENDATION_TASK:
                     key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
@@ -1610,7 +1614,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     def process_scores_rec(self, input_ids, idx):
         """Process each score based on input length and update mask list."""
         current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
+        has_bos_token = self.is_bos_token_in_input(input_ids)
 
         key = self.get_current_key(input_ids, idx)
         if current_len == self.max_sequence_length - 1 - has_bos_token:
@@ -1632,7 +1636,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     def process_scores_lp(self, input_ids, idx):
         """Process each score based on input length or skip."""
         current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
+        has_bos_token = self.is_bos_token_in_input(input_ids)
 
         key, candidate_tokens = None, None
         if current_len % 2 == has_bos_token:
@@ -1643,7 +1647,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
     def is_next_token_entity(self, input_ids):
         current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
+        has_bos_token = self.is_bos_token_in_input(input_ids)
 
         # bos_token determines if the current length is even or odd
         return current_len % 2 == has_bos_token
@@ -1675,9 +1679,8 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         """Retrieve or cache the banned token mask for a specific key."""
         banned_mask = self.mask_cache.get(key)
         if banned_mask is None:
-            banned_mask = np.zeros(self.tokenizer.vocab_size, dtype=bool)
-            banned_mask[candidate_tokens] = True
-            banned_mask = np.logical_not(banned_mask)
+            banned_mask = np.ones(len(self.tokenizer), dtype=bool)
+            banned_mask[candidate_tokens] = False
             self.mask_cache[key] = banned_mask
         return banned_mask
 

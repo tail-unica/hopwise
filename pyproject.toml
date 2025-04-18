@@ -167,7 +167,7 @@ env_list = ["3.12", "3.11", "3.10", "3.9"]
 
 [tool.tox.env_run_base]
 description = "uv_sync run base"
-dependency_groups = ["dev", "test"]
+dependency_groups = ["dev", "test", "cu121"]
 commands = [
   ["uv", "run", "--active", "run_hopwise.py", "--epochs=2"],
   ["uv", "run", "--active", "run_hopwise.py", "--model", "LightGCN", "--epochs=2"],
