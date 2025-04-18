@@ -8,6 +8,7 @@
 # @email   :   panxy@ruc.edu.cn, xulanling_sherry@163.com
 
 import os
+import tempfile
 import unittest
 
 from hopwise.quick_start import objective_function
@@ -388,30 +389,34 @@ class TestContextRecommender(unittest.TestCase):
         quick_test(config_dict)
 
     def test_xgboost(self):
-        config_dict = {
-            "model": "XGBoost",
-            "threshold": {"rating": 4},
-            "xgb_params": {
-                "booster": "gbtree",
-                "objective": "binary:logistic",
-                "eval_metric": ["auc", "logloss"],
-            },
-            "xgb_num_boost_round": 1,
-        }
-        quick_test(config_dict)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            config_dict = {
+                "model": "XGBoost",
+                "threshold": {"rating": 4},
+                "xgb_params": {
+                    "booster": "gbtree",
+                    "objective": "binary:logistic",
+                    "eval_metric": ["auc", "logloss"],
+                },
+                "xgb_num_boost_round": 1,
+                "checkpoint_dir": tmpdirname,
+            }
+            quick_test(config_dict)
 
     def test_lightgbm(self):
-        config_dict = {
-            "model": "LightGBM",
-            "threshold": {"rating": 4},
-            "lgb_params": {
-                "boosting": "gbdt",
-                "objective": "binary",
-                "metric": ["auc", "binary_logloss"],
-            },
-            "lgb_num_boost_round": 1,
-        }
-        quick_test(config_dict)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            config_dict = {
+                "model": "LightGBM",
+                "threshold": {"rating": 4},
+                "lgb_params": {
+                    "boosting": "gbdt",
+                    "objective": "binary",
+                    "metric": ["auc", "binary_logloss"],
+                },
+                "lgb_num_boost_round": 1,
+                "checkpoint_dir": tmpdirname,
+            }
+            quick_test(config_dict)
 
     def test_fignn(self):
         config_dict = {
@@ -767,26 +772,41 @@ class TestSequentialRecommender(unittest.TestCase):
         }
         quick_test(config_dict)
 
-    # def test_gru4reckg(self):
-    #     config_dict = {
-    #         'model': 'GRU4RecKG',
-    #     }
-    #     quick_test(config_dict)
+    def test_gru4reckg(self):
+        config_dict = {"model": "GRU4RecKG", "train_neg_sample_args": None, "embedding_size": 4}
+        quick_test(config_dict)
 
-    # def test_s3rec(self):
-    #     config_dict = {
-    #         'model': 'S3Rec',
-    #         'train_stage': 'pretrain',
-    #         'save_step': 1,
-    #     }
-    #     quick_test(config_dict)
-    #
-    #     config_dict = {
-    #         'model': 'S3Rec',
-    #         'train_stage': 'finetune',
-    #         'pre_model_path': './saved/S3Rec-test-1.pth',
-    #     }
-    #     quick_test(config_dict)
+    def test_gru4reckg_with_BPR_loss(self):
+        config_dict = {"model": "GRU4RecKG", "loss_type": "BPR", "embedding_size": 4}
+        quick_test(config_dict)
+
+    def test_ksr(self):
+        config_dict = {"model": "KSR", "train_neg_sample_args": None, "kg_embedding_size": 4}
+        quick_test(config_dict)
+
+    def test_ksr_with_BPR_loss(self):
+        config_dict = {"model": "KSR", "loss_type": "BPR", "kg_embedding_size": 4}
+        quick_test(config_dict)
+
+    def test_s3rec(self):
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            config_dict = {
+                "model": "S3Rec",
+                "train_stage": "pretrain",
+                "save_step": 1,
+                "pretrain_epochs": 1,
+                "checkpoint_dir": tmpdirname,
+                "train_neg_sample_args": None,
+            }
+            quick_test(config_dict)
+
+            config_dict = {
+                "model": "S3Rec",
+                "train_stage": "finetune",
+                "pre_model_path": os.path.join(tmpdirname, "S3Rec-test-1.pth"),
+                "train_neg_sample_args": None,
+            }
+            quick_test(config_dict)
 
 
 class TestKnowledgeRecommender(unittest.TestCase):
@@ -917,91 +937,117 @@ class TestKnowledgeRecommender(unittest.TestCase):
         }
         quick_test(config_dict)
 
+    def test_pgpr(self):
+        config_dict = {
+            "model": "PGPR",
+        }
+        quick_test(config_dict)
 
-class TestKnowledgeGraphEmbedding(unittest.TestCase):
+    def test_cafe(self):
+        config_dict = {
+            "model": "CAFE",
+        }
+        quick_test(config_dict)
+
+
+class TestKnowledgeGraphEmbeddingRecommender(unittest.TestCase):
     def test_transe(self):
-        config_dict = {"model": "TransE", "embedding_size": 64, "margin": 1.0}
+        config_dict = {"model": "TransE"}
         quick_test(config_dict)
 
     def test_transh(self):
-        config_dict = {"model": "TransH", "embedding_size": 64, "margin": 1.0}
+        config_dict = {"model": "TransH"}
         quick_test(config_dict)
 
     def test_transd(self):
-        config_dict = {"model": "TransD", "embedding_size": 64, "margin": 1.0}
+        config_dict = {"model": "TransD"}
         quick_test(config_dict)
 
     def test_transr(self):
-        config_dict = {"model": "TransR", "embedding_size": 64, "margin": 1.0}
+        config_dict = {"model": "TransR"}
         quick_test(config_dict)
 
     def test_toruse(self):
-        config_dict = {"model": "TorusE", "embedding_size": 64, "margin": 1.0}
+        config_dict = {"model": "TorusE"}
         quick_test(config_dict)
 
     def test_analogy(self):
-        config_dict = {"model": "Analogy", "embedding_size": 64, "scalar_share": 0.5}
+        config_dict = {"model": "Analogy"}
         quick_test(config_dict)
 
     def test_complex(self):
-        config_dict = {"model": "ComplEx", "embedding_size": 64}
+        config_dict = {"model": "ComplEx"}
         quick_test(config_dict)
 
     def test_distmult(self):
-        config_dict = {"model": "DistMult", "embedding_size": 64, "margin": 1.0}
+        config_dict = {"model": "DistMult"}
         quick_test(config_dict)
 
     def test_rescal(self):
-        config_dict = {"model": "RESCAL", "embedding_size": 64, "margin": 1.0}
+        config_dict = {"model": "RESCAL"}
         quick_test(config_dict)
 
     def test_rotate(self):
-        config_dict = {"model": "RotatE", "embedding_size": 64, "margin": 1.0}
+        config_dict = {"model": "RotatE"}
         quick_test(config_dict)
 
     def test_hole(self):
-        config_dict = {"model": "HolE", "embedding_size": 64, "margin": 1.0}
+        config_dict = {"model": "HolE"}
         quick_test(config_dict)
 
     def test_tucker(self):
-        config_dict = {
-            "model": "TuckER",
-            "embedding_size": 64,
-            "input_dropout": 0.3,
-            "input_dropout1": 0.4,
-            "input_dropout2": 0.5,
-            "label_smoothing": 0.1,
-            "train_neg_sample_args": {"sample_size": "none"},
-        }
+        config_dict = {"model": "TuckER", "train_neg_sample_args": {"sample_size": "none"}}
         quick_test(config_dict)
 
     def test_conve(self):
-        config_dict = {
-            "model": "ConvE",
-            "embedding_size": 200,
-            "train_neg_sample_args": {"sample_size": "none"},
-            "use_bias": True,
-            "input_dropout": 0.2,
-            "hidden_dropout": 0.3,
-            "feature_dropout": 0.2,
-            "hidden_size": 9728,
-            "embedding_shape": 20,
-            "label_smoothing": 0.1,
-        }
+        config_dict = {"model": "ConvE", "train_neg_sample_args": {"sample_size": "none"}}
         quick_test(config_dict)
 
     def test_convkb(self):
-        config_dict = {
-            "model": "ConvKB",
-            "embedding_size": 50,
-            "train_batch_size": 512,
-            "dropout_prob": 0,
-            "kernel_size": 1,
-            "lambda": 0.2,
-            "out_channels": 64,
-            "epochs": 5,
-        }
+        config_dict = {"model": "ConvKB"}
         quick_test(config_dict)
+
+
+class TestPathLanguageModelingRecommender(unittest.TestCase):
+    lm_base_config = {
+        "embedding_size": 4,
+        "num_heads": 2,
+        "num_layers": 2,
+        "path_generation_args": {
+            "paths_per_user": 2,
+            "num_beams": 2,
+            "num_beam_groups": 2,
+        },
+    }
+
+    def test_pearlm(self):
+        config_dict = {"model": "PEARLM", **self.lm_base_config}
+        quick_test(config_dict)
+
+    # def test_plm(self):
+    #     config_dict = {"model": "PLM", **self.lm_base_config}
+    #     quick_test(config_dict)
+
+    def test_kgglm(self):
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            config_dict = {
+                "model": "KGGLM",
+                "train_stage": "lp_pretrain",
+                "save_step": 1,
+                "checkpoint_dir": tmpdirname,
+                "pretrain_epochs": 1,
+                **self.lm_base_config,
+                "path_sample_args": {"pretrain_paths": 100},
+            }
+            quick_test(config_dict)
+
+            config_dict = {
+                "model": "KGGLM",
+                "train_stage": "finetune",
+                "pre_model_path": os.path.join(tmpdirname, "huggingface-KGGLM-test-pretrained-1.pth"),
+                **self.lm_base_config,
+            }
+            quick_test(config_dict)
 
 
 if __name__ == "__main__":

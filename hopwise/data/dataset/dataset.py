@@ -223,8 +223,7 @@ class Dataset(torch.utils.data.Dataset):
             return None
         else:
             raise ValueError(
-                f"Neither [{self.dataset_path}] exists in the device "
-                f"nor [{self.dataset_name}] a known dataset name."
+                f"Neither [{self.dataset_path}] exists in the device nor [{self.dataset_name}] a known dataset name."
             )
 
     def _download(self):
@@ -348,6 +347,8 @@ class Dataset(torch.utils.data.Dataset):
         For those additional features, e.g. pretrained entity embedding, user can set them
         as ``config['additional_feat_suffix']``, then they will be loaded and stored in
         :attr:`feat_name_list`. See :doc:`../user_guide/data/data_settings` for details.
+        If ``config['preload_weight']`` and ``config['preload_weight_path']`` are set,
+        those additional features will be loaded from ``config['preload_weight_path']``.
 
         Args:
             token (str): dataset name.
@@ -358,7 +359,14 @@ class Dataset(torch.utils.data.Dataset):
         for suf in self.config["additional_feat_suffix"]:
             if hasattr(self, f"{suf}_feat"):
                 raise ValueError(f"{suf}_feat already exist.")
-            feat_path = os.path.join(dataset_path, f"{token}.{suf}")
+            preload_fields = self.config["preload_weight"]
+            load_col = self.config["load_col"]
+            if preload_fields is not None and any(col in load_col[suf] for col in preload_fields):
+                feat_path = self.config["preload_weight_path"] or dataset_path
+            else:
+                feat_path = dataset_path
+
+            feat_path = os.path.join(feat_path, f"{token}.{suf}")
             if os.path.isfile(feat_path):
                 feat = self._load_feat(feat_path, suf)
             else:
@@ -373,8 +381,8 @@ class Dataset(torch.utils.data.Dataset):
             source (FeatureSource): source of input file.
 
         Returns:
-            tuple: tuple of parsed ``load_col`` and ``unload_col``, see :doc:`../user_guide/data/data_args` for details.
-        """  # noqa: E501
+            tuple: tuple of parsed ``load_col`` and ``unload_col``, details on :doc:`../user_guide/data/data_args`.
+        """
         if isinstance(source, FeatureSource):
             source = source.value
         if self.config["load_col"] is None:
@@ -512,7 +520,7 @@ class Dataset(torch.utils.data.Dataset):
             isin = np.isin(alias, self._rest_fields, assume_unique=True)
             if isin.all() is False:
                 raise ValueError(
-                    f"`alias_of_{alias_name}` should not contain " f"non-token-like field {list(alias[~isin])}."
+                    f"`alias_of_{alias_name}` should not contain non-token-like field {list(alias[~isin])}."
                 )
             self._rest_fields = np.setdiff1d(self._rest_fields, alias, assume_unique=True)
 
@@ -1645,7 +1653,7 @@ class Dataset(torch.utils.data.Dataset):
         """Saving this :class:`Dataset` object to :attr:`config['checkpoint_dir']`."""
         save_dir = self.config["checkpoint_dir"]
         ensure_dir(save_dir)
-        file = os.path.join(save_dir, f'{self.config["dataset"]}-{self.__class__.__name__}.pth')
+        file = os.path.join(save_dir, f"{self.config['dataset']}-{self.__class__.__name__}.pth")
         self.logger.info(set_color("Saving filtered dataset into ", "pink") + f"[{file}]")
         with open(file, "wb") as f:
             pickle.dump(self, f)
@@ -1778,20 +1786,32 @@ class Dataset(torch.utils.data.Dataset):
             raise ValueError("dataset does not exist uid/iid, thus can not converted to sparse matrix.")
         return self._create_sparse_matrix(self.inter_feat, self.uid_field, self.iid_field, form, value_field)
 
-    def _create_norm_adjacency_matrix(self):
+    def _create_norm_adjacency_matrix(self, size=None, symmetric=True):
         r"""Get the normalized interaction matrix of users and items.
 
         Construct the square matrix from the training data and normalize it
         using the laplace matrix.
 
-        .. math::
-            A_{hat} = D^{-0.5} \times A \times D^{-0.5}
+        Args:
+            size (int, optional): Size of the normalized interaction matrix. Defaults to ``None``.
+                If ``None``, the size is set to ``self.user_num + self.item_num``.
+            symmetric (bool, optional): Whether to use symmetric normalization. Defaults to ``True``.
+                If ``True``, the normalized interaction matrix is calculated as:
+                .. math::
+                    A_{hat} = D^{-0.5} \times A \times D^{-0.5}
+                If ``False``, the normalized interaction matrix is calculated as:
+                .. math::
+                    A_{hat} = D^{-1} \times A
+                where :math:`A` is the adjacency matrix, and :math:`D` is the diagonal degree matrix.
 
         Returns:
             Sparse tensor of the normalized interaction matrix.
         """
+        if size is None:
+            size = self.user_num + self.item_num
+
         # build adj matrix
-        A = dok_matrix((self.user_num + self.item_num, self.user_num + self.item_num), dtype=np.float32)
+        A = dok_matrix((size, size), dtype=np.float32)
         inter_M = self.inter_matrix(form="coo").astype(np.float32)
         inter_M_t = inter_M.transpose()
         data_dict = dict(zip(zip(inter_M.row, inter_M.col + self.user_num), [1] * inter_M.nnz))
@@ -1808,11 +1828,16 @@ class Dataset(torch.utils.data.Dataset):
         # norm adj matrix
         sumArr = (A > 0).sum(axis=1)
         diag = np.array(sumArr.flatten())[0] + 1e-7  # add epsilon to avoid divide by zero Warning
-        diag = np.power(diag, -0.5)
-        D = diags(diag)
-        L = D @ A @ D
+        if symmetric:
+            diag = np.power(diag, -0.5)
+            D = diags(diag)
+            L = D @ A @ D
+        else:
+            diag = np.power(diag, -1)
+            D = diags(diag)
+            L = D @ A
 
-        # covert norm_adj matrix to tensor
+        # convert norm_adj matrix to tensor
         L = coo_matrix(L)
         row = L.row
         col = L.col

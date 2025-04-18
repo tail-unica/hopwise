@@ -14,6 +14,7 @@
 import os
 import re
 import sys
+import warnings
 from logging import getLogger
 from typing import Literal
 
@@ -64,6 +65,8 @@ class Config:
 
     Finally the learning_rate is equal to 0.02.
     """
+
+    NESTED_KEY_SEPARATOR = "."
 
     def __init__(self, model=None, dataset=None, config_file_list=None, config_dict=None):
         """Args:
@@ -118,10 +121,17 @@ class Config:
 
     def _convert_config_dict(self, config_dict):
         r"""This function convert the str parameters to their original type."""
-        for key in config_dict:
+        config_keys = list(config_dict.keys())
+        for key in config_keys:
             param = config_dict[key]
+
             if not isinstance(param, str):
                 if isinstance(param, dict):
+                    if self.NESTED_KEY_SEPARATOR in key:
+                        raise SyntaxError(
+                            f"If '{self.NESTED_KEY_SEPARATOR}' is used in the key, "
+                            f"the value should be str, but got [{param}] of type [{type(param)}] instead."
+                        )
                     config_dict[key] = self._convert_config_dict(param)
                 continue
             try:
@@ -138,7 +148,14 @@ class Config:
                         value = param
                 else:
                     value = param
-            config_dict[key] = value
+            if self.NESTED_KEY_SEPARATOR in key:
+                nested_cmd_dict = param
+                for nested_key in reversed(key.split(self.NESTED_KEY_SEPARATOR)):
+                    nested_cmd_dict = {nested_key: nested_cmd_dict}
+                self.deep_dict_update(config_dict, nested_cmd_dict)
+                del config_dict[key]
+            else:
+                config_dict[key] = value
         return config_dict
 
     def _load_config_files(self, file_list):
@@ -167,10 +184,8 @@ class Config:
                 cmd_arg_name, cmd_arg_value = arg[2:].split("=")
                 if cmd_arg_name in cmd_config_dict and cmd_arg_value != cmd_config_dict[cmd_arg_name]:
                     raise SyntaxError("There are duplicate command arg '%s' with different value." % arg)
-                elif "." in cmd_arg_name:
-                    nested_cmd_dict = cmd_arg_value
-                    for key in reversed(cmd_arg_name.split(".")):
-                        nested_cmd_dict = {key: nested_cmd_dict}
+                elif self.NESTED_KEY_SEPARATOR in cmd_arg_name:
+                    nested_cmd_dict = self._convert_config_dict({cmd_arg_name: cmd_arg_value})
                     self.deep_dict_update(cmd_config_dict, nested_cmd_dict)
                 else:
                     cmd_config_dict[cmd_arg_name] = cmd_arg_value
@@ -218,11 +233,12 @@ class Config:
 
     def deep_dict_update(self, updated_dict, updating_dict):
         overwrite_keys = ["split"]
-        for key, value in updating_dict.items():
-            if isinstance(value, dict) and isinstance(updated_dict.get(key), dict) and key not in overwrite_keys:
-                self.deep_dict_update(updated_dict[key], value)
-            else:
-                updated_dict[key] = value
+        if isinstance(updated_dict, dict) and isinstance(updating_dict, dict):
+            for key, value in updating_dict.items():
+                if isinstance(value, dict) and isinstance(updated_dict.get(key), dict) and key not in overwrite_keys:
+                    self.deep_dict_update(updated_dict[key], value)
+                else:
+                    updated_dict[key] = value
 
     def _update_internal_config_dict(self, file):
         with open(file, encoding="utf-8") as f:
@@ -249,6 +265,7 @@ class Config:
         )
         sequential_embedding_model_init = os.path.join(quick_start_config_path, "sequential_embedding_model.yaml")
         knowledge_base_init = os.path.join(quick_start_config_path, "knowledge_base.yaml")
+        knowledge_base_on_ml_100k_init = os.path.join(quick_start_config_path, "knowledge_base_on_ml-100k.yaml")
         knowledge_path_base_init = os.path.join(quick_start_config_path, "knowledge_path_base.yaml")
         knowledge_path_base_on_ml_100k_init = os.path.join(
             quick_start_config_path, "knowledge_path_base_on_ml-100k.yaml"
@@ -281,10 +298,10 @@ class Config:
                 self._update_internal_config_dict(DIN_init)
                 if dataset == "ml-100k":
                     self._update_internal_config_dict(DIN_on_ml_100k_init)
-            elif model in ["GRU4RecKG", "KSR"]:
-                self._update_internal_config_dict(sequential_embedding_model_init)
             else:
                 self._update_internal_config_dict(sequential_init)
+                if model in ["GRU4RecKG", "KSR"]:
+                    self._update_internal_config_dict(sequential_embedding_model_init)
                 if dataset == "ml-100k" and model in [
                     "GRU4RecF",
                     "SASRecF",
@@ -295,6 +312,8 @@ class Config:
 
         elif self.internal_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE:
             self._update_internal_config_dict(knowledge_base_init)
+            if dataset == "ml-100k":
+                self._update_internal_config_dict(knowledge_base_on_ml_100k_init)
         elif self.internal_config_dict["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
             self._update_internal_config_dict(knowledge_path_base_init)
             if dataset == "ml-100k":
@@ -342,7 +361,7 @@ class Config:
             elif self.final_config_dict["loss_type"] in ["BPR"]:
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
         else:
-            raise ValueError("Either Model has attr 'input_type'," "or arg 'loss_type' should exist in config.")
+            raise ValueError("Either Model has attr 'input_type',or arg 'loss_type' should exist in config.")
 
         metrics = self.final_config_dict["metrics"]
         if isinstance(metrics, str):
@@ -448,9 +467,9 @@ class Config:
                 raise ValueError(
                     f"train_neg_sample_args:[{self.final_config_dict['train_neg_sample_args']}] should be a dict."
                 )
-            for op_args in default_train_neg_sample_args:
+            for op_args, op_args_values in default_train_neg_sample_args.items():
                 if op_args not in self.final_config_dict["train_neg_sample_args"]:
-                    self.final_config_dict["train_neg_sample_args"][op_args] = default_train_neg_sample_args[op_args]
+                    self.final_config_dict["train_neg_sample_args"][op_args] = op_args_values
 
         # eval_args checking
         default_eval_args = {
@@ -567,8 +586,7 @@ class Config:
                 }
             elif distribution not in ["uniform", "popularity"]:
                 raise ValueError(
-                    f"The distribution [{distribution}] of train_neg_sample_args "
-                    f"should in ['uniform', 'popularity']"
+                    f"The distribution [{distribution}] of train_neg_sample_args should in ['uniform', 'popularity']"
                 )
 
     def _set_eval_neg_sample_args(self, phase: Literal["valid", "test"]):
@@ -659,8 +677,10 @@ class Config:
 
         np.object = np.object_
         np.str = np.str_
-        if not hasattr(np, "long"):
-            np.long = np.int_
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            if not hasattr(np, "long"):
+                np.long = np.int_
 
         if not hasattr(np, "string_"):
             np.string_ = np.bytes_

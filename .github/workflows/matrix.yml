@@ -1,0 +1,60 @@
+name: Build, test with matrix, then lint
+
+on: [
+  # push,
+  pull_request,
+  workflow_dispatch
+]
+
+jobs:
+  sync_and_test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        env: [cu121]
+        python-version: ["3.10"]
+        experimental_or_skip_heavy_tests: [false]
+        include:
+          - os: ubuntu-latest
+            env: cu121
+            python-version: "3.12"
+            experimental_or_skip_heavy_tests: true
+
+          - os: ubuntu-latest
+            env: cpu
+            python-version: "3.10"
+            experimental_or_skip_heavy_tests: true
+
+          - os: ubuntu-latest
+            env: cu121
+            python-version: "3.9"
+            experimental_or_skip_heavy_tests: true
+
+          - os: windows-latest
+            env: cpu
+            python-version: "3.10"
+            experimental_or_skip_heavy_tests: true
+
+          - os: ubuntu-latest
+            env: cu118
+            python-version: "3.11"
+            experimental_or_skip_heavy_tests: true
+
+          - os: ubuntu-latest
+            env: cu124
+            python-version: "3.10"
+            experimental_or_skip_heavy_tests: true
+
+    uses: ./.github/workflows/sync_and_test.yml
+    with:
+      env: ${{ matrix.env }}
+      python-version: ${{ matrix.python-version }}
+      os: ${{ matrix.os }}
+      experimental_or_skip_heavy_tests: ${{ matrix.experimental_or_skip_heavy_tests }}
+
+  lint:
+    uses: ./.github/workflows/lint.yml
+    with:
+      python-version: "3.10"
+      os: ubuntu-latest
