@@ -1,0 +1,44 @@
+# Configuration file for KGLRR model## 没有写入配置文件的都采用了默认值
+tensorboard: 1
+prefix: '0520'
+board_path: "../result"
+device: '0'
+
+pretrain: False
+seed: 2023
+
+# dataset setting
+dataset: yelp2018
+maxhis : 10
+topks  : [10, 20]
+
+# model setting
+kgcn: "RGAT"
+
+# Specifica la dimensione del vettore latente utilizzato per la rappresentazione degli utenti e degli elementi nel modello di raccomandazione.
+# Un valore più alto può catturare più caratteristiche, ma aumenta la complessità computazionale.
+latent_dim_rec: 64
+lightGCN_n_layers: 3
+train_trans: True
+entity_num_per_item: 10
+
+kgc_joint : True
+kgc_temp : 0.2
+use_kgc_pretrain : False
+pretrain_kgc : False
+ssl_reg : 0.1
+dropout : 1
+
+r_logic: 1.0e-4
+r_length: 1.0e-5
+l2_loss: 1.0e-4
+loss_sum: True
+
+epoch : 1000
+batch_size : 1024
+test_u_batch_size: 2048
+lr : 5.0e-4
+test_verbose : 1    ##
+test_start_epoch : 15
+early_stop_cnt : 10
+
