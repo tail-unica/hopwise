@@ -12,6 +12,7 @@ from sklearn.metrics import *
 import logging
 import os
 
+from hopwise.model.abstract_recommender import KnowledgeRecommender
 from hopwise.utils import InputType
 
 
@@ -245,7 +246,7 @@ class KGEncoder(nn.Module):
         return item_embs+entity_embs_mean
 
 
-class KGLRR(nn.Module):
+class KGLRR(KnowledgeRecommender):
     input_type = InputType.PAIRWISE
     def __init__(self, config, dataset, kg_dataset) -> None:
         super(KGLRR,self).__init__()
