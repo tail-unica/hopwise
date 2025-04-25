@@ -1056,40 +1056,54 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
         whose ``entity_id`` doesn't occur in kg triplets and
         ``user_id`` doesn't occur in interaction records.
         """
-        item_tokens = self._get_rec_token("item_id")
-        user_tokens = self._get_rec_token("user_id")
-        ent_tokens = self._get_entity_token()
+        while True:
+            # loop is needed in case dropped index lead to drop of user/item
+            # causing incompatibility between link mappings and field2id_token
+            item_tokens = self._get_rec_token("item_id")
+            user_tokens = self._get_rec_token("user_id")
+            ent_tokens = self._get_entity_token()
 
-        illegal_item = set()
-        illegal_item_ent = set()
-        for item in self.item2entity:
-            ent = self.item2entity[item]
-            if item not in item_tokens or ent not in ent_tokens:
-                illegal_item.add(item)
-                illegal_item_ent.add(ent)
-        for item in illegal_item:
-            del self.item2entity[item]
-        for ent in illegal_item_ent:
-            del self.entity2item[ent]
+            illegal_item = set()
+            illegal_item_ent = set()
+            for item in self.item2entity:
+                ent = self.item2entity[item]
+                if item not in item_tokens or ent not in ent_tokens:
+                    illegal_item.add(item)
+                    illegal_item_ent.add(ent)
+            for item in illegal_item:
+                del self.item2entity[item]
+            for ent in illegal_item_ent:
+                del self.entity2item[ent]
 
-        remained_inter = pd.Series(True, index=self.inter_feat.index)
-        remained_inter &= self.inter_feat[self.iid_field].isin(self.item2entity.keys())
+            remained_inter = pd.Series(True, index=self.inter_feat.index)
+            remained_inter &= self.inter_feat[self.iid_field].isin(self.item2entity.keys())
 
-        illegal_user = set()
-        illegal_user_ent = set()
-        for user in self.user2entity:
-            ent = self.user2entity[user]
-            if user not in user_tokens or ent not in ent_tokens:
-                illegal_user.add(user)
-                illegal_user_ent.add(ent)
-        for user in illegal_user:
-            del self.user2entity[user]
-        for ent in illegal_user_ent:
-            del self.entity2user[ent]
+            illegal_user = set()
+            illegal_user_ent = set()
+            for user in self.user2entity:
+                ent = self.user2entity[user]
+                if user not in user_tokens or ent not in ent_tokens:
+                    illegal_user.add(user)
+                    illegal_user_ent.add(ent)
+            for user in illegal_user:
+                del self.user2entity[user]
+            for ent in illegal_user_ent:
+                del self.entity2user[ent]
 
-        remained_inter |= self.inter_feat[self.uid_field].isin(self.user2entity.keys())
+            remained_inter &= self.inter_feat[self.uid_field].isin(self.user2entity.keys())
 
-        self.inter_feat.drop(self.inter_feat.index[~remained_inter], inplace=True)
+            if not (~remained_inter).any():
+                break
+
+            self.inter_feat.drop(self.inter_feat.index[~remained_inter], inplace=True)
+
+        if self.item_feat is not None:
+            remained_item = self.item_feat[self.iid_field].isin(self.item2entity.keys())
+            self.item_feat.drop(self.item_feat.index[~remained_item], inplace=True)
+
+        if self.user_feat is not None:
+            remained_user = self.user_feat[self.uid_field].isin(self.user2entity.keys())
+            self.user_feat.drop(self.user_feat.index[~remained_user], inplace=True)
 
     def _load_data(self, token, dataset_path):
         super(KnowledgeBasedDataset, self)._load_data(token, dataset_path)
