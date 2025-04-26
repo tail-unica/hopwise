@@ -162,6 +162,7 @@ class HyperTuning:
         output_path=None,
         timeout=None,
         study_name=None,
+        resume=False,
     ):
         self.tuner = self.TUNER_TYPES[tuner.upper()]
         self.best_score = None
@@ -180,6 +181,7 @@ class HyperTuning:
         if not os.path.exists(self.output_path):
             os.makedirs(self.output_path)
         self.study_name = study_name or f"hyper_{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}"
+        self.resume = resume
 
         if space:
             self.space = space
@@ -495,13 +497,13 @@ class HyperTuning:
 
                 fp.write("Test result:\n" + dict2str(self.params2result[params]["test_result"]) + "\n\n")
 
-                if self.tuner == self.TUNER_TYPES.OPTUNA:
-                    if not hasattr(self, "study"):
-                        raise ValueError("Optuna study not created. Call `run` method first.")
+            if self.tuner == self.TUNER_TYPES.OPTUNA:
+                if not hasattr(self, "study"):
+                    raise ValueError("Optuna study not created. Call `run` method first.")
 
-                    optuna_df = self.study.trials_dataframe()
-                    fp.write("Optuna trials dataframe:\n")
-                    optuna_df.to_string(fp, index=False)
+                optuna_df = self.study.trials_dataframe()
+                fp.write("Optuna trials dataframe:\n")
+                optuna_df.to_string(fp, index=False)
 
     def trial(self, params):
         r"""Given a set of parameters, return results and optimization status
@@ -566,6 +568,10 @@ class HyperTuning:
 
     def run(self):
         r"""Begin to search the best parameters"""
+        if self.resume:
+            print("\n# Resume " + "-" * 40)
+            print(f"Resuming from {os.path.join(self.output_path, self.study_name)} if exists.\n")
+
         if self.tuner == self.TUNER_TYPES.HYPEROPT:
             import hyperopt
 
@@ -580,6 +586,12 @@ class HyperTuning:
                     return {"loss": np.nan, "status": hyperopt.STATUS_FAIL}
 
                 return {"loss": result_dict["hyper_score"], "status": hyperopt.STATUS_OK}
+
+            if os.path.exists(os.path.join(self.output_path, self.study_name)) and not self.resume:
+                raise FileExistsError(
+                    f"File {os.path.join(self.output_path, self.study_name)} already exists. "
+                    "Please remove it or set `--resume True` to continue."
+                )
 
             hyperopt.fmin(
                 hyperopt_objective,
@@ -637,23 +649,27 @@ class HyperTuning:
                 storage_path=self.output_path,
                 name=self.study_name,
                 log_to_file=self.study_name,
+                resume=self.resume,
             )
         elif self.tuner == self.TUNER_TYPES.OPTUNA:
             import optuna
 
-            self.study = optuna.create_study(
-                direction="minimize",
-                study_name=self.study_name,
-                storage=f"sqlite:///{os.path.join(self.output_path, self.study_name)}.db",
-                pruner=self.algo["pruner"],
-                sampler=self.algo["sampler"],
-            )
-
-            update_objective_function = True
+            try:
+                self.study = optuna.create_study(
+                    direction="minimize",
+                    study_name=self.study_name,
+                    storage=f"sqlite:///{os.path.join(self.output_path, self.study_name)}.db",
+                    pruner=self.algo["pruner"],
+                    sampler=self.algo["sampler"],
+                    load_if_exists=self.resume,
+                )
+            except optuna.exceptions.DuplicatedStudyError as e:
+                raise optuna.exceptions.DuplicatedStudyError(
+                    f"Study {os.path.join(self.output_path, self.study_name)} already exists. "
+                    "Please use --resume True to load an existing study checkpoint."
+                ) from e
 
             def optuna_objective(trial):
-                nonlocal update_objective_function
-
                 params = self.build_optuna_space(trial)
 
                 def trial_callback(epoch_idx, valid_score):
@@ -662,13 +678,16 @@ class HyperTuning:
                     if trial.should_prune():
                         raise optuna.exceptions.TrialPruned()
 
-                if update_objective_function:
+                if isinstance(self.objective_function, partial):
+                    self.objective_function = partial(
+                        self.objective_function.func,
+                        callback_fn=trial_callback,
+                    )
+                else:
                     self.objective_function = partial(
                         self.objective_function,
                         callback_fn=trial_callback,
                     )
-
-                    update_objective_function = False
 
                 result_dict = self.trial(params)
 

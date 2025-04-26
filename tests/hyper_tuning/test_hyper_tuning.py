@@ -4,7 +4,6 @@
 import os
 import tempfile
 import unittest
-import warnings
 
 from hopwise.quick_start import objective_function
 from hopwise.trainer import HyperTuning
@@ -26,8 +25,11 @@ def quick_test(tuner, algo):
         else:
             test_config_file_list = config_file_list
 
+        def test_objective_function(*args, **kwargs):
+            return objective_function(*args, **kwargs, saved=False)
+
         hp = HyperTuning(
-            objective_function,
+            test_objective_function,
             tuner=tuner,
             algo=algo,
             early_stop=10,
@@ -36,9 +38,7 @@ def quick_test(tuner, algo):
             fixed_config_file_list=test_config_file_list,
             output_path=tmpdirname,
         )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            hp.run()
+        hp.run()
 
         if tuner == "ray":
             ray_config_file.close()
