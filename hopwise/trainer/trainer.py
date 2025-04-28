@@ -1871,7 +1871,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         Args:
             resume_file (str): the path to the directory containing the checkpoint files or subdirectories
         """
-        from transformers import AutoModel, AutoTokenizer
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         if not hasattr(self, "hf_trainer"):
             raise ValueError("The HuggingFace Trainer has not been initialized. Please call `init_hf_trainer` first.")
@@ -1890,7 +1890,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         self.cur_step = checkpoint["cur_step"]
         self.best_valid_score = checkpoint["best_valid_score"]
 
-        self.model = AutoModel.from_pretrained(hf_resume_file)
+        self.model = AutoModelForCausalLM.from_pretrained(hf_resume_file)
         self.hf_trainer.processing_class.tokenizer = AutoTokenizer.from_pretrained(hf_resume_file)
 
     def fit(
@@ -1914,6 +1914,8 @@ class HFPathLanguageModelingTrainer(Trainer):
         )
 
         self.hf_trainer.train()
+        self.hf_trainer._load_best_model()
+        self.hf_trainer.save_model()
 
         return self.best_valid_score, self.best_valid_result
 
