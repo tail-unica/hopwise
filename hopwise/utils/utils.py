@@ -94,7 +94,12 @@ def get_trainer(model_type, model_name):
     register_table = {}
 
     try:
-        return getattr(importlib.import_module("hopwise.trainer"), model_name + "Trainer")
+        if model_name.startswith("User"):
+            real_model_name = model_name.replace("User", "")
+        else:
+            real_model_name = model_name
+
+        return getattr(importlib.import_module("hopwise.trainer"), real_model_name + "Trainer")
     except AttributeError:
         if model_name in register_table:
             return getattr(importlib.import_module("hopwise.trainer"), register_table[model_name])
