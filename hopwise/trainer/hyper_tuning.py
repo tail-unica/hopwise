@@ -515,7 +515,7 @@ class HyperTuning:
         params_str = self.params2str(params)
         self.params_list.append(params_str)
         print("running parameters:", config_dict)
-        result_dict = self.objective_function(config_dict, self.fixed_config_file_list)
+        result_dict = self.objective_function(config_dict, self.fixed_config_file_list, saved=False)
         self.params2result[params_str] = result_dict
         model, score, bigger = (
             result_dict["model"],

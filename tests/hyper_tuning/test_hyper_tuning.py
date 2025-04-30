@@ -25,11 +25,8 @@ def quick_test(tuner, algo):
         else:
             test_config_file_list = config_file_list
 
-        def test_objective_function(*args, **kwargs):
-            return objective_function(*args, **kwargs, saved=False)
-
         hp = HyperTuning(
-            test_objective_function,
+            objective_function,
             tuner=tuner,
             algo=algo,
             early_stop=10,
