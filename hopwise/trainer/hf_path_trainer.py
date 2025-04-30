@@ -171,9 +171,10 @@ class HFPathTrainer(Trainer):
         # paths_per_head=50,  # n_sequences_lp
         # n_beams_lp=50,
         eval_device="cpu",
+        tokenizer=None,
     ):
         hopwise_dataset = hopwise_train_data.dataset
-        tokenizer = hopwise_dataset.tokenizer
+        tokenizer = tokenizer or hopwise_dataset.tokenizer
         super().__init__(
             model=model,
             args=args,
