@@ -6,11 +6,13 @@ import torch.nn as nn
 from torch.nn.init import ones_
 
 import numpy as np
+import scipy.sparse as sp
 
 from sklearn.metrics import *
 
 import logging
 import os
+from time import time
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
 from hopwise.utils import InputType
@@ -85,7 +87,8 @@ class GraphAttentionLayer(nn.Module):
         return torch.cat((Wh, We), dim=-1) # (N, e_num, 2*out_features)
 
 class KGEncoder(nn.Module):
-    def __init__(self,config,dataset, kg_dataset):
+
+    def __init__(self, config, dataset, kg_dataset):
         super().__init__()
         self.kgcn = config['kgcn']
         self.dropout = config['dropout']
@@ -101,15 +104,15 @@ class KGEncoder(nn.Module):
         self.__init_weight()
     
     def __init_weight(self):
-        self.num_users = self.dataset.n_users
-        self.num_items = self.dataset.m_items
-        self.num_entities = self.kg_dataset.entity_count
-        self.num_relations = self.kg_dataset.relation_count
+        self.num_users = self.dataset.user_num
+        self.num_items = self.dataset.item_num
+        self.num_entities = self.dataset.entity_num
+        self.num_relations = self.dataset.relation_num
        
         # Print with colors the stats
-        logging.info(f'\033[36mtrainSize\033[0m: \033[35m{self.dataset.trainSize}\033[0m')
-        logging.info(f'\033[36mn_user\033[0m: \033[35m{self.dataset.n_user}\033[0m')
-        logging.info(f'\033[36mm_item\033[0m: \033[35m{self.dataset.m_item}\033[0m')
+        #logging.info(f'\033[36mtrainSize\033[0m: \033[35m{self.dataset.trainSize}\033[0m') TODO capire come ottenere trainSize
+        logging.info(f'\033[36mn_user\033[0m: \033[35m{self.dataset.user_num}\033[0m')
+        logging.info(f'\033[36mm_item\033[0m: \033[35m{self.dataset.item_num}\033[0m')
 
         self.embedding_user = torch.nn.Embedding(
             num_embeddings=self.num_users, embedding_dim=self.latent_dim)
@@ -133,10 +136,81 @@ class KGEncoder(nn.Module):
         nn.init.normal_(self.embedding_relation.weight, std=0.1)
         
         self.f = nn.Sigmoid()
-        self.Graph = self.dataset.getSparseGraph()
+        #self.Graph = self.dataset.getSparseGraph()
+        self.Graph = self.getSparseGraph()
         # self.ItemNet = self.kg_dataset.get_item_net_from_kg(self.num_items)
-        self.kg_dict, self.item2relations = self.kg_dataset.get_kg_dict(
+        self.kg_dict, self.item2relations = self.get_kg_dict(
             self.num_items)
+
+    def get_kg_dict(self, item_num):
+        i2es = dict()
+        i2rs = dict()
+        for item in range(item_num):
+            rts = self.kg_dataset.get(item, False)
+            if rts:
+                tails = list(map(lambda x:x[1], rts))
+                relations = list(map(lambda x:x[0], rts))
+                if(len(tails) > self.dataset.entity_num):
+                    i2es[item] = torch.IntTensor(tails).cuda()[:self.dataset.entity_num]
+                    i2rs[item] = torch.IntTensor(relations).cuda()[:self.dataset.entity_num]
+                else:
+                    # last embedding pos as padding idx
+                    tails.extend([self.dataset.entity_count]*(self.dataset.entity_num-len(tails)))
+                    relations.extend([self.dataset.relation_count]*(self.dataset.entity_num-len(relations)))
+                    i2es[item] = torch.IntTensor(tails).cuda()
+                    i2rs[item] = torch.IntTensor(relations).cuda()
+            else:
+                i2es[item] = torch.IntTensor([self.dataset.item_num]*self.dataset.entity_num).cuda()
+                i2rs[item] = torch.IntTensor([self.dataset.relation_num]*self.dataset.entity_num).cuda()
+        return i2es, i2rs
+        
+    
+        
+    def getSparseGraph(self):
+        '''Calculate the connection graph in graph convolution, including A~, etc.
+        The returned data is a processed list, the length of the list is determined by self.fold, 
+        and each item in the list is a sparse matrix representing the connection matrix of the entity 
+        at the corresponding index for that length.
+        '''
+        logging.info("loading adjacency matrix")
+        if self.dataset.G is None:
+            A_path = os.path.abspath(os.path.join(os.path.dirname(__file__), self.path, 's_pre_adj_mat.npz'))
+            try:
+                pre_adj_mat = sp.load_npz(A_path)
+                logging.info("successfully loaded...")
+                norm_adj = pre_adj_mat
+            except :
+                logging.info("generating adjacency matrix")
+                s = time()
+                # adj_mat 的横纵坐标将用户与物品进行拼接，并将已知连接进行标记
+                adj_mat = sp.dok_matrix((self.n_users + self.items_num, self.n_users + self.items_num), dtype=np.float32)
+                adj_mat = adj_mat.tolil()
+                R = self.UserItemNet.tolil()
+                adj_mat[:self.n_users, self.n_users:] = R
+                adj_mat[self.n_users:, :self.n_users] = R.T
+                adj_mat = adj_mat.todok() # 将矩阵转换为字典形式（键值对）
+                # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
+                
+                rowsum = np.array(adj_mat.sum(axis=1))
+                d_inv = np.power(rowsum, -0.5).flatten()
+                d_inv[np.isinf(d_inv)] = 0.
+                d_mat = sp.diags(d_inv) # 对角线元素为每行求和
+                
+                norm_adj = d_mat.dot(adj_mat)
+                norm_adj = norm_adj.dot(d_mat)
+                norm_adj = norm_adj.tocsr()
+                end = time()
+                logging.info(f"costing {end-s}s, saved norm_mat...")
+                sp.save_npz(A_path, norm_adj)
+
+            if self.split == True:
+                self.dataset.G = self._split_A_hat(norm_adj)
+                logging.info("matrix splitted")
+            else:
+                self.dataset.G = self._convert_sp_mat_to_sp_tensor(norm_adj)
+                self.dataset.G = self.dataset.G.coalesce().cuda()
+                logging.info("didn't split the matrix")
+        return self.dataset.G
 
     def computer(self):
         """
@@ -248,9 +322,18 @@ class KGEncoder(nn.Module):
 
 class KGLRR(KnowledgeRecommender):
     input_type = InputType.PAIRWISE
-    def __init__(self, config, dataset, kg_dataset) -> None:
-        super(KGLRR,self).__init__()
-        self.encoder = KGEncoder(config, dataset, kg_dataset)
+    def __init__(self, config, dataset) -> None:
+        super().__init__(config, dataset)
+
+        # Load Full Knowledge Graph in dict form
+        if dataset.G is not None and dataset.kg_relation is not None:
+            self.G, self.kg_dataset = dataset.G, dataset.kg_dataset
+        else:
+            self.G, self.kg_dataset = dataset.ckg_dict_graph()
+            if config["save_dataset"]:
+                dataset.save()
+        
+        self.encoder = KGEncoder(config, dataset, self.kg_dataset)
         self.latent_dim = config['latent_dim_rec']
 
         self.r_logic = config['r_logic']
@@ -261,8 +344,8 @@ class KGLRR(KnowledgeRecommender):
         self.l2s_weight = config['l2_loss']
         
         self.dataset = dataset
-        self.num_items = dataset.m_items
-        self.kg_dataset = kg_dataset
+        self.num_items = dataset.item_num
+        
 
         self._init_weights()
         self.bceloss = nn.BCEWithLogitsLoss()
@@ -296,7 +379,7 @@ class KGLRR(KnowledgeRecommender):
         return vector
 
     def logic_regularizer(self, train:bool, check_list:list, constraint, constraint_valid):
-        # 该函数计算逻辑表达与真实世界的差距
+        # This function calculates the gap between logical expressions and the real world
 
         # length
         r_length = constraint.norm(dim=2).sum()

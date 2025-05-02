@@ -11,6 +11,9 @@ beam_search_hop: [25,5,1]
 # The kge embeddings necessary to score paths
 additional_feat_suffix: [useremb, entityemb, relationemb]
 
+# The path constraint to be used. Options are:
+path_constraint: none
+
 # To load the pretrained embeddings (Typically from TransE) necessary to score the paths
 load_col:
     useremb: [userid, user_embedding]
