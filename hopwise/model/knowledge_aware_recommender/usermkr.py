@@ -86,7 +86,7 @@ class UserMKR(KnowledgeRecommender):
         tail_indices=None,
         task="rs",
     ):
-        self.user_embeddings = self.user_embeddings_lookup(item_indices)
+        self.user_embeddings = self.user_embeddings_lookup(user_indices)
         self.item_embeddings = self.item_embeddings_lookup(item_indices)
         head_embeddings = self.entity_embeddings_lookup(head_indices)
         self.item_embeddings, item_head_embeddings = self.item_cc_unit(

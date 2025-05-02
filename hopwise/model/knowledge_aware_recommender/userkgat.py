@@ -251,7 +251,6 @@ class UserKGAT(KnowledgeRecommender):
 
     def update_attentive_A(self):
         r"""Update the attention matrix using the updated embedding matrix"""
-
         kg_score_list, row_list, col_list = [], [], []
         # To reduce the GPU memory consumption, we calculate the scores of KG triples according to the type of relation
         for rel_idx in range(1, self.n_relations, 1):

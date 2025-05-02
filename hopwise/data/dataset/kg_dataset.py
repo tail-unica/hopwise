@@ -1289,3 +1289,100 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             dropped_index = self.kg_feat.index[dropped_kg]
             self.logger.debug(f"[{len(dropped_index)}] dropped triples.")
             self.kg_feat.drop(dropped_index, inplace=True)
+
+    def _create_ckg_source_target(self, form="numpy"):
+        """Create base collaborative knowledge graph.
+
+        Args:
+            form (str, optional): The format of the returned graph source and target.
+            Defaults to ``numpy``.
+        """
+        user_num = self.user_num
+
+        if form == "numpy":
+            hids = self.head_entities
+            tids = self.tail_entities
+
+            uids = self.inter_feat[self.uid_field].numpy()
+            iids = self.inter_feat[self.iid_field].numpy() + user_num
+
+            src = np.concatenate([uids, iids, hids])
+            tgt = np.concatenate([iids, uids, tids])
+        elif form == "torch":
+            kg_tensor = self.kg_feat
+            inter_tensor = self.inter_feat
+
+            hids = kg_tensor[self.head_entity_field]
+            tids = kg_tensor[self.tail_entity_field]
+
+            uids = inter_tensor[self.uid_field]
+            iids = inter_tensor[self.iid_field] + user_num
+
+            src = torch.cat([uids, iids, hids])
+            tgt = torch.cat([iids, uids, tids])
+        else:
+            raise NotImplementedError(f"form [{form}] has not been implemented.")
+
+        return src, tgt
+
+    def _create_ckg_sparse_matrix(self, form="coo", show_relation=False):
+        src, tgt = self._create_ckg_source_target(form="numpy")
+
+        ui_rel_num = self.inter_num
+        ui_rel_id = self.relation_num - 1
+        assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
+
+        if not show_relation:
+            data = np.ones(len(src))
+        else:
+            kg_rel = self.kg_feat[self.relation_field].numpy()
+            ui_rel = np.full(2 * ui_rel_num, ui_rel_id, dtype=kg_rel.dtype)
+            data = np.concatenate([ui_rel, kg_rel])
+        mat = coo_matrix((data, (src, tgt)), shape=(self.entity_num, self.entity_num))
+        if form == "coo":
+            return mat
+        elif form == "csr":
+            return mat.tocsr()
+        else:
+            raise NotImplementedError(f"Sparse matrix format [{form}] has not been implemented.")
+
+    def _create_ckg_igraph(self, show_relation=False, directed=True):
+        import igraph as ig
+
+        vertex_type_attrs = np.concatenate(
+            [
+                [self.uid_field] * self.user_num,
+                [self.iid_field] * self.item_num,
+                [self.entity_field] * (self.entity_num - self.item_num),
+            ],
+            axis=0,
+        )
+        if show_relation:
+            n_ui_relations = self.inter_num * 2 if directed else self.inter_num
+            edge_type_attrs = np.concatenate(
+                [[self.ui_relation] * n_ui_relations, self.field2id_token[self.relation_field][self.relations]], axis=0
+            )
+        else:
+            edge_type_attrs = None
+
+        if directed:
+            src, tgt = self._create_ckg_source_target(form="numpy")
+        else:
+            hids = self.head_entities
+            tids = self.tail_entities
+
+            uids = self.inter_feat[self.uid_field].numpy()
+            iids = self.inter_feat[self.iid_field].numpy() + self.user_num
+
+            src = np.concatenate([uids, hids])
+            tgt = np.concatenate([iids, tids])
+
+        tuple_graph = list(zip(src, tgt))
+        ig_graph = ig.Graph(
+            edges=tuple_graph,
+            vertex_attrs={"type": vertex_type_attrs},
+            edge_attrs={"type": edge_type_attrs} if show_relation else None,
+            directed=directed,
+        )
+
+        return ig_graph
