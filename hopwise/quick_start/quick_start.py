@@ -119,7 +119,7 @@ def run_hopwise(
             model=model,
             dataset=dataset,
             config_file_list=config_file_list,
-            config_dict=config_dict,
+            config_dict=config_dict
         )
         logger = get_logger(config)
         # dataset filtering

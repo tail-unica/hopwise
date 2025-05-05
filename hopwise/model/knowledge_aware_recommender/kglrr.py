@@ -437,7 +437,9 @@ class KGLRR(KnowledgeRecommender):
             return new_v1, new_v2
         return vector1, vector2
 
-    def just_predict(self, users, history, explain=True):
+    def predict(self, interaction, explain=True):
+        users = interaction[self.USER_ID]
+        history = interaction[self.ITEM_ID]
         bs = users.size(0)
         item_embed = self.encoder.computer()[1]   # item_num * V
         

@@ -31,7 +31,7 @@ preload_weight:
   relationid: relation_embedding
 
 # KGLRR specific (aggiunti come custom keys)
-use_kgcn: "RGAT"
+kgcn: "RGAT"
 latent_dim_rec: 64
 lightGCN_n_layers: 3
 entity_num_per_item: 10
@@ -51,6 +51,8 @@ epochs: 1000
 test_start_epoch: 15
 early_stop_cnt: 10
 test_verbose: 1
+
+layers: 1
 
 # Meta
 tensorboard: true
