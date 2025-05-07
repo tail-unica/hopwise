@@ -7,6 +7,7 @@ from torch.nn.init import ones_
 
 import numpy as np
 import scipy.sparse as sp
+from scipy.sparse import csr_matrix
 
 from sklearn.metrics import *
 
@@ -90,6 +91,7 @@ class KGEncoder(nn.Module):
 
     def __init__(self, config, dataset, kg_dataset):
         super().__init__()
+        self.batch_size = config['batch_size']
         self.kgcn = config['kgcn']
         self.dropout = config['dropout']
         self.keep_prob = 1 - self.dropout #Added
@@ -101,6 +103,10 @@ class KGEncoder(nn.Module):
         self.kg_dataset = kg_dataset
         self.gat = GAT(self.latent_dim, self.latent_dim,
                        dropout=0.4, alpha=0.2).train()
+        self.trainUser = self.dataset.inter_feat[self.dataset.USER_ID].values
+        self.trainItem = self.dataset.trainItem
+        self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
+                                      shape=(self.dataset.user_num, self.dataset.item_num))
         self.__init_weight()
     
     def __init_weight(self):
@@ -137,7 +143,7 @@ class KGEncoder(nn.Module):
         
         self.f = nn.Sigmoid()
         #self.Graph = self.dataset.getSparseGraph()
-        self.Graph = self.getSparseGraph()
+        self.Graph = self.getSparseGraph() # TODO: Change this, because return a GraphDict and not a Tensor...(?)
         # self.ItemNet = self.kg_dataset.get_item_net_from_kg(self.num_items)
         self.kg_dict, self.item2relations = self.get_kg_dict(
             self.num_items)
@@ -171,45 +177,32 @@ class KGEncoder(nn.Module):
         The returned data is a processed list, the length of the list is determined by self.fold, 
         and each item in the list is a sparse matrix representing the connection matrix of the entity 
         at the corresponding index for that length.
-        '''
-        logging.info("loading adjacency matrix")
-        if self.dataset.G is None:
-            A_path = os.path.abspath(os.path.join(os.path.dirname(__file__), self.path, 's_pre_adj_mat.npz'))
-            try:
-                pre_adj_mat = sp.load_npz(A_path)
-                logging.info("successfully loaded...")
-                norm_adj = pre_adj_mat
-            except :
-                logging.info("generating adjacency matrix")
-                s = time()
-                # adj_mat 的横纵坐标将用户与物品进行拼接，并将已知连接进行标记
-                adj_mat = sp.dok_matrix((self.n_users + self.items_num, self.n_users + self.items_num), dtype=np.float32)
-                adj_mat = adj_mat.tolil()
-                R = self.UserItemNet.tolil()
-                adj_mat[:self.n_users, self.n_users:] = R
-                adj_mat[self.n_users:, :self.n_users] = R.T
-                adj_mat = adj_mat.todok() # 将矩阵转换为字典形式（键值对）
-                # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
-                
-                rowsum = np.array(adj_mat.sum(axis=1))
-                d_inv = np.power(rowsum, -0.5).flatten()
-                d_inv[np.isinf(d_inv)] = 0.
-                d_mat = sp.diags(d_inv) # 对角线元素为每行求和
-                
-                norm_adj = d_mat.dot(adj_mat)
-                norm_adj = norm_adj.dot(d_mat)
-                norm_adj = norm_adj.tocsr()
-                end = time()
-                logging.info(f"costing {end-s}s, saved norm_mat...")
-                sp.save_npz(A_path, norm_adj)
+        '''        
+        logging.info("generating adjacency matrix")
+        s = time()
+        # The rows and columns of adj_mat concatenate users and items, marking known connections.
+        adj_mat = sp.dok_matrix((self.num_users + self.num_items, self.num_users + self.num_items), dtype=np.float32)
+        adj_mat = adj_mat.tolil()
+        R = self.dataset.UserItemNet.tolil()
+        adj_mat[:self.num_users, self.num_users:] = R
+        adj_mat[self.num_users:, :self.num_users] = R.T
+        adj_mat = adj_mat.todok() # Convert the matrix to dictionary format (key-value pairs)
+        # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
+        
+        rowsum = np.array(adj_mat.sum(axis=1))
+        d_inv = np.power(rowsum, -0.5).flatten()
+        d_inv[np.isinf(d_inv)] = 0.
+        d_mat = sp.diags(d_inv) # 对角线元素为每行求和
+        
+        norm_adj = d_mat.dot(adj_mat)
+        norm_adj = norm_adj.dot(d_mat)
+        norm_adj = norm_adj.tocsr()
+        end = time()
+        logging.info(f"costing {end-s}s, saved norm_mat...")
 
-            if self.split == True:
-                self.dataset.G = self._split_A_hat(norm_adj)
-                logging.info("matrix splitted")
-            else:
-                self.dataset.G = self._convert_sp_mat_to_sp_tensor(norm_adj)
-                self.dataset.G = self.dataset.G.coalesce().cuda()
-                logging.info("didn't split the matrix")
+        self.dataset.G = self._convert_sp_mat_to_sp_tensor(norm_adj)
+        self.dataset.G = self.dataset.G.coalesce().cuda()
+        logging.info("\033[31mDidn't split the matrix\033[0m")
         return self.dataset.G
 
     def computer(self):
@@ -269,33 +262,64 @@ class KGEncoder(nn.Module):
         elif (self.kgcn == "NO"):
             return self.embedding_item.weight
 
-    def cal_item_embedding_gat(self, kg: dict):
-        item_embs = self.embedding_item(torch.IntTensor(
-            list(kg.keys())).cuda())  # item_num, emb_dim
+    # def cal_item_embedding_gat(self, kg: dict):
+        
+        # print("\033[92mStarting with batches...\033[0m")
+        # item_embs = self.embedding_item(torch.IntTensor(
+            # list(kg.keys())).cuda())  # item_num, emb_dim
         # item_num, entity_num_each
-        item_entities = torch.stack(list(kg.values()))
+        # item_entities = torch.stack(list(kg.values()))
         # item_num, entity_num_each, emb_dim
-        entity_embs = self.embedding_entity(item_entities)
+        # entity_embs = self.embedding_entity(item_entities)
         # item_num, entity_num_each
-        padding_mask = torch.where(item_entities != self.num_entities, torch.ones_like(
+        # padding_mask = torch.where(item_entities != self.num_entities, torch.ones_like(
+            # item_entities), torch.zeros_like(item_entities)).float()
+        # return self.gat(item_embs, entity_embs, padding_mask)
+    
+    def cal_item_embedding_gat(self, kg: dict):
+        
+        print("\033[92mStarting with batches...\033[0m")
+        batch_size = self.config['batch_size']
+        item_keys = list(kg.keys())
+        item_embs_list = []
+        
+        for i in range(0, len(item_keys), batch_size):
+            batch_keys = item_keys[i:i+batch_size]
+            item_embs = self.embedding_item(torch.IntTensor(batch_keys).cuda())  # batch_size, emb_dim
+            # batch_size, entity_num_each
+            item_entities = torch.stack([kg[key] for key in batch_keys])
+            # batch_size, entity_num_each, emb_dim
+            entity_embs = self.embedding_entity(item_entities)
+            # batch_size, entity_num_each
+            padding_mask = torch.where(item_entities != self.num_entities, torch.ones_like(
             item_entities), torch.zeros_like(item_entities)).float()
-        return self.gat(item_embs, entity_embs, padding_mask)
+            batch_embs = self.gat(item_embs, entity_embs, padding_mask)
+            item_embs_list.append(batch_embs)
+        
+        return torch.cat(item_embs_list, dim=0)
 
     def cal_item_embedding_rgat(self, kg: dict):
-        item_embs = self.embedding_item(torch.IntTensor(
-            list(kg.keys())).cuda())  # item_num, emb_dim
-        # item_num, entity_num_each
-        item_entities = torch.stack(list(kg.values()))
-        item_relations = torch.stack(list(self.item2relations.values()))
-        # item_num, entity_num_each, emb_dim
-        entity_embs = self.embedding_entity(item_entities)
-        relation_embs = self.embedding_relation(
-            item_relations)  # item_num, entity_num_each, emb_dim
-        # w_r = self.W_R[relation_embs] # item_num, entity_num_each, emb_dim, emb_dim
-        # item_num, entity_num_each
-        padding_mask = torch.where(item_entities != self.num_entities, torch.ones_like(
+        print("\033[92mStarting with batches...\033[0m")
+        batch_size = self.batch_size
+        item_keys = list(kg.keys())
+        item_embs_list = []
+        
+        for i in range(0, len(item_keys), batch_size):
+            batch_keys = item_keys[i:i+batch_size]
+            item_embs = self.embedding_item(torch.IntTensor(batch_keys).cuda())  # batch_size, emb_dim
+            # batch_size, entity_num_each
+            item_entities = torch.stack([kg[key] for key in batch_keys])
+            item_relations = torch.stack([self.item2relations[key] for key in batch_keys])
+            # batch_size, entity_num_each, emb_dim
+            entity_embs = self.embedding_entity(item_entities)
+            relation_embs = self.embedding_relation(item_relations)  # batch_size, entity_num_each, emb_dim
+            # batch_size, entity_num_each
+            padding_mask = torch.where(item_entities != self.num_entities, torch.ones_like(
             item_entities), torch.zeros_like(item_entities)).float()
-        return self.gat.forward_relation(item_embs, entity_embs, relation_embs, padding_mask)
+            batch_embs = self.gat.forward_relation(item_embs, entity_embs, relation_embs, padding_mask)
+            item_embs_list.append(batch_embs)
+        
+        return torch.cat(item_embs_list, dim=0)
 
     def cal_item_embedding_mean(self, kg: dict):
         item_embs = self.embedding_item(torch.IntTensor(
@@ -329,7 +353,10 @@ class KGLRR(KnowledgeRecommender):
         if dataset.G is not None and dataset.kg_relation is not None:
             self.G, self.kg_dataset = dataset.G, dataset.kg_dataset
         else:
+            # Load the knowledge graph from the dataset
+            print("\033[92mLoading KG...\033[0m")
             self.G, self.kg_dataset = dataset.ckg_dict_graph()
+            # self.G, self.kg_dataset = dataset.ckg_graph("pyg")
             if config["save_dataset"]:
                 dataset.save()
         
@@ -439,7 +466,7 @@ class KGLRR(KnowledgeRecommender):
 
     def predict(self, interaction, explain=True):
         users = interaction[self.USER_ID]
-        history = interaction[self.ITEM_ID]
+        history = interaction[self.ITEM_ID]# TODO: check if this is correct
         bs = users.size(0)
         item_embed = self.encoder.computer()[1]   # item_num * V
         

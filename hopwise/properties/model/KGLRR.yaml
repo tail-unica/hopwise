@@ -44,7 +44,7 @@ r_logic: 1.0e-4
 r_length: 1.0e-5
 l2_loss: 1.0e-4
 
-batch_size: 1024
+batch_size: 4 #1024
 test_u_batch_size: 2048
 lr: 5.0e-4
 epochs: 1000
