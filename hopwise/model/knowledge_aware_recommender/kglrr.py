@@ -103,8 +103,9 @@ class KGEncoder(nn.Module):
         self.kg_dataset = kg_dataset
         self.gat = GAT(self.latent_dim, self.latent_dim,
                        dropout=0.4, alpha=0.2).train()
-        self.trainUser = self.dataset.inter_feat[self.dataset.USER_ID].values
-        self.trainItem = self.dataset.trainItem
+        
+        self.config = config
+        self.read_file("train")
         self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
                                       shape=(self.dataset.user_num, self.dataset.item_num))
         self.__init_weight()
@@ -147,6 +148,69 @@ class KGEncoder(nn.Module):
         # self.ItemNet = self.kg_dataset.get_item_net_from_kg(self.num_items)
         self.kg_dict, self.item2relations = self.get_kg_dict(
             self.num_items)
+
+    def read_file(self, filetype):
+        """
+        Adattato per Hopwise: Legge i dati di interazione da inter_feat e popola gli attributi necessari.
+
+        Args:
+            filetype (str): Tipo di file da leggere ('train', 'test', 'valid').
+        """
+        if not hasattr(self.dataset, 'inter_feat'):
+            logging.info(f"\033[91mDataset does not contain inter_feat\033[0m")
+            return
+
+        inter_feat = self.dataset.inter_feat
+
+        maxhis = self.config["maxhis"]
+
+        # Estrai USER_ID e ITEM_ID
+        user_col = self.dataset.uid_field  # Nome della colonna per USER_ID
+        item_col = self.dataset.iid_field  # Nome della colonna per ITEM_ID
+
+        if user_col not in inter_feat or item_col not in inter_feat:
+            logging.info(f"\033[91mColumns {user_col} or {item_col} not found in inter_feat\033[0m")
+            return
+
+        UniqueUsers, Item, User = [], [], []
+        UsersHis = []
+        dataSize = 0
+
+        # Itera sui dati di inter_feat
+        user_ids = inter_feat[user_col]
+        item_ids = inter_feat[item_col]
+
+        for uid, iid in zip(user_ids, item_ids):
+            uid = int(uid)  # ID utente
+            iid = int(iid)  # ID oggetto
+
+            if filetype == "train":
+                # Costruzione della cronologia per gli utenti
+                his = []
+                for i in range(len(item_ids)):
+                    this_his = item_ids[:i] if maxhis <= 0 else item_ids[max(0, i - maxhis):i]
+                    padding = torch.full((maxhis - this_his.size(0),), -1, dtype=this_his.dtype, device=this_his.device)
+                    this_his = torch.cat((this_his, padding))
+                    his.append(this_his)
+                UsersHis.extend(his)
+
+            UniqueUsers.append(uid)
+            User.append(uid)
+            Item.append(iid)
+
+            self.m_item = max(self.dataset.item_num, iid)
+            self.n_user = max(self.dataset.user_num, uid)
+            dataSize += 1
+
+        # Salva i dati come attributi della classe
+        setattr(self, f'{filetype}UniqueUsers', np.array(UniqueUsers))
+        setattr(self, f'{filetype}User', np.array(User))
+        setattr(self, f'{filetype}Item', np.array(Item))
+        if filetype == "train":
+            setattr(self, f'{filetype}UsersHis', np.array(UsersHis))
+        setattr(self, f'{filetype}Size', dataSize)
+
+        logging.info(f"{dataSize} interactions for {filetype}")
 
     def get_kg_dict(self, item_num):
         i2es = dict()

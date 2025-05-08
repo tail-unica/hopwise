@@ -53,6 +53,7 @@ early_stop_cnt: 10
 test_verbose: 1
 
 layers: 1
+maxhis : 10
 
 # Meta
 tensorboard: true
