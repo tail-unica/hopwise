@@ -12,6 +12,7 @@ from scipy.sparse import csr_matrix
 from sklearn.metrics import *
 
 import logging
+from tqdm import tqdm  # Importa tqdm per la barra di caricamento
 import os
 from time import time
 
@@ -91,6 +92,7 @@ class KGEncoder(nn.Module):
 
     def __init__(self, config, dataset, kg_dataset):
         super().__init__()
+        self.maxhis = config['maxhis']
         self.batch_size = config['batch_size']
         self.kgcn = config['kgcn']
         self.dropout = config['dropout']
@@ -105,7 +107,7 @@ class KGEncoder(nn.Module):
                        dropout=0.4, alpha=0.2).train()
         
         self.config = config
-        self.read_file("train")
+        self.process_inter_feat("train")
         self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
                                       shape=(self.dataset.user_num, self.dataset.item_num))
         self.__init_weight()
@@ -148,8 +150,46 @@ class KGEncoder(nn.Module):
         # self.ItemNet = self.kg_dataset.get_item_net_from_kg(self.num_items)
         self.kg_dict, self.item2relations = self.get_kg_dict(
             self.num_items)
+        
+    def process_inter_feat(self, filetype):
+        logging.info("\033[92mProcessing interaction features...\033[0m")
+        inter_feat = self.dataset.inter_feat
+        UniqueUsers, Item, User = [], [], []
+        UsersHis = []
+        dataSize = 0
 
-    def read_file(self, filetype):
+        user_ids = inter_feat['user_id'].numpy()
+        item_ids = inter_feat['item_id'].numpy()
+
+        last_uid = None
+        user_items = []
+
+        for uid, iid in zip(user_ids, item_ids):
+            if filetype == "train":
+                if last_uid is None or uid != last_uid:
+                    user_items = []
+                this_his = user_items[-self.maxhis:] if self.maxhis > 0 else user_items[:]
+                this_his += [-1] * (self.maxhis - len(this_his))
+                UsersHis.append(this_his)
+                user_items.append(iid)
+            UniqueUsers.append(uid)
+            User.append(uid)
+            Item.append(iid)
+            self.m_item = max(self.dataset.item_num, iid)
+            self.n_user = max(self.dataset.user_num, uid)
+            dataSize += 1
+            last_uid = uid
+
+        setattr(self, f'{filetype}UniqueUsers', np.array(UniqueUsers))
+        setattr(self, f'{filetype}User', np.array(User))
+        setattr(self, f'{filetype}Item', np.array(Item))
+        setattr(self, f'{filetype}UsersHis', np.array(UsersHis))
+        setattr(self, f'{filetype}Size', dataSize)
+
+        logging.info(f"{dataSize} interactions for {filetype}")
+
+
+    def get_inetrfeat(self, filetype):
         """
         Adattato per Hopwise: Legge i dati di interazione da inter_feat e popola gli attributi necessari.
 
@@ -234,7 +274,13 @@ class KGEncoder(nn.Module):
                 i2rs[item] = torch.IntTensor([self.dataset.relation_num]*self.dataset.entity_num).cuda()
         return i2es, i2rs
         
-    
+    def _convert_sp_mat_to_sp_tensor(self, X):
+        coo = X.tocoo().astype(np.float32)
+        row = torch.Tensor(coo.row).long()
+        col = torch.Tensor(coo.col).long()
+        index = torch.stack([row, col])
+        data = torch.FloatTensor(coo.data)
+        return torch.sparse.FloatTensor(index, data, torch.Size(coo.shape))
         
     def getSparseGraph(self):
         '''Calculate the connection graph in graph convolution, including A~, etc.
@@ -247,7 +293,7 @@ class KGEncoder(nn.Module):
         # The rows and columns of adj_mat concatenate users and items, marking known connections.
         adj_mat = sp.dok_matrix((self.num_users + self.num_items, self.num_users + self.num_items), dtype=np.float32)
         adj_mat = adj_mat.tolil()
-        R = self.dataset.UserItemNet.tolil()
+        R = self.UserItemNet.tolil()
         adj_mat[:self.num_users, self.num_users:] = R
         adj_mat[self.num_users:, :self.num_users] = R.T
         adj_mat = adj_mat.todok() # Convert the matrix to dictionary format (key-value pairs)
