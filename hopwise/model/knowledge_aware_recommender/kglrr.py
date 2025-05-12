@@ -92,6 +92,13 @@ class KGEncoder(nn.Module):
 
     def __init__(self, config, dataset, kg_dataset):
         super().__init__()
+
+        self.user_history_dict = dict()
+        for user_id, item_id in zip(dataset.inter_feat['user_id'].numpy(), dataset.inter_feat['item_id'].numpy()):
+            if user_id not in self.user_history_dict:
+                self.user_history_dict[user_id] = []
+            self.user_history_dict[user_id].append(item_id)
+
         self.maxhis = config['maxhis']
         self.batch_size = config['batch_size']
         self.kgcn = config['kgcn']
@@ -576,8 +583,18 @@ class KGLRR(KnowledgeRecommender):
 
     def predict(self, interaction, explain=True):
         users = interaction[self.USER_ID]
-        history = interaction[self.ITEM_ID]# TODO: check if this is correct
         bs = users.size(0)
+        maxhis = self.encoder.maxhis
+
+        history_list = []
+
+        for uid in users.tolist():
+            user_his = self.encoder.user_history_dict.get(uid, [])
+            user_his = user_his[-maxhis:]  # limita alla lunghezza massima
+            user_his += [-1] * (maxhis - len(user_his))  # padding
+            history_list.append(user_his)
+
+        history = torch.tensor(history_list, dtype=torch.long, device=users.device)  # [B, H]
         item_embed = self.encoder.computer()[1]   # item_num * V
         
         his_valid = history.ge(0).float()  # B * H
@@ -677,20 +694,32 @@ class KGLRR(KnowledgeRecommender):
         - Entropy Loss (tloss)
         - L2 Loss (l2loss)
         """
-
         # Estrazione dei tensori dal dizionario interaction
-        batch_users = interaction['users'].long().cuda()
-        batch_pos = interaction['pos_items'].long().cuda()
-        batch_neg = interaction['neg_items'].long().cuda()
-        batch_history = interaction['history'].long().cuda()
+        batch_users = interaction['user_id'].long().cuda()
+        batch_pos = interaction['item_id'].long().cuda()
+        batch_neg = interaction['neg_item_id'].long().cuda()
 
-        # La forward del modello restituisce le 3 componenti della loss
+        # Costruzione della history nello stesso modo di predict
+        bs = batch_users.size(0)
+        maxhis = self.encoder.maxhis
+        history_list = []
+
+        for uid in batch_users.tolist():
+            user_his = self.encoder.user_history_dict.get(uid, [])
+            user_his = user_his[-maxhis:]  # limita alla lunghezza massima
+            user_his += [-1] * (maxhis - len(user_his))  # padding
+            history_list.append(user_his)
+
+        batch_history = torch.tensor(history_list, dtype=torch.long, device=batch_users.device)
+
+        # Forward del modello con le 3 componenti della loss
         rloss, tloss, l2loss = self.forward(False, 0, batch_users, batch_pos, batch_neg, batch_history)
 
-        # Combinazione delle tre componenti
+        # Combinazione delle 3 componenti
         total_loss = rloss + tloss + l2loss
 
         return total_loss
+
 
     def triple_loss(self, TItemScore, FItemScore):
         bce_loss = self.bceloss(TItemScore.sigmoid(), torch.ones_like(TItemScore)) + \
