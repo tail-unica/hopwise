@@ -394,9 +394,7 @@ class KGEncoder(nn.Module):
         # return self.gat(item_embs, entity_embs, padding_mask)
     
     def cal_item_embedding_gat(self, kg: dict):
-        
-        print("\033[92mStarting with batches...\033[0m")
-        batch_size = self.config['batch_size']
+        batch_size = self.batch_size
         item_keys = list(kg.keys())
         item_embs_list = []
         
@@ -416,8 +414,7 @@ class KGEncoder(nn.Module):
         return torch.cat(item_embs_list, dim=0)
 
     def cal_item_embedding_rgat(self, kg: dict):
-        print("\033[92mStarting with batches...\033[0m")
-        batch_size = 4  # puoi alzare progressivamente se non esaurisce memoria
+        batch_size = self.batch_size
         item_keys = list(kg.keys())
         item_embs_list = []
 

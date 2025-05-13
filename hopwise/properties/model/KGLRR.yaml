@@ -32,28 +32,27 @@ preload_weight:
 
 # KGLRR specific (aggiunti come custom keys)
 kgcn: "RGAT"
-latent_dim_rec: 64
-lightGCN_n_layers: 3
-entity_num_per_item: 10
+latent_dim_rec: 32  # Riduci da 64 a 32
+lightGCN_n_layers: 2  # Riduci da 3 a 2
+entity_num_per_item: 5  # Riduci da 10 a 5
 kgc_joint: true
 kgc_temp: 0.2
 ssl_reg: 0.1
-dropout: 1
+dropout: 0.2  # Riduci da 1 a 0.2
 
 r_logic: 1.0e-4
 r_length: 1.0e-5
 l2_loss: 1.0e-4
 
-batch_size: 64
-test_u_batch_size: 2048
-lr: 5.0e-4
-epochs: 1000
-test_start_epoch: 15
+batch_size: 64  # Riduci da 128 a 64 o anche 32
+test_u_batch_size: 1024  # Riduci il batch size per il test
+lr: 1.0e-3  # Aumenta da 5.0e-4 a 1.0e-3
+test_start_epoch: 20
 early_stop_cnt: 10
 test_verbose: 1
 
 layers: 1
-maxhis : 10
+maxhis: 5  # Riduci da 10 a 5
 sim_scale: 10
 
 # Meta
