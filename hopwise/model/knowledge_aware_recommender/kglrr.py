@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from torch.nn.init import ones_
+import gc
 
 import numpy as np
 import scipy.sparse as sp
@@ -323,28 +324,27 @@ class KGEncoder(nn.Module):
         return self.dataset.G
 
     def computer(self):
-        """
-        propagate methods for lightGCN
-        """
-        users_emb = self.embedding_user.weight
-        items_emb = self.cal_item_embedding_from_kg(self.kg_dict)
-        all_emb = torch.cat([users_emb, items_emb])
-        embs = [all_emb]
-        if self.dropout:
-            if self.training:
-                g_droped = self.__dropout(self.keep_prob)
+        with torch.no_grad():
+            users_emb = self.embedding_user.weight
+            items_emb = self.cal_item_embedding_from_kg(self.kg_dict)
+            all_emb = torch.cat([users_emb, items_emb])
+            embs = [all_emb]
+            if self.dropout:
+                if self.training:
+                    g_droped = self.__dropout(self.keep_prob)
+                else:
+                    g_droped = self.Graph
             else:
                 g_droped = self.Graph
-        else:
-            g_droped = self.Graph
-        for layer in range(self.n_layers):
-            all_emb = torch.sparse.mm(g_droped, all_emb)
-            embs.append(all_emb)
-        embs = torch.stack(embs, dim=1)
-        # logging.info(embs.size())
-        light_out = torch.mean(embs, dim=1)
-        users, items = torch.split(light_out, [self.num_users, self.num_items])
-        return users, items
+
+            for layer in range(self.n_layers):
+                all_emb = torch.sparse.mm(g_droped, all_emb)
+                embs.append(all_emb)
+
+            embs = torch.stack(embs, dim=1)
+            light_out = torch.mean(embs, dim=1)
+            users, items = torch.split(light_out, [self.num_users, self.num_items])
+            return users, items
 
     def __dropout_x(self, x, keep_prob):
         size = x.size()
@@ -417,25 +417,32 @@ class KGEncoder(nn.Module):
 
     def cal_item_embedding_rgat(self, kg: dict):
         print("\033[92mStarting with batches...\033[0m")
-        batch_size = self.batch_size
+        batch_size = 4  # puoi alzare progressivamente se non esaurisce memoria
         item_keys = list(kg.keys())
         item_embs_list = []
-        
+
         for i in range(0, len(item_keys), batch_size):
             batch_keys = item_keys[i:i+batch_size]
-            item_embs = self.embedding_item(torch.IntTensor(batch_keys).cuda())  # batch_size, emb_dim
-            # batch_size, entity_num_each
+
+            # Pulisci cache prima di ogni batch
+            gc.collect()
+            torch.cuda.empty_cache()
+
+            item_embs = self.embedding_item(torch.IntTensor(batch_keys).cuda())
             item_entities = torch.stack([kg[key] for key in batch_keys])
             item_relations = torch.stack([self.item2relations[key] for key in batch_keys])
-            # batch_size, entity_num_each, emb_dim
+
             entity_embs = self.embedding_entity(item_entities)
-            relation_embs = self.embedding_relation(item_relations)  # batch_size, entity_num_each, emb_dim
-            # batch_size, entity_num_each
+            relation_embs = self.embedding_relation(item_relations)
+
             padding_mask = torch.where(item_entities != self.num_entities, torch.ones_like(
-            item_entities), torch.zeros_like(item_entities)).float()
-            batch_embs = self.gat.forward_relation(item_embs, entity_embs, relation_embs, padding_mask)
+                item_entities), torch.zeros_like(item_entities)).float()
+
+            with torch.no_grad():
+                batch_embs = self.gat.forward_relation(item_embs, entity_embs, relation_embs, padding_mask)
+
             item_embs_list.append(batch_embs)
-        
+
         return torch.cat(item_embs_list, dim=0)
 
     def cal_item_embedding_mean(self, kg: dict):
