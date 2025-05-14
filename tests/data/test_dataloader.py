@@ -906,7 +906,6 @@ class TestKnowledgePathDataLoader:
         subsequent_pos_items = paths[:, -1] - dataset.user_num
         assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
 
-    # @pytest.mark.skip(reason="Cannot run numba compiled function in pytest")
     def test_kg_add_paths_relations(self):
         config_dict = {
             "model": "PEARLM",
@@ -958,9 +957,8 @@ class TestKnowledgePathDataLoader:
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         path_string = "U2 R5 I2 R1 E7 R1 I3\nU2 R5 I3 R1 E7 R1 I2\nU2 R5 I2 R2 E9 R3 I3"
         train_data.dataset._path_dataset = path_string
-        train_data.dataset._tokenized_dataset = None
-        train_data.dataset.tokenize_path_dataset(phase="train")
-        tokenized_dataset = train_data.dataset.tokenized_dataset
+        train_data.tokenize_path_dataset(phase="train")
+        tokenized_dataset = train_data.tokenized_dataset
         tokenized_path_string = tokenized_dataset.data["train"]["input_ids"].to_pylist()
         split_path_string = path_string.split("\n")
         assert tokenized_path_string[0] == train_data.dataset.tokenizer(split_path_string[0])["input_ids"]

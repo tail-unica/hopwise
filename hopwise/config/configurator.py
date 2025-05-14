@@ -358,7 +358,7 @@ class Config:
             elif self.final_config_dict["loss_type"] in ["BPR"]:
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
         else:
-            raise ValueError("Either Model has attr 'input_type'," "or arg 'loss_type' should exist in config.")
+            raise ValueError("Either Model has attr 'input_type',or arg 'loss_type' should exist in config.")
 
         metrics = self.final_config_dict["metrics"]
         if isinstance(metrics, str):
@@ -464,9 +464,9 @@ class Config:
                 raise ValueError(
                     f"train_neg_sample_args:[{self.final_config_dict['train_neg_sample_args']}] should be a dict."
                 )
-            for op_args in default_train_neg_sample_args:
+            for op_args, op_args_values in default_train_neg_sample_args.items():
                 if op_args not in self.final_config_dict["train_neg_sample_args"]:
-                    self.final_config_dict["train_neg_sample_args"][op_args] = default_train_neg_sample_args[op_args]
+                    self.final_config_dict["train_neg_sample_args"][op_args] = op_args_values
 
         # eval_args checking
         default_eval_args = {
@@ -583,8 +583,7 @@ class Config:
                 }
             elif distribution not in ["uniform", "popularity"]:
                 raise ValueError(
-                    f"The distribution [{distribution}] of train_neg_sample_args "
-                    f"should in ['uniform', 'popularity']"
+                    f"The distribution [{distribution}] of train_neg_sample_args should in ['uniform', 'popularity']"
                 )
 
     def _set_eval_neg_sample_args(self, phase: Literal["valid", "test"]):

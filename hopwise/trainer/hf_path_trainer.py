@@ -71,12 +71,12 @@ class CumulativeSequenceScoreRanker:
         self.avg_topk_size = {}
 
     def calculate_sequence_scores(self, normalized_tuple, sequences):
-        last_5_tokens = sequences[:, -self.max_new_tokens :]
+        new_sequence_tokens = sequences[:, -self.max_new_tokens - 1 : -1]
         sequence_scores = []
         # Iterate over each tensor in the normalized tuple
         for i in range(self.max_new_tokens):
-            # Get the probabilities corresponding to the ith token in last_5_tokens
-            probs = normalized_tuple[i].gather(1, last_5_tokens[:, [i]])
+            # Get the probabilities corresponding to the ith token in new_sequence_tokens
+            probs = normalized_tuple[i].gather(1, new_sequence_tokens[:, [i]])
             sequence_scores.append(probs)
         # Convert the list of tensors into a single tensor
         sequence_scores = torch.cat(sequence_scores, dim=-1)
@@ -112,6 +112,9 @@ class CumulativeSequenceScoreRanker:
             uid_token = seq[0]
             recommended_token = seq[-1]
 
+            if recommended_token == self.tokenizer.pad_token:
+                continue
+
             if not (
                 uid_token.startswith(PathLanguageModelingTokenType.USER.value)
                 and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
@@ -123,7 +126,59 @@ class CumulativeSequenceScoreRanker:
 
             if torch.isfinite(scores[user_index, recommended_item]) or recommended_item in self.used_ids[uid]:
                 continue
+            scores[user_index, recommended_item] = sequence_score
 
+            if uid not in self.avg_topk_size:
+                self.avg_topk_size[uid] = set()
+
+            user_topk_sequences.append((uid, recommended_item, None, seq))
+            self.avg_topk_size[uid].add(seq[-1])
+
+        return scores, user_topk_sequences
+
+
+class BeamSearchSequenceScoreRanker:
+    """
+    Ranker that uses the sequence score of the beam search to rank sequences.
+    """
+
+    def __init__(self, tokenizer, used_ids, item_num, topk=10, max_new_tokens=24):
+        self.tokenizer = tokenizer
+        self.used_ids = used_ids
+        self.item_num = item_num
+        self.max_new_tokens = max_new_tokens
+        self.topk = topk
+        self.avg_topk_size = {}
+
+    def get_sequences(self, batch_len, generation_outputs):
+        user_num = batch_len
+        scores = torch.full((user_num, self.item_num), -torch.inf)
+        user_topk_sequences = list()
+
+        sequences = generation_outputs.sequences
+        num_return_sequences = sequences.shape[0] // user_num
+        batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
+
+        sorted_indices = generation_outputs.sequences_scores.argsort(descending=True)
+        sorted_sequences = sequences[sorted_indices]
+        sorted_batch_user_index = batch_user_index[sorted_indices]
+
+        for sequence, user_index, sequence_score in zip(sorted_sequences, sorted_batch_user_index, sorted_indices):
+            seq = self.tokenizer.decode(sequence).split(" ")
+            uid_token = seq[0]
+            recommended_token = seq[-1]
+
+            if not (
+                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
+                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
+            ):
+                continue
+
+            uid = int(uid_token[1:])
+            recommended_item = int(recommended_token[1:])
+
+            if torch.isfinite(scores[user_index, recommended_item]) or recommended_item in self.used_ids[uid]:
+                continue
             scores[user_index, recommended_item] = sequence_score
 
             if uid not in self.avg_topk_size:
@@ -187,59 +242,6 @@ class SampleSearchSequenceScoreRanker:
 
             if recommended_token == self.tokenizer.pad_token:
                 continue
-
-            if not (
-                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
-                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
-            ):
-                continue
-
-            uid = int(uid_token[1:])
-            recommended_item = int(recommended_token[1:])
-
-            if torch.isfinite(scores[user_index, recommended_item]) or recommended_item in self.used_ids[uid]:
-                continue
-            scores[user_index, recommended_item] = sequence_score
-
-            if uid not in self.avg_topk_size:
-                self.avg_topk_size[uid] = set()
-
-            user_topk_sequences.append((uid, recommended_item, None, seq))
-            self.avg_topk_size[uid].add(seq[-1])
-
-        return scores, user_topk_sequences
-
-
-class BeamSearchSequenceScoreRanker:
-    """
-    Ranker that uses the sequence score of the beam search to rank sequences.
-    """
-
-    def __init__(self, tokenizer, used_ids, item_num, topk=10, max_new_tokens=24):
-        self.tokenizer = tokenizer
-        self.used_ids = used_ids
-        self.item_num = item_num
-        self.max_new_tokens = max_new_tokens
-        self.topk = topk
-        self.avg_topk_size = {}
-
-    def get_sequences(self, batch_len, generation_outputs):
-        user_num = batch_len
-        scores = torch.full((user_num, self.item_num), -torch.inf)
-        user_topk_sequences = list()
-
-        sequences = generation_outputs.sequences
-        num_return_sequences = sequences.shape[0] // user_num
-        batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
-
-        sorted_indices = generation_outputs.sequences_scores.argsort(descending=True)
-        sorted_sequences = sequences[sorted_indices]
-        sorted_batch_user_index = batch_user_index[sorted_indices]
-
-        for sequence, user_index, sequence_score in zip(sorted_sequences, sorted_batch_user_index, sorted_indices):
-            seq = self.tokenizer.decode(sequence).split(" ")
-            uid_token = seq[0]
-            recommended_token = seq[-1]
 
             if not (
                 uid_token.startswith(PathLanguageModelingTokenType.USER.value)
@@ -361,15 +363,15 @@ class HFPathTrainer(Trainer):
         paths_per_user=10,
         path_generation_args=None,
         eval_device="cpu",
+        tokenizer=None,
     ):
         hopwise_dataset = hopwise_train_data.dataset
-        tokenizer = hopwise_dataset.tokenizer
-
+        tokenizer = tokenizer or hopwise_dataset.tokenizer
         super().__init__(
             model=model,
             args=args,
             callbacks=None,
-            train_dataset=hopwise_dataset.tokenized_dataset["train"],
+            train_dataset=hopwise_train_data.tokenized_dataset["train"],
             eval_dataset="none",
             processing_class=tokenizer,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
@@ -388,8 +390,8 @@ class HFPathTrainer(Trainer):
         used_ids = hopwise_train_data.general_dataloader._sampler.used_ids
         tokenized_used_ids = get_tokenized_used_ids(used_ids, self.processing_class)
 
-        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations
-        self.token_sequence_length = (1 + path_hop_length) + path_hop_length
+        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
+        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 2
 
         # TODO: add inference template as config param and use that instead of the hardcoded values
         ranker_max_new_tokens = self.token_sequence_length - 2
@@ -535,7 +537,7 @@ class HopwiseCallback(TrainerCallback):
     def on_epoch_begin(self, args, state, control, **kwargs):
         self.training_start_time = time()
 
-        len_hf_dataloader = len(self.train_data.dataset.tokenized_dataset["train"])
+        len_hf_dataloader = len(self.train_data.tokenized_dataset["train"])
         steps_in_epoch = len_hf_dataloader // self.hopwise_trainer.config["train_batch_size"]
         steps_in_epoch += int(len_hf_dataloader % self.hopwise_trainer.config["train_batch_size"] > 0)
         self.progress_bar = (

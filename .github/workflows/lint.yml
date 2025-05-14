@@ -13,27 +13,22 @@ on:
 jobs:
   lint:
     runs-on: ${{ inputs.os }}
-    outputs:
-      lint_status: ${{ steps.test_code_format.outputs.status }}
 
     steps:
       - uses: actions/checkout@v4
-
       - name: Install uv and set the python version
         uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ inputs.python-version }}
-
-      - name: Install dependencies
+      - name: Install the project to follow ruff directives in pyproject.toml
         run: |
-          uv pip install ruff
+          uv sync --group "cu121"
       - uses: astral-sh/ruff-action@v3
-      - name: Test code format
-        id: test_code_format
+      - name: Lint code
         run: |
-          ruff check --fix
-          ruff format
-          echo "status=success" >> $GITHUB_OUTPUT
+          uv run ruff check --fix
+          uv run ruff format
+          uv run ruff check --select I --fix
       - name: Apply code-format changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:

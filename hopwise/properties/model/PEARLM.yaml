@@ -9,6 +9,7 @@ save_dataloaders: False
 save_dataset: False
 ranker: BeamSearchSequenceScoreRanker # one of ['SampleSearchSequenceScoreRanker', 'BeamSearchSequenceScoreRanker', 'SimilaritySequenceScoreRanker', 'CumulativeSequenceScoreRanker']
 logits_processor: ConstrainedBeamLogitsProcessorWordLevel # one of ['ConstrainedBeamLogitsProcessorWordLevel', 'ConstrainedLogitsProcessorWordLevel']
+use_kg_token_types: True        # (bool) Whether to use token types for the knowledge graph.
 
 path_sample_args:
     restrict_by_phase: False    # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.

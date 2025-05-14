@@ -395,14 +395,14 @@ class AUC(LossMetric):
 
         if fps[-1] <= 0:
             logger = getLogger()
-            logger.warning("No negative samples in y_true, " "false positive value should be meaningless")
+            logger.warning("No negative samples in y_true, false positive value should be meaningless")
             fpr = np.repeat(np.nan, fps.shape)
         else:
             fpr = fps / fps[-1]
 
         if tps[-1] <= 0:
             logger = getLogger()
-            logger.warning("No positive samples in y_true, " "true positive value should be meaningless")
+            logger.warning("No positive samples in y_true, true positive value should be meaningless")
             tpr = np.repeat(np.nan, tps.shape)
         else:
             tpr = tps / tps[-1]

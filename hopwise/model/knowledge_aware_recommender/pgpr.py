@@ -537,12 +537,12 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
         # 2) Pick best paths for each user-product pair based on the score
         best_pred_paths = defaultdict(list)
-        for user in pred_paths:
-            for item in pred_paths[user]:
+        for user, user_pred_paths in pred_paths.items():
+            for item in user_pred_paths:
                 if item in self.positives[user]:
                     continue
                 # Get the path with highest probability
-                sorted_path = sorted(pred_paths[user][item], key=lambda x: x[1], reverse=True)[0]
+                sorted_path = sorted(user_pred_paths[item], key=lambda x: x[1], reverse=True)[0]
                 best_pred_paths[user].append(sorted_path)
 
         # 3) Fill the results tensor

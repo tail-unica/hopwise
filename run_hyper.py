@@ -30,8 +30,7 @@ def tune(args):
         display_file=args.display_file,
         output_path=args.output_path,
         study_name=args.study_name,
-        show_progress=args.show_progress,
-        load_previous_study=args.load_previous_study,
+        resume=args.resume,
     )
     ht.run()
     ht.export_result(output_path=args.output_path)
@@ -66,7 +65,7 @@ if __name__ == "__main__":
         default=f"hyper_{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}",
         help="Trial study name for hyper tuning.",
     )
-    hyperopt_algo = parser.add_argument(
+    parser.add_argument(
         "--algo",
         type=str,
         default=None,
@@ -77,6 +76,11 @@ if __name__ == "__main__":
         "For ray it identifies searcher and scheduler separated by '-'. One of them can be omitted. "
         "Examples: async_hyperband, bohb, bohb-pbt_replay. \n"
         "For more details, please refer to the official website of the corresponding tool.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume the tuning process from the checkpoint, which is saved in os.path.join(output_path, study_name).",
     )
     args, _ = parser.parse_known_args()
 

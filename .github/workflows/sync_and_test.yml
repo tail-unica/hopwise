@@ -12,70 +12,60 @@ on:
       os:
         required: true
         type: string
-      experimental:
+      experimental_or_skip_heavy_tests:
         required: true
         type: boolean
 
 jobs:
-  sync:
+  sync_and_test:
     runs-on: ${{ inputs.os }}
-    continue-on-error: ${{ inputs.experimental }}
-    outputs:
-      sync_status: ${{ steps.sync_step.outputs.status }}
 
     steps:
       - uses: actions/checkout@v4
-
       - name: Install uv and set the python version
         uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ inputs.python-version }}
 
-      - id: sync_step
-        name: Install the project
+      # Sync pipeline
+      - name: Install the project
         run: |
           uv sync --group ${{ inputs.env }}
 
-          # install torch-sparse
-          if [ "${{ inputs.env }}" == "cu124" ]; then
-            uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
-          elif [ "${{ inputs.env }}" == "cpu" ]; then
-            uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
-          elif [ "${{ inputs.env }}" == "cu118" ]; then
-            uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu118.html
-          else
-            uv pip install torch-sparse -f https://data.pyg.org/whl/torch-2.3.1+cu121.html
-          fi
-
-          echo "status=success" >> $GITHUB_OUTPUT
-  test:
-    needs: sync
-    runs-on: ${{ inputs.os }}
-    continue-on-error: ${{ inputs.experimental }}
-    outputs:
-      test_status: ${{ steps.test_project.outputs.status }}
-
-    steps:
-      - name: Test Overall
+      - if: ${{ inputs.env == 'cu124' }}
         run: |
-          python -m pytest -v -n auto tests/config
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
+      - if: ${{ inputs.env == 'cpu' }}
+        run: |
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
+      - if: ${{ inputs.env == 'cu118' }}
+        run: |
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cu118.html
+      - if: ${{ inputs.env == 'cu121' }}
+        run: |
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.3.1+cu121.html
+
+      # Testing pipeline
+      - name: Test Overall
+        if: ${{ inputs.experimental_or_skip_heavy_tests == false && inputs.os == 'ubuntu-latest' }}
+        run: |
+          uv run -m pytest -v -n auto tests/config/test_overall.py
+      - name: Test Config
+        run: |
+          uv run -m pytest -v -n auto tests/config/test_config.py
       - name: Test metrics
         run: |
-          python -m pytest -v -n auto tests/metrics
+          uv run -m pytest -v -n auto tests/metrics
       - name: Test data
         run: |
-          python -m pytest -v -n auto tests/data
+          uv run -m pytest -v -n auto tests/data
       - name: Test evaluation_setting
         run: |
-          python -m pytest -v -n auto tests/evaluation_setting
+          uv run -m pytest -v -n auto tests/evaluation_setting
       - name: Test model
-        if: inputs.experimental == 'false' && inputs.os == 'ubuntu-latest'
+        if: ${{ inputs.experimental_or_skip_heavy_tests == false && inputs.os == 'ubuntu-latest' }}
         run: |
-          python -m pytest -v -n auto tests/model/test_model_auto.py
+          uv run -m pytest -v -n auto tests/model/test_model_auto.py
       - name: Test hyper_tuning
         run: |
-          python -m pytest -v tests/hyper_tuning/test_hyper_tuning.py
-      - name: Output test status
-        id: test_project
-        run: |
-          echo "status=success" >> $GITHUB_OUTPUT
+          uv run -m pytest -v tests/hyper_tuning/test_hyper_tuning.py
