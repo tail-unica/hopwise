@@ -189,9 +189,9 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
             new_path = []
             # Process the path
             # U R I R I R I
-            for node_idx in range(0, len(path), 2):
+            for node_idx in range(1, len(path) + 1, 2):
                 if path[node_idx].startswith(PathLanguageModelingTokenType.USER.value):
-                    if not node_idx:
+                    if not node_idx - 1:
                         new_node = ("self_loop", "user", int(path[node_idx][1:]))
                     else:
                         new_node = (int(path[node_idx - 1][1:]), "user", int(path[node_idx][1:]))

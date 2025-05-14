@@ -10,7 +10,7 @@ from tokenizers import models as token_models
 from tokenizers import processors as token_processors
 from tokenizers import trainers as token_trainers
 from tqdm import tqdm
-from transformers import DatasetDict, HuggingFaceDataset, PreTrainedTokenizerFast
+from transformers import PreTrainedTokenizerFast
 
 from hopwise.data import Interaction
 from hopwise.data.dataset import KnowledgeBasedDataset
@@ -217,34 +217,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             tokenized_kg[tail_token][relation_token].add(head_token)
 
         return tokenized_kg
-
-    def tokenize_path_dataset(self, phase="train"):
-        """Tokenize the path dataset.
-
-        Args:
-            phase (str, optional): The phase for which the path dataset is used. Defaults to "train".
-        """
-
-        if self._tokenized_dataset is None:
-            special_token_ids = [
-                self.tokenizer.bos_token_id,
-                self.tokenizer.eos_token_id,
-                self.tokenizer.unk_token_id,
-                self.tokenizer.pad_token_id,
-                self.tokenizer.mask_token_id,
-            ]
-
-            def remove_incorrect_paths(tokenized_dataset):
-                return not any(path in special_token_ids for path in tokenized_dataset["input_ids"])
-
-            def tokenization(example):
-                return self.tokenizer(example["path"], truncation=True, padding=True, max_length=self.context_length)
-
-            hf_path_dataset = HuggingFaceDataset.from_dict({"path": self.path_dataset.split("\n")})
-            tokenized_dataset = hf_path_dataset.map(tokenization, batched=True, remove_columns=["path"])
-            tokenized_dataset = tokenized_dataset.filter(remove_incorrect_paths)
-            tokenized_dataset = DatasetDict({phase: tokenized_dataset})
-            self._tokenized_dataset = tokenized_dataset
 
     def generate_user_path_dataset(self, used_ids):
         """Generate path dataset by sampling paths from the knowledge graph.

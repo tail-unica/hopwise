@@ -1574,11 +1574,6 @@ class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
         else:
             self.special_tokens_ids = None
 
-    def mask_non_eos_tokens(self, scores):
-        """Apply masking to all tokens except EOS tokens."""
-        scores[:] = -math.inf
-        scores[:, self.eos_token_id] = 0.0
-
     def is_bos_token_in_input(self, input_ids):
         """Check if the input contains a BOS token. Checking the first sequence is enough."""
         return (input_ids[0, 0] == self.bos_token_id).item()
@@ -1595,7 +1590,7 @@ class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
             )
             unique_input_ids = input_ids[input_ids_indices]
 
-        full_mask = np.zeros((unique_input_ids.shape[0], self.tokenizer.vocab_size), dtype=bool)
+        full_mask = np.zeros((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
         for idx in range(unique_input_ids.shape[0]):
             if self.task == self.RECOMMENDATION_TASK:
                 key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
@@ -1608,7 +1603,6 @@ class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
         if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
             scores[full_mask[input_ids_inv]] = -math.inf
             # replace lm scores with transe dot product scores to encourage the model to generate quality paths
-
         else:
             scores[full_mask] = -math.inf
 
@@ -1705,7 +1699,6 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         mask_cache_size=3 * 10**4,
         pos_candidates_cache_size=1 * 10**5,
         task="recommendation",
-        wte_embeddings=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1716,7 +1709,6 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         self.num_return_sequences = num_return_sequences
         self.eos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.eos_token)
         self.bos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.bos_token)
-        # self.wte_embeddings = wte_embeddings.cpu()
         self.pos_candidates_cache = LFUCache(pos_candidates_cache_size)
         self.mask_cache = LFUCache(mask_cache_size)
         self.task = task
@@ -1730,7 +1722,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
             self.special_tokens_ids = None
 
     def __call__(self, input_ids, scores):
-        full_mask = torch.zeros((input_ids.shape[0], self.tokenizer.vocab_size), dtype=bool, device=scores.device)
+        full_mask = torch.zeros((input_ids.shape[0], len(self.tokenizer)), dtype=bool, device=scores.device)
         for idx in range(input_ids.shape[0]):
             if self.task == self.RECOMMENDATION_TASK:
                 key, candidate_tokens = self.process_scores_rec(input_ids, idx)
@@ -1739,7 +1731,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
             banned_mask = self.get_banned_mask(key, candidate_tokens)
 
-            if banned_mask.sum() == self.tokenizer.vocab_size:
+            if banned_mask.sum() == len(self.tokenizer):
                 banned_mask[self.tokenizer.pad_token_id] = False
 
             full_mask[idx] = banned_mask
@@ -1753,13 +1745,12 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
 
         key = self.get_current_key(input_ids, idx)
-
         if current_len == self.max_sequence_length - 1 - has_bos_token:
             current_uid = input_ids[idx, int(has_bos_token)].item()
             uid_cond_key = (current_uid, *key)
             candidate_tokens = self.pos_candidates_cache.get(uid_cond_key)
             if candidate_tokens is None:
-                candidate_tokens = list(self.get_candidates_rec(*key))
+                candidate_tokens = self.get_candidates_rec(*key)
 
                 # Get user positives
                 user_used_ids = self.tokenized_ignored_ids[current_uid]
@@ -1818,10 +1809,8 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         """Retrieve or cache the banned token mask for a specific key."""
         banned_mask = self.mask_cache.get(key)
         if banned_mask is None:
-            banned_mask = torch.zeros(self.tokenizer.vocab_size, dtype=bool)
-            banned_mask[candidate_tokens] = True
-            # Ban positives, the not of negatives.
-            banned_mask = torch.logical_not(banned_mask)
+            banned_mask = torch.ones(len(self.tokenizer), dtype=bool)
+            banned_mask[candidate_tokens] = False
             self.mask_cache[key] = banned_mask
         return banned_mask
 

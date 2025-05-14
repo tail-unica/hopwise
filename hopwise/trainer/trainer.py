@@ -1977,7 +1977,6 @@ class HFPathLanguageModelingTrainer(Trainer):
             show_progress=show_progress,
             callback_fn=callback_fn,
         )
-
         self.hf_trainer.train()
         self.hf_trainer._load_best_model()
         self.hf_trainer.save_model()

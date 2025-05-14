@@ -109,7 +109,7 @@ class CumulativeSequenceScoreRanker:
         ):
             seq = self.tokenizer.decode(sequence).split(" ")
 
-            uid_token = seq[0]
+            uid_token = seq[1]
             recommended_token = seq[-1]
 
             if recommended_token == self.tokenizer.pad_token:
@@ -146,7 +146,6 @@ class BeamSearchSequenceScoreRanker:
         self.tokenizer = tokenizer
         self.used_ids = used_ids
         self.item_num = item_num
-        self.max_new_tokens = max_new_tokens
         self.topk = topk
         self.avg_topk_size = {}
 
@@ -165,7 +164,7 @@ class BeamSearchSequenceScoreRanker:
 
         for sequence, user_index, sequence_score in zip(sorted_sequences, sorted_batch_user_index, sorted_indices):
             seq = self.tokenizer.decode(sequence).split(" ")
-            uid_token = seq[0]
+            uid_token = seq[1]
             recommended_token = seq[-1]
 
             if not (
@@ -201,8 +200,8 @@ class SampleSearchSequenceScoreRanker:
         self.tokenizer = tokenizer
         self.used_ids = used_ids
         self.item_num = item_num
-        self.max_new_tokens = max_new_tokens
         self.topk = topk
+        self.max_new_tokens = max_new_tokens
         self.avg_topk_size = {}
 
     def get_scores(self, sequences, scores):
@@ -237,7 +236,7 @@ class SampleSearchSequenceScoreRanker:
         sequences_score = self.get_scores(sequences[:, -self.max_new_tokens :], generation_outputs.scores)
         for sequence, user_index, sequence_score in zip(sequences, batch_user_index, sequences_score):
             seq = self.tokenizer.decode(sequence).split(" ")
-            uid_token = seq[0]
+            uid_token = seq[1]
             recommended_token = seq[-1]
 
             if recommended_token == self.tokenizer.pad_token:
@@ -391,10 +390,10 @@ class HFPathTrainer(Trainer):
         tokenized_used_ids = get_tokenized_used_ids(used_ids, self.processing_class)
 
         # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
-        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 2
+        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 1
 
         # TODO: add inference template as config param and use that instead of the hardcoded values
-        ranker_max_new_tokens = self.token_sequence_length - 2
+        ranker_max_new_tokens = self.token_sequence_length - 3
 
         if self.hopwise_config["ranker"] == "CumulativeSequenceScoreRanker":
             self.ranker_rec = CumulativeSequenceScoreRanker(
@@ -410,7 +409,6 @@ class HFPathTrainer(Trainer):
                 used_ids,
                 hopwise_dataset.item_num,
                 topk=10,
-                max_new_tokens=ranker_max_new_tokens,
             )
         elif self.hopwise_config["ranker"] == "SampleSearchSequenceScoreRanker":
             self.ranker_rec = SampleSearchSequenceScoreRanker(
@@ -441,7 +439,6 @@ class HFPathTrainer(Trainer):
                         self.processing_class,
                         self.paths_per_user,
                         task=ConstrainedLogitsProcessorWordLevel.RECOMMENDATION_TASK,
-                        wte_embeddings=self.model.transformer.wte.weight,
                     )
                 ]
             )
