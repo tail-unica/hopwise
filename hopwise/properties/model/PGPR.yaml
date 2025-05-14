@@ -9,7 +9,6 @@ weight_factor: 1e-3
 beam_search_hop: [25,5,1]
 fix_scores_sorting_bug: False
 
-metrics: ['NDCG', 'NDCG_old', 'MRR', 'Hit', 'Precision', 'Recall', 'LIR', 'Fidelity', 'SEP', 'LID','SED', 'PTD', 'PTC', 'LITD', 'SETD', 'PPT']
 # The kge embeddings necessary to score paths
 additional_feat_suffix: [useremb, entityemb, relationemb]
 

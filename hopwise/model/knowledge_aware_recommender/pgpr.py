@@ -19,7 +19,7 @@ from torch import nn
 from torch.distributions import Categorical
 
 from hopwise.model.abstract_recommender import ExplainableRecommender, KnowledgeRecommender
-from hopwise.utils import InputType, KGPathExplanationTokenType
+from hopwise.utils import InputType, PathLanguageModelingTokenType
 
 
 class PGPR(KnowledgeRecommender, ExplainableRecommender):
@@ -433,10 +433,33 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
         # make explanations as pandas dataframe, then return the results
         df = pd.DataFrame(explanations, columns=["user", "product", "score", "path"])
-
         df["path"] = df["path"].apply(self.decode_path)
 
         return df
+
+    def decode_path(self, path):
+        decoded_path = []
+        for node in path:
+            # append relations
+            if node[0] != "self_loop":
+                decoded_path.append(f"{PathLanguageModelingTokenType.RELATION.value}{node[0]}")
+
+            # append everything else
+
+            e_type = node[1]
+            eid = node[2]
+
+            if e_type == "user":
+                e_type = PathLanguageModelingTokenType.USER.value
+            elif eid in range(self.n_items):
+                e_type = PathLanguageModelingTokenType.ITEM.value
+            else:
+                e_type = PathLanguageModelingTokenType.ENTITY.value
+
+            # node[1] is the node type, node[2] is the node id
+            decoded_path.append(f"{e_type}{eid}")
+
+        return decoded_path
 
     def beam_search(self, users):
         users = [user.item() for user in users]
@@ -549,30 +572,6 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
                 collect_results.append([user, product, score, path])
 
         return results, collect_results
-
-    def decode_path(self, path):
-        decoded_path = []
-        for node in path:
-            # append relations
-            if node[0] != "self_loop":
-                decoded_path.append(f"{KGPathExplanationTokenType.RELATION.value}{node[0]}")
-
-            # append everything else
-
-            e_type = node[1]
-            eid = node[2]
-
-            if e_type == "user":
-                e_type = KGPathExplanationTokenType.USER.value
-            elif eid in self.items:
-                e_type = KGPathExplanationTokenType.ITEM.value
-            else:
-                e_type = KGPathExplanationTokenType.ENTITY.value
-
-            # node[1] is the node type, node[2] is the node id
-            decoded_path.append(f"{e_type}{eid}")
-
-        return decoded_path
 
 
 class KGState:

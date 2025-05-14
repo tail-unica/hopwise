@@ -14,12 +14,13 @@ import random
 from functools import reduce
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.utils import InputType
+from hopwise.utils import InputType, PathLanguageModelingTokenType
 
 
 class CAFE(KnowledgeRecommender):
@@ -334,6 +335,53 @@ class CAFE(KnowledgeRecommender):
         path_counts = self._estimate_path_count(users)
         results = self.run_program(users, path_counts, predicted_paths)
         return results
+
+    def explain(self, interaction):
+        """Support function used for case study.
+
+        Args:
+            interaction : test interaction data
+
+        Returns:
+            pd.Dataframe: explanation results with columns: "user", "product", "score", "path"
+        """
+        users = interaction[self.USER_ID]
+
+        kg_mask = KGMask(self.graph_dict, self.ui_relation_id)
+        predicted_paths = self._infer_paths(users, kg_mask)
+        path_counts = self._estimate_path_count(users)
+        _, explanations = self.run_program(users, path_counts, predicted_paths)
+
+        # make explanations as pandas dataframe, then return the results
+        df = pd.DataFrame(explanations, columns=["user", "product", "score", "path"])
+        df["path"] = df["path"].apply(self.decode_path)
+
+        return df
+
+    def decode_path(self, path):
+        decoded_path = []
+        for node in path:
+            # append relations
+            if node[0] != "self_loop":
+                relation = self.dataset.token2id(self.dataset.relation_field, node[0])
+                decoded_path.append(f"{PathLanguageModelingTokenType.RELATION.value}{relation}")
+
+            # append everything else
+
+            e_type = node[1]
+            eid = node[2]
+
+            if e_type == "user":
+                e_type = PathLanguageModelingTokenType.USER.value
+            elif eid in range(self.n_items):
+                e_type = PathLanguageModelingTokenType.ITEM.value
+            else:
+                e_type = PathLanguageModelingTokenType.ENTITY.value
+
+            # node[1] is the node type, node[2] is the node id
+            decoded_path.append(f"{e_type}{eid}")
+
+        return decoded_path
 
     def _infer_paths(self, users, kg_mask):
         predictions = dict()

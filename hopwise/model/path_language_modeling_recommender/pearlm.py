@@ -1,18 +1,25 @@
 from enum import IntEnum
 from typing import Optional, Union
 
+import pandas as pd
 import torch
 from torch import nn
-from transformers import AutoConfig, GPT2LMHeadModel
+from transformers import AutoConfig, GPT2LMHeadModel, LogitsProcessorList
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from hopwise.data import Interaction
-from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
+from hopwise.model.abstract_recommender import ExplainableRecommender, PathLanguageModelingRecommender
+from hopwise.trainer.hf_path_trainer import (
+    ConstrainedLogitsProcessorWordLevel,
+    CumulativeSequenceScoreRanker,
+    get_tokenized_used_ids,
+)
+from hopwise.utils import PathLanguageModelingTokenType
 
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("ENTITY", 1), ("RELATION", 2)])
 
 
-class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
+class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecommender):
     """PEARLM is a path-language-modeling recommender. It learns the sequence of entity-relation triplets
     from a knowledge graph as a next-token prediction task.
     """
@@ -128,3 +135,70 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
 
     def predict(self, input_ids, **kwargs):
         return self.forward(input_ids, **kwargs)
+
+    def explain(self, interaction):
+        tokenized_used_ids = get_tokenized_used_ids(self.used_ids, self.tokenizer)
+        token_sequence_length = (1 + self.model_config["path_hop_length"]) + self.model_config["path_hop_length"]
+        paths_per_user = self.model_config["path_generation_args"]["paths_per_user"]
+
+        ranker = CumulativeSequenceScoreRanker(
+            self.tokenizer,
+            self.used_ids,
+            self.dataset.item_num,
+            topk=10,
+            max_new_tokens=token_sequence_length - 2,
+        )
+        logits_processor = LogitsProcessorList(
+            [
+                ConstrainedLogitsProcessorWordLevel(
+                    self.dataset.get_tokenized_ckg(),
+                    tokenized_used_ids,
+                    token_sequence_length,
+                    self.tokenizer,
+                    paths_per_user,
+                    task=ConstrainedLogitsProcessorWordLevel.RECOMMENDATION_TASK,
+                )
+            ]
+        )
+        self.model_config["path_generation_args"].pop("paths_per_user")
+        outputs = self.generate(
+            **interaction,
+            max_length=token_sequence_length,
+            min_length=token_sequence_length,
+            num_return_sequences=paths_per_user,
+            logits_processor=logits_processor,
+            return_dict_in_generate=True,
+            output_scores=True,
+            **self.model_config["path_generation_args"],
+        )
+        scores, user_topk_sequences = ranker.get_sequences(interaction["input_ids"].size(0), outputs)
+        paths = []
+        for i, (user, sequence) in enumerate(user_topk_sequences.items()):
+            product = int(sequence[-1][1:])
+            paths.append([user, product, scores[i, product], sequence])
+        # # make explanations as pandas dataframe, then return the results
+        df = pd.DataFrame(paths, columns=["user", "product", "score", "path"])
+
+        return df
+
+    def decode_path(self, paths):
+        """Standardise path format"""
+        new_paths = list()
+        for user, product, score, path in paths:
+            new_path = []
+            # Process the path
+            # U R I R I R I
+            for node_idx in range(0, len(path), 2):
+                if path[node_idx].startswith(PathLanguageModelingTokenType.USER.value):
+                    if not node_idx:
+                        new_node = ("self_loop", "user", int(path[node_idx][1:]))
+                    else:
+                        new_node = (int(path[node_idx - 1][1:]), "user", int(path[node_idx][1:]))
+                elif path[node_idx].startswith(PathLanguageModelingTokenType.ITEM.value):
+                    new_node = (int(path[node_idx - 1][1:]), "item", int(path[node_idx][1:]))
+                else:
+                    # Is an entity
+                    new_node = (int(path[node_idx - 1][1:]), "entity", int(path[node_idx][1:]))
+                new_path.append(new_node)
+            new_paths.append([user, product, score, new_path])
+        return new_paths

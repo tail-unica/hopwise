@@ -46,6 +46,28 @@ class SSMLoss(nn.Module):
         return nce_loss
 
 
+class SimCELoss(nn.Module):
+    """Simplified Sampled Softmax Cross- Entropy Loss (SimCE),
+    based on the implementation in https://arxiv.org/pdf/2406.16170"""
+
+    def __init__(self, margin=5.0):
+        super().__init__()
+        self.margin = margin
+
+    def forward(self, user_emb, pos_item_emb, neg_item_emb):
+        # user_emb: [batch, dim]
+        # pos_item_emb: [batch, dim]
+        # neg_item_emb: [batch, num_neg, dim]
+        num_neg, dim = neg_item_emb.shape[1], neg_item_emb.shape[2]
+        neg_item_emb = neg_item_emb.reshape(-1, num_neg, dim)
+        pos_score = torch.mul(user_emb, pos_item_emb).sum(dim=1)
+        neg_score = torch.mul(user_emb.unsqueeze(dim=1), neg_item_emb).sum(dim=-1)
+        neg_score = torch.max(neg_score, dim=-1).values
+        loss = torch.relu(self.margin - pos_score + neg_score)
+
+        return torch.mean(loss)
+
+
 class BPRLoss(nn.Module):
     """BPRLoss, based on Bayesian Personalized Ranking
 

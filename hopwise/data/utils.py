@@ -83,10 +83,35 @@ def save_split_dataloaders(config, dataloaders):
         dataloaders (tuple of AbstractDataLoader): The split dataloaders.
     """
     ensure_dir(config["checkpoint_dir"])
-    file_path = os.path.join(
-        config["checkpoint_dir"],
-        f'{config["dataset"]}-for-{config["model"]}-dataloader.pth',
-    )
+    if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
+        dataloaders_folder = f'{config["model"]} - {config["dataset"]} - dataloaders'
+        ensure_dir(os.path.join(config["checkpoint_dir"], dataloaders_folder))
+        path_gen_args = config["path_sample_args"]
+
+        max_path_per_user = config["MAX_PATHS_PER_USER"]
+        max_rw_tries_per_iid = config["MAX_RW_TRIES_PER_IID"]
+        restrict_by_phase = path_gen_args["restrict_by_phase"]
+        temporal_causality = path_gen_args["temporal_causality"]
+        strategy = path_gen_args["strategy"]
+        collaborative_path = path_gen_args["collaborative_path"]
+
+        file_path = os.path.join(
+            config["checkpoint_dir"],
+            dataloaders_folder,
+            f'{config["dataset"]}-for-{config["model"]}'
+            f'-str {strategy}'
+            f'-mppu {max_path_per_user}'
+            f'-max_tries {max_rw_tries_per_iid}'
+            f'-temp {temporal_causality}'
+            f'-col {collaborative_path}'
+            f'-restrbyphase {restrict_by_phase}-dataloader.pth',
+        )
+    else:
+        file_path = os.path.join(
+            config["checkpoint_dir"],
+            f'{config["dataset"]}-for-{config["model"]}-dataloader.pth',
+        )
+
     logger = getLogger()
     logger.info(set_color("Saving split dataloaders into", "pink") + f": [{file_path}]")
     serialization_dataloaders = []
@@ -119,11 +144,38 @@ def load_split_dataloaders(config):
     Returns:
         dataloaders (tuple of AbstractDataLoader or None): The split dataloaders.
     """
-    default_file = os.path.join(
-        config["checkpoint_dir"],
-        f'{config["dataset"]}-for-{config["model"]}-dataloader.pth',
-    )
-    dataloaders_save_path = config["dataloaders_save_path"] or default_file
+
+    if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
+        dataloaders_folder = f'{config["model"]} - {config["dataset"]} - dataloaders'
+        path_gen_args = config["path_sample_args"]
+
+        max_path_per_user = config["MAX_PATHS_PER_USER"]
+        max_rw_tries_per_iid = config["MAX_RW_TRIES_PER_IID"]
+        restrict_by_phase = path_gen_args["restrict_by_phase"]
+        temporal_causality = path_gen_args["temporal_causality"]
+        strategy = path_gen_args["strategy"]
+        collaborative_path = path_gen_args["collaborative_path"]
+
+        dataloaders_save_path = os.path.join(
+            config["checkpoint_dir"],
+            dataloaders_folder,
+            f'{config["dataset"]}-for-{config["model"]}'
+            f'-str {strategy}'
+            f'-mppu {max_path_per_user}'
+            f'-max_tries {max_rw_tries_per_iid}'
+            f'-temp {temporal_causality}'
+            f'-col {collaborative_path}'
+            f'-restrbyphase {restrict_by_phase}-dataloader.pth',
+        )
+
+    else:
+        default_file = os.path.join(
+            config["checkpoint_dir"],
+            f'{config["dataset"]}-for-{config["model"]}-dataloader.pth',
+        )
+        # used if you want to load a specific dataloader
+        dataloaders_save_path = config["dataloaders_save_path"] or default_file
+
     if not os.path.exists(dataloaders_save_path):
         return None
     with open(dataloaders_save_path, "rb") as f:
@@ -155,7 +207,6 @@ def load_split_dataloaders(config):
             train_data, valid_inter_data, valid_kg_data, test_inter_data, test_kg_data = dataloaders
         else:
             train_data, valid_data, test_data = dataloaders
-
     for arg in dataset_arguments + ["seed", "repeatable", "eval_args"]:
         if isinstance(train_data, KnowledgeBasedDataLoader):
             general_config = train_data.general_dataloader.config

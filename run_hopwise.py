@@ -39,7 +39,6 @@ if __name__ == "__main__":
     setproctitle(args.proc_title)
 
     config_file_list = args.config_files.strip().split(" ") if args.config_files else None
-
     run(
         args.model,
         args.dataset,

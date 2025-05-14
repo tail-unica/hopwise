@@ -159,7 +159,7 @@ def run_hopwise(
     elif run == "evaluate":
         if checkpoint is None:
             raise ValueError("Checkpoint is needed for evaluation")
-
+        trainer.eval_collector.train_data_collect(train_data)
         best_valid_result = trainer.evaluate(
             test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
         )
@@ -282,7 +282,7 @@ def objective_function(config_dict=None, config_file_list=None, saved=True, show
     }
 
 
-def load_data_and_model(model_file):
+def load_data_and_model(model_file, load_only_data=False):
     r"""Load filtered dataset, split dataloaders and saved model.
 
     Args:
@@ -299,7 +299,7 @@ def load_data_and_model(model_file):
     """
     import torch
 
-    checkpoint = torch.load(model_file)
+    checkpoint = torch.load(model_file, weights_only=False)
     config = checkpoint["config"]
     init_seed(config["seed"], config["reproducibility"])
     init_logger(config)
@@ -312,7 +312,7 @@ def load_data_and_model(model_file):
 
     init_seed(config["seed"], config["reproducibility"])
     model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
-    model.load_state_dict(checkpoint["state_dict"])
-    model.load_other_parameter(checkpoint.get("other_parameter"))
-
+    if not load_only_data:
+        model.load_state_dict(checkpoint["state_dict"])
+        model.load_other_parameter(checkpoint.get("other_parameter"))
     return config, model, dataset, train_data, valid_data, test_data

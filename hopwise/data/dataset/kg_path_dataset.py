@@ -50,9 +50,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self._path_dataset = None  # path dataset is generated with generate_user_path_dataset
         self._tokenized_dataset = None  # tokenized dataset is generated with tokenize_path_dataset
         self._tokenizer = None
-        self.add_negatives_to_paths = (
-            False if config["add_negative_to_paths"] is None else config["add_negative_to_paths"]
-        )
+        self._used_ids = None
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
@@ -61,6 +59,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         # Path sampling parameters
         self.path_hop_length = self.config["path_hop_length"]
+
         self.max_paths_per_user = self.config["MAX_PATHS_PER_USER"]
 
         path_sample_args = self.config["path_sample_args"]
@@ -215,10 +214,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
             tokenized_kg[head_token][relation_token].add(tail_token)
 
-            # if relation is user-item and collaborative path is False, the reverse path is not added
-            if relation == self.ui_relation and not self.collaborative_path:
-                continue
-
             if relation_token not in tokenized_kg[tail_token]:
                 tokenized_kg[tail_token][relation_token] = set()
 
@@ -234,12 +229,23 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         """
 
         if self._tokenized_dataset is None:
+            special_token_ids = [
+                self.tokenizer.bos_token_id,
+                self.tokenizer.eos_token_id,
+                self.tokenizer.unk_token_id,
+                self.tokenizer.pad_token_id,
+                self.tokenizer.mask_token_id,
+            ]
+
+            def remove_incorrect_paths(tokenized_dataset):
+                return not any(path in special_token_ids for path in tokenized_dataset["input_ids"])
 
             def tokenization(example):
                 return self.tokenizer(example["path"], truncation=True, padding=True, max_length=self.context_length)
 
             hf_path_dataset = HuggingFaceDataset.from_dict({"path": self.path_dataset.split("\n")})
             tokenized_dataset = hf_path_dataset.map(tokenization, batched=True, remove_columns=["path"])
+            tokenized_dataset = tokenized_dataset.filter(remove_incorrect_paths)
             tokenized_dataset = DatasetDict({phase: tokenized_dataset})
             self._tokenized_dataset = tokenized_dataset
 
@@ -256,13 +262,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         Args:
             used_ids (numpy.ndarray): The used ids.
         """
+        self._used_ids = used_ids
         if not isinstance(self.inter_feat, Interaction):
             raise ValueError("The data should be prepared before generating the path dataset.")
 
         if self._path_dataset is None:
             generated_paths = self.generate_user_paths(used_ids)
-            if self.add_negatives_to_paths:
-                generated_paths = _add_negatives(generated_paths, used_ids, self.item_num)
 
             path_string = ""
             for path in generated_paths:
@@ -291,7 +296,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         Returns:
             list: List of paths with relations.
         """
-        if self.strategy in ["weighted-rw", "constrained-rw", "simple"]:
+        if self.strategy in ["weighted-rw", "constrained-rw", "simple", "simple-ui"]:
             graph = self._create_ckg_igraph(show_relation=True, directed=False)
         elif self.strategy in ["metapath"]:
             graph = self.ckg_hetero_graph(form="dgl", directed=not self.collaborative_path)
@@ -327,6 +332,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             )
         elif self.strategy == "simple":
             generated_paths = self._generate_user_paths_all_simple(graph, used_ids, temporal_matrix=temporal_matrix)
+        elif self.strategy == "simple-ui":
+            generated_paths = self._generate_user_paths_all_simple_ui(graph, used_ids, temporal_matrix=temporal_matrix)
         elif self.strategy == "metapath":
             generated_paths = self._generate_user_paths_from_metapaths(
                 graph, used_ids, temporal_matrix=temporal_matrix
@@ -380,7 +387,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             Defaults to 1.
         """
         paths = set()
-
         kwargs = dict(
             parallel_max_workers=self.parallel_max_workers,
             temporal_matrix=temporal_matrix,
@@ -423,6 +429,29 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         user_paths = _generate_user_paths_all_simple_per_user(graph, used_ids, **kwargs)
         paths = set.union(*user_paths)
 
+        return paths
+
+    def _generate_user_paths_all_simple_ui(self, graph, used_ids, temporal_matrix=None):
+        """Generate paths from the knowledge graph by extracting all simple paths for all the positives..
+        Refer to igraph's https://python.igraph.org/en/stable/api/igraph.Graph.html#get_all_simple_paths.
+
+        It sample all the paths from a user to all the positive items. If U1 has 3 positive items, we'd have
+        k distinct paths from U1 to each of the positive items.
+        """
+        paths = set()
+
+        kwargs = dict(
+            parallel_max_workers=self.parallel_max_workers,
+            temporal_matrix=temporal_matrix,
+            path_hop_length=self.path_hop_length - 1,
+            user_num=self.user_num,
+            item_num=self.item_num,
+            max_paths_per_user=self.max_paths_per_user,
+            collaborative_path=self.collaborative_path,
+        )
+
+        user_paths = _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwargs)
+        paths = set.union(*user_paths)
         return paths
 
     def _generate_user_paths_from_metapaths(self, graph, used_ids, temporal_matrix=None):
@@ -565,7 +594,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
                 if user_path_sample_size == self.max_paths_per_user or user_invalid_paths == 0:
                     break
-
         return final_paths
 
     @staticmethod
@@ -614,9 +642,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         interleaved_entities_relations = zip_longest(remapped_path_nodes, relation_mapped_list)
         path_string = self.path_token_separator.join(list(chain(*interleaved_entities_relations))[:-1])
-
-        if self.add_negatives_to_paths:
-            path_string += f" {PathLanguageModelingTokenType.ITEM.value + str(path[-1])}"
 
         return path_string
 
@@ -668,7 +693,7 @@ def _user_parallel_sampling(sampling_func_factory):
         if not parallel_max_workers:
             return [sampling_func(u) for u in iter_users]
         else:
-            return joblib.Parallel(n_jobs=parallel_max_workers, prefer="threads")(
+            return joblib.Parallel(n_jobs=parallel_max_workers, prefer="processes")(
                 joblib.delayed(sampling_func)(u) for u in iter_users
             )
 
@@ -877,6 +902,51 @@ def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_fiel
 
 
 @_user_parallel_sampling
+def _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwargs):
+    """Parallel version of the simple path generation."""
+    temporal_matrix = kwargs.pop("temporal_matrix", None)
+    path_hop_length = kwargs.pop("path_hop_length", None)
+    user_num = kwargs.pop("user_num", None)
+    item_num = kwargs.pop("item_num", None)
+    max_paths_per_user = kwargs.pop("max_paths_per_user", None)
+    collaborative_path = kwargs.pop("collaborative_path", None)
+
+    def process_user(u):
+        user_paths = set()
+
+        pos_iid = np.array(list(used_ids[u]))
+        if temporal_matrix is not None:
+            pos_iid = pos_iid[np.argsort(temporal_matrix[u, pos_iid])]
+
+        # reindex item ids according to the igraph
+        pos_iid += user_num
+
+        for target_item in pos_iid:
+            user_path_sample_size = 0
+
+            # First hop is the relation user-item already addressed
+            generated_paths = graph.get_all_simple_paths(u, to=target_item, cutoff=path_hop_length + 1, mode="all")
+
+            random.shuffle(generated_paths)
+            # U R I R I R I
+            for full_path in generated_paths:
+                valid_path = KnowledgePathDataset._check_kg_path(
+                    full_path, user_num, item_num, check_last_node=True, collaborative_path=collaborative_path
+                )
+
+                if valid_path not in user_paths:
+                    user_paths.add(tuple(full_path))
+                    user_path_sample_size += 1
+
+                if user_path_sample_size == max_paths_per_user:
+                    break
+
+        return user_paths
+
+    return process_user
+
+
+@_user_parallel_sampling
 def _generate_user_paths_all_simple_per_user(graph, used_ids, **kwargs):
     """Parallel version of the simple path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
@@ -961,28 +1031,3 @@ def _add_paths_relations_parallel(paths, paths_with_relations, relation_map):
             paths_with_relations[path_idx, start_path] = path[node_idx]
             paths_with_relations[path_idx, start_path + 1] = edge_id
             paths_with_relations[path_idx, start_path + 2] = path[node_idx + 1]
-
-
-# @numba.jit(nopython=True, parallel=True)
-def _add_negatives(paths, used_ids, n_items):
-    """For each path, append at the end a negative item.
-    Args:
-        paths (list or ndarray): Array of paths of size (num_paths, sequence length).
-        used_ids (dict-like): Dictionary-like structure mapping user IDs to their positive items.
-    Returns:
-        ndarray: Paths with negative items appended
-    """
-    user_neg = []
-    for path in paths:
-        user_id = path[0]
-
-        user_pos_items = used_ids[user_id]
-        all_items = set(range(1, n_items))
-        negatives = list(all_items - user_pos_items)
-        neg_item = np.random.choice(negatives)
-        user_neg.append(neg_item)
-
-    user_neg = np.array(user_neg).reshape(-1, 1)
-    paths = np.hstack((paths, user_neg))
-
-    return paths

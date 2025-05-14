@@ -24,8 +24,6 @@
 
 path_constraint: [
   [[null, 'user'], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"]],
-  # [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.prequel","entity"]],
-  # [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.sequel","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.prequel","entity"], ["film.film.prequel","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.sequel","entity"], ["film.film.sequel","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.actor","entity"],["film.actor.film","entity"]],

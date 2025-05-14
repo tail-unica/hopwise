@@ -308,7 +308,7 @@ class Trainer(AbstractTrainer):
         """
         resume_file = str(resume_file)
         self.saved_model_file = resume_file
-        checkpoint = torch.load(resume_file, map_location=self.device)
+        checkpoint = torch.load(resume_file, map_location=self.device, weights_only=False)
         self.start_epoch = checkpoint["epoch"] + 1
         self.cur_step = checkpoint["cur_step"]
         self.best_valid_score = checkpoint["best_valid_score"]
@@ -1022,7 +1022,6 @@ class PGPRTrainer(Trainer):
             if isinstance(scores, tuple):
                 # then the first is the score, the second are paths
                 scores, paths = scores
-
         except NotImplementedError:
             inter_len = len(interaction)
             new_inter = interaction.to(self.device).repeat_interleave(tot_item_num)
@@ -1396,7 +1395,7 @@ class DecisionTreeTrainer(AbstractTrainer):
                 if verbose:
                     self.logger.info(valid_score_output)
                     self.logger.info(valid_result_output)
-                self.tensorboard.add_scalar("Vaild_score", valid_score, epoch_idx)
+                self.tensorboard.add_scalar("Valid_score", valid_score, epoch_idx)
 
                 if update_flag:
                     if saved:
@@ -1716,7 +1715,7 @@ class NCLTrainer(Trainer):
                 if verbose:
                     self.logger.info(valid_score_output)
                     self.logger.info(valid_result_output)
-                self.tensorboard.add_scalar("Vaild_score", valid_score, epoch_idx)
+                self.tensorboard.add_scalar("Valid_score", valid_score, epoch_idx)
 
                 if update_flag:
                     if saved:
@@ -1814,10 +1813,14 @@ class HFPathLanguageModelingTrainer(Trainer):
 
     def __init__(self, config, model):
         super().__init__(config, model)
-
+        self.config = config
+        self.eval_device = config["device"]
         self.path_hop_length = self.config["path_hop_length"]
         self.path_gen_args = self.config["path_generation_args"].copy()
         self.paths_per_user = self.path_gen_args.pop("paths_per_user")
+
+        self.HOPWISE_SAVE_PATH_SUFFIX += f"{config['base_model']}-"
+        self.HUGGINGFACE_SAVE_PATH_SUFFIX += f"{config['base_model']}-"
 
         dirname, basename = os.path.split(self.saved_model_file)
         self.saved_model_file = os.path.join(dirname, self.HOPWISE_SAVE_PATH_SUFFIX + basename)
@@ -1879,6 +1882,8 @@ class HFPathLanguageModelingTrainer(Trainer):
                 saved=saved,
                 show_progress=show_progress,
                 callback_fn=callback_fn,
+                model=self.model,
+                model_name=self.config["model"],
             ),
             *hf_callbacks,
         ]
@@ -1892,7 +1897,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             path_hop_length=self.path_hop_length,
             paths_per_user=self.paths_per_user,
             path_generation_args=self.path_gen_args,
-            eval_device=self.device,
+            eval_device=self.eval_device,
         )
 
     @property
@@ -1946,7 +1951,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         else:
             raise ValueError(f"The directory name [{resume_file}] does not indicate a HuggingFace or Hopwise model.")
 
-        checkpoint = torch.load(hopwise_resume_file, map_location=self.device)
+        checkpoint = torch.load(hopwise_resume_file, map_location=self.device, weights_only=False)
         self.start_epoch = checkpoint["epoch"] + 1
         self.cur_step = checkpoint["cur_step"]
         self.best_valid_score = checkpoint["best_valid_score"]
@@ -2009,6 +2014,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             else eval_data
         )
 
+        avg_topk_size = None
         num_sample = 0
         for batch_idx, batched_data in enumerate(iter_data):
             num_sample += len(batched_data)
@@ -2017,7 +2023,9 @@ class HFPathLanguageModelingTrainer(Trainer):
             inputs = self.hf_trainer.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(
                 self.device
             )
-            scores, user_topk_sequences = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
+            scores, paths, avg_topk_size = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
+            if hasattr(self.model, "decode_path"):
+                paths = self.model.decode_path(paths)
 
             scores = scores.view(-1, self.tot_item_num)
             scores[:, 0] = -np.inf
@@ -2026,7 +2034,9 @@ class HFPathLanguageModelingTrainer(Trainer):
 
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
-            self.eval_collector.eval_batch_collect(scores, None, positive_u, positive_i)
+            self.eval_collector.eval_batch_collect((scores, paths), None, positive_u, positive_i)
+        set_sizes = [len(s) for s in avg_topk_size.values()]
+        self.logger.info(f'{set_color("Average topk size: ", "blue")}{sum(set_sizes)/len(set_sizes):.2f}')
         self.eval_collector.model_collect(self.model)
         struct = self.eval_collector.get_data_struct()
         result = self.evaluator.evaluate(struct)

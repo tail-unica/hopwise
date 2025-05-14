@@ -1530,7 +1530,7 @@ class SparseDropout(nn.Module):
         return torch.sparse.FloatTensor(rc, val, x.shape)
 
 
-class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
+class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
     """
     Force the last token to be one of the force_tokens if the total length is reached, in the path generation stage
     this means to limit the hop size. This is a word-level constraint, does not work with piece tokenizers.
@@ -1550,6 +1550,8 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         mask_cache_size=3 * 10**4,
         pos_candidates_cache_size=1 * 10**5,
         task="recommendation",
+        user_embeddings=None,
+        entity_embeddings=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1560,6 +1562,8 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         self.num_return_sequences = num_return_sequences
         self.eos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.eos_token)
         self.bos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.bos_token)
+        self.user_embeddings = user_embeddings
+        self.entity_embeddings = entity_embeddings
         self.pos_candidates_cache = LFUCache(pos_candidates_cache_size)
         self.mask_cache = LFUCache(mask_cache_size)
         self.task = task
@@ -1572,40 +1576,34 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         else:
             self.special_tokens_ids = None
 
-    def mask_non_eos_tokens(self, scores):
-        """Apply masking to all tokens except EOS tokens."""
-        scores[:] = -math.inf
-        scores[:, self.eos_token_id] = 0.0
-
     def __call__(self, input_ids, scores):
         current_len = input_ids.shape[-1]
         has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
 
-        if has_bos_token and current_len == self.max_sequence_length - 1:
-            self.mask_non_eos_tokens(scores)
+        unique_input_ids = input_ids
+        if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
+            last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
+            _, input_ids_indices, input_ids_inv = np.unique(
+                input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True
+            )
+            unique_input_ids = input_ids[input_ids_indices]
+
+        full_mask = np.zeros((unique_input_ids.shape[0], self.tokenizer.vocab_size), dtype=bool)
+        for idx in range(unique_input_ids.shape[0]):
+            if self.task == self.RECOMMENDATION_TASK:
+                key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
+            elif self.task == self.LINK_PREDICTION_TASK:
+                key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
+
+            banned_mask = self.get_banned_mask(key, candidate_tokens)
+            full_mask[idx] = banned_mask
+
+        if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
+            scores[full_mask[input_ids_inv]] = -math.inf
+            # replace lm scores with transe dot product scores to encourage the model to generate quality paths
+
         else:
-            unique_input_ids = input_ids
-            if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
-                last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
-                _, input_ids_indices, input_ids_inv = np.unique(
-                    input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True
-                )
-                unique_input_ids = input_ids[input_ids_indices]
-
-            full_mask = np.zeros((unique_input_ids.shape[0], self.tokenizer.vocab_size), dtype=bool)
-            for idx in range(unique_input_ids.shape[0]):
-                if self.task == self.RECOMMENDATION_TASK:
-                    key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
-                elif self.task == self.LINK_PREDICTION_TASK:
-                    key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
-
-                banned_mask = self.get_banned_mask(key, candidate_tokens)
-                full_mask[idx] = banned_mask
-
-            if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
-                scores[full_mask[input_ids_inv]] = -math.inf
-            else:
-                scores[full_mask] = -math.inf
+            scores[full_mask] = -math.inf
 
         return scores
 
@@ -1623,8 +1621,11 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
             if candidate_tokens is None:
                 candidate_tokens = self.get_candidates_rec(*key)
 
+                # Get user positives
                 user_used_ids = self.tokenized_ignored_ids[current_uid]
+                # Select negatives
                 candidate_tokens = list(candidate_tokens - user_used_ids)
+                # Useless if during evaluation a user is seen once
                 self.pos_candidates_cache[uid_cond_key] = candidate_tokens
         else:
             candidate_tokens = list(self.get_candidates_rec(*key))
@@ -1679,7 +1680,143 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         if banned_mask is None:
             banned_mask = np.zeros(self.tokenizer.vocab_size, dtype=bool)
             banned_mask[candidate_tokens] = True
+            # Ban positives, the not of negatives.
             banned_mask = np.logical_not(banned_mask)
+            self.mask_cache[key] = banned_mask
+        return banned_mask
+
+
+class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
+    RECOMMENDATION_TASK = "recommendation"
+    LINK_PREDICTION_TASK = "link_prediction"
+
+    def __init__(
+        self,
+        tokenized_kg,
+        tokenized_ignored_ids,
+        max_sequence_length,
+        tokenizer,
+        num_return_sequences,
+        mask_cache_size=3 * 10**4,
+        pos_candidates_cache_size=1 * 10**5,
+        task="recommendation",
+        wte_embeddings=None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.tokenized_kg = tokenized_kg
+        self.tokenized_ignored_ids = tokenized_ignored_ids
+        self.max_sequence_length = max_sequence_length
+        self.tokenizer = tokenizer
+        self.num_return_sequences = num_return_sequences
+        self.eos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.eos_token)
+        self.bos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.bos_token)
+        # self.wte_embeddings = wte_embeddings.cpu()
+        self.pos_candidates_cache = LFUCache(pos_candidates_cache_size)
+        self.mask_cache = LFUCache(mask_cache_size)
+        self.task = task
+
+        if self.task == self.LINK_PREDICTION_TASK:
+            self.special_tokens_ids = [
+                self.tokenizer.encode(x, add_special_tokens=False)[0]
+                for x in self.tokenizer.all_special_tokens_extended
+            ]
+        else:
+            self.special_tokens_ids = None
+
+    def __call__(self, input_ids, scores):
+        full_mask = torch.zeros((input_ids.shape[0], self.tokenizer.vocab_size), dtype=bool, device=scores.device)
+        for idx in range(input_ids.shape[0]):
+            if self.task == self.RECOMMENDATION_TASK:
+                key, candidate_tokens = self.process_scores_rec(input_ids, idx)
+            elif self.task == self.LINK_PREDICTION_TASK:
+                key, candidate_tokens = self.process_scores_lp(input_ids, idx)
+
+            banned_mask = self.get_banned_mask(key, candidate_tokens)
+
+            if banned_mask.sum() == self.tokenizer.vocab_size:
+                banned_mask[self.tokenizer.pad_token_id] = False
+
+            full_mask[idx] = banned_mask
+
+        scores[full_mask] = -math.inf
+        return scores
+
+    def process_scores_rec(self, input_ids, idx):
+        """Process each score based on input length and update mask list."""
+        current_len = input_ids.shape[-1]
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
+
+        key = self.get_current_key(input_ids, idx)
+
+        if current_len == self.max_sequence_length - 1 - has_bos_token:
+            current_uid = input_ids[idx, int(has_bos_token)].item()
+            uid_cond_key = (current_uid, *key)
+            candidate_tokens = self.pos_candidates_cache.get(uid_cond_key)
+            if candidate_tokens is None:
+                candidate_tokens = list(self.get_candidates_rec(*key))
+
+                # Get user positives
+                user_used_ids = self.tokenized_ignored_ids[current_uid]
+                # Select negatives
+                candidate_tokens = list(candidate_tokens - user_used_ids)
+                # Useless if during evaluation a user is seen once
+                self.pos_candidates_cache[uid_cond_key] = candidate_tokens
+        else:
+            candidate_tokens = list(self.get_candidates_rec(*key))
+
+        return key, candidate_tokens
+
+    def process_scores_lp(self, input_ids, idx):
+        """Process each score based on input length or skip."""
+        current_len = input_ids.shape[-1]
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
+
+        key, candidate_tokens = None, None
+        if current_len % 2 == has_bos_token:
+            key = self.get_current_key(input_ids, idx)
+            candidate_tokens = self.get_candidates_lp(key)
+
+        return key, candidate_tokens
+
+    def is_next_token_entity(self, input_ids):
+        current_len = input_ids.shape[-1]
+        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
+
+        # bos_token determines if the current length is even or odd
+        return current_len % 2 == has_bos_token
+
+    def get_current_key(self, input_ids, idx):
+        if self.is_next_token_entity(input_ids):
+            return input_ids[idx, -2].item(), input_ids[idx, -1].item()
+        else:
+            # The next token is a relation
+            return (input_ids[idx, -1].item(),)
+
+    def get_candidates_rec(self, key1, key2=None):
+        """
+        :param key1:
+        :param key2: if key2 is not None, it returns entity candidates, otherwise relation candidates
+        """
+        if key1 in self.tokenized_kg:
+            if key2 is not None and key2 in self.tokenized_kg[key1]:
+                return self.tokenized_kg[key1][key2]  # return tail given head + relation
+            else:
+                return set(self.tokenized_kg[key1].keys())  # return relations given head
+        else:
+            raise ValueError(f"Key {key1} ('{self.tokenizer.convert_ids_to_tokens(key1)}') not found in tokenized_kg")
+
+    def get_candidates_lp(self, key):
+        return list(self.tokenized_ignored_ids[key]) + self.special_tokens_ids
+
+    def get_banned_mask(self, key, candidate_tokens):
+        """Retrieve or cache the banned token mask for a specific key."""
+        banned_mask = self.mask_cache.get(key)
+        if banned_mask is None:
+            banned_mask = torch.zeros(self.tokenizer.vocab_size, dtype=bool)
+            banned_mask[candidate_tokens] = True
+            # Ban positives, the not of negatives.
+            banned_mask = torch.logical_not(banned_mask)
             self.mask_cache[key] = banned_mask
         return banned_mask
 
@@ -1704,7 +1841,7 @@ class PrefixConstrainedLogitsProcessorWordLevel(ConstrainedLogitsProcessorWordLe
             tokenizer,
             num_return_sequences,
             id_to_uid_token_map,
-            mask_cache_size=mask_cache_size,
+            mask_cache_size,
             cand_cache_size=cand_cache_size,
             **kwargs,
         )

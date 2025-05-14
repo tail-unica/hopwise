@@ -122,14 +122,14 @@ class Collector:
     def node_degree_dict(self, train_data):
         # from pgpr knowledge graph
         # https: // github.com/giacoballoccu/rep-path-reasoning-recsys/blob/main/models/PGPR/knowledge_graph.py
-        aug_kg, _ = train_data.dataset.ckg_dict_graph()
+        aug_kg = train_data.dataset.ckg_dict_graph()
         degrees = {}
-        for etype in aug_kg.G:
+        for etype in aug_kg:
             degrees[etype] = {}
-            for eid in aug_kg.G[etype]:
+            for eid in aug_kg[etype]:
                 count = 0
-                for r in aug_kg.G[etype][eid]:
-                    count += len(aug_kg.G[etype][eid][r])
+                for r in aug_kg[etype][eid]:
+                    count += len(aug_kg[etype][eid][r])
                 degrees[etype][eid] = count
         return degrees
 
