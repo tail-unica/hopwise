@@ -633,7 +633,23 @@ class KGLRR(KnowledgeRecommender):
         #     explaination = self.explain(users, history, prediction)
         #     return prediction, explaination
         return prediction
+    
+    def full_sort_predict(self, interaction):
+        r"""Full sort prediction function.
+        Given users, calculate the scores between users and all candidate items.
 
+        Args:
+            interaction (Interaction): Interaction class of the batch.
+
+        Returns:
+            torch.Tensor: Predicted scores for given users and all candidate items,
+            shape: [n_batch_users, n_candidate_items]
+        """
+        # La funzione predict già fa quello che serve (utenti vs tutti gli item)
+        prediction = self.predict(interaction, explain=False)  # [batch_size, num_items]
+        return prediction
+
+    
     def predict_or_and(self, users, pos, neg, history):
         # 存储用于检查的内容：逻辑正则化 
         # 对嵌入计算L2正则化
