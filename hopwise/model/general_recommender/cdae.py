@@ -25,7 +25,7 @@ class CDAE(GeneralRecommender, AutoEncoderMixin):
     We implement the the CDAE model with only user dataloader.
     """
 
-    input_type = InputType.POINTWISE
+    input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)

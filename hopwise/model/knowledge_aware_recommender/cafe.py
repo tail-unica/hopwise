@@ -14,16 +14,17 @@ import random
 from functools import reduce
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.utils import InputType
+from hopwise.utils import InputType, PathLanguageModelingTokenType
 
 
 class CAFE(KnowledgeRecommender):
-    input_type = InputType.PAIRWISE
+    input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
@@ -31,6 +32,7 @@ class CAFE(KnowledgeRecommender):
         # Load parameters info from config
         self.device = config["device"]
         self.load_embeddings = config["load_embeddings"]
+        self.raw_metapaths = config["path_constraint"]
         self.raw_metapaths = config["path_constraint"]
 
         # Load CAFE parameters
@@ -52,7 +54,7 @@ class CAFE(KnowledgeRecommender):
 
         # Topk Candidates
         self.topk_user_products = self._compute_top_items()
-
+        self.dataset = dataset  # to remove
         # Turn into torch, so that the weight is updated.
         self.user_embedding = torch.from_numpy(self.user_embedding).to(device=self.device, dtype=torch.float32)
         self.entity_embedding = torch.from_numpy(self.entity_embedding).to(self.device, dtype=torch.float32)
@@ -334,6 +336,53 @@ class CAFE(KnowledgeRecommender):
         results = self.run_program(users, path_counts, predicted_paths)
         return results
 
+    def explain(self, interaction):
+        """Support function used for case study.
+
+        Args:
+            interaction : test interaction data
+
+        Returns:
+            pd.Dataframe: explanation results with columns: "user", "product", "score", "path"
+        """
+        users = interaction[self.USER_ID]
+
+        kg_mask = KGMask(self.graph_dict, self.ui_relation_id)
+        predicted_paths = self._infer_paths(users, kg_mask)
+        path_counts = self._estimate_path_count(users)
+        _, explanations = self.run_program(users, path_counts, predicted_paths)
+
+        # make explanations as pandas dataframe, then return the results
+        df = pd.DataFrame(explanations, columns=["user", "product", "score", "path"])
+        df["path"] = df["path"].apply(self.decode_path)
+
+        return df
+
+    def decode_path(self, path):
+        decoded_path = []
+        for node in path:
+            # append relations
+            if node[0] != "self_loop":
+                relation = self.dataset.token2id(self.dataset.relation_field, node[0])
+                decoded_path.append(f"{PathLanguageModelingTokenType.RELATION.value}{relation}")
+
+            # append everything else
+
+            e_type = node[1]
+            eid = node[2]
+
+            if e_type == "user":
+                e_type = PathLanguageModelingTokenType.USER.value
+            elif eid in range(self.n_items):
+                e_type = PathLanguageModelingTokenType.ITEM.value
+            else:
+                e_type = PathLanguageModelingTokenType.ENTITY.value
+
+            # node[1] is the node type, node[2] is the node id
+            decoded_path.append(f"{e_type}{eid}")
+
+        return decoded_path
+
     def _infer_paths(self, users, kg_mask):
         predictions = dict()
         for user in users:
@@ -365,6 +414,7 @@ class CAFE(KnowledgeRecommender):
 
     def run_program(self, users, path_counts, predicted_paths):
         results = torch.full((len(users), self.n_items), -torch.inf)
+        collect_results = list()
 
         kg_mask = KGMask(self.graph_dict, self.ui_relation_id)
         program_exe = MetaProgramExecutor(self.model, self.rng, self.device, kg_mask, self.relation2rid)
@@ -384,15 +434,18 @@ class CAFE(KnowledgeRecommender):
                 path = [("self_loop", "user", r[0][0])]
                 for j in range(len(r[-1])):
                     path.append((r[-1][j], r[2][j], r[0][j + 1]))
+                    # stop when a path is created
                     if j == len(r[-1]) - 1:
                         continue
-                pred_paths_instances[r[0][0]][r[0][-1]] = [(reduce(lambda x, y: x * y, r[1]), np.mean(r[1][-1]), path)]
+                pred_paths_instances[r[0][0]][r[0][-1]] = (reduce(lambda x, y: x * y, r[1]), np.mean(r[1][-1]), path)
+
             top_products_scores = sorted(tmp, key=lambda x: x[1], reverse=True)
             for product, score in top_products_scores:
                 if product < self.n_items and results[i, product] < score:  # if it's an item
                     results[i, product] = score.tolist()
+                    collect_results.append([user, product, score, pred_paths_instances[user][product][2]])
 
-        return results
+        return results, collect_results
 
     def create_heuristic_program(self, metapaths, predicted_paths, path_counts):
         pcount = path_counts.astype(np.float32)

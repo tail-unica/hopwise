@@ -76,11 +76,14 @@ def init_logger(config):
     ensure_dir(dir_name)
     model_name = os.path.join(dir_name, config["model"])
     ensure_dir(model_name)
-    config_str = "".join([str(key) for key in config.final_config_dict.values()])
-    md5 = hashlib.md5(config_str.encode(encoding="utf-8")).hexdigest()[:6]
-    logfilename = "{}/{}-{}-{}-{}.log".format(
-        config["model"], config["model"], config["dataset"], get_local_time(), md5
-    )
+    if config["proc_title"] is None:
+        config_str = "".join([str(key) for key in config.final_config_dict.values()])
+        md5 = hashlib.md5(config_str.encode(encoding="utf-8")).hexdigest()[:6]
+        logfilename = "{}/{}-{}-{}-{}.log".format(
+            config["model"], config["model"], config["dataset"], get_local_time(), md5
+        )
+    else:
+        logfilename = "{}/{}-{}.log".format(config["model"], config["proc_title"], get_local_time())
 
     logfilepath = os.path.join(LOGROOT, logfilename)
 

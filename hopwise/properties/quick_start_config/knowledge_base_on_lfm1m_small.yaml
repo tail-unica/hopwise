@@ -1,0 +1,11 @@
+# These contraints are used by PGPR and CAFE.
+# While in CAFE are left as they are, in PGPR reverse relations are removed and only not-null relations are considered.
+
+path_constraint: [
+  [[null, 'user'], ["[UI-Relation]","entity"], ["[UI-Relation]","user"], ["[UI-Relation]","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["belong_to_genre","entity"],["belong_to_genre_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["featured_by_artist","entity"],["featured_by_artist_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["mixed_by_engineer","entity"],["mixed_by_engineer_r","entity"]],
+  [[null, 'user'], ["[UI-Relation]","entity"], ["produced_by_producer","entity"],["produced_by_producer_r","entity"]],
+
+]
