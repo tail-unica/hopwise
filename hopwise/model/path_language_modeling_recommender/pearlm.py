@@ -4,16 +4,11 @@ from typing import Optional, Union
 import pandas as pd
 import torch
 from torch import nn
-from transformers import AutoConfig, GPT2LMHeadModel, LogitsProcessorList
+from transformers import AutoConfig, GPT2LMHeadModel
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from hopwise.data import Interaction
 from hopwise.model.abstract_recommender import ExplainableRecommender, PathLanguageModelingRecommender
-from hopwise.trainer.hf_path_trainer import (
-    ConstrainedLogitsProcessorWordLevel,
-    CumulativeSequenceScoreRanker,
-    get_tokenized_used_ids,
-)
 from hopwise.utils import PathLanguageModelingTokenType
 
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("ENTITY", 1), ("RELATION", 2)])
@@ -67,6 +62,11 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
 
         self.loss = nn.CrossEntropyLoss()
         self.post_init()
+
+        self.model_config = config
+        self.used_ids = dataset._used_ids
+        self.tokenizer = dataset.tokenizer
+        self.dataset = dataset
 
     def forward(
         self,
@@ -137,31 +137,16 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
     def predict(self, input_ids, **kwargs):
         return self.forward(input_ids, **kwargs)
 
-    def explain(self, interaction):
-        tokenized_used_ids = get_tokenized_used_ids(self.used_ids, self.tokenizer)
-        token_sequence_length = (1 + self.model_config["path_hop_length"]) + self.model_config["path_hop_length"]
-        paths_per_user = self.model_config["path_generation_args"]["paths_per_user"]
+    def explain(self, interaction, ranker, logits_processor, **kwargs):
+        # update paths per user from the newest config, otherwise, use the saved config
+        paths_per_user = kwargs.get("paths_per_user", self.model_config["path_generation_args"]["paths_per_user"])
+        token_sequence_length = kwargs.get(
+            "token_sequence_length",
+            (1 + self.model_config["path_hop_length"]) + self.model_config["path_hop_length"] + 1,
+        )
+        paths_gen_args = kwargs.get("path_gen_args", self.model_config["path_generation_args"])
 
-        ranker = CumulativeSequenceScoreRanker(
-            self.tokenizer,
-            self.used_ids,
-            self.dataset.item_num,
-            topk=10,
-            max_new_tokens=token_sequence_length - 2,
-        )
-        logits_processor = LogitsProcessorList(
-            [
-                ConstrainedLogitsProcessorWordLevel(
-                    self.dataset.get_tokenized_ckg(),
-                    tokenized_used_ids,
-                    token_sequence_length,
-                    self.tokenizer,
-                    paths_per_user,
-                    task=ConstrainedLogitsProcessorWordLevel.RECOMMENDATION_TASK,
-                )
-            ]
-        )
-        self.model_config["path_generation_args"].pop("paths_per_user")
+        paths_gen_args.pop("paths_per_user")
         outputs = self.generate(
             **interaction,
             max_length=token_sequence_length,
@@ -170,16 +155,12 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
             logits_processor=logits_processor,
             return_dict_in_generate=True,
             output_scores=True,
-            **self.model_config["path_generation_args"],
+            **paths_gen_args,
         )
-        scores, user_topk_sequences = ranker.get_sequences(interaction["input_ids"].size(0), outputs)
-        paths = []
-        for i, (user, sequence) in enumerate(user_topk_sequences.items()):
-            product = int(sequence[-1][1:])
-            paths.append([user, product, scores[i, product], sequence])
+        _, user_topk_sequences = ranker.get_sequences(interaction["input_ids"].size(0), outputs)
+        paths = [[user, item, score, sequence] for user, item, score, sequence in user_topk_sequences]
         # # make explanations as pandas dataframe, then return the results
         df = pd.DataFrame(paths, columns=["user", "product", "score", "path"])
-
         return df
 
     def decode_path(self, paths):

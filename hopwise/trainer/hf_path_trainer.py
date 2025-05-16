@@ -131,7 +131,7 @@ class CumulativeSequenceScoreRanker:
             if uid not in self.avg_topk_size:
                 self.avg_topk_size[uid] = set()
 
-            user_topk_sequences.append((uid, recommended_item, None, seq))
+            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
             self.avg_topk_size[uid].add(seq[-1])
 
         return scores, user_topk_sequences
@@ -183,7 +183,7 @@ class BeamSearchSequenceScoreRanker:
             if uid not in self.avg_topk_size:
                 self.avg_topk_size[uid] = set()
 
-            user_topk_sequences.append((uid, recommended_item, None, seq))
+            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
             self.avg_topk_size[uid].add(seq[-1])
 
         return scores, user_topk_sequences
@@ -258,7 +258,7 @@ class SampleSearchSequenceScoreRanker:
             if uid not in self.avg_topk_size:
                 self.avg_topk_size[uid] = set()
 
-            user_topk_sequences.append((uid, recommended_item, None, seq))
+            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
             self.avg_topk_size[uid].add(seq[-1])
 
         return scores, user_topk_sequences
@@ -323,7 +323,7 @@ class SimilaritySequenceScoreRanker:
             if uid not in self.avg_topk_size:
                 self.avg_topk_size[uid] = set()
 
-            user_topk_sequences.append(seq)
+            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
             self.avg_topk_size[uid].add(seq[-1])
 
         return scores, user_topk_sequences
@@ -393,7 +393,7 @@ class HFPathTrainer(Trainer):
         self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 1
 
         # TODO: add inference template as config param and use that instead of the hardcoded values
-        ranker_max_new_tokens = self.token_sequence_length - 3
+        ranker_max_new_tokens = self.token_sequence_length - 2
 
         if self.hopwise_config["ranker"] == "CumulativeSequenceScoreRanker":
             self.ranker_rec = CumulativeSequenceScoreRanker(

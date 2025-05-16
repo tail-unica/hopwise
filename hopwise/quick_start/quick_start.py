@@ -21,6 +21,7 @@ import torch.distributed as dist
 from hopwise.config import Config
 from hopwise.data import create_dataset, data_preparation
 from hopwise.data.transform import construct_transform
+from hopwise.trainer import HFPathLanguageModelingTrainer
 from hopwise.utils import (
     calculate_valid_score,
     get_environment,
@@ -118,18 +119,19 @@ def run_hopwise(
         queue (torch.multiprocessing.Queue, optional): The queue used to pass the result to the main process. Defaults to ``None``.
     """  # noqa: E501
 
+    # Initialize configuration
+    config = Config(
+        model=model,
+        dataset=dataset,
+        config_file_list=config_file_list,
+        config_dict=config_dict,
+    )
+
     if checkpoint is not None:
-        config, model, dataset, train_data, valid_data, test_data = load_data_and_model(model_file=checkpoint)
+        _, model, dataset, train_data, valid_data, test_data = load_data_and_model(model_file=checkpoint)
         logger = get_logger(config)
         logger.info(f"A checkpoint is provided from which to resume training {checkpoint}")
     else:
-        # configurations initialization
-        config = Config(
-            model=model,
-            dataset=dataset,
-            config_file_list=config_file_list,
-            config_dict=config_dict,
-        )
         logger = get_logger(config)
         # dataset filtering
         dataset = create_dataset(config)
@@ -151,7 +153,6 @@ def run_hopwise(
 
     # trainer loading and initialization
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
-
     if run == "train":
         best_valid_score, best_valid_result = trainer.fit(
             train_data, valid_data, saved=saved, show_progress=config["show_progress"]
@@ -160,27 +161,40 @@ def run_hopwise(
         if checkpoint is None:
             raise ValueError("Checkpoint is needed for evaluation")
         trainer.eval_collector.train_data_collect(train_data)
-        best_valid_result = trainer.evaluate(
-            test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
-        )
+
+        if isinstance(trainer, HFPathLanguageModelingTrainer):
+            trainer.init_hf_trainer(train_data, valid_data, show_progress=config["show_progress"])
+            trainer.resume_checkpoint(checkpoint, train_data)
+
+            best_valid_result = trainer.evaluate(
+                test_data, load_best_model=False, model_file=checkpoint, show_progress=config["show_progress"]
+            )
+        else:
+            best_valid_result = trainer.evaluate(
+                test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
+            )
+
         best_valid_score = calculate_valid_score(best_valid_result, trainer.valid_metric)
     else:
         raise ValueError(f"Invalid run mode: {run}")
-
-    # model evaluation
-    test_result = trainer.evaluate(
-        test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
-    )
-
-    environment_tb = get_environment(config)
-    logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
 
     if best_valid_result is not None:
         if KnowledgeEvaluationType.REC in best_valid_result or KnowledgeEvaluationType.LP in best_valid_result:
             for task, result in best_valid_result.items():
                 logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
         else:
-            logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
+            logger.info(set_color("valid result", "yellow") + f": {format_metrics(best_valid_result)}")
+
+    # model evaluation
+    test_result = trainer.evaluate(
+        test_data,
+        load_best_model=not isinstance(trainer, HFPathLanguageModelingTrainer),
+        model_file=checkpoint,
+        show_progress=config["show_progress"],
+    )
+
+    environment_tb = get_environment(config)
+    logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
 
     if test_result is not None:
         if KnowledgeEvaluationType.REC in test_result or KnowledgeEvaluationType.LP in test_result:
@@ -312,7 +326,8 @@ def load_data_and_model(model_file, load_only_data=False):
 
     init_seed(config["seed"], config["reproducibility"])
     model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
-    if not load_only_data:
+
+    if not load_only_data and not config["model"].startswith(("PEARLM", "KGGLM")):
         model.load_state_dict(checkpoint["state_dict"])
         model.load_other_parameter(checkpoint.get("other_parameter"))
     return config, model, dataset, train_data, valid_data, test_data

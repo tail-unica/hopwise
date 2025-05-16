@@ -971,8 +971,6 @@ class LIR(PathQualityMetric):
     """
     Time recency of linking interaction
 
-    Args:
-        PathQualityMetric (_type_): _description_
     """
 
     def __init__(self, config):
@@ -1006,9 +1004,14 @@ class LIR(PathQualityMetric):
 
     def metric_info(self, lir_matrix, paths):
         lirs_topk = []
-        for user, _, _, path in paths:
-            e_id = path[1][-1]
-            lirs_topk.append(lir_matrix[user][e_id])
+        for user, item, _, _ in paths:
+            # there can be times where the final item predicted, is not seen during training.
+            # this depends on how the paths are generated, if the path inference prediction
+            # is constrained on the training interactions or not.
+            try:
+                lirs_topk.append(lir_matrix[user][item])
+            except KeyError:
+                lirs_topk.append(0.0)
         if len(lirs_topk) == 0:
             return 0.0
         return np.array(lirs_topk)
@@ -1116,6 +1119,8 @@ class SEP(PathQualityMetric):
         seps_topk = []
         for _, _, _, path in paths:
             shared_entity_id, shared_entity_type = path[-2][-1], path[-2][1]
+            if shared_entity_type == "item":
+                shared_entity_type = "entity"
             seps_topk.append(sep_matrix[shared_entity_type][shared_entity_id])
         if not seps_topk:
             return 0.0

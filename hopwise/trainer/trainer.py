@@ -1928,7 +1928,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             hf_output_dir = self.hf_trainer.args.output_dir
             self.logger.info(set_color("HuggingFace model is saved at", "blue") + f": {hf_output_dir}")
 
-    def resume_checkpoint(self, resume_file):
+    def resume_checkpoint(self, resume_file, train_data):
         """
         Load the model parameters and training information based on the directory name,
         and navigate into subdirectories if necessary.
@@ -1937,7 +1937,10 @@ class HFPathLanguageModelingTrainer(Trainer):
         Args:
             resume_file (str): the path to the directory containing the checkpoint files or subdirectories
         """
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from safetensors.torch import load_file
+        from transformers import AutoTokenizer
+
+        from hopwise.utils import get_model
 
         if not hasattr(self, "hf_trainer"):
             raise ValueError("The HuggingFace Trainer has not been initialized. Please call `init_hf_trainer` first.")
@@ -1956,7 +1959,12 @@ class HFPathLanguageModelingTrainer(Trainer):
         self.cur_step = checkpoint["cur_step"]
         self.best_valid_score = checkpoint["best_valid_score"]
 
-        self.model = AutoModelForCausalLM.from_pretrained(hf_resume_file)
+        # We have created a custom model, so we need to take our new class and load the weights.
+        # otherwise, we cannot access to the new methods/embeddings we wrote.
+
+        self.model = get_model(self.config["model"])(self.config, train_data.dataset).to(self.config["device"])
+        weights = load_file(os.path.join(hf_resume_file, "model.safetensors"))
+        self.model.load_state_dict(weights, strict=False)
         self.hf_trainer.processing_class.tokenizer = AutoTokenizer.from_pretrained(hf_resume_file)
 
     def fit(
@@ -2025,6 +2033,7 @@ class HFPathLanguageModelingTrainer(Trainer):
                 self.device
             )
             scores, paths, avg_topk_size = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
+
             if hasattr(self.model, "decode_path"):
                 paths = self.model.decode_path(paths)
 

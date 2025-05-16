@@ -115,7 +115,14 @@ class Collector:
         if self.register.need("data.max_path_length"):
             # how many path constraint are set?
             # 'path_constraint' is hardcoded and may change in the future
-            self.data_struct.set("data.max_path_length", len(self.config["path_constraint"]))
+            if self.config["path_constraint"] is None:
+                # PEARLM or KGGLM
+                sampled_path_len = len(train_data.dataset._path_dataset.split("\n")[0].split(" "))
+                self.data_struct.set("data.max_path_length", sampled_path_len)
+            else:
+                # PGPR or CAFE
+                self.data_struct.set("data.max_path_length", len(self.config["path_constraint"]))
+
         if self.register.need("data.rid2relation"):
             self.data_struct.set("data.rid2relation", train_data.dataset.field2id_token["relation_id"])
 
