@@ -127,7 +127,6 @@ class KGEncoder(nn.Module):
         self.num_relations = self.dataset.relation_num
        
         # Print with colors the stats
-        #logging.info(f'\033[36mtrainSize\033[0m: \033[35m{self.dataset.trainSize}\033[0m') TODO capire come ottenere trainSize
         logging.info(f'\033[36mn_user\033[0m: \033[35m{self.dataset.user_num}\033[0m')
         logging.info(f'\033[36mm_item\033[0m: \033[35m{self.dataset.item_num}\033[0m')
 
@@ -153,9 +152,7 @@ class KGEncoder(nn.Module):
         nn.init.normal_(self.embedding_relation.weight, std=0.1)
         
         self.f = nn.Sigmoid()
-        #self.Graph = self.dataset.getSparseGraph()
-        self.Graph = self.getSparseGraph() # TODO: Change this, because return a GraphDict and not a Tensor...(?)
-        # self.ItemNet = self.kg_dataset.get_item_net_from_kg(self.num_items)
+        self.Graph = self.getSparseGraph()
         self.kg_dict, self.item2relations = self.get_kg_dict(
             self.num_items)
         
@@ -199,10 +196,10 @@ class KGEncoder(nn.Module):
 
     def get_inetrfeat(self, filetype):
         """
-        Adattato per Hopwise: Legge i dati di interazione da inter_feat e popola gli attributi necessari.
+        Adapted for Hopwise: Reads interaction data from inter_feat and populates the necessary attributes.
 
         Args:
-            filetype (str): Tipo di file da leggere ('train', 'test', 'valid').
+            filetype (str): Type of file to read ('train', 'test', 'valid').
         """
         if not hasattr(self.dataset, 'inter_feat'):
             logging.info(f"\033[91mDataset does not contain inter_feat\033[0m")
@@ -224,16 +221,16 @@ class KGEncoder(nn.Module):
         UsersHis = []
         dataSize = 0
 
-        # Itera sui dati di inter_feat
+        # Iterates on inter_feat data
         user_ids = inter_feat[user_col]
         item_ids = inter_feat[item_col]
 
         for uid, iid in zip(user_ids, item_ids):
-            uid = int(uid)  # ID utente
-            iid = int(iid)  # ID oggetto
+            uid = int(uid)  # User ID 
+            iid = int(iid)  # Item ID
 
             if filetype == "train":
-                # Costruzione della cronologia per gli utenti
+                # User history building
                 his = []
                 for i in range(len(item_ids)):
                     this_his = item_ids[:i] if maxhis <= 0 else item_ids[max(0, i - maxhis):i]
@@ -250,7 +247,7 @@ class KGEncoder(nn.Module):
             self.n_user = max(self.dataset.user_num, uid)
             dataSize += 1
 
-        # Salva i dati come attributi della classe
+        # Saves data like class attributes
         setattr(self, f'{filetype}UniqueUsers', np.array(UniqueUsers))
         setattr(self, f'{filetype}User', np.array(User))
         setattr(self, f'{filetype}Item', np.array(Item))
@@ -310,7 +307,7 @@ class KGEncoder(nn.Module):
         rowsum = np.array(adj_mat.sum(axis=1))
         d_inv = np.power(rowsum, -0.5).flatten()
         d_inv[np.isinf(d_inv)] = 0.
-        d_mat = sp.diags(d_inv) # 对角线元素为每行求和
+        d_mat = sp.diags(d_inv) # Diagonal elements are the sum of each row
         
         norm_adj = d_mat.dot(adj_mat)
         norm_adj = norm_adj.dot(d_mat)
@@ -378,20 +375,7 @@ class KGEncoder(nn.Module):
             return self.cal_item_embedding_mean(kg)
         elif (self.kgcn == "NO"):
             return self.embedding_item.weight
-
-    # def cal_item_embedding_gat(self, kg: dict):
         
-        # print("\033[92mStarting with batches...\033[0m")
-        # item_embs = self.embedding_item(torch.IntTensor(
-            # list(kg.keys())).cuda())  # item_num, emb_dim
-        # item_num, entity_num_each
-        # item_entities = torch.stack(list(kg.values()))
-        # item_num, entity_num_each, emb_dim
-        # entity_embs = self.embedding_entity(item_entities)
-        # item_num, entity_num_each
-        # padding_mask = torch.where(item_entities != self.num_entities, torch.ones_like(
-            # item_entities), torch.zeros_like(item_entities)).float()
-        # return self.gat(item_embs, entity_embs, padding_mask)
     
     def cal_item_embedding_gat(self, kg: dict):
         batch_size = self.batch_size
@@ -414,14 +398,14 @@ class KGEncoder(nn.Module):
         return torch.cat(item_embs_list, dim=0)
 
     def cal_item_embedding_rgat(self, kg: dict):
-        batch_size = self.batch_size
+        batch_size = 128
         item_keys = list(kg.keys())
         item_embs_list = []
 
         for i in range(0, len(item_keys), batch_size):
             batch_keys = item_keys[i:i+batch_size]
 
-            # Pulisci cache prima di ogni batch
+            # Cleans cache
             gc.collect()
             torch.cuda.empty_cache()
 
@@ -594,7 +578,7 @@ class KGLRR(KnowledgeRecommender):
 
         for uid in users.tolist():
             user_his = self.encoder.user_history_dict.get(uid, [])
-            user_his = user_his[-maxhis:]  # limita alla lunghezza massima
+            user_his = user_his[-maxhis:]  # limits to max length
             user_his += [-1] * (maxhis - len(user_his))  # padding
             history_list.append(user_his)
 
@@ -613,7 +597,7 @@ class KGLRR(KnowledgeRecommender):
             if tmp_o is None:
                 tmp_o = elements[:, i, :] * tmp_o_valid  # B * V
             else:
-                # 有valid标志才能运算or，否则就是历史长度没有这么长（才会不valid），此时直接保持原本的内容不变
+                # Only perform OR operation if valid; otherwise, if the history is not that long (not valid), keep the original content unchanged
                 tmp_o = self.logic_or(tmp_o, elements[:, i, :]) * tmp_o_valid + \
                         tmp_o * (-tmp_o_valid + 1)  # B * V
         or_vector = tmp_o  # B * V
@@ -645,24 +629,26 @@ class KGLRR(KnowledgeRecommender):
             torch.Tensor: Predicted scores for given users and all candidate items,
             shape: [n_batch_users, n_candidate_items]
         """
-        # La funzione predict già fa quello che serve (utenti vs tutti gli item)
+        # The predict function already does what is needed (users vs all items)
         prediction = self.predict(interaction, explain=False)  # [batch_size, num_items]
         return prediction
 
     
     def predict_or_and(self, users, pos, neg, history):
-        # 存储用于检查的内容：逻辑正则化 
-        # 对嵌入计算L2正则化
+        # Store content for checking: logic regularization 
+        # Compute L2 regularization on embeddings
         check_list = []
         bs = users.size(0)
         users_embed, item_embed = self.encoder.computer()
 
-        # 历史数据中每个商品都为正标记，但是历史后段可能取-1表示没有这么长
+        # Each item in the history is marked as positive, but the latter part of the history may be -1, 
+        # indicating it is not that long
         his_valid = history.ge(0).float()  # B * H
         maxlen = int(his_valid.sum(dim=1).max().item())
         elements = item_embed[history.abs()] * his_valid.unsqueeze(-1)  # B * H * V
         
-        # 用于之后的验证，每个向量都应满足逻辑表达式中的相应约束，valid表示限制向量中对应元的有效性
+        # For later validation, each vector should satisfy the corresponding constraint in the logical 
+        # expression; 'valid' indicates the validity of the corresponding element in the constraint vector
         constraint = [elements.view([bs, -1, self.latent_dim])]  # B * H * V
         constraint_valid = [his_valid.view([bs, -1])]  # B * H
         
@@ -672,7 +658,8 @@ class KGLRR(KnowledgeRecommender):
             if tmp_o is None:
                 tmp_o = elements[:, i, :] * tmp_o_valid  # B * V
             else:
-                # 有valid标志才能运算or，否则就是历史长度没有这么长（才会不valid），此时直接保持原本的内容不变
+                # Only perform OR operation if valid; otherwise, if the history is not that long (not valid), 
+                # keep the original content unchanged
                 tmp_o = self.logic_or(tmp_o, elements[:, i, :]) * tmp_o_valid + \
                         tmp_o * (-tmp_o_valid + 1)  # B * V
                 constraint.append(tmp_o.view([bs, 1, self.latent_dim]))  # B * 1 * V
@@ -684,7 +671,7 @@ class KGLRR(KnowledgeRecommender):
         right_vector_false = item_embed[neg]  # B * V
         
         constraint.append(right_vector_true.view([bs, 1, self.latent_dim]))  # B * 1 * V
-        constraint_valid.append(torch.ones((bs,1), device='cuda'))  # B * 1   # 表示所有将要判断的item都是有效的
+        constraint_valid.append(torch.ones((bs,1), device='cuda'))  # B * 1   # Indicates that all items to be judged are valid
         constraint.append(right_vector_false.view([bs, 1, self.latent_dim]))  # B * 1 * V
         constraint_valid.append(torch.ones((bs,1), device='cuda'))  # B * 1
 
@@ -714,28 +701,28 @@ class KGLRR(KnowledgeRecommender):
         - Entropy Loss (tloss)
         - L2 Loss (l2loss)
         """
-        # Estrazione dei tensori dal dizionario interaction
+        # Extraction of tensors from the interaction dictionary
         batch_users = interaction['user_id'].long().cuda()
         batch_pos = interaction['item_id'].long().cuda()
         batch_neg = interaction['neg_item_id'].long().cuda()
 
-        # Costruzione della history nello stesso modo di predict
+        # Build the history in the same way as in predict
         bs = batch_users.size(0)
         maxhis = self.encoder.maxhis
         history_list = []
 
         for uid in batch_users.tolist():
             user_his = self.encoder.user_history_dict.get(uid, [])
-            user_his = user_his[-maxhis:]  # limita alla lunghezza massima
+            user_his = user_his[-maxhis:]  # limits to the maximum length
             user_his += [-1] * (maxhis - len(user_his))  # padding
             history_list.append(user_his)
 
         batch_history = torch.tensor(history_list, dtype=torch.long, device=batch_users.device)
 
-        # Forward del modello con le 3 componenti della loss
+        # Forward of the model with the 3 loss components
         rloss, tloss, l2loss = self.forward(False, 0, batch_users, batch_pos, batch_neg, batch_history)
 
-        # Combinazione delle 3 componenti
+        # Combination of the 3 components
         total_loss = rloss + tloss + l2loss
 
         return total_loss
