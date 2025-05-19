@@ -472,7 +472,6 @@ class HFPathTrainer(Trainer):
             num_return_sequences = self.N_RET_SEQ_LP
             logits_processor = self.logits_processor_lp
             ranker = self.ranker_lp
-
         outputs = model.generate(
             **inputs,
             max_length=sequence_len,
@@ -577,7 +576,7 @@ class HopwiseCallback(TrainerCallback):
             control.should_evaluate = False
 
         # update attentive-a
-        if self.model_name in ["PEARLMGAT", "PEARLMGATv2", "PEARLMGATv3"]:
+        if hasattr(self.model, "update_attentive_A"):
             with torch.no_grad():
                 self.model.update_attentive_A()
         return control
