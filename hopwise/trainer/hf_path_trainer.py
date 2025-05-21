@@ -569,7 +569,7 @@ class HopwiseCallback(TrainerCallback):
         if self.hopwise_trainer.eval_step <= 0 or not self.valid_data:
             if self.saved:
                 control.should_save = True
-        elif (epoch_idx + 1) % self.hopwise_trainer.eval_step == 0:
+        elif epoch_idx % self.hopwise_trainer.eval_step == 0:
             control.should_evaluate = True
             self.valid_start_time = time()
         else:

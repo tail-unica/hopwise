@@ -167,11 +167,11 @@ def run_hopwise(
             trainer.resume_checkpoint(checkpoint, train_data)
 
             best_valid_result = trainer.evaluate(
-                test_data, load_best_model=False, model_file=checkpoint, show_progress=config["show_progress"]
+                valid_data, load_best_model=False, model_file=checkpoint, show_progress=config["show_progress"]
             )
         else:
             best_valid_result = trainer.evaluate(
-                test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
+                valid_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
             )
 
         best_valid_score = calculate_valid_score(best_valid_result, trainer.valid_metric)
@@ -183,7 +183,7 @@ def run_hopwise(
             for task, result in best_valid_result.items():
                 logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
         else:
-            logger.info(set_color("valid result", "yellow") + f": {format_metrics(best_valid_result)}")
+            logger.info(set_color("best valid result", "yellow") + f": {format_metrics(best_valid_result)}")
 
     # model evaluation
     test_result = trainer.evaluate(

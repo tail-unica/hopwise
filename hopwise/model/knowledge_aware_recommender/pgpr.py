@@ -515,6 +515,9 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
             self.user_embedding + self.relation_embedding[self.ui_relation_id], self.entity_embedding[: self.n_items].T
         )
         for path, prob in zip(paths, probs):
+            if "self_loop" in [node[0] for node in path[1:]]:
+                continue
+
             if path[-1][1] != "entity":
                 continue
 
@@ -564,7 +567,6 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
             # Change order from smallest to largest
             top_products = top_products[::-1]
             top_paths = top_paths[::-1]
-
             for (product, score), path in zip(top_products, top_paths):
                 results[i, product] = score
 
