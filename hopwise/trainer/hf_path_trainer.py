@@ -2,6 +2,7 @@ from collections import defaultdict
 from time import time
 
 import torch
+import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import (
     DataCollatorForLanguageModeling,
@@ -11,14 +12,8 @@ from transformers import (
     TrainerCallback,
 )
 
-from hopwise.model.layers import ConstrainedLogitsProcessorWordLevel
-from hopwise.utils import (
-    PathLanguageModelingTokenType,
-    dict2str,
-    early_stopping,
-    get_gpu_usage,
-    set_color,
-)
+from hopwise.model.layers import ConstrainedBeamLogitsProcessorWordLevel, ConstrainedLogitsProcessorWordLevel
+from hopwise.utils import PathLanguageModelingTokenType, dict2str, early_stopping, get_gpu_usage, set_color
 
 
 def normalize_tuple(logits_tuple):
@@ -63,12 +58,17 @@ class RankerLP:
 
 
 class CumulativeSequenceScoreRanker:
+    """
+    Ranker that uses the cumulative sequence score of the final 5 predicted tokens to rank sequences.
+    """
+
     def __init__(self, tokenizer, used_ids, item_num, topk=10, max_new_tokens=24):
         self.tokenizer = tokenizer
         self.used_ids = used_ids
         self.item_num = item_num
         self.max_new_tokens = max_new_tokens
         self.topk = topk
+        self.avg_topk_size = {}
 
     def calculate_sequence_scores(self, normalized_tuple, sequences):
         new_sequence_tokens = sequences[:, -self.max_new_tokens - 1 : -1]
@@ -87,32 +87,34 @@ class CumulativeSequenceScoreRanker:
     def get_sequences(self, batch_len, generation_outputs):
         user_num = batch_len
         scores = torch.full((user_num, self.item_num), -torch.inf)
-        user_topk_sequences = {}
+        user_topk_sequences = list()
 
-        # TODO: is it really necessary this scorer?
-        #       the ordering is made on the last 5 tokens, but original sequences_scores values are likely more robust
         normalized_scores = normalize_tuple(generation_outputs.scores)
         normalized_sequences_scores = self.calculate_sequence_scores(normalized_scores, generation_outputs.sequences)
-        ######################################################
 
         sequences = generation_outputs.sequences
         num_return_sequences = sequences.shape[0] // user_num
         batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
 
-        valid_sequences_mask = torch.logical_not(torch.isfinite(normalized_sequences_scores))
+        valid_sequences_mask = torch.logical_not(torch.isfinite(normalized_sequences_scores))  # false if finite
         normalized_sequences_scores = torch.where(valid_sequences_mask, -torch.inf, normalized_sequences_scores)
 
         sorted_indices = normalized_sequences_scores.argsort(descending=True)
         sorted_sequences = sequences[sorted_indices]
         sorted_sequences_scores = normalized_sequences_scores[sorted_indices]
         sorted_batch_user_index = batch_user_index[sorted_indices]
+
         for user_index, sequence, sequence_score in zip(
             sorted_batch_user_index, sorted_sequences, sorted_sequences_scores
         ):
-            seq = self.tokenizer.decode(sequence[1:-1]).split(" ")
+            seq = self.tokenizer.decode(sequence).split(" ")
 
-            uid_token = seq[0]
+            uid_token = seq[1]
             recommended_token = seq[-1]
+
+            if recommended_token == self.tokenizer.pad_token:
+                continue
+
             if not (
                 uid_token.startswith(PathLanguageModelingTokenType.USER.value)
                 and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
@@ -121,17 +123,208 @@ class CumulativeSequenceScoreRanker:
 
             uid = int(uid_token[1:])
             recommended_item = int(recommended_token[1:])
-            if (
-                torch.isfinite(scores[user_index, recommended_item])  # already scored
-                or recommended_item in self.used_ids[uid]
+
+            if torch.isfinite(scores[user_index, recommended_item]) or recommended_item in self.used_ids[uid]:
+                continue
+            scores[user_index, recommended_item] = sequence_score
+
+            if uid not in self.avg_topk_size:
+                self.avg_topk_size[uid] = set()
+
+            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
+            self.avg_topk_size[uid].add(seq[-1])
+
+        return scores, user_topk_sequences
+
+
+class BeamSearchSequenceScoreRanker:
+    """
+    Ranker that uses the sequence score of the beam search to rank sequences.
+    """
+
+    def __init__(self, tokenizer, used_ids, item_num, topk=10, max_new_tokens=24):
+        self.tokenizer = tokenizer
+        self.used_ids = used_ids
+        self.item_num = item_num
+        self.topk = topk
+        self.avg_topk_size = {}
+
+    def get_sequences(self, batch_len, generation_outputs):
+        user_num = batch_len
+        scores = torch.full((user_num, self.item_num), -torch.inf)
+        user_topk_sequences = list()
+
+        sequences = generation_outputs.sequences
+        num_return_sequences = sequences.shape[0] // user_num
+        batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
+
+        sorted_indices = generation_outputs.sequences_scores.argsort(descending=True)
+        sorted_sequences = sequences[sorted_indices]
+        sorted_batch_user_index = batch_user_index[sorted_indices]
+
+        for sequence, user_index, sequence_score in zip(sorted_sequences, sorted_batch_user_index, sorted_indices):
+            seq = self.tokenizer.decode(sequence).split(" ")
+            uid_token = seq[1]
+            recommended_token = seq[-1]
+
+            if not (
+                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
+                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
             ):
                 continue
 
+            uid = int(uid_token[1:])
+            recommended_item = int(recommended_token[1:])
+
+            if torch.isfinite(scores[user_index, recommended_item]) or recommended_item in self.used_ids[uid]:
+                continue
             scores[user_index, recommended_item] = sequence_score
-            if uid not in user_topk_sequences:
-                user_topk_sequences[uid] = [seq]
+
+            if uid not in self.avg_topk_size:
+                self.avg_topk_size[uid] = set()
+
+            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
+            self.avg_topk_size[uid].add(seq[-1])
+
+        return scores, user_topk_sequences
+
+
+class SampleSearchSequenceScoreRanker:
+    """
+    Ranker that uses the sequence score of the beam search to rank sequences.
+
+    To use only if do_sample = True and if topk and topp are set.
+    """
+
+    def __init__(self, tokenizer, used_ids, item_num, topk=10, max_new_tokens=24):
+        self.tokenizer = tokenizer
+        self.used_ids = used_ids
+        self.item_num = item_num
+        self.topk = topk
+        self.max_new_tokens = max_new_tokens
+        self.avg_topk_size = {}
+
+    def get_scores(self, sequences, scores):
+        sequences_scores = None
+
+        for i, tstep in enumerate(scores):
+            # tstep is a tensor for logits at time t
+            score = torch.softmax(tstep, dim=-1)
+            if sequences_scores is None:
+                sequences_scores = score[:, sequences[:, i]].sum(-1)
             else:
-                user_topk_sequences[uid].append(seq)
+                sequences_scores += score[:, sequences[:, i]].sum(-1)
+
+        return sequences_scores
+
+    def get_sequences(self, batch_len, generation_outputs):
+        """
+        generation_outputs is a dict with 3 keys: 'sequences', 'scores' and 'past_key_values'
+        sequences is a tensor of shape (num_return_sequences, sequence_length)
+        scores is a tuple of len (|generated tokens|) where each element is a tensor
+            that says the logits at each timestep before applying topk and topp
+
+        """
+        user_num = batch_len
+        scores = torch.full((user_num, self.item_num), -torch.inf)
+        user_topk_sequences = list()
+
+        sequences = generation_outputs.sequences
+        num_return_sequences = sequences.shape[0] // user_num
+        batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
+
+        sequences_score = self.get_scores(sequences[:, -self.max_new_tokens :], generation_outputs.scores)
+        for sequence, user_index, sequence_score in zip(sequences, batch_user_index, sequences_score):
+            seq = self.tokenizer.decode(sequence).split(" ")
+            uid_token = seq[1]
+            recommended_token = seq[-1]
+
+            if recommended_token == self.tokenizer.pad_token:
+                continue
+
+            if not (
+                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
+                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
+            ):
+                continue
+
+            uid = int(uid_token[1:])
+            recommended_item = int(recommended_token[1:])
+
+            if torch.isfinite(scores[user_index, recommended_item]) or recommended_item in self.used_ids[uid]:
+                continue
+            scores[user_index, recommended_item] = sequence_score
+
+            if uid not in self.avg_topk_size:
+                self.avg_topk_size[uid] = set()
+
+            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
+            self.avg_topk_size[uid].add(seq[-1])
+
+        return scores, user_topk_sequences
+
+
+class SimilaritySequenceScoreRanker:
+    """
+    Ranker that uses as sequence score the dot product between user and item embeddings.
+    """
+
+    def __init__(
+        self, tokenizer, used_ids, item_num, topk=10, max_new_tokens=24, user_embeddings=None, entity_embeddings=None
+    ):
+        self.tokenizer = tokenizer
+        self.used_ids = used_ids
+        self.item_num = item_num
+        self.max_new_tokens = max_new_tokens
+        self.topk = topk
+        self.avg_topk_size = {}
+        self.user_embeddings = user_embeddings
+        self.entity_embeddings = entity_embeddings
+
+    def get_sequences(self, batch_len, generation_outputs):
+        user_num = batch_len
+        scores = torch.full((user_num, self.item_num), -torch.inf)
+        user_topk_sequences = list()
+
+        sequences = generation_outputs.sequences
+        num_return_sequences = sequences.shape[0] // user_num
+        batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
+
+        sorted_indices = generation_outputs.sequences_scores.argsort(descending=True)
+        sorted_sequences = sequences[sorted_indices]
+        sorted_batch_user_index = batch_user_index[sorted_indices]
+
+        for sequence, user_index in zip(sorted_sequences, sorted_batch_user_index):
+            seq = self.tokenizer.decode(sequence).split(" ")
+
+            uid_token = seq[0]
+            recommended_token = seq[-1]
+
+            if not (
+                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
+                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
+            ):
+                continue
+
+            uid = int(uid_token[1:])
+            recommended_item = int(recommended_token[1:])
+
+            if torch.isfinite(scores[user_index, recommended_item]) or recommended_item in self.used_ids[uid]:
+                continue
+
+            # Use as score the dot product of the user and item kgat embeddings
+            u_emb = F.normalize(self.user_embeddings[uid], p=2, dim=0)
+            i_emb = F.normalize(self.entity_embeddings[recommended_item], p=2, dim=0)
+
+            ui_similarity = torch.mul(u_emb, i_emb).sum()
+
+            scores[user_index, recommended_item] = ui_similarity
+
+            if uid not in self.avg_topk_size:
+                self.avg_topk_size[uid] = set()
+
+            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
+            self.avg_topk_size[uid].add(seq[-1])
 
         return scores, user_topk_sequences
 
@@ -168,8 +361,6 @@ class HFPathTrainer(Trainer):
         path_hop_length=3,
         paths_per_user=10,
         path_generation_args=None,
-        # paths_per_head=50,  # n_sequences_lp
-        # n_beams_lp=50,
         eval_device="cpu",
         tokenizer=None,
     ):
@@ -189,11 +380,8 @@ class HFPathTrainer(Trainer):
         self.callback_handler.callbacks = callbacks
 
         self.hopwise_config = hopwise_config
-
         self.paths_per_user = paths_per_user
-        # self.N_RET_SEQ_LP = n_sequences_lp
         self.path_generation_args = path_generation_args
-        # self.N_BEAMS_LP = n_beams_lp
 
         self.path_hop_length = path_hop_length
         self.eval_device = eval_device
@@ -202,66 +390,71 @@ class HFPathTrainer(Trainer):
         tokenized_used_ids = get_tokenized_used_ids(used_ids, self.processing_class)
 
         # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
-        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 2
+        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 1
 
         # TODO: add inference template as config param and use that instead of the hardcoded values
-        ranker_max_new_tokens = self.token_sequence_length - 4
-        self.ranker_rec = CumulativeSequenceScoreRanker(
-            self.processing_class,
-            used_ids,
-            hopwise_dataset.item_num,
-            topk=10,
-            max_new_tokens=ranker_max_new_tokens,
-        )
+        ranker_max_new_tokens = self.token_sequence_length - 2
 
-        # Link Prediction Data
-        # self.SEQUENCE_LEN_LP = 3 + 1
-        # self.test_set_lp = get_set_lp(dataset_name, "test")
-        # heads_lp = [head for head, rel in self.test_set_lp.keys()]
-        # relations_lp = [rel for head, rel in self.test_set_lp.keys()]
+        if self.hopwise_config["ranker"] == "CumulativeSequenceScoreRanker":
+            self.ranker_rec = CumulativeSequenceScoreRanker(
+                self.processing_class,
+                used_ids,
+                hopwise_dataset.item_num,
+                topk=10,
+                max_new_tokens=ranker_max_new_tokens,
+            )
+        elif self.hopwise_config["ranker"] == "BeamSearchSequenceScoreRanker":
+            self.ranker_rec = BeamSearchSequenceScoreRanker(
+                self.processing_class,
+                used_ids,
+                hopwise_dataset.item_num,
+                topk=10,
+            )
+        elif self.hopwise_config["ranker"] == "SampleSearchSequenceScoreRanker":
+            self.ranker_rec = SampleSearchSequenceScoreRanker(
+                self.processing_class,
+                used_ids,
+                hopwise_dataset.item_num,
+                topk=10,
+                max_new_tokens=ranker_max_new_tokens,
+            )
+        else:
+            self.ranker_rec = SimilaritySequenceScoreRanker(
+                self.processing_class,
+                used_ids,
+                hopwise_dataset.item_num,
+                topk=10,
+                max_new_tokens=ranker_max_new_tokens,
+                user_embeddings=self.model.pretrained_user_embeddings,
+                entity_embeddings=self.model.pretrained_entity_embeddings,
+            )
 
-        # self.product_entities = [int(h) for h in get_dataset_id2eid(dataset_name, "product").values()]
-        # self.all_entities, self.positive_triplets, self.positive_triplets_token_ids = (
-        #     get_kg_positives_and_tokens_ids_lp(dataset_name, tokenizer)
-        # )
-
-        # def init_condition_fn_lp(head, rel):
-        #     return f"[BOS] E{head} R{rel}" if head not in self.product_entities else f"[BOS] P{head} R{rel}"
-
-        # self.inference_paths_lp = {
-        #     "eid_rid": [init_condition_fn_lp(head, rel) for head, rel in zip(heads_lp, relations_lp)]
-        # }
-        # self.ranker_lp = RankerLP(
-        #     tokenizer, kg_positives=self.positive_triplets, K=10, max_new_tokens=self.SEQUENCE_LEN_LP
-        # )
-        # self.test_dataset_lp = Dataset.from_dict(self.inference_paths_lp)
-        # print(f"Sequence length rec: {self.token_sequence_length}")  # , lp: {self.SEQUENCE_LEN_LP}")
-
-        self.logits_processor_rec = LogitsProcessorList(
-            [
-                ConstrainedLogitsProcessorWordLevel(
-                    hopwise_dataset.get_tokenized_ckg(),
-                    tokenized_used_ids,
-                    self.token_sequence_length,
-                    self.processing_class,
-                    self.paths_per_user,
-                    task=ConstrainedLogitsProcessorWordLevel.RECOMMENDATION_TASK,
-                )
-            ]
-        )
-
-        # self.logits_processor_lp = LogitsProcessorList(
-        #     [
-        #         ConstrainedLogitsProcessorLP(
-        #             tokenized_kg=tokenized_kg,
-        #             positive_token_map=self.positive_triplets_token_ids,
-        #             tokenizer=tokenizer,
-        #             total_length=self.SEQUENCE_LEN_LP,
-        #             num_return_sequences=self.paths_per_user,
-        #             eos_token_ids=[self.processing_class.convert_tokens_to_ids(self.processing_class.eos_token)],
-        #         )
-        #     ]
-        # )
+        if self.hopwise_config["logits_processor"] == "ConstrainedLogitsProcessorWordLevel":
+            self.logits_processor_rec = LogitsProcessorList(
+                [
+                    ConstrainedLogitsProcessorWordLevel(
+                        hopwise_dataset.get_tokenized_ckg(),
+                        tokenized_used_ids,
+                        self.token_sequence_length,
+                        self.processing_class,
+                        self.paths_per_user,
+                        task=ConstrainedLogitsProcessorWordLevel.RECOMMENDATION_TASK,
+                    )
+                ]
+            )
+        else:
+            self.logits_processor_rec = LogitsProcessorList(
+                [
+                    ConstrainedBeamLogitsProcessorWordLevel(
+                        hopwise_dataset.get_tokenized_ckg(),
+                        tokenized_used_ids,
+                        self.token_sequence_length,
+                        self.processing_class,
+                        self.paths_per_user,
+                        task=ConstrainedBeamLogitsProcessorWordLevel.RECOMMENDATION_TASK,
+                    )
+                ]
+            )
 
     def _full_sort_batch_eval(self, inputs, task="rec"):
         if isinstance(self.model, torch.nn.DataParallel):
@@ -279,7 +472,6 @@ class HFPathTrainer(Trainer):
             num_return_sequences = self.N_RET_SEQ_LP
             logits_processor = self.logits_processor_lp
             ranker = self.ranker_lp
-
         outputs = model.generate(
             **inputs,
             max_length=sequence_len,
@@ -290,9 +482,10 @@ class HFPathTrainer(Trainer):
             output_scores=True,
             **self.path_generation_args,
         )
+
         scores, user_topk_sequences = ranker.get_sequences(inputs["input_ids"].shape[0], outputs)
 
-        return scores, user_topk_sequences
+        return scores, user_topk_sequences, self.ranker_rec.avg_topk_size
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)
@@ -313,7 +506,11 @@ class HopwiseCallback(TrainerCallback):
         show_progress=False,
         callback_fn=None,
         train_phase="finetune",
+        model=None,
+        model_name=None,
     ):
+        self.model = model
+        self.model_name = model_name
         self.hopwise_trainer = hopwise_trainer
         self.train_data = train_data
         self.valid_data = valid_data
@@ -372,12 +569,16 @@ class HopwiseCallback(TrainerCallback):
         if self.hopwise_trainer.eval_step <= 0 or not self.valid_data:
             if self.saved:
                 control.should_save = True
-        elif (epoch_idx + 1) % self.hopwise_trainer.eval_step == 0:
+        elif epoch_idx % self.hopwise_trainer.eval_step == 0:
             control.should_evaluate = True
             self.valid_start_time = time()
         else:
             control.should_evaluate = False
 
+        # update attentive-a
+        if hasattr(self.model, "update_attentive_A"):
+            with torch.no_grad():
+                self.model.update_attentive_A()
         return control
 
     def on_step_end(self, args, state, control, **kwargs):
@@ -427,7 +628,7 @@ class HopwiseCallback(TrainerCallback):
         if self.verbose:
             self.hopwise_trainer.logger.info(valid_score_output)
             self.hopwise_trainer.logger.info(valid_result_output)
-        self.hopwise_trainer.tensorboard.add_scalar("Vaild_score", valid_score, epoch_idx)
+        self.hopwise_trainer.tensorboard.add_scalar("Valid_score", valid_score, epoch_idx)
         self.hopwise_trainer.wandblogger.log_metrics({**valid_result, "valid_step": self.valid_step}, head="valid")
 
         if not self.hopwise_trainer.valid_metric.startswith("eval_"):

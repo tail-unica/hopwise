@@ -24,29 +24,87 @@ By integrating **knowledge embedding models**, **path-based reasoning methods**,
 
 ### 🔍 **Added New Path Reasoning Models**
 ✔️ **PEARLM**
+
+
 ✔️ **KGGLM**
+
+
 ✔️ **PGPR**
+
+
 ✔️ **CAFE**
 
-🛠️ _Future Plans:_ We aim to add **UCPR** (even though it's quite slow ⏳).
+⏳ *KG-LRR coming soon...*
+
+⏳ *CPA-ER coming soon...*
+
+⏳ *TPRec coming soon...*
+
+⏳ *PLM-Rec coming soon...*
+
+
 
 ### 🧩 **Added 14 Knowledge Graph Embedding Models**
-✔️ **TransE**
-✔️ **TransH**
-✔️ **TransD**
-✔️ **TransR**
-✔️ **TorusE**
-✔️ **ComplEx**
-✔️ **Analogy**
-✔️ **TuckER**
-✔️ **RESCAL**
-✔️ **DistMult**
-✔️ **ConvE**
-✔️ **ConvKB**
-✔️ **RotatE**
-✔️ **HolE**
+✔️ **[TransE](https://proceedings.neurips.cc/paper_files/paper/2013/file/1cecc7a77928ca8133fa24680a88d2f9-Paper.pdf)**
+
+✔️ **[TransH](https://ojs.aaai.org/index.php/AAAI/article/view/8870)**
+
+✔️ **[TransD](https://aclanthology.org/P15-1067/)**
+
+✔️ **[TransR](https://linyankai.github.io/publications/aaai2015_transr.pdf)**
+
+✔️ **[TorusE](https://cdn.aaai.org/ojs/11538/11538-13-15066-1-2-20201228.pdf)**
+
+✔️ **[ComplEx](https://arxiv.org/abs/1606.06357)**
+
+✔️ **[Analogy](https://proceedings.mlr.press/v70/liu17d/liu17d.pdf)**
+
+✔️ **[TuckER](https://arxiv.org/abs/1901.09590)**
+
+✔️ **[RESCAL](https://icml.cc/2011/papers/438_icmlpaper.pdf)**
+
+✔️ **[DistMult](https://arxiv.org/abs/1412.6575)**
+
+✔️ **[ConvE](https://arxiv.org/abs/1707.01476)**
+
+✔️ **[ConvKB](https://aclanthology.org/N18-2053/)**
+
+✔️ **[RotatE](https://arxiv.org/abs/1902.10197)**
+
+✔️ **[HolE](https://arxiv.org/abs/1510.04935)**
+
+For some implementations: [TorchKGE](https://torchkge.readthedocs.io/en/latest/)
 
 ---
+### 🧩 **Added 10 Perceived Explanation Quality Metrics**
+
+
+✔️ **LIR (Linking Interaction Recency)**
+
+✔️ **SEP (Shared Entity Popularity)**
+
+✔️ **LID (Linking Interaction Diversity)**
+
+✔️ **LITD (Linked Interaction Type Diversity)**
+
+✔️ **SED (Shared Entity Diversity)**
+
+✔️ **SETD (Shared Entities Type Diversity)**
+
+✔️ **PTC (Path Type Concentration)**
+
+✔️ **PPT (Path Pattern Type)**
+
+✔️ **PTD/PPC (Path Type Diversity)**
+
+✔️ **Fidelity**
+
+> [!NOTE] References
+> [Balloccu G. et al. (2022) Reinforcement Recommendation Reasoning through Knowledge Graphs for Explanation Path Quality](https://arxiv.org/pdf/2209.04954)
+>
+> [Peake G. et al. (2018) Explanation Mining: Post Hoc Interpretability of Latent Factor Models for Recommendation Systems](https://dl.acm.org/doi/pdf/10.1145/3219819.3220072)
+>
+> [Fu Z. et al. (2020) Fairness-Aware Explainable Recommendation over Knowledge Graphs](https://dl.acm.org/doi/pdf/10.1145/3397271.3401051)
 
 ## ⚡ Installation
 

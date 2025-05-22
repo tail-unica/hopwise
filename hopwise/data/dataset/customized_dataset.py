@@ -186,7 +186,7 @@ class KGGLMDataset(KnowledgePathDataset):
                 path_hop_length = np.random.randint(min_hop, max_hop + 1)
 
                 while True:
-                    generated_path = graph.random_walk(start_node, path_hop_length - 1, weights="weight")
+                    generated_path = graph.random_walk(start_node, path_hop_length, weights="weight")
                     generated_path = tuple(generated_path)
                     if generated_path not in paths:
                         break

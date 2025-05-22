@@ -27,6 +27,10 @@ dataset/
 !hopwise/data/dataset
 !hopwise/properties/dataset
 hyper/
+model/
 *.txt
 *.*emb
 !tests/test_data/test/*.*emb
+test.py
+plot_results.ipynb
+logwatcher.py

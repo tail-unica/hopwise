@@ -212,6 +212,17 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         """
 
         if self._tokenized_dataset is None:
+            special_token_ids = [
+                self._dataset.tokenizer.bos_token_id,
+                self._dataset.tokenizer.eos_token_id,
+                self._dataset.tokenizer.unk_token_id,
+                self._dataset.tokenizer.pad_token_id,
+                self._dataset.tokenizer.mask_token_id,
+            ]
+
+            def remove_incorrect_paths(tokenized_dataset):
+                # remove paths that contain special tokens. The token in position 0 and -1 are [BOS] and [EOS]
+                return not any(path in special_token_ids for path in tokenized_dataset["input_ids"][1:-1])
 
             def tokenization(example):
                 return self._dataset.tokenizer(
@@ -224,6 +235,7 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
 
             hf_path_dataset = HuggingFaceDataset.from_dict({"path": self._dataset.path_dataset.split("\n")})
             tokenized_dataset = hf_path_dataset.map(tokenization, batched=True, remove_columns=["path"])
+            tokenized_dataset = tokenized_dataset.filter(remove_incorrect_paths)
             tokenized_dataset = DatasetDict({phase: tokenized_dataset})
             self._tokenized_dataset = tokenized_dataset
 
