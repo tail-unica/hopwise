@@ -21,7 +21,16 @@ import torch.distributed as dist
 from hopwise.config import Config
 from hopwise.data import create_dataset, data_preparation
 from hopwise.data.transform import construct_transform
-from hopwise.utils import get_environment, get_flops, get_model, get_trainer, init_logger, init_seed, set_color
+from hopwise.utils import (
+    calculate_valid_score,
+    get_environment,
+    get_flops,
+    get_model,
+    get_trainer,
+    init_logger,
+    init_seed,
+    set_color,
+)
 from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
@@ -119,7 +128,7 @@ def run_hopwise(
             model=model,
             dataset=dataset,
             config_file_list=config_file_list,
-            config_dict=config_dict
+            config_dict=config_dict,
         )
         logger = get_logger(config)
         # dataset filtering
@@ -147,54 +156,47 @@ def run_hopwise(
         best_valid_score, best_valid_result = trainer.fit(
             train_data, valid_data, saved=saved, show_progress=config["show_progress"]
         )
-
-        # model evaluation
-        test_result = trainer.evaluate(test_data, load_best_model=saved, show_progress=config["show_progress"])
-
-        environment_tb = get_environment(config)
-        logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
-
-        if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.LP in best_valid_result:
-            for task, result in best_valid_result.items():
-                logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
-
-        if KnowledgeEvaluationType.REC in test_result and KnowledgeEvaluationType.LP in test_result:
-            for task, result in test_result.items():
-                logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
-        else:
-            if isinstance(best_valid_result, dict) and KnowledgeEvaluationType.REC in best_valid_result:
-                best_valid_result = best_valid_result[KnowledgeEvaluationType.REC]
-
-            logger.info(set_color("best valid ", "yellow") + f": {format_metrics(best_valid_result)}")
-            logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
-        # In the case of KG-aware tasks, we don't care about the final "best_valid_score"
-        # format because it is not used anywhere.
-        result = {
-            "best_valid_score": best_valid_score,
-            "valid_score_bigger": config["valid_metric_bigger"],
-            "best_valid_result": best_valid_result,
-            "test_result": test_result,
-        }
-
     elif run == "evaluate":
         if checkpoint is None:
             raise ValueError("Checkpoint is needed for evaluation")
 
-        test_result = trainer.evaluate(
+        best_valid_result = trainer.evaluate(
             test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
         )
-
-        environment_tb = get_environment(config)
-        logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
-
-        logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
-
-        result = {
-            "valid_score_bigger": config["valid_metric_bigger"],
-            "test_result": test_result,
-        }
+        best_valid_score = calculate_valid_score(best_valid_result, trainer.valid_metric)
     else:
         raise ValueError(f"Invalid run mode: {run}")
+
+    # model evaluation
+    test_result = trainer.evaluate(
+        test_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
+    )
+
+    environment_tb = get_environment(config)
+    logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
+
+    if best_valid_result is not None:
+        if KnowledgeEvaluationType.REC in best_valid_result or KnowledgeEvaluationType.LP in best_valid_result:
+            for task, result in best_valid_result.items():
+                logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
+        else:
+            logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
+
+    if test_result is not None:
+        if KnowledgeEvaluationType.REC in test_result or KnowledgeEvaluationType.LP in test_result:
+            for task, result in test_result.items():
+                logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
+        else:
+            logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
+
+    # In the case of KG-aware tasks, we don't care about the final "best_valid_score"
+    # format because it is not used anywhere.
+    result = {
+        "best_valid_score": best_valid_score,
+        "valid_score_bigger": config["valid_metric_bigger"],
+        "best_valid_result": best_valid_result,
+        "test_result": test_result,
+    }
 
     if not config["single_spec"]:
         dist.destroy_process_group()
@@ -233,7 +235,7 @@ def run_hopwises(rank, *args):
     )
 
 
-def objective_function(config_dict=None, config_file_list=None, saved=True):
+def objective_function(config_dict=None, config_file_list=None, saved=True, callback_fn=None):
     r"""The default objective_function used in HyperTuning
 
     Args:
@@ -241,7 +243,6 @@ def objective_function(config_dict=None, config_file_list=None, saved=True):
         config_file_list (list, optional): Config files used to modify experiment parameters. Defaults to ``None``.
         saved (bool, optional): Whether to save the model. Defaults to ``True``.
     """
-    from ray import tune
 
     config = Config(config_dict=config_dict, config_file_list=config_file_list)
     init_seed(config["seed"], config["reproducibility"])
@@ -256,70 +257,16 @@ def objective_function(config_dict=None, config_file_list=None, saved=True):
     model_name = config["model"]
     model = get_model(model_name)(config, train_data.dataset).to(config["device"])
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
-    best_valid_score, best_valid_result = trainer.fit(train_data, valid_data, verbose=False, saved=saved)
-    test_result = trainer.evaluate(test_data, load_best_model=saved)
-
-    tune.report(**test_result)
-
-    return {
-        "model": model_name,
-        "best_valid_score": best_valid_score,
-        "valid_score_bigger": config["valid_metric_bigger"],
-        "best_valid_result": best_valid_result,
-        "test_result": test_result,
-    }
-
-
-def optuna_report(epoch_idx, valid_score, **kwargs):
-    r"""Report the intermediate value of the objective function.
-
-    Args:
-        valid_score (float): The intermediate value of the objective function.
-        epoch_idx (int): The epoch.
-    """
-    import optuna
-
-    trial = kwargs.get("trial")
-
-    trial.report(valid_score, epoch_idx)
-
-    # Handle pruning based on the intermediate value.
-    if trial.should_prune():
-        raise optuna.exceptions.TrialPruned()
-
-
-def objective_function_optuna(config=None, saved=True, trial=None):
-    r"""The default objective_function used in HyperTuning
-
-    Args:
-        config_dict (dict, optional): Parameters dictionary used to modify experiment parameters. Defaults to ``None``.
-        config_file_list (list, optional): Config files used to modify experiment parameters. Defaults to ``None``.
-        saved (bool, optional): Whether to save the model. Defaults to ``True``.
-    """
-    init_seed(config["seed"], config["reproducibility"])
-    logger = getLogger()
-    for hdlr in logger.handlers[:]:  # remove all old handlers
-        logger.removeHandler(hdlr)
-    init_logger(config)
-    logging.basicConfig(level=logging.ERROR)
-    dataset = create_dataset(config)
-    train_data, valid_data, test_data = data_preparation(config, dataset)
-    init_seed(config["seed"], config["reproducibility"])
-    model_name = config["model"]
-    model = get_model(model_name)(config, train_data._dataset).to(config["device"])
-    trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
     best_valid_score, best_valid_result = trainer.fit(
-        train_data, valid_data, verbose=False, saved=saved, trial=trial, callback_fn=optuna_report
+        train_data, valid_data, verbose=False, saved=saved, callback_fn=callback_fn
     )
-    if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.REC in best_valid_score:
-        best_valid_score, best_valid_result = (
-            best_valid_score[KnowledgeEvaluationType.REC],
-            best_valid_result[KnowledgeEvaluationType.REC],
-        )
+    if best_valid_result is not None:
+        if KnowledgeEvaluationType.REC in best_valid_result and KnowledgeEvaluationType.REC in best_valid_score:
+            best_valid_score, best_valid_result = (
+                best_valid_score[KnowledgeEvaluationType.REC],
+                best_valid_result[KnowledgeEvaluationType.REC],
+            )
     test_result = trainer.evaluate(test_data, load_best_model=saved)
-
-    for key, value in test_result.items():
-        trial.set_user_attr(key, value)
 
     return {
         "model": model_name,
