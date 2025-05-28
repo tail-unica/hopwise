@@ -122,10 +122,6 @@ class KGEncoder(nn.Module):
         self.num_entities = self.dataset.entity_num
         self.num_relations = self.dataset.relation_num
 
-        # Print with colors the stats
-        logging.info(f"\033[36mn_user\033[0m: \033[35m{self.dataset.user_num}\033[0m")
-        logging.info(f"\033[36mm_item\033[0m: \033[35m{self.dataset.item_num}\033[0m")
-
         self.embedding_user = torch.nn.Embedding(num_embeddings=self.num_users, embedding_dim=self.latent_dim)
         # item and kg entity
         self.embedding_item = torch.nn.Embedding(num_embeddings=self.num_items, embedding_dim=self.latent_dim)
@@ -137,10 +133,8 @@ class KGEncoder(nn.Module):
         self.W_R = nn.Parameter(torch.Tensor(self.num_relations, self.latent_dim, self.latent_dim))
         nn.init.xavier_uniform_(self.W_R, gain=nn.init.calculate_gain("relu"))
 
-        logging.info("use NORMAL distribution UI")
         nn.init.normal_(self.embedding_user.weight, std=0.1)
         nn.init.normal_(self.embedding_item.weight, std=0.1)
-        logging.info("use NORMAL distribution ENTITY")
         nn.init.normal_(self.embedding_entity.weight, std=0.1)
         nn.init.normal_(self.embedding_relation.weight, std=0.1)
 
@@ -149,7 +143,7 @@ class KGEncoder(nn.Module):
         self.kg_dict, self.item2relations = self.get_kg_dict(self.num_items)
 
     def process_inter_feat(self, filetype):
-        logging.info("\033[92mProcessing interaction features...\033[0m")
+        # Process interaction features to extract user-item interactions and user history.
         inter_feat = self.dataset.inter_feat
         UniqueUsers, Item, User = [], [], []
         UsersHis = []
@@ -183,8 +177,6 @@ class KGEncoder(nn.Module):
         setattr(self, f"{filetype}UsersHis", np.array(UsersHis))
         setattr(self, f"{filetype}Size", dataSize)
 
-        logging.info(f"{dataSize} interactions for {filetype}")
-
     def get_inetrfeat(self, filetype):
         """
         Adapted for Hopwise: Reads interaction data from inter_feat and populates the necessary attributes.
@@ -193,7 +185,6 @@ class KGEncoder(nn.Module):
             filetype (str): Type of file to read ('train', 'test', 'valid').
         """
         if not hasattr(self.dataset, "inter_feat"):
-            logging.info("\033[91mDataset does not contain inter_feat\033[0m")
             return
 
         inter_feat = self.dataset.inter_feat
@@ -205,7 +196,6 @@ class KGEncoder(nn.Module):
         item_col = self.dataset.iid_field  # Nome della colonna per ITEM_ID
 
         if user_col not in inter_feat or item_col not in inter_feat:
-            logging.info(f"\033[91mColumns {user_col} or {item_col} not found in inter_feat\033[0m")
             return
 
         UniqueUsers, Item, User = [], [], []
@@ -245,7 +235,6 @@ class KGEncoder(nn.Module):
             setattr(self, f"{filetype}UsersHis", np.array(UsersHis))
         setattr(self, f"{filetype}Size", dataSize)
 
-        logging.info(f"{dataSize} interactions for {filetype}")
 
     def get_kg_dict(self, item_num):
         i2es = dict()
@@ -275,7 +264,7 @@ class KGEncoder(nn.Module):
         col = torch.Tensor(coo.col).long()
         index = torch.stack([row, col])
         data = torch.FloatTensor(coo.data)
-        return torch.sparse.FloatTensor(index, data, torch.Size(coo.shape))
+        return torch.sparse_coo_tensor(index, data, torch.Size(coo.shape))
 
     def getSparseGraph(self):
         """Calculate the connection graph in graph convolution, including A~, etc.
@@ -283,8 +272,6 @@ class KGEncoder(nn.Module):
         and each item in the list is a sparse matrix representing the connection matrix of the entity
         at the corresponding index for that length.
         """
-        logging.info("generating adjacency matrix")
-        s = time()
         # The rows and columns of adj_mat concatenate users and items, marking known connections.
         adj_mat = sp.dok_matrix((self.num_users + self.num_items, self.num_users + self.num_items), dtype=np.float32)
         adj_mat = adj_mat.tolil()
@@ -294,20 +281,18 @@ class KGEncoder(nn.Module):
         adj_mat = adj_mat.todok()  # Convert the matrix to dictionary format (key-value pairs)
         # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
 
-        rowsum = np.array(adj_mat.sum(axis=1))
-        d_inv = np.power(rowsum, -0.5).flatten()
-        d_inv[np.isinf(d_inv)] = 0.0
+        rowsum = np.array(adj_mat.sum(axis=1)).flatten()
+        d_inv = np.zeros_like(rowsum)
+        nonzero_mask = rowsum != 0
+        d_inv[nonzero_mask] = np.power(rowsum[nonzero_mask], -0.5)
         d_mat = sp.diags(d_inv)  # Diagonal elements are the sum of each row
 
         norm_adj = d_mat.dot(adj_mat)
         norm_adj = norm_adj.dot(d_mat)
         norm_adj = norm_adj.tocsr()
-        end = time()
-        logging.info(f"costing {end - s}s, saved norm_mat...")
 
         self.dataset.G = self._convert_sp_mat_to_sp_tensor(norm_adj)
         self.dataset.G = self.dataset.G.coalesce().cuda()
-        logging.info("\033[31mDidn't split the matrix\033[0m")
         return self.dataset.G
 
     def computer(self):
@@ -448,10 +433,7 @@ class KGLRR(KnowledgeRecommender):
         if dataset.G is not None and dataset.kg_relation is not None:
             self.G, self.kg_dataset = dataset.G, dataset.kg_dataset
         else:
-            # Load the knowledge graph from the dataset
-            print("\033[92mLoading KG...\033[0m")
             self.G, self.kg_dataset = dataset.ckg_dict_graph()
-            # self.G, self.kg_dataset = dataset.ckg_graph("pyg")
             if config["save_dataset"]:
                 dataset.save()
 
@@ -748,6 +730,17 @@ class KGLRR(KnowledgeRecommender):
         return reg_loss * self.l2s_weight
 
     def check(self, check_list):
+        """
+        Logs the shape and contents of tensors in the provided check_list.
+        Each element in check_list is expected to be a tuple where the first item is a string (label)
+        and the second item is a tensor. For each tuple, this function:
+          - Converts the tensor to a NumPy array after detaching it from the computation graph and moving it to CPU.
+          - Logs the label and the shape of the array.
+          - Logs the array contents, with a threshold of 20 elements for display.
+        Args:
+            check_list (list of tuple): List of (label, tensor) pairs to be logged for inspection.
+        """
+
         logging.info(os.linesep)
         for t in check_list:
             d = np.array(t[1].detach().cpu())
