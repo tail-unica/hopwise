@@ -724,7 +724,7 @@ class KGLRR(KnowledgeRecommender):
             FItemScore.sigmoid(), torch.zeros_like(FItemScore)
         )
         # Input positive and negative example scores, maximizing the score difference
-        if self.loss_sum == 1:
+        if self.loss_sum:
             loss = torch.sum(torch.nn.functional.softplus(-(TItemScore - FItemScore)))
         else:
             loss = torch.mean(torch.nn.functional.softplus(-(TItemScore - FItemScore)))
@@ -743,7 +743,7 @@ class KGLRR(KnowledgeRecommender):
             * (users_emb.norm(2).pow(2) + pos_emb.norm(2).pow(2) + neg_emb.norm(2).pow(2) + elements.norm(2).pow(2))
             / float(len(users))
         )
-        if self.loss_sum == 0:
+        if not self.loss_sum:
             reg_loss /= users.size(0)
         return reg_loss * self.l2s_weight
 
