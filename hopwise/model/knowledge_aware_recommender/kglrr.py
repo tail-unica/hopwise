@@ -1,7 +1,6 @@
 import gc
 import logging
 import os
-from time import time
 
 import numpy as np
 import scipy.sparse as sp
@@ -104,6 +103,7 @@ class KGEncoder(nn.Module):
 
         self.latent_dim = config["latent_dim_rec"]
         self.n_layers = config["lightGCN_n_layers"]
+        self.max_entities_per_user = config["max_entities_per_user"]
         self.dataset = dataset
         self.kg_dataset = kg_dataset
         self.gat = GAT(self.latent_dim, self.latent_dim, dropout=0.4, alpha=0.2).train()
@@ -177,85 +177,26 @@ class KGEncoder(nn.Module):
         setattr(self, f"{filetype}UsersHis", np.array(UsersHis))
         setattr(self, f"{filetype}Size", dataSize)
 
-    def get_inetrfeat(self, filetype):
-        """
-        Adapted for Hopwise: Reads interaction data from inter_feat and populates the necessary attributes.
-
-        Args:
-            filetype (str): Type of file to read ('train', 'test', 'valid').
-        """
-        if not hasattr(self.dataset, "inter_feat"):
-            return
-
-        inter_feat = self.dataset.inter_feat
-
-        maxhis = self.config["maxhis"]
-
-        # Estrai USER_ID e ITEM_ID
-        user_col = self.dataset.uid_field  # Nome della colonna per USER_ID
-        item_col = self.dataset.iid_field  # Nome della colonna per ITEM_ID
-
-        if user_col not in inter_feat or item_col not in inter_feat:
-            return
-
-        UniqueUsers, Item, User = [], [], []
-        UsersHis = []
-        dataSize = 0
-
-        # Iterates on inter_feat data
-        user_ids = inter_feat[user_col]
-        item_ids = inter_feat[item_col]
-
-        for uid, iid in zip(user_ids, item_ids):
-            if filetype == "train":
-                # User history building
-                his = []
-                for i in range(len(item_ids)):
-                    this_his = item_ids[:i] if maxhis <= 0 else item_ids[max(0, i - maxhis) : i]
-                    padding = torch.full(
-                        (maxhis - this_his.size(0),), -1, dtype=this_his.dtype, device=this_his.device
-                    )
-                    this_his = torch.cat((this_his, padding))
-                    his.append(this_his)
-                UsersHis.extend(his)
-
-            UniqueUsers.append(uid)
-            User.append(uid)
-            Item.append(iid)
-
-            self.m_item = max(self.dataset.item_num, iid)
-            self.n_user = max(self.dataset.user_num, uid)
-            dataSize += 1
-
-        # Saves data like class attributes
-        setattr(self, f"{filetype}UniqueUsers", np.array(UniqueUsers))
-        setattr(self, f"{filetype}User", np.array(User))
-        setattr(self, f"{filetype}Item", np.array(Item))
-        if filetype == "train":
-            setattr(self, f"{filetype}UsersHis", np.array(UsersHis))
-        setattr(self, f"{filetype}Size", dataSize)
-
-
     def get_kg_dict(self, item_num):
         i2es = dict()
         i2rs = dict()
         for item in range(item_num):
             rts = self.kg_dataset.get(item, False)
             if rts:
-                tails = list(map(lambda x: x[1], rts))
-                relations = list(map(lambda x: x[0], rts))
-                if len(tails) > self.dataset.entity_num:
-                    i2es[item] = torch.IntTensor(tails).cuda()[: self.dataset.entity_num]
-                    i2rs[item] = torch.IntTensor(relations).cuda()[: self.dataset.entity_num]
+                tails = list(set([ent for tail_list in rts.values() for ent in tail_list]))
+                relations = list(rts.keys())
+                if len(tails) > self.max_entities_per_user:
+                    i2es[item] = torch.IntTensor(tails).cuda()[: self.max_entities_per_user]
+                    i2rs[item] = torch.IntTensor(relations).cuda()[: self.max_entities_per_user]
                 else:
                     # last embedding pos as padding idx
-                    tails.extend([self.dataset.entity_count] * (self.dataset.entity_num - len(tails)))
-                    relations.extend([self.dataset.relation_count] * (self.dataset.entity_num - len(relations)))
+                    tails.extend([self.dataset.entity_count] * (self.max_entities_per_user - len(tails)))
+                    relations.extend([self.dataset.relation_count] * (self.max_entities_per_user - len(relations)))
                     i2es[item] = torch.IntTensor(tails).cuda()
                     i2rs[item] = torch.IntTensor(relations).cuda()
             else:
-                i2es[item] = torch.IntTensor([self.dataset.item_num] * self.dataset.entity_num).cuda()
-                i2rs[item] = torch.IntTensor([self.dataset.relation_num] * self.dataset.entity_num).cuda()
+                i2es[item] = torch.IntTensor([self.dataset.item_num] * self.max_entities_per_user).cuda()
+                i2rs[item] = torch.IntTensor([self.dataset.relation_num] * self.max_entities_per_user).cuda()
         return i2es, i2rs
 
     def _convert_sp_mat_to_sp_tensor(self, X):
@@ -429,13 +370,7 @@ class KGLRR(KnowledgeRecommender):
     def __init__(self, config, dataset) -> None:
         super().__init__(config, dataset)
 
-        # Load Full Knowledge Graph in dict form
-        if dataset.G is not None and dataset.kg_relation is not None:
-            self.G, self.kg_dataset = dataset.G, dataset.kg_dataset
-        else:
-            self.G, self.kg_dataset = dataset.ckg_dict_graph()
-            if config["save_dataset"]:
-                dataset.save()
+        self.kg_dataset = dataset.ckg_dict_graph()
 
         self.encoder = KGEncoder(config, dataset, self.kg_dataset)
         self.latent_dim = config["latent_dim_rec"]
