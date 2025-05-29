@@ -3,7 +3,6 @@ import logging
 import os
 
 import numpy as np
-import scipy.sparse as sp
 import torch
 import torch.nn.functional as F
 from scipy.sparse import csr_matrix
@@ -139,7 +138,7 @@ class KGEncoder(nn.Module):
         nn.init.normal_(self.embedding_relation.weight, std=0.1)
 
         self.f = nn.Sigmoid()
-        self.Graph = self.getSparseGraph()
+        self.Graph = self.dataset.norm_adjacency_matrix().to(self.device)
         self.kg_dict, self.item2relations = self.get_kg_dict(self.num_items)
 
     def process_inter_feat(self, filetype):
@@ -198,43 +197,6 @@ class KGEncoder(nn.Module):
                 i2es[item] = torch.IntTensor([self.dataset.item_num] * self.max_entities_per_user).cuda()
                 i2rs[item] = torch.IntTensor([self.dataset.relation_num] * self.max_entities_per_user).cuda()
         return i2es, i2rs
-
-    def _convert_sp_mat_to_sp_tensor(self, X):
-        coo = X.tocoo().astype(np.float32)
-        row = torch.Tensor(coo.row).long()
-        col = torch.Tensor(coo.col).long()
-        index = torch.stack([row, col])
-        data = torch.FloatTensor(coo.data)
-        return torch.sparse_coo_tensor(index, data, torch.Size(coo.shape))
-
-    def getSparseGraph(self):
-        """Calculate the connection graph in graph convolution, including A~, etc.
-        The returned data is a processed list, the length of the list is determined by self.fold,
-        and each item in the list is a sparse matrix representing the connection matrix of the entity
-        at the corresponding index for that length.
-        """
-        # The rows and columns of adj_mat concatenate users and items, marking known connections.
-        adj_mat = sp.dok_matrix((self.num_users + self.num_items, self.num_users + self.num_items), dtype=np.float32)
-        adj_mat = adj_mat.tolil()
-        R = self.UserItemNet.tolil()
-        adj_mat[: self.num_users, self.num_users :] = R
-        adj_mat[self.num_users :, : self.num_users] = R.T
-        adj_mat = adj_mat.todok()  # Convert the matrix to dictionary format (key-value pairs)
-        # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
-
-        rowsum = np.array(adj_mat.sum(axis=1)).flatten()
-        d_inv = np.zeros_like(rowsum)
-        nonzero_mask = rowsum != 0
-        d_inv[nonzero_mask] = np.power(rowsum[nonzero_mask], -0.5)
-        d_mat = sp.diags(d_inv)  # Diagonal elements are the sum of each row
-
-        norm_adj = d_mat.dot(adj_mat)
-        norm_adj = norm_adj.dot(d_mat)
-        norm_adj = norm_adj.tocsr()
-
-        self.dataset.G = self._convert_sp_mat_to_sp_tensor(norm_adj)
-        self.dataset.G = self.dataset.G.coalesce().cuda()
-        return self.dataset.G
 
     def computer(self):
         with torch.no_grad():
@@ -382,7 +344,6 @@ class KGLRR(KnowledgeRecommender):
         self.loss_sum = config["loss_sum"]
         self.l2s_weight = config["l2_loss"]
 
-        self.dataset = dataset
         self.num_items = dataset.item_num
 
         self._init_weights()
