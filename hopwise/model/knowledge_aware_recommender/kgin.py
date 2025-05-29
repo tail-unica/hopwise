@@ -245,7 +245,7 @@ class KGIN(KnowledgeRecommender):
 
         # load dataset info
         # inter_matrix: [n_users, n_entities]; inter_graph: [n_users + n_entities, n_users + n_entities]
-        self.interact_mat, _ = dataset._create_norm_adjacency_matrix(symmetric=False)
+        self.interact_mat, _ = dataset._create_norm_ckg_adjacency_matrix(symmetric=False)
         self.interact_mat = self.interact_mat.to(self.device)
         self.kg_graph = dataset.kg_graph(form="coo", value_field="relation_id")  # [n_entities, n_entities]
         # edge_index: [2, -1]; edge_type: [-1,]
