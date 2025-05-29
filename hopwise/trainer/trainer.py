@@ -1914,7 +1914,6 @@ class HFPathLanguageModelingTrainer(Trainer):
         )
 
         self.hf_trainer.train()
-        self.hf_trainer._load_best_model()
         self.hf_trainer.save_model()
 
         return self.best_valid_score, self.best_valid_result

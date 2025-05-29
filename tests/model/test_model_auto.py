@@ -17,8 +17,8 @@ current_path = os.path.dirname(os.path.realpath(__file__))
 config_file_list = [os.path.join(current_path, "test_model.yaml")]
 
 
-def quick_test(config_dict):
-    objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
+def quick_test(config_dict, saved=False):
+    objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=saved)
 
 
 class TestGeneralRecommender(unittest.TestCase):
@@ -1039,12 +1039,12 @@ class TestPathLanguageModelingRecommender(unittest.TestCase):
                 **self.lm_base_config,
                 "path_sample_args": {"pretrain_paths": 100},
             }
-            quick_test(config_dict)
+            quick_test(config_dict, saved=True)
 
             config_dict = {
                 "model": "KGGLM",
                 "train_stage": "finetune",
-                "pre_model_path": os.path.join(tmpdirname, "huggingface-KGGLM-test-pretrained-1.pth"),
+                "pre_model_path": os.path.join(tmpdirname, "huggingface-KGGLM-test-pretrained.pth"),
                 **self.lm_base_config,
             }
             quick_test(config_dict)
