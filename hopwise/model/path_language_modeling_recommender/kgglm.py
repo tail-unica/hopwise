@@ -18,7 +18,8 @@ class KGGLM(PEARLM):
         assert self.train_stage in self.TRAIN_STAGES
         if self.train_stage == "finetune":
             # load pretrained model for finetune
-            if not os.path.basename(self.pre_model_path).startswith("checkpoint-"):
+            if not os.path.exists(os.path.join(self.pre_model_path, "config.json")):
+                # if the path is not a checkpoint, we assume it contains the checkpoint
                 self.pre_model_path = get_last_checkpoint(self.pre_model_path)
 
             self.logger.info(f"Load pretrained model from {self.pre_model_path}")

@@ -33,8 +33,8 @@ class KSR(SequentialRecommender):
         self.RELATION_ID = config["RELATION_ID_FIELD"]
         self.n_entities = dataset.num(self.ENTITY_ID)
         self.n_relations = dataset.num(self.RELATION_ID) - 1
-        self.entity_embedding_matrix = dataset.get_preload_weight("ent_id")
-        self.relation_embedding_matrix = dataset.get_preload_weight("rel_id")
+        self.entity_embedding_matrix = dataset.get_preload_weight("entity_embedding_id")
+        self.relation_embedding_matrix = dataset.get_preload_weight("relation_embedding_id")
 
         # load parameters info
         self.embedding_size = config["embedding_size"]  # later use "E" to represent
@@ -73,8 +73,11 @@ class KSR(SequentialRecommender):
 
         # parameters initialization
         self.apply(self._init_weights)
+        emb_dtype = str(self.entity_embedding.weight.dtype).strip("torch.")
+        self.entity_embedding_matrix = self.entity_embedding_matrix.astype(emb_dtype)
+        self.relation_embedding_matrix = self.relation_embedding_matrix.astype(emb_dtype)
         self.entity_embedding.weight.data.copy_(torch.from_numpy(self.entity_embedding_matrix[: self.n_items]))
-        self.relation_Matrix = torch.from_numpy(self.relation_embedding_matrix[: self.n_relations]).to(
+        self.relation_matrix = torch.from_numpy(self.relation_embedding_matrix[: self.n_relations]).to(
             self.device
         )  # [R K]
 
@@ -91,11 +94,11 @@ class KSR(SequentialRecommender):
         We generate the embeddings of the tail entities on every relations only for head due to the 1-N problems.
         """
         head_e = self.entity_embedding(head)  # [B K]
-        relation_Matrix = self.relation_Matrix.unsqueeze(0).repeat(head_e.size()[0], 1, 1)  # [B R K]
-        head_Matrix = torch.unsqueeze(head_e, 1).repeat(1, self.n_relations, 1)  # [B R K]
-        tail_Matrix = head_Matrix + relation_Matrix
+        relation_matrix = self.relation_matrix.unsqueeze(0).repeat(head_e.size()[0], 1, 1)  # [B R K]
+        head_matrix = torch.unsqueeze(head_e, 1).repeat(1, self.n_relations, 1)  # [B R K]
+        tail_matrix = head_matrix + relation_matrix
 
-        return head_e, tail_Matrix
+        return head_e, tail_matrix
 
     def _memory_update_cell(self, user_memory, update_memory):
         z = torch.sigmoid(torch.mul(user_memory, update_memory).sum(-1).float()).unsqueeze(
@@ -121,9 +124,8 @@ class KSR(SequentialRecommender):
 
     def memory_read(self, seq_output, user_memory):
         """Define read operator"""
-        attrs = self.relation_Matrix
         attentions = nn.functional.softmax(
-            self.gamma * torch.matmul(seq_output, attrs.transpose(0, 1)).float(), -1
+            self.gamma * torch.matmul(seq_output, self.relation_matrix.transpose(0, 1)).float(), -1
         )  # [B R]
         u_m = torch.mul(user_memory, attentions.unsqueeze(-1)).sum(1)  # [B K]
         return u_m

@@ -1,6 +1,7 @@
 # Saved models
 /saved*
 *.pth
+.tox
 
 .vscode/
 .idea/
@@ -15,6 +16,7 @@ wandb/*
 /ray_log*
 config/
 !hopwise/config/
+!tests/config/
 .venv/
 venv/
 testModules.py
@@ -23,6 +25,8 @@ tempCodeRunnerFile.py
 .env
 dataset/
 !hopwise/data/dataset
+!hopwise/properties/dataset
 hyper/
 *.txt
 *.*emb
+!tests/test_data/test/*.*emb

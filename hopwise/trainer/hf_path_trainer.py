@@ -13,7 +13,7 @@ from transformers import (
 
 from hopwise.model.layers import ConstrainedLogitsProcessorWordLevel
 from hopwise.utils import (
-    PathLanuageModelingTokenType,
+    PathLanguageModelingTokenType,
     dict2str,
     early_stopping,
     get_gpu_usage,
@@ -71,12 +71,12 @@ class CumulativeSequenceScoreRanker:
         self.topk = topk
 
     def calculate_sequence_scores(self, normalized_tuple, sequences):
-        last_5_tokens = sequences[:, -self.max_new_tokens :]
+        new_sequence_tokens = sequences[:, -self.max_new_tokens - 1 : -1]
         sequence_scores = []
         # Iterate over each tensor in the normalized tuple
         for i in range(self.max_new_tokens):
-            # Get the probabilities corresponding to the ith token in last_5_tokens
-            probs = normalized_tuple[i].gather(1, last_5_tokens[:, [i]])
+            # Get the probabilities corresponding to the ith token in new_sequence_tokens
+            probs = normalized_tuple[i].gather(1, new_sequence_tokens[:, [i]])
             sequence_scores.append(probs)
         # Convert the list of tensors into a single tensor
         sequence_scores = torch.cat(sequence_scores, dim=-1)
@@ -99,10 +99,8 @@ class CumulativeSequenceScoreRanker:
         num_return_sequences = sequences.shape[0] // user_num
         batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
 
-        valid_sequences = torch.isnan(normalized_sequences_scores).logical_not()
-        sequences = generation_outputs.sequences[valid_sequences]
-        normalized_sequences_scores = normalized_sequences_scores[valid_sequences]
-        batch_user_index = batch_user_index[valid_sequences]
+        valid_sequences_mask = torch.logical_not(torch.isfinite(normalized_sequences_scores))
+        normalized_sequences_scores = torch.where(valid_sequences_mask, -torch.inf, normalized_sequences_scores)
 
         sorted_indices = normalized_sequences_scores.argsort(descending=True)
         sorted_sequences = sequences[sorted_indices]
@@ -111,13 +109,13 @@ class CumulativeSequenceScoreRanker:
         for user_index, sequence, sequence_score in zip(
             sorted_batch_user_index, sorted_sequences, sorted_sequences_scores
         ):
-            seq = self.tokenizer.decode(sequence).split(" ")
+            seq = self.tokenizer.decode(sequence[1:-1]).split(" ")
 
             uid_token = seq[0]
             recommended_token = seq[-1]
             if not (
-                uid_token.startswith(PathLanuageModelingTokenType.USER.value)
-                and recommended_token.startswith(PathLanuageModelingTokenType.ITEM.value)
+                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
+                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
             ):
                 continue
 
@@ -130,7 +128,7 @@ class CumulativeSequenceScoreRanker:
                 continue
 
             scores[user_index, recommended_item] = sequence_score
-            if user_index not in user_topk_sequences:
+            if uid not in user_topk_sequences:
                 user_topk_sequences[uid] = [seq]
             else:
                 user_topk_sequences[uid].append(seq)
@@ -138,23 +136,25 @@ class CumulativeSequenceScoreRanker:
         return scores, user_topk_sequences
 
 
-def get_user_negatives_and_tokens_ids(used_ids, item_num, tokenizer):
+def get_tokenized_used_ids(used_ids, tokenizer):
     """
-    Returns a dictionary with the user negatives in the dataset,
-    this means the items not interacted in the train and valid sets.
-    Note that the ids are the entity ids to be in the same space of the models.
-    And a dictionary with the user negatives tokens ids converted
+    Convert the used ids to tokenized ids for the user and item tokens.
+    Args:
+        used_ids (dict): A dictionary where keys are user ids and values are lists of item ids.
+        tokenizer: The tokenizer to convert ids to tokenized ids.
+    Returns:
+        dict: A dictionary where keys are tokenized user ids and values are lists of tokenized item ids.
     """
-    items = set(range(item_num))
-    user_negatives_ids = {uid: items - set(used_ids[uid]) for uid in range(len(used_ids))}
-    user_negatives_tokens_ids = {}
-    for uid in user_negatives_ids:
-        uid_token = tokenizer.convert_tokens_to_ids(PathLanuageModelingTokenType.USER.value + str(uid))
-        user_negatives_tokens_ids[uid_token] = [
-            tokenizer.convert_tokens_to_ids(PathLanuageModelingTokenType.ITEM.value + str(item))
-            for item in user_negatives_ids[uid]
-        ]
-    return user_negatives_ids, user_negatives_tokens_ids
+    user_token_type = PathLanguageModelingTokenType.USER.value
+    item_token_type = PathLanguageModelingTokenType.ITEM.value
+
+    tokenized_used_ids = {}
+    for uid in range(used_ids.shape[0]):
+        uid_token = tokenizer.convert_tokens_to_ids(user_token_type + str(uid))
+        tokenized_used_ids[uid_token] = set(
+            [tokenizer.convert_tokens_to_ids(item_token_type + str(item)) for item in used_ids[uid]]
+        )
+    return tokenized_used_ids
 
 
 class HFPathTrainer(Trainer):
@@ -171,14 +171,15 @@ class HFPathTrainer(Trainer):
         # paths_per_head=50,  # n_sequences_lp
         # n_beams_lp=50,
         eval_device="cpu",
+        tokenizer=None,
     ):
         hopwise_dataset = hopwise_train_data.dataset
-        tokenizer = hopwise_dataset.tokenizer
+        tokenizer = tokenizer or hopwise_dataset.tokenizer
         super().__init__(
             model=model,
             args=args,
             callbacks=None,
-            train_dataset=hopwise_dataset.tokenized_dataset["train"],
+            train_dataset=hopwise_train_data.tokenized_dataset["train"],
             eval_dataset="none",
             processing_class=tokenizer,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
@@ -198,15 +199,13 @@ class HFPathTrainer(Trainer):
         self.eval_device = eval_device
 
         used_ids = hopwise_train_data.general_dataloader._sampler.used_ids
-        self.user_negatives, self.user_negatives_token_ids = get_user_negatives_and_tokens_ids(
-            used_ids, hopwise_dataset.item_num, self.processing_class
-        )
+        tokenized_used_ids = get_tokenized_used_ids(used_ids, self.processing_class)
 
-        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations
-        self.token_sequence_length = (1 + path_hop_length) + path_hop_length
+        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
+        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 2
 
         # TODO: add inference template as config param and use that instead of the hardcoded values
-        ranker_max_new_tokens = self.token_sequence_length - 2
+        ranker_max_new_tokens = self.token_sequence_length - 4
         self.ranker_rec = CumulativeSequenceScoreRanker(
             self.processing_class,
             used_ids,
@@ -242,7 +241,7 @@ class HFPathTrainer(Trainer):
             [
                 ConstrainedLogitsProcessorWordLevel(
                     hopwise_dataset.get_tokenized_ckg(),
-                    self.user_negatives_token_ids,
+                    tokenized_used_ids,
                     self.token_sequence_length,
                     self.processing_class,
                     self.paths_per_user,
@@ -293,7 +292,7 @@ class HFPathTrainer(Trainer):
         )
         scores, user_topk_sequences = ranker.get_sequences(inputs["input_ids"].shape[0], outputs)
 
-        return scores
+        return scores, user_topk_sequences
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)
@@ -337,7 +336,7 @@ class HopwiseCallback(TrainerCallback):
     def on_epoch_begin(self, args, state, control, **kwargs):
         self.training_start_time = time()
 
-        len_hf_dataloader = len(self.train_data.dataset.tokenized_dataset["train"])
+        len_hf_dataloader = len(self.train_data.tokenized_dataset["train"])
         steps_in_epoch = len_hf_dataloader // self.hopwise_trainer.config["train_batch_size"]
         steps_in_epoch += int(len_hf_dataloader % self.hopwise_trainer.config["train_batch_size"] > 0)
         self.progress_bar = (
@@ -351,7 +350,8 @@ class HopwiseCallback(TrainerCallback):
         )
 
     def on_epoch_end(self, args, state, control, **kwargs):
-        self.progress_bar.close()
+        if self.show_progress:
+            self.progress_bar.close()
         training_end_time = time()
         # Retrieve training loss and other information
         if state.log_history:
@@ -382,7 +382,8 @@ class HopwiseCallback(TrainerCallback):
 
     def on_step_end(self, args, state, control, **kwargs):
         control.should_log = True
-        self.progress_bar.update(1)
+        if self.show_progress:
+            self.progress_bar.update(1)
         if self.hopwise_trainer.gpu_available and self.show_progress:
             gpu_usage = get_gpu_usage(self.hopwise_trainer.device)
             self.progress_bar.set_postfix_str(set_color("GPU RAM: " + gpu_usage, "yellow"))

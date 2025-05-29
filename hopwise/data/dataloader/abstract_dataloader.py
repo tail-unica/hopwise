@@ -160,7 +160,7 @@ class NegSampleDataLoader(AbstractDataLoader):
                 raise ValueError(f"`neg sampling by` with dl_format [{self.dl_format}] not been implemented.")
 
         elif self.neg_sample_args["distribution"] != "none" and self.neg_sample_args["sample_num"] != "none":
-            raise ValueError(f'`neg_sample_args` [{self.neg_sample_args["distribution"]}] is not supported!')
+            raise ValueError(f"`neg_sample_args` [{self.neg_sample_args['distribution']}] is not supported!")
 
     def _neg_sampling(self, inter_feat):
         if self.neg_sample_args.get("dynamic", False):

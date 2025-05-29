@@ -26,8 +26,7 @@ class WandbLogger:
                 self._wandb = wandb
             except ImportError:
                 raise ImportError(
-                    "To use the Weights and Biases Logger please install wandb."
-                    "Run `pip install wandb` to install it."
+                    "To use the Weights and Biases Logger please install wandb.Run `pip install wandb` to install it."
                 )
 
             # Initialize a W&B run

@@ -9,6 +9,8 @@
 
 import logging
 import os
+import shutil
+import tempfile
 import unittest
 
 import numpy as np
@@ -963,6 +965,68 @@ class TestKGDataset:
         dataset = new_dataset(config_dict=config_dict)
         assert dataset.entity_num == 7
         assert dataset.relation_num == 5
+
+    def test_preload_weight(self):
+        config_dict = {
+            "model": "KGAT",
+            "dataset": "test",
+            "data_path": os.path.join(current_path, os.pardir, "test_data"),
+            "load_col": {
+                "useremb": ["user_embedding_id", "user_embedding"],
+                "entityemb": ["entity_embedding_id", "entity_embedding"],
+                "relationemb": ["relation_embedding_id", "relation_embedding"],
+            },
+            "alias_of_user_id": ["user_embedding_id"],
+            "alias_of_entity_id": ["entity_embedding_id"],
+            "alias_of_relation_id": ["relation_embedding_id"],
+            "preload_weight": {
+                "user_embedding_id": "user_embedding",
+                "entity_embedding_id": "entity_embedding",
+                "relation_embedding_id": "relation_embedding",
+            },
+            "additional_feat_suffix": ["useremb", "entityemb", "relationemb"],
+        }
+        dataset = new_dataset(config_dict=config_dict)
+        assert dataset.useremb_feat is not None
+        assert dataset.entityemb_feat is not None
+        assert dataset.relationemb_feat is not None
+
+    def test_preload_weight_with_preload_weight_path(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            shutil.copytree(
+                os.path.join(current_path, os.pardir, "test_data"),
+                os.path.join(tempdir, "test_data"),
+            )
+            for preload_weight_feat in ["useremb", "entityemb", "relationemb"]:
+                shutil.move(
+                    os.path.join(tempdir, "test_data", "test", f"test.{preload_weight_feat}"),
+                    os.path.join(tempdir, f"test.{preload_weight_feat}"),
+                )
+
+            config_dict = {
+                "model": "KGAT",
+                "dataset": "test",
+                "data_path": os.path.join(tempdir, "test_data"),
+                "load_col": {
+                    "useremb": ["user_embedding_id", "user_embedding"],
+                    "entityemb": ["entity_embedding_id", "entity_embedding"],
+                    "relationemb": ["relation_embedding_id", "relation_embedding"],
+                },
+                "alias_of_user_id": ["user_embedding_id"],
+                "alias_of_entity_id": ["entity_embedding_id"],
+                "alias_of_relation_id": ["relation_embedding_id"],
+                "preload_weight": {
+                    "user_embedding_id": "user_embedding",
+                    "entity_embedding_id": "entity_embedding",
+                    "relation_embedding_id": "relation_embedding",
+                },
+                "additional_feat_suffix": ["useremb", "entityemb", "relationemb"],
+                "preload_weight_path": tempdir,
+            }
+            dataset = new_dataset(config_dict=config_dict)
+            assert dataset.useremb_feat is not None
+            assert dataset.entityemb_feat is not None
+            assert dataset.relationemb_feat is not None
 
 
 class TestKGPathDataset(unittest.TestCase):

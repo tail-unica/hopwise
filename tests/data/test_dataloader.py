@@ -429,13 +429,14 @@ class TestGeneralDataloader:
 class TestKnowledgePathDataLoader:
     def test_kg_generate_path_weighted_random_walk_unrestricted_no_collaborative_no_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -447,7 +448,7 @@ class TestKnowledgePathDataLoader:
         used_ids = train_data.general_dataloader._sampler.used_ids
         # randomness forces us to retry until we get a valid path
         while True:
-            paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+            paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
             if len(paths) > 0:
                 break
         paths_used_ids = used_ids[paths[:, 0]]
@@ -455,13 +456,14 @@ class TestKnowledgePathDataLoader:
 
     def test_kg_generate_path_weighted_random_walk_no_collaborative_no_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -485,7 +487,7 @@ class TestKnowledgePathDataLoader:
         used_ids = train_data.general_dataloader._sampler.used_ids
         # randomness forces us to retry until we get a valid path
         while True:
-            paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+            paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
             if len(paths) > 0:
                 break
         potential_paths_found = paths[:, None] == potential_paths
@@ -493,13 +495,14 @@ class TestKnowledgePathDataLoader:
 
     def test_kg_generate_path_weighted_random_walk_collaborative_no_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
                 "collaborative_path": True,
                 "temporal_causality": False,
@@ -512,20 +515,21 @@ class TestKnowledgePathDataLoader:
         used_ids = train_data.general_dataloader._sampler.used_ids
         # randomness forces us to retry until we get a valid path
         while True:
-            paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+            paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
             if len(paths) > 0:
                 break
         assert (paths[:, 4] < user_num).any()
 
     def test_kg_generate_path_weighted_random_walk_no_collaborative_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
                 "collaborative_path": False,
                 "temporal_causality": True,
@@ -543,7 +547,7 @@ class TestKnowledgePathDataLoader:
         used_ids = train_data.general_dataloader._sampler.used_ids
         # randomness forces us to retry until we get a valid path
         while True:
-            paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+            paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
             if len(paths) > 0:
                 break
         users = paths[:, 0]
@@ -553,13 +557,14 @@ class TestKnowledgePathDataLoader:
 
     def test_kg_generate_path_constrained_random_walk_unrestricted_no_collaborative_no_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -569,19 +574,20 @@ class TestKnowledgePathDataLoader:
         }
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         paths_used_ids = used_ids[paths[:, 0]]
         assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
 
     def test_kg_generate_path_constrained_random_walk_no_collaborative_no_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -603,19 +609,20 @@ class TestKnowledgePathDataLoader:
         )
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         potential_paths_found = paths[:, None] == potential_paths
         assert potential_paths_found.all(axis=-1).any()
 
     def test_kg_generate_path_constrained_random_walk_collaborative_no_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
                 "collaborative_path": True,
                 "temporal_causality": False,
@@ -626,18 +633,19 @@ class TestKnowledgePathDataLoader:
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         user_num = train_data.dataset.user_num
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         assert (paths[:, 4] < user_num).any()
 
     def test_kg_generate_path_constrained_random_walk_no_collaborative_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
                 "collaborative_path": False,
                 "temporal_causality": True,
@@ -653,7 +661,7 @@ class TestKnowledgePathDataLoader:
         temporal_matrix = np.zeros((dataset.user_num, dataset.item_num), dtype=timestamp.dtype)
         temporal_matrix[user, item] = timestamp
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         users = paths[:, 0]
         starting_pos_items = paths[:, 2] - dataset.user_num
         subsequent_pos_items = paths[:, -1] - dataset.user_num
@@ -661,13 +669,14 @@ class TestKnowledgePathDataLoader:
 
     def test_kg_generate_path_all_simple_unrestricted_no_collaborative_no_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "simple",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -677,19 +686,20 @@ class TestKnowledgePathDataLoader:
         }
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         paths_used_ids = used_ids[paths[:, 0]]
         assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
 
     def test_kg_generate_path_all_simple_no_collaborative_no_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "simple",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -711,19 +721,20 @@ class TestKnowledgePathDataLoader:
         )
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         potential_paths_found = paths[:, None] == potential_paths
         assert potential_paths_found.all(axis=-1).any()
 
     def test_kg_generate_path_all_simple_collaborative_no_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "simple",
                 "collaborative_path": True,
                 "temporal_causality": False,
@@ -734,18 +745,19 @@ class TestKnowledgePathDataLoader:
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         user_num = train_data.dataset.user_num
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         assert (paths[:, 4] < user_num).any()
 
     def test_kg_generate_path_all_simple_no_collaborative_temporal(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "simple",
                 "collaborative_path": False,
                 "temporal_causality": True,
@@ -761,7 +773,7 @@ class TestKnowledgePathDataLoader:
         temporal_matrix = np.zeros((dataset.user_num, dataset.item_num), dtype=timestamp.dtype)
         temporal_matrix[user, item] = timestamp
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         users = paths[:, 0]
         starting_pos_items = paths[:, 2] - dataset.user_num
         subsequent_pos_items = paths[:, -1] - dataset.user_num
@@ -770,13 +782,14 @@ class TestKnowledgePathDataLoader:
     def test_kg_generate_path_metapaths_unrestricted_no_collaborative_no_temporal(self):
         metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "metapath",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -788,20 +801,21 @@ class TestKnowledgePathDataLoader:
         # Differently from igraph, reverse paths must be explicitly defined in the KG
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         paths_used_ids = used_ids[paths[:, 0]]
         assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
 
     def test_kg_generate_path_metapaths_no_collaborative_no_temporal(self):
         metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "metapath",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -822,7 +836,7 @@ class TestKnowledgePathDataLoader:
         )
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         potential_paths_found = paths[:, None] == potential_paths
         assert potential_paths_found.all(axis=-1).any()
 
@@ -837,13 +851,14 @@ class TestKnowledgePathDataLoader:
             [("item_id", "[UI-Relation]", "user_id"), ("user_id", "[UI-Relation]", "item_id")],
         ]
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "metapath",
                 "collaborative_path": True,
                 "temporal_causality": False,
@@ -855,19 +870,20 @@ class TestKnowledgePathDataLoader:
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         user_num = train_data.dataset.user_num
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         assert (paths[:, 4] < user_num).any()
 
     def test_kg_generate_path_metapaths_no_collaborative_temporal(self):
         metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
+                "parallel_max_workers": 0,
                 "strategy": "metapath",
                 "collaborative_path": False,
                 "temporal_causality": True,
@@ -884,7 +900,7 @@ class TestKnowledgePathDataLoader:
         temporal_matrix = np.zeros((dataset.user_num, dataset.item_num), dtype=timestamp.dtype)
         temporal_matrix[user, item] = timestamp
         used_ids = train_data.general_dataloader._sampler.used_ids
-        paths = train_data.dataset.generate_paths(used_ids)  # path ids not remapped
+        paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
         users = paths[:, 0]
         starting_pos_items = paths[:, 2] - dataset.user_num
         subsequent_pos_items = paths[:, -1] - dataset.user_num
@@ -892,7 +908,7 @@ class TestKnowledgePathDataLoader:
 
     def test_kg_add_paths_relations(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
@@ -917,12 +933,12 @@ class TestKnowledgePathDataLoader:
 
     def test_kg_tokenize_path_dataset(self):
         config_dict = {
-            "model": "KGGLM",
+            "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
-            "path_sample_args": {"path_token_separator": " "},
+            "path_sample_args": {"parallel_max_workers": 0, "path_token_separator": " "},
             "tokenizer": {
                 "model": "WordLevel",
                 "context_length": 24,
@@ -941,9 +957,8 @@ class TestKnowledgePathDataLoader:
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         path_string = "U2 R5 I2 R1 E7 R1 I3\nU2 R5 I3 R1 E7 R1 I2\nU2 R5 I2 R2 E9 R3 I3"
         train_data.dataset._path_dataset = path_string
-        train_data.dataset._tokenized_dataset = None
-        train_data.dataset.tokenize_path_dataset(phase="train")
-        tokenized_dataset = train_data.dataset.tokenized_dataset
+        train_data.tokenize_path_dataset(phase="train")
+        tokenized_dataset = train_data.tokenized_dataset
         tokenized_path_string = tokenized_dataset.data["train"]["input_ids"].to_pylist()
         split_path_string = path_string.split("\n")
         assert tokenized_path_string[0] == train_data.dataset.tokenizer(split_path_string[0])["input_ids"]

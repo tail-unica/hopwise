@@ -14,15 +14,15 @@ additional_feat_suffix: [useremb, entityemb, relationemb]
 
 # To load the pretrained embeddings (Typically from TransE) necessary to score the paths
 load_col:
-    useremb: [userid, user_embedding]
-    entityemb: [entityid, entity_embedding]
-    relationemb: [relationid, relation_embedding]
+    useremb: [user_embedding_id, user_embedding]
+    entityemb: [entity_embedding_id, entity_embedding]
+    relationemb: [relation_embedding_id, relation_embedding]
 
-alias_of_user_id: [userid]
-alias_of_entity_id: [entityid]
-alias_of_relation_id: [relationid]
+alias_of_user_id: [user_embedding_id]
+alias_of_entity_id: [entity_embedding_id]
+alias_of_relation_id: [relation_embedding_id]
 
 preload_weight:
-  userid: user_embedding
-  entityid: entity_embedding
-  relationid: relation_embedding
+  user_embedding_id: user_embedding
+  entity_embedding_id: entity_embedding
+  relation_embedding_id: relation_embedding

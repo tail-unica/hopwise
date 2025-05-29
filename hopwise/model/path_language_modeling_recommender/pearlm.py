@@ -12,52 +12,54 @@ from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("ENTITY", 1), ("RELATION", 2)])
 
 
-class PEARLM(PathLanguageModelingRecommender):
+class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
     """PEARLM is a path-language-modeling recommender. It learns the sequence of entity-relation triplets
     from a knowledge graph as a next-token prediction task.
     """
 
     def __init__(self, config, dataset):
-        super().__init__(config, dataset)
-
-        tokenizer = dataset.tokenizer
+        self.use_kg_token_types = config["use_kg_token_types"]
         transformers_config = AutoConfig.from_pretrained(
             "distilgpt2",
             **{
-                "vocab_size": len(tokenizer),
+                "vocab_size": len(dataset.tokenizer),
                 "n_ctx": config["context_length"],
                 "n_positions": config["context_length"],
-                "pad_token_id": tokenizer.pad_token_id,
-                "bos_token_id": tokenizer.bos_token_id,
-                "eos_token_id": tokenizer.eos_token_id,
+                "pad_token_id": dataset.tokenizer.pad_token_id,
+                "bos_token_id": dataset.tokenizer.bos_token_id,
+                "eos_token_id": dataset.tokenizer.eos_token_id,
                 "n_embd": config["embedding_size"],
                 "n_head": config["num_heads"],
                 "n_layer": config["num_layers"],
             },
         )
-        self.hf_model = GPT2LMHeadModel(transformers_config)
+        PathLanguageModelingRecommender.__init__(self, config, dataset)
+        GPT2LMHeadModel.__init__(self, transformers_config)
+        self.to(config["device"])
 
-        self.max_hop_length = dataset.path_hop_length
+        # Add type ids template
+        if self.use_kg_token_types:
+            prev_vocab_size = len(dataset.tokenizer)
+            token_types = [f"<{token_type.name}>" for token_type in TokenType]
+            for token_type in token_types:
+                dataset.tokenizer.add_tokens(token_type)
 
-        # Create type embedding layer
-        self.type_embeddings = torch.nn.Embedding(
-            num_embeddings=len(TokenType), embedding_dim=transformers_config.hidden_size
-        )
+            spec_type, ent_type, rel_type = TokenType.SPECIAL.value, TokenType.ENTITY.value, TokenType.RELATION.value
+            spec_type, ent_type, rel_type = (
+                spec_type + prev_vocab_size,
+                ent_type + prev_vocab_size,
+                rel_type + prev_vocab_size,
+            )
+            self.token_type_ids = torch.LongTensor(
+                # BOS + ENT + REL + ENT + REL + ... + ENT + REL + EOS
+                [spec_type, ent_type] + [rel_type, ent_type] * dataset.path_hop_length + [spec_type]
+            )
+            self.token_type_ids = self.token_type_ids.to(config["device"])
 
-        middle_token_types = [TokenType.ENTITY.value, TokenType.RELATION.value] * ((self.max_hop_length - 1) // 2)
-        self.token_type_ids = torch.tensor(
-            [[TokenType.SPECIAL.value] + middle_token_types + [TokenType.SPECIAL.value]],
-            dtype=torch.long,
-            device=self.device,
-        )
+            self.transformer.resize_token_embeddings(len(dataset.tokenizer))
 
         self.loss = nn.CrossEntropyLoss()
-        self.hf_model.post_init()
-
-    def get_type_embeds(self, batch_size):
-        self.token_type_ids = self.token_type_ids.to(self.type_embeddings.weight.device)
-        type_ids = self.token_type_ids.expand(batch_size, -1)
-        return self.type_embeddings(type_ids)
+        self.post_init()
 
     def forward(
         self,
@@ -81,13 +83,12 @@ class PEARLM(PathLanguageModelingRecommender):
             attention_mask = input_ids["attention_mask"]
             input_ids = input_ids["input_ids"]
 
-        batch_size = input_ids.shape[0]
-        type_embeds = self.get_type_embeds(batch_size)
+        if self.use_kg_token_types:
+            # indexing is only relevant during generation to match token types length with input_ids
+            token_type_ids = self.token_type_ids[[*range(input_ids.shape[1] - 1), -1]]
+            token_type_ids = token_type_ids.expand(input_ids.shape[0], -1)
 
-        if inputs_embeds is not None:
-            inputs_embeds += type_embeds
-
-        transformer_outputs = self.hf_model.transformer(
+        transformer_outputs = self.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -100,11 +101,11 @@ class PEARLM(PathLanguageModelingRecommender):
             use_cache=use_cache and labels is None,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict or self.hf_model.config.use_return_dict,
+            return_dict=return_dict or self.config.use_return_dict,
         )
 
         sequence_output = transformer_outputs[0]
-        prediction_scores = self.hf_model.lm_head(sequence_output)
+        prediction_scores = self.lm_head(sequence_output)
 
         lm_loss = None
         if labels is not None:

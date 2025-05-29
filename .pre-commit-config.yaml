@@ -27,6 +27,7 @@ repos:
     rev: v5.0.0  # Use the ref you want to point at
     hooks:
       - id: check-added-large-files
+        args: [ --maxkb=2048 ]
       - id: check-merge-conflict
       - id: name-tests-test
         args: [ --pytest-test-first ]

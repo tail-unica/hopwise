@@ -34,6 +34,7 @@ alias_of_item_id: ~             # (list) Fields' names remapped into the same in
 alias_of_entity_id: ~           # (list) Fields' names remapped into the same index system with ENTITY_ID_FIELD.
 alias_of_relation_id: ~         # (list) Fields' names remapped into the same index system with RELATION_ID_FIELD.
 preload_weight: ~               # (dict) Preloaded weight in {IDs (token): pretrained vectors (float-like)}.
+preload_weight_path: ~          # (str) Optional path to load the preloaded weight, otherwise, data_path will be used.
 normalize_field: ~              # (list) List of filed names to be normalized.
 normalize_all: ~                # (bool) Whether or not to normalize all the float like fields.
 discretization: ~               # (dict) The discretization settings.
@@ -79,7 +80,6 @@ tokenizer:                      # (dict) Tokenizer parameters.
         bos_token: "[BOS]"      # (str) Beginning of sequence token.
         sep_token: "[SEP]"      # (str) Separator token.
         cls_token: "[CLS]"      # (str) Classification token.
-    template: "{bos_token}:0 $A:0 {eos_token}"                # (str) Template for the tokenizer.
 
 # Benchmark .inter file
 benchmark_filename: ~           # (list) List of pre-split user-item interaction suffix.
