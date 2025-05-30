@@ -14,3 +14,6 @@ batch_size: 1024
 layers: 1
 maxhis: 10
 sim_scale: 10
+
+save_dataset: False
+explain: False

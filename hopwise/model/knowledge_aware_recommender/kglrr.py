@@ -1,7 +1,6 @@
 import gc
 import logging
 import os
-from time import time
 
 import numpy as np
 import scipy.sparse as sp
@@ -104,33 +103,34 @@ class KGEncoder(nn.Module):
 
         self.latent_dim = config["latent_dim_rec"]
         self.n_layers = config["lightGCN_n_layers"]
-        self.dataset = dataset
         self.kg_dataset = kg_dataset
         self.gat = GAT(self.latent_dim, self.latent_dim, dropout=0.4, alpha=0.2).train()
+        
+        self.inter_feat = dataset.inter_feat
+        self.num_users = dataset.user_num
+        self.num_items = dataset.item_num
 
-        self.config = config
         self.process_inter_feat("train")
         self.UserItemNet = csr_matrix(
             (np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
-            shape=(self.dataset.user_num, self.dataset.item_num),
+            shape=(dataset.user_num, dataset.item_num),
         )
-        self.__init_weight()
+        self.__init_weight(dataset)
+        self.config = config
 
-    def __init_weight(self):
-        self.num_users = self.dataset.user_num
-        self.num_items = self.dataset.item_num
-        self.num_entities = self.dataset.entity_num
-        self.num_relations = self.dataset.relation_num
+    def __init_weight(self, dataset):
+        self.entity_count = dataset.entity_num
+        self.relation_count = dataset.relation_num
 
         self.embedding_user = torch.nn.Embedding(num_embeddings=self.num_users, embedding_dim=self.latent_dim)
         # item and kg entity
         self.embedding_item = torch.nn.Embedding(num_embeddings=self.num_items, embedding_dim=self.latent_dim)
-        self.embedding_entity = torch.nn.Embedding(num_embeddings=self.num_entities + 1, embedding_dim=self.latent_dim)
+        self.embedding_entity = torch.nn.Embedding(num_embeddings=self.entity_count + 1, embedding_dim=self.latent_dim)
         self.embedding_relation = torch.nn.Embedding(
-            num_embeddings=self.num_relations + 1, embedding_dim=self.latent_dim
+            num_embeddings=self.relation_count + 1, embedding_dim=self.latent_dim
         )
         # relation weights
-        self.W_R = nn.Parameter(torch.Tensor(self.num_relations, self.latent_dim, self.latent_dim))
+        self.W_R = nn.Parameter(torch.Tensor(self.relation_count, self.latent_dim, self.latent_dim))
         nn.init.xavier_uniform_(self.W_R, gain=nn.init.calculate_gain("relu"))
 
         nn.init.normal_(self.embedding_user.weight, std=0.1)
@@ -139,12 +139,14 @@ class KGEncoder(nn.Module):
         nn.init.normal_(self.embedding_relation.weight, std=0.1)
 
         self.f = nn.Sigmoid()
+        # Graph is on cuda
         self.Graph = self.getSparseGraph()
+        # kg_dict and item2relations are both on cuda
         self.kg_dict, self.item2relations = self.get_kg_dict(self.num_items)
 
     def process_inter_feat(self, filetype):
         # Process interaction features to extract user-item interactions and user history.
-        inter_feat = self.dataset.inter_feat
+        inter_feat = self.inter_feat
         UniqueUsers, Item, User = [], [], []
         UsersHis = []
         dataSize = 0
@@ -166,8 +168,8 @@ class KGEncoder(nn.Module):
             UniqueUsers.append(uid)
             User.append(uid)
             Item.append(iid)
-            self.m_item = max(self.dataset.item_num, iid)
-            self.n_user = max(self.dataset.user_num, uid)
+            self.m_item = max(self.num_items, iid)
+            self.n_user = max(self.num_users, uid)
             dataSize += 1
             last_uid = uid
 
@@ -177,65 +179,6 @@ class KGEncoder(nn.Module):
         setattr(self, f"{filetype}UsersHis", np.array(UsersHis))
         setattr(self, f"{filetype}Size", dataSize)
 
-    def get_inetrfeat(self, filetype):
-        """
-        Adapted for Hopwise: Reads interaction data from inter_feat and populates the necessary attributes.
-
-        Args:
-            filetype (str): Type of file to read ('train', 'test', 'valid').
-        """
-        if not hasattr(self.dataset, "inter_feat"):
-            return
-
-        inter_feat = self.dataset.inter_feat
-
-        maxhis = self.config["maxhis"]
-
-        # Estrai USER_ID e ITEM_ID
-        user_col = self.dataset.uid_field  # Nome della colonna per USER_ID
-        item_col = self.dataset.iid_field  # Nome della colonna per ITEM_ID
-
-        if user_col not in inter_feat or item_col not in inter_feat:
-            return
-
-        UniqueUsers, Item, User = [], [], []
-        UsersHis = []
-        dataSize = 0
-
-        # Iterates on inter_feat data
-        user_ids = inter_feat[user_col]
-        item_ids = inter_feat[item_col]
-
-        for uid, iid in zip(user_ids, item_ids):
-            if filetype == "train":
-                # User history building
-                his = []
-                for i in range(len(item_ids)):
-                    this_his = item_ids[:i] if maxhis <= 0 else item_ids[max(0, i - maxhis) : i]
-                    padding = torch.full(
-                        (maxhis - this_his.size(0),), -1, dtype=this_his.dtype, device=this_his.device
-                    )
-                    this_his = torch.cat((this_his, padding))
-                    his.append(this_his)
-                UsersHis.extend(his)
-
-            UniqueUsers.append(uid)
-            User.append(uid)
-            Item.append(iid)
-
-            self.m_item = max(self.dataset.item_num, iid)
-            self.n_user = max(self.dataset.user_num, uid)
-            dataSize += 1
-
-        # Saves data like class attributes
-        setattr(self, f"{filetype}UniqueUsers", np.array(UniqueUsers))
-        setattr(self, f"{filetype}User", np.array(User))
-        setattr(self, f"{filetype}Item", np.array(Item))
-        if filetype == "train":
-            setattr(self, f"{filetype}UsersHis", np.array(UsersHis))
-        setattr(self, f"{filetype}Size", dataSize)
-
-
     def get_kg_dict(self, item_num):
         i2es = dict()
         i2rs = dict()
@@ -244,18 +187,18 @@ class KGEncoder(nn.Module):
             if rts:
                 tails = list(map(lambda x: x[1], rts))
                 relations = list(map(lambda x: x[0], rts))
-                if len(tails) > self.dataset.entity_num:
-                    i2es[item] = torch.IntTensor(tails).cuda()[: self.dataset.entity_num]
-                    i2rs[item] = torch.IntTensor(relations).cuda()[: self.dataset.entity_num]
+                if len(tails) > self.entity_count:
+                    i2es[item] = torch.IntTensor(tails).cuda()[: self.entity_count]
+                    i2rs[item] = torch.IntTensor(relations).cuda()[: self.entity_count]
                 else:
                     # last embedding pos as padding idx
-                    tails.extend([self.dataset.entity_count] * (self.dataset.entity_num - len(tails)))
-                    relations.extend([self.dataset.relation_count] * (self.dataset.entity_num - len(relations)))
+                    tails.extend([self.entity_count] * (self.entity_count - len(tails)))
+                    relations.extend([self.relation_count] * (self.entity_count - len(relations)))
                     i2es[item] = torch.IntTensor(tails).cuda()
                     i2rs[item] = torch.IntTensor(relations).cuda()
             else:
-                i2es[item] = torch.IntTensor([self.dataset.item_num] * self.dataset.entity_num).cuda()
-                i2rs[item] = torch.IntTensor([self.dataset.relation_num] * self.dataset.entity_num).cuda()
+                i2es[item] = torch.IntTensor([self.num_items] * self.entity_count).cuda()
+                i2rs[item] = torch.IntTensor([self.relation_count] * self.entity_count).cuda()
         return i2es, i2rs
 
     def _convert_sp_mat_to_sp_tensor(self, X):
@@ -291,9 +234,9 @@ class KGEncoder(nn.Module):
         norm_adj = norm_adj.dot(d_mat)
         norm_adj = norm_adj.tocsr()
 
-        self.dataset.G = self._convert_sp_mat_to_sp_tensor(norm_adj)
-        self.dataset.G = self.dataset.G.coalesce().cuda()
-        return self.dataset.G
+        self.G = self._convert_sp_mat_to_sp_tensor(norm_adj)
+        self.G = self.G.coalesce().cuda()
+        return self.G
 
     def computer(self):
         with torch.no_grad():
@@ -326,7 +269,7 @@ class KGEncoder(nn.Module):
         random_index = random_index.int().bool()
         index = index[random_index]
         values = values[random_index] / keep_prob
-        g = torch.sparse.FloatTensor(index.t(), values, size)
+        g = torch.sparse_coo_tensor(index.t(), values, size)
         return g
 
     def __dropout(self, keep_prob):
@@ -347,7 +290,7 @@ class KGEncoder(nn.Module):
         elif self.kgcn == "RGAT":
             return self.cal_item_embedding_rgat(kg)
         elif self.kgcn == "MEAN":
-            return self.cal_item_embedding_mean(kg)
+            raise NotImplementedError("The 'MEAN' option for kgcn is not yet implemented.")
         elif self.kgcn == "NO":
             return self.embedding_item.weight
 
@@ -365,7 +308,7 @@ class KGEncoder(nn.Module):
             entity_embs = self.embedding_entity(item_entities)
             # batch_size, entity_num_each
             padding_mask = torch.where(
-                item_entities != self.num_entities, torch.ones_like(item_entities), torch.zeros_like(item_entities)
+                item_entities != self.entity_count, torch.ones_like(item_entities), torch.zeros_like(item_entities)
             ).float()
             batch_embs = self.gat(item_embs, entity_embs, padding_mask)
             item_embs_list.append(batch_embs)
@@ -382,7 +325,7 @@ class KGEncoder(nn.Module):
 
             # Cleans cache
             gc.collect()
-            torch.cuda.empty_cache()
+            torch.cuda.empty_cache() # activate in case of memory leak
 
             item_embs = self.embedding_item(torch.IntTensor(batch_keys).cuda())
             item_entities = torch.stack([kg[key] for key in batch_keys])
@@ -392,7 +335,7 @@ class KGEncoder(nn.Module):
             relation_embs = self.embedding_relation(item_relations)
 
             padding_mask = torch.where(
-                item_entities != self.num_entities, torch.ones_like(item_entities), torch.zeros_like(item_entities)
+                item_entities != self.entity_count, torch.ones_like(item_entities), torch.zeros_like(item_entities)
             ).float()
 
             with torch.no_grad():
@@ -402,26 +345,6 @@ class KGEncoder(nn.Module):
 
         return torch.cat(item_embs_list, dim=0)
 
-    def cal_item_embedding_mean(self, kg: dict):
-        item_embs = self.embedding_item(torch.IntTensor(list(kg.keys())).cuda())  # item_num, emb_dim
-        # item_num, entity_num_each
-        item_entities = torch.stack(list(kg.values()))
-        # item_num, entity_num_each, emb_dim
-        entity_embs = self.embedding_entity(item_entities)
-        # item_num, entity_num_each
-        padding_mask = torch.where(
-            item_entities != self.num_entities, torch.ones_like(item_entities), torch.zeros_like(item_entities)
-        ).float()
-        # padding为0
-        entity_embs = entity_embs * padding_mask.unsqueeze(-1).expand(entity_embs.size())
-        # item_num, emb_dim
-        entity_embs_sum = entity_embs.sum(1)
-        entity_embs_mean = entity_embs_sum / padding_mask.sum(-1).unsqueeze(-1).expand(entity_embs_sum.size())
-        # replace nan with zeros
-        entity_embs_mean = torch.nan_to_num(entity_embs_mean)
-        # item_num, emb_dim
-        return item_embs + entity_embs_mean
-
 
 class KGLRR(KnowledgeRecommender):
     input_type = InputType.PAIRWISE
@@ -430,12 +353,9 @@ class KGLRR(KnowledgeRecommender):
         super().__init__(config, dataset)
 
         # Load Full Knowledge Graph in dict form
-        if dataset.G is not None and dataset.kg_relation is not None:
-            self.G, self.kg_dataset = dataset.G, dataset.kg_dataset
-        else:
-            self.G, self.kg_dataset = dataset.ckg_dict_graph()
-            if config["save_dataset"]:
-                dataset.save()
+        self.G, self.kg_dataset = dataset.ckg_dict_graph()
+        if config["save_dataset"]:
+            dataset.save()
 
         self.encoder = KGEncoder(config, dataset, self.kg_dataset)
         self.latent_dim = config["latent_dim_rec"]
@@ -446,8 +366,8 @@ class KGLRR(KnowledgeRecommender):
         self.sim_scale = config["sim_scale"]
         self.loss_sum = config["loss_sum"]
         self.l2s_weight = config["l2_loss"]
+        self.is_explain = config["explain"]
 
-        self.dataset = dataset
         self.num_items = dataset.item_num
 
         self._init_weights()
@@ -541,7 +461,7 @@ class KGLRR(KnowledgeRecommender):
             return new_v1, new_v2
         return vector1, vector2
 
-    def predict(self, interaction, explain=True):
+    def predict(self, interaction):
         users = interaction[self.USER_ID]
         bs = users.size(0)
         maxhis = self.encoder.maxhis
@@ -586,10 +506,29 @@ class KGLRR(KnowledgeRecommender):
 
         prediction = torch.stack(prediction).cuda()
 
-        # if explain:
-        #     explaination = self.explain(users, history, prediction)
-        #     return prediction, explaination
+        if self.is_explain:
+            topk_items = torch.topk(prediction, k=1, dim=1).indices  # shape: [B, 1]
+            topk_embeds = self.encoder.computer()[1][topk_items.squeeze(1)]  # shape: [B, V]
+            explaination = self.explain(users, history, topk_embeds)
+            return prediction, explaination
         return prediction
+    
+    def explain(self, users, history, items):
+        bs = users.size(0)
+        _, item_embed = self.encoder.computer()   # user_num/item_num * V
+        
+        his_valid = history.ge(0).float()  # B * H
+        # maxlen = int(his_valid.sum(dim=1).max().item())
+        elements = item_embed[history.abs()] * his_valid.unsqueeze(-1)  # B * H * V
+
+        similarity_rlt = []
+        for i in range(bs):
+            tmp_a_valid = his_valid[i, :].unsqueeze(-1)  # H
+            tmp_item = items[i].unsqueeze(0).expand(elements[i].size(0), -1)  # [H, V]
+            tmp_a = self.logic_and(tmp_item, elements[i]) * tmp_a_valid
+            similarity_rlt.append(self.similarity(tmp_a, self.true))
+        
+        return torch.stack(similarity_rlt).cuda()
 
     def full_sort_predict(self, interaction):
         r"""Full sort prediction function.
