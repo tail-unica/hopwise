@@ -366,15 +366,13 @@ class Trainer(AbstractTrainer):
         hparam_dict.update(
             {para: val for para, val in self.config.final_config_dict.items() if para not in unrecorded_parameter}
         )
-        for k in hparam_dict:
-            if hparam_dict[k] is not None and not isinstance(hparam_dict[k], (bool, str, float, int)):
-                hparam_dict[k] = str(hparam_dict[k])
+        for k, hparam in hparam_dict.items():
+            if hparam is not None and not isinstance(hparam, (bool, str, float, int)):
+                hparam_dict[k] = str(hparam)
 
         self.tensorboard.add_hparams(hparam_dict, {"hparam/best_valid_result": best_valid_result})
 
-    def fit(
-        self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, trial=None
-    ):
+    def fit(self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None):
         r"""Train the model based on the train data and the valid data.
 
         Args:
@@ -458,7 +456,7 @@ class Trainer(AbstractTrainer):
                     self.best_valid_result = valid_result
 
                 if callback_fn:
-                    callback_fn(epoch_idx, valid_score, trial=trial)
+                    callback_fn(epoch_idx, valid_score)
 
                 if stop_flag:
                     stop_output = "Finished training, best eval result in epoch %d" % (
@@ -859,9 +857,7 @@ class KGTrainer(Trainer):
         self.wandblogger.log_eval_metrics(result, head="eval")
         return result
 
-    def fit(
-        self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, trial=None
-    ):
+    def fit(self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None):
         r"""Train the model based on the train data and the valid data.
 
         Args:
@@ -980,7 +976,7 @@ class KGTrainer(Trainer):
                         self.best_valid_result = valid_result
 
                     if callback_fn:
-                        callback_fn(epoch_idx, valid_score, trial=trial)
+                        callback_fn(epoch_idx, valid_score)
 
                     if task == KnowledgeEvaluationType.REC and stop_flag:
                         stop_output = "Finished training, best eval result in epoch %d" % (
@@ -1304,7 +1300,7 @@ class DecisionTreeTrainer(AbstractTrainer):
         }
         torch.save(state, self.saved_model_file)
 
-    def fit(self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False):
+    def fit(self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None):
         for epoch_idx in range(self.epochs):
             self._train_at_once(train_data, valid_data)
 
@@ -1759,9 +1755,8 @@ class HFPathLanguageModelingTrainer(Trainer):
         super().__init__(config, model)
 
         self.path_hop_length = self.config["path_hop_length"]
-        path_gen_args = self.config["path_generation_args"]
-        self.paths_per_user = path_gen_args["paths_per_user"]
-        self.path_gen_lm_args = path_gen_args["language_model"]
+        self.path_gen_args = self.config["path_generation_args"].copy()
+        self.paths_per_user = self.path_gen_args.pop("paths_per_user")
 
         dirname, basename = os.path.split(self.saved_model_file)
         self.saved_model_file = os.path.join(dirname, self.HOPWISE_SAVE_PATH_SUFFIX + basename)
@@ -1831,11 +1826,11 @@ class HFPathLanguageModelingTrainer(Trainer):
             train_data,
             self.config,
             callbacks,
-            model=self.model.hf_model,
+            model=self.model,
             args=training_arguments,
             path_hop_length=self.path_hop_length,
             paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_lm_args,
+            path_generation_args=self.path_gen_args,
             eval_device=self.device,
         )
 
@@ -1864,7 +1859,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         torch.save(state, saved_model_file, pickle_protocol=4)
         if verbose:
             self.logger.info(set_color("Saving current", "blue") + f": {saved_model_file}")
-            hf_output_dir = self.hopwise_trainer.hf_trainer.args.output_dir
+            hf_output_dir = self.hf_trainer.args.output_dir
             self.logger.info(set_color("HuggingFace model is saved at", "blue") + f": {hf_output_dir}")
 
     def resume_checkpoint(self, resume_file):
@@ -1876,7 +1871,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         Args:
             resume_file (str): the path to the directory containing the checkpoint files or subdirectories
         """
-        from transformers import AutoModel, AutoTokenizer
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         if not hasattr(self, "hf_trainer"):
             raise ValueError("The HuggingFace Trainer has not been initialized. Please call `init_hf_trainer` first.")
@@ -1895,7 +1890,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         self.cur_step = checkpoint["cur_step"]
         self.best_valid_score = checkpoint["best_valid_score"]
 
-        self.model = AutoModel.from_pretrained(hf_resume_file)
+        self.model = AutoModelForCausalLM.from_pretrained(hf_resume_file)
         self.hf_trainer.processing_class.tokenizer = AutoTokenizer.from_pretrained(hf_resume_file)
 
     def fit(
@@ -1919,6 +1914,8 @@ class HFPathLanguageModelingTrainer(Trainer):
         )
 
         self.hf_trainer.train()
+        self.hf_trainer._load_best_model()
+        self.hf_trainer.save_model()
 
         return self.best_valid_score, self.best_valid_result
 
@@ -1927,6 +1924,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         valid_score = calculate_valid_score(valid_result, self.valid_metric)
         return valid_score, valid_result
 
+    @torch.no_grad()
     def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False, task="rec"):
         if not eval_data:
             return
@@ -1959,9 +1957,9 @@ class HFPathLanguageModelingTrainer(Trainer):
             interaction, history_index, positive_u, positive_i = batched_data
 
             inputs = self.hf_trainer.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(
-                self.hf_trainer.eval_device
+                self.device
             )
-            scores = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
+            scores, user_topk_sequences = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
 
             scores = scores.view(-1, self.tot_item_num)
             scores[:, 0] = -np.inf

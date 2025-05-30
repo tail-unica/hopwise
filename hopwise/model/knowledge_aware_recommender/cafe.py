@@ -31,7 +31,7 @@ class CAFE(KnowledgeRecommender):
         # Load parameters info from config
         self.device = config["device"]
         self.load_embeddings = config["load_embeddings"]
-        self.raw_metapaths = config["path_contraint"]
+        self.raw_metapaths = config["path_constraint"]
 
         # Load CAFE parameters
         self.rank_weight = config["rank_weight"]
@@ -42,15 +42,13 @@ class CAFE(KnowledgeRecommender):
         self.topk_paths = config["topk_paths"]
 
         # user-item relation
-        self.ui_relation = dataset.field2token_id["relation_id"][dataset.ui_relation]
-
-        # Items
-        self.items = set(range(self.n_items))
+        self.ui_relation = dataset.ui_relation
+        self.ui_relation_id = dataset.field2token_id["relation_id"][dataset.ui_relation]
 
         # Load Knowledge Graph Embedding Checkpoint
-        self.user_embedding = dataset.get_preload_weight("userid")
-        self.entity_embedding = dataset.get_preload_weight("entityid")
-        self.relation_embedding = dataset.get_preload_weight("relationid")
+        self.user_embedding = dataset.get_preload_weight("user_embedding_id")
+        self.entity_embedding = dataset.get_preload_weight("entity_embedding_id")
+        self.relation_embedding = dataset.get_preload_weight("relation_embedding_id")
 
         # Topk Candidates
         self.topk_user_products = self._compute_top_items()
@@ -76,28 +74,24 @@ class CAFE(KnowledgeRecommender):
         self.positives = dataset.history_item_matrix()[0]
 
         # Load Full Knowledge Graph in dict form
-        if dataset.G is not None and dataset.kg_relation is not None:
-            self.G, self.kg_relation = dataset.G, dataset.kg_relation
-        else:
-            self.G, self.kg_relation = dataset.ckg_dict_graph()
-            if config["save_dataset"]:
-                dataset.save()
+        self.graph_dict = dataset.ckg_dict_graph()
 
         self.num_products = self.n_items
         self.memory_size = 10000  # number of paths to save for each metapath
         self.replay_memory = {}
 
-        self.rid2relation_name = {
-            id: relation_name for relation_name, id in dataset.field2token_id["relation_id"].items()
-        }
-        self.relation_info = dict()  # è kg_relation
-        for head in self.kg_relation.keys():
-            for relation in self.kg_relation[head]:
-                tail = self.kg_relation[head][relation]
-                relation = self.rid2relation_name[relation]  # noqa: PLW2901
+        self.relation_info = dict()
+        for relation_name in self.rid2relation.values():
+            if relation_name == "[PAD]":
+                continue
 
-                if relation not in self.relation_info:
-                    self.relation_info[relation] = {"name": relation, "entity_head": head, "entity_tail": tail}
+            if relation_name == dataset.ui_relation:
+                head, tail = "user", "entity"
+            else:
+                head, tail = "entity", "entity"
+
+            if relation_name not in self.relation_info:
+                self.relation_info[relation_name] = {"name": relation_name, "entity_head": head, "entity_tail": tail}
 
         # Transform each node in the metapath in a tuple
         self.metapaths = []
@@ -119,7 +113,7 @@ class CAFE(KnowledgeRecommender):
             self.embedding_size,
             self.deep_module,
             self.use_dropout,
-            self.items,
+            self.n_items,
             self.device,
         )
 
@@ -128,7 +122,7 @@ class CAFE(KnowledgeRecommender):
 
     def _compute_top_items(self):
         u_p_scores = np.dot(
-            self.user_embedding + self.relation_embedding[self.ui_relation], self.entity_embedding[list(self.items)].T
+            self.user_embedding + self.relation_embedding[self.ui_relation_id], self.entity_embedding[: self.n_items].T
         )
         ui_scores = np.argsort(u_p_scores, axis=1)  # From worst to best
         top100_ui_scores = ui_scores[:, -100:][:, ::-1]
@@ -186,6 +180,9 @@ class CAFE(KnowledgeRecommender):
         return mpid, pos_path_batch, neg_pid_batch
 
     def _rev_rel(self, rel):
+        if rel == self.ui_relation:
+            return self.ui_relation
+
         if rel.endswith("_r"):
             return rel[:-2]
         return rel + "_r"
@@ -206,8 +203,9 @@ class CAFE(KnowledgeRecommender):
             next_relation, _ = metapath[i]
             tmp_paths = []
             for fp in forward_paths:
-                next_ids = self.G(last_entity, fp[-1], self.relation2rid[next_relation])
-                if next_ids is None:
+                try:
+                    next_ids = self.graph_dict[last_entity][fp[-1]][self.relation2rid[next_relation]]
+                except KeyError:
                     next_ids = []
                 # Random sample ids
                 if len(next_ids) > sample_size:
@@ -223,8 +221,9 @@ class CAFE(KnowledgeRecommender):
             next_relation, next_entity = metapath[i]
             tmp_paths = []
             for bp in backward_paths:
-                curr_ids = self.G(next_entity, bp[0], self.relation2rid[self._rev_rel(next_relation)])
-                if curr_ids is None:
+                try:
+                    curr_ids = self.graph_dict[next_entity][bp[0]][self.relation2rid[self._rev_rel(next_relation)]]
+                except KeyError:
                     curr_ids = []
                 # Random sample ids
                 if len(curr_ids) > sample_size:
@@ -239,11 +238,13 @@ class CAFE(KnowledgeRecommender):
         next_relation, next_entity = metapath[mid_level + 1]
         # convert relation name to id for graphdict lookup
         for bp in backward_paths:
-            curr_ids = self.G(next_entity, bp[0], self.relation2rid[self._rev_rel(next_relation)])
-            if curr_ids is None:
-                relations = list(self.G(last_entity, fp[-1]).keys())
-                curr_ids = self.G(last_entity, fp[-1], self.rng.choice(relations))
-                if curr_ids is None:
+            try:
+                curr_ids = self.graph_dict[next_entity][bp[0]][self.relation2rid[self._rev_rel(next_relation)]]
+            except KeyError:
+                try:
+                    relations = list(self.graph_dict[last_entity][fp[-1]].keys())
+                    curr_ids = self.graph_dict[last_entity][fp[-1]][self.rng.choice(relations)]
+                except KeyError:
                     curr_ids = []
             if len(curr_ids) > sample_size:
                 curr_ids = self.rng.choice(curr_ids, size=sample_size, replace=False)
@@ -283,10 +284,13 @@ class CAFE(KnowledgeRecommender):
             next_relation, _ = metapath[i]
             tmp_ids = []
             for eid in forward_ids:
-                next_ids = self.G(last_entity, eid, self.relation2rid[next_relation])
-                if len(next_ids) > sample_size:
-                    next_ids = self.rng.choice(next_ids, size=sample_size, replace=False).tolist()
-                tmp_ids.extend(next_ids)
+                try:
+                    next_ids = self.graph_dict[last_entity][eid][self.relation2rid[next_relation]]
+                    if len(next_ids) > sample_size:
+                        next_ids = self.rng.choice(next_ids, size=sample_size, replace=False).tolist()
+                    tmp_ids.extend(next_ids)
+                except KeyError:
+                    continue
             forward_ids = tmp_ids
 
         # Backward BFS (e.g. e4--e5--e6).
@@ -295,8 +299,9 @@ class CAFE(KnowledgeRecommender):
             next_relation, next_entity = metapath[i]
             tmp_ids = []
             for eid in backward_ids:
-                curr_ids = self.G(next_entity, eid, self.relation2rid[self._rev_rel(next_relation)])
-                if curr_ids is None:
+                try:
+                    curr_ids = self.graph_dict[next_entity][eid][self.relation2rid[self._rev_rel(next_relation)]]
+                except KeyError:
                     curr_ids = []
                 tmp_ids.extend(curr_ids)
             backward_ids = tmp_ids
@@ -323,7 +328,7 @@ class CAFE(KnowledgeRecommender):
 
     def full_sort_predict(self, interaction):
         users = interaction[self.USER_ID]
-        kg_mask = KGMask(self.G, self.kg_relation)
+        kg_mask = KGMask(self.graph_dict, self.ui_relation_id)
         predicted_paths = self._infer_paths(users, kg_mask)
         path_counts = self._estimate_path_count(users)
         results = self.run_program(users, path_counts, predicted_paths)
@@ -361,7 +366,7 @@ class CAFE(KnowledgeRecommender):
     def run_program(self, users, path_counts, predicted_paths):
         results = torch.full((len(users), self.n_items), -torch.inf)
 
-        kg_mask = KGMask(self.G, self.kg_relation)
+        kg_mask = KGMask(self.graph_dict, self.ui_relation_id)
         program_exe = MetaProgramExecutor(self.model, self.rng, self.device, kg_mask, self.relation2rid)
 
         pred_paths_instances = dict()
@@ -384,7 +389,7 @@ class CAFE(KnowledgeRecommender):
                 pred_paths_instances[r[0][0]][r[0][-1]] = [(reduce(lambda x, y: x * y, r[1]), np.mean(r[1][-1]), path)]
             top_products_scores = sorted(tmp, key=lambda x: x[1], reverse=True)
             for product, score in top_products_scores:
-                if product in self.items and results[i, product] < score:
+                if product < self.n_items and results[i, product] < score:  # if it's an item
                     results[i, product] = score.tolist()
 
         return results
@@ -420,12 +425,12 @@ class CAFE(KnowledgeRecommender):
 
 class SymbolicNetwork(nn.Module):
     def __init__(
-        self, relation_info, relation2rid, embeddings, embedding_size, deep_module, use_dropout, items, device
+        self, relation_info, relation2rid, embeddings, embedding_size, deep_module, use_dropout, n_items, device
     ):
         super().__init__()
         self.embedding = embeddings
         self.embedding_size = embedding_size
-        self.items = items
+        self.n_items = n_items
         self.device = device
         self.relation2rid = relation2rid
 
@@ -500,7 +505,7 @@ class SymbolicNetwork(nn.Module):
         outputs = self._forward(modules, uids)
 
         # Path regularization loss
-        products = self.embedding["entity"].weight[self.items]  # [bs, d]
+        products = self.embedding["entity"].weight[: self.n_items]  # [bs, d]
         scores = torch.matmul(outputs[-1], products.t())  # [bs, vocab_size]
         logprobs = F.log_softmax(scores, dim=1)  # [bs, vocab_size]
         pid_logprobs = logprobs.gather(1, pids.view(-1, 1)).view(-1)
@@ -516,7 +521,7 @@ class SymbolicNetwork(nn.Module):
 
         # Path regularization loss
         pids_tensor = torch.LongTensor(pids).to(self.device)
-        products = self.embedding["entity"].weight[self.items]  # [bs, d]
+        products = self.embedding["entity"].weight[: self.n_items]  # [bs, d]
         scores = torch.matmul(outputs[-1], products.t())  # [1, vocab_size]
         logprobs = F.log_softmax(scores, dim=1)  # [1, vocab_size]
         pid_logprobs = logprobs[0][pids_tensor]
@@ -662,41 +667,54 @@ class ReplayMemory:
 
 
 class KGMask:
-    def __init__(self, kg, kg_relation):
+    def __init__(self, kg, ui_relation_id):
         self.kg = kg
-        self.kg_relation = kg_relation
+        self.ui_relation_id = ui_relation_id
+
+    def _get_next_node_type(self, current_node_type, relation_id):
+        if current_node_type == "entity" and relation_id == self.ui_relation_id:
+            return "user"
+        else:
+            return "entity"
 
     def get_ids(self, eh, eh_ids, relation):
         et_ids = []
         if isinstance(eh_ids, list):
             for eh_id in eh_ids:
-                ids = list(self.kg(eh, eh_id, relation))
+                try:
+                    ids = list(self.kg[eh][eh_id][relation])
+                except KeyError:
+                    ids = []
                 et_ids.extend(ids)
             et_ids = list(set(et_ids))
         else:
-            res = self.kg(eh, eh_ids, relation)
-            if res is None:
-                res = list()
+            try:
+                res = self.kg[eh][eh_ids][relation]
+            except KeyError:
+                res = []
             et_ids = list(res)
         return et_ids
 
     def get_mask(self, eh, eh_ids, relation):
-        et = self.kg_relation[eh][relation]
-        et_vocab_size = len(self.kg(et))
+        et = self._get_next_node_type(eh, relation)
+        et_vocab_size = len(self.kg[et])
 
         if isinstance(eh_ids, list):
             mask = np.zeros([len(eh_ids), et_vocab_size], dtype=np.int64)
             for i, eh_id in enumerate(eh_ids):
-                et_ids = list(self.kg(eh, eh_id, relation))
+                try:
+                    et_ids = list(self.kg[eh][eh_id][relation])
+                except KeyError:
+                    et_ids = []
                 mask[i, et_ids] = 1
         else:
             mask = np.zeros(et_vocab_size, dtype=np.int64)
-            et_ids = list(self.kg(eh, eh_ids, relation))
+            try:
+                et_ids = list(self.kg[eh][eh_ids][relation])
+            except KeyError:
+                et_ids = []
             mask[et_ids] = 1
         return mask
-
-    def get_et(self, eh, eh_id, relation):
-        return np.array(self.kg(eh, eh_id, relation))
 
     def __call__(self, eh, eh_ids, relation):
         return self.get_mask(eh, eh_ids, relation)

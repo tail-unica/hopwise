@@ -3,7 +3,6 @@ import logging
 import os
 
 import numpy as np
-import scipy.sparse as sp
 import torch
 import torch.nn.functional as F
 from scipy.sparse import csr_matrix
@@ -103,6 +102,7 @@ class KGEncoder(nn.Module):
 
         self.latent_dim = config["latent_dim_rec"]
         self.n_layers = config["lightGCN_n_layers"]
+        self.max_entities_per_user = config["max_entities_per_user"]
         self.kg_dataset = kg_dataset
         self.gat = GAT(self.latent_dim, self.latent_dim, dropout=0.4, alpha=0.2).train()
         
@@ -139,9 +139,7 @@ class KGEncoder(nn.Module):
         nn.init.normal_(self.embedding_relation.weight, std=0.1)
 
         self.f = nn.Sigmoid()
-        # Graph is on cuda
-        self.Graph = self.getSparseGraph()
-        # kg_dict and item2relations are both on cuda
+        self.Graph = self.dataset.norm_adjacency_matrix().to(self.device)
         self.kg_dict, self.item2relations = self.get_kg_dict(self.num_items)
 
     def process_inter_feat(self, filetype):
@@ -185,58 +183,21 @@ class KGEncoder(nn.Module):
         for item in range(item_num):
             rts = self.kg_dataset.get(item, False)
             if rts:
-                tails = list(map(lambda x: x[1], rts))
-                relations = list(map(lambda x: x[0], rts))
-                if len(tails) > self.entity_count:
-                    i2es[item] = torch.IntTensor(tails).cuda()[: self.entity_count]
-                    i2rs[item] = torch.IntTensor(relations).cuda()[: self.entity_count]
+                tails = list(set([ent for tail_list in rts.values() for ent in tail_list]))
+                relations = list(rts.keys())
+                if len(tails) > self.max_entities_per_user:
+                    i2es[item] = torch.IntTensor(tails).cuda()[: self.max_entities_per_user]
+                    i2rs[item] = torch.IntTensor(relations).cuda()[: self.max_entities_per_user]
                 else:
                     # last embedding pos as padding idx
-                    tails.extend([self.entity_count] * (self.entity_count - len(tails)))
-                    relations.extend([self.relation_count] * (self.entity_count - len(relations)))
+                    tails.extend([self.dataset.entity_count] * (self.max_entities_per_user - len(tails)))
+                    relations.extend([self.dataset.relation_count] * (self.max_entities_per_user - len(relations)))
                     i2es[item] = torch.IntTensor(tails).cuda()
                     i2rs[item] = torch.IntTensor(relations).cuda()
             else:
-                i2es[item] = torch.IntTensor([self.num_items] * self.entity_count).cuda()
-                i2rs[item] = torch.IntTensor([self.relation_count] * self.entity_count).cuda()
+                i2es[item] = torch.IntTensor([self.dataset.item_num] * self.max_entities_per_user).cuda()
+                i2rs[item] = torch.IntTensor([self.dataset.relation_num] * self.max_entities_per_user).cuda()
         return i2es, i2rs
-
-    def _convert_sp_mat_to_sp_tensor(self, X):
-        coo = X.tocoo().astype(np.float32)
-        row = torch.Tensor(coo.row).long()
-        col = torch.Tensor(coo.col).long()
-        index = torch.stack([row, col])
-        data = torch.FloatTensor(coo.data)
-        return torch.sparse_coo_tensor(index, data, torch.Size(coo.shape))
-
-    def getSparseGraph(self):
-        """Calculate the connection graph in graph convolution, including A~, etc.
-        The returned data is a processed list, the length of the list is determined by self.fold,
-        and each item in the list is a sparse matrix representing the connection matrix of the entity
-        at the corresponding index for that length.
-        """
-        # The rows and columns of adj_mat concatenate users and items, marking known connections.
-        adj_mat = sp.dok_matrix((self.num_users + self.num_items, self.num_users + self.num_items), dtype=np.float32)
-        adj_mat = adj_mat.tolil()
-        R = self.UserItemNet.tolil()
-        adj_mat[: self.num_users, self.num_users :] = R
-        adj_mat[self.num_users :, : self.num_users] = R.T
-        adj_mat = adj_mat.todok()  # Convert the matrix to dictionary format (key-value pairs)
-        # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
-
-        rowsum = np.array(adj_mat.sum(axis=1)).flatten()
-        d_inv = np.zeros_like(rowsum)
-        nonzero_mask = rowsum != 0
-        d_inv[nonzero_mask] = np.power(rowsum[nonzero_mask], -0.5)
-        d_mat = sp.diags(d_inv)  # Diagonal elements are the sum of each row
-
-        norm_adj = d_mat.dot(adj_mat)
-        norm_adj = norm_adj.dot(d_mat)
-        norm_adj = norm_adj.tocsr()
-
-        self.G = self._convert_sp_mat_to_sp_tensor(norm_adj)
-        self.G = self.G.coalesce().cuda()
-        return self.G
 
     def computer(self):
         with torch.no_grad():
@@ -352,10 +313,7 @@ class KGLRR(KnowledgeRecommender):
     def __init__(self, config, dataset) -> None:
         super().__init__(config, dataset)
 
-        # Load Full Knowledge Graph in dict form
-        self.G, self.kg_dataset = dataset.ckg_dict_graph()
-        if config["save_dataset"]:
-            dataset.save()
+        self.kg_dataset = dataset.ckg_dict_graph()
 
         self.encoder = KGEncoder(config, dataset, self.kg_dataset)
         self.latent_dim = config["latent_dim_rec"]

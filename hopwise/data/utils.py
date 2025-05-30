@@ -54,7 +54,7 @@ def create_dataset(config):
         }
         dataset_class = getattr(dataset_module, type2class[model_type])
 
-    default_file = os.path.join(config["checkpoint_dir"], f'{config["dataset"]}-{dataset_class.__name__}.pth')
+    default_file = os.path.join(config["checkpoint_dir"], f"{config['dataset']}-{dataset_class.__name__}.pth")
     file = config["dataset_save_path"] or default_file
     if os.path.exists(file):
         with open(file, "rb") as f:
@@ -85,7 +85,7 @@ def save_split_dataloaders(config, dataloaders):
     ensure_dir(config["checkpoint_dir"])
     file_path = os.path.join(
         config["checkpoint_dir"],
-        f'{config["dataset"]}-for-{config["model"]}-dataloader.pth',
+        f"{config['dataset']}-for-{config['model']}-dataloader.pth",
     )
     logger = getLogger()
     logger.info(set_color("Saving split dataloaders into", "pink") + f": [{file_path}]")
@@ -121,7 +121,7 @@ def load_split_dataloaders(config):
     """
     default_file = os.path.join(
         config["checkpoint_dir"],
-        f'{config["dataset"]}-for-{config["model"]}-dataloader.pth',
+        f"{config['dataset']}-for-{config['model']}-dataloader.pth",
     )
     dataloaders_save_path = config["dataloaders_save_path"] or default_file
     if not os.path.exists(dataloaders_save_path):
@@ -294,15 +294,15 @@ def data_preparation(config, dataset):
         set_color("[Training]: ", "pink")
         + set_color("train_batch_size", "cyan")
         + " = "
-        + set_color(f'[{config["train_batch_size"]}]', "yellow")
+        + set_color(f"[{config['train_batch_size']}]", "yellow")
         + set_color(" train_neg_sample_args", "cyan")
         + ": "
-        + set_color(f'[{config["train_neg_sample_args"]}]', "yellow")
+        + set_color(f"[{config['train_neg_sample_args']}]", "yellow")
     )
 
     if config["eval_lp_args"] is not None and config["eval_lp_args"]["knowledge_split"] is not None:
         eval_lp_args_info = (
-            set_color(" eval_lp_args", "cyan") + ": " + set_color(f'[{config["eval_lp_args"]}]', "yellow")
+            set_color(" eval_lp_args", "cyan") + ": " + set_color(f"[{config['eval_lp_args']}]", "yellow")
         )
     else:
         eval_lp_args_info = ""
@@ -311,10 +311,10 @@ def data_preparation(config, dataset):
         set_color("[Evaluation]: ", "pink")
         + set_color("eval_batch_size", "cyan")
         + " = "
-        + set_color(f'[{config["eval_batch_size"]}]', "yellow")
+        + set_color(f"[{config['eval_batch_size']}]", "yellow")
         + set_color(" eval_args", "cyan")
         + ": "
-        + set_color(f'[{config["eval_args"]}]', "yellow")
+        + set_color(f"[{config['eval_args']}]", "yellow")
         + eval_lp_args_info
     )
     return train_data, valid_data, test_data

@@ -20,7 +20,6 @@ import numpy as np
 import pandas as pd
 import torch
 from scipy.sparse import coo_matrix
-from tqdm import tqdm
 
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
@@ -71,9 +70,6 @@ class KnowledgeBasedDataset(Dataset):
 
     def __init__(self, config):
         super().__init__(config)
-        self.tail_field = None
-        self.G = None
-        self.kg_relation = None
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
@@ -549,6 +545,11 @@ class KnowledgeBasedDataset(Dataset):
             # Add mapping for internal and external ID of relations
             for i in range(1, original_rel_num + 1):
                 original_token = self.field2id_token[self.relation_field][i]
+
+                # ui_relation may already exist in the relation field when using pre-trained embeddings
+                if original_token == self.ui_relation:
+                    continue
+
                 reverse_token = original_token + "_r"
                 self.field2token_id[self.relation_field][reverse_token] = i + original_rel_num
                 self.field2id_token[self.relation_field] = np.append(
@@ -616,19 +617,67 @@ class KnowledgeBasedDataset(Dataset):
         """
         return self.kg_feat[self.relation_field].numpy()
 
+    def norm_ckg_adjacency_matrix(self, form="torch_sparse"):
+        """Get the collaborative normalized adjacency matrix of users and items.
+
+        Construct the square matrix from the training data and normalize it
+        using the laplace matrix.
+
+        .. math::
+            A_{hat} = D^{-0.5} \times A \times D^{-0.5}
+
+        Args:
+            form (str, optional): Format of the normalized adjacency matrix. Defaults to ``torch_sparse``.
+
+        Returns:
+            torch.sparse.FloatTensor: Normalized adjacency matrix.
+
+        Raises:
+            NotImplementedError: If the format of the normalized adjacency matrix is not implemented.
+        """
+        if form == "torch_sparse":
+            return self._create_norm_ckg_adjacency_matrix()
+        else:
+            raise NotImplementedError(f"Normalized adjacency matrix format [{form}] has not been implemented.")
+
+    def _create_norm_ckg_adjacency_matrix(self, size=None, symmetric=True):
+        """Get the normalized interaction matrix of users and entities (items) and
+        the normalized adjacency matrix of the collaborative knowledge graph.
+
+        Uses :func:`~hopwise.data.dataset.dataset.Dataset._create_norm_adjacency_matrix`
+        to get the normalized adjacency matrix of the collaborative knowledge graph
+        and then extract the normalized interaction matrix of users and entities (items).
+
+        Returns:
+            tuple: tuple of:
+            - normalized interaction matrix of users and entities (items)
+            - normalized adjacency matrix of the collaborative knowledge graph.
+
+        """
+        if size is None:
+            size = self.user_num + self.entity_num
+
+        norm_graph = self._create_norm_adjacency_matrix(size=size, symmetric=symmetric)
+        if not norm_graph.is_coalesced():
+            norm_graph = norm_graph.coalesce()
+
+        row, col = norm_graph.indices().cpu().numpy()
+        values = norm_graph.values().cpu().numpy()
+        mat = coo_matrix((values, (row, col)), shape=tuple(norm_graph.shape))
+        norm_matrix = mat.tocsr()[: self.user_num, self.user_num :].tocoo()
+
+        indices = torch.LongTensor(np.array([norm_matrix.row, norm_matrix.col]))
+        data = torch.FloatTensor(norm_matrix.data)
+        norm_matrix = torch.sparse.FloatTensor(indices, data, norm_matrix.shape)
+
+        return norm_matrix, norm_graph
+
     @property
     def entities(self):
         """Returns:
         numpy.ndarray: List of entity id, including virtual entities.
         """
         return np.arange(self.entity_num)
-
-    def ckg_dict_graph(self):
-        G = GraphDict(self, self.ui_relation, self.kg_feat, self.inter_feat)
-        self.G = G
-        self.kg_relation = G.kg_relation
-
-        return self.G, self.kg_relation
 
     def kg_graph(self, form="coo", value_field=None):
         """Get graph or sparse matrix that describe relations between entities.
@@ -936,85 +985,48 @@ class KnowledgeBasedDataset(Dataset):
         else:
             raise NotImplementedError("ckg hetero graph format [{}] has not been implemented.")
 
+    def ckg_dict_graph(self):
+        """Get a dictionary representation of the collaborative knowledge graph.
 
-class GraphDict:
-    def __init__(self, dataset, ui_relation, kg_feat, inter_feat):
-        self.relation2id = dataset.field2token_id["relation_id"]
-        self.inter_num = dataset.inter_num
-        self.ui_relation = self.relation2id[ui_relation]
+        Returns:
+            dict: Dictionary representation of the collaborative knowledge graph.
+        """
+        src, tgt = self._create_ckg_source_target(form="numpy")
+        # Adjust the indices to account for the user_num offset
+        src[src >= self.user_num] -= self.user_num
+        tgt[tgt >= self.user_num] -= self.user_num
 
-        self.G = dict()
-        self.kg_relation = dict()
+        ui_relation_id = self.field2token_id[self.relation_field][self.ui_relation]
+        rels = np.concatenate([np.full(self.inter_num * 2, ui_relation_id), self.relations])
 
-        # Knowledge graph data
-        hids = kg_feat[dataset.head_entity_field].numpy()
-        kg_rels = kg_feat[dataset.relation_field].numpy()
-        tids = kg_feat[dataset.tail_entity_field].numpy()
-
-        # User Interaction data
-        uids = inter_feat[dataset.uid_field].numpy()
-        ui_ids = np.full((len(uids),), self.ui_relation)
-        iids = inter_feat[dataset.iid_field].numpy()
-
-        # Concatenate data
-        heads = np.concatenate([uids, iids, hids])
-        relations = np.concatenate([ui_ids, ui_ids, kg_rels])
-        tails = np.concatenate([iids, uids, tids])
-
-        # Build the graph
-        self._build_graph(heads, relations, tails)
-
-    def _build_graph(self, heads, relations, tails):
-        self.G["user"] = dict()
-        self.G["entity"] = dict()
-        self.kg_relation["user"] = dict()
-        self.kg_relation["entity"] = dict()
-
-        iter_triples = tqdm(
-            enumerate(zip(heads, relations, tails)),
-            total=len(heads),
-            desc="Building Graph Dict",
-        )
-
-        for triple_i, (head, relation, tail) in iter_triples:
-            if relation == self.ui_relation:
-                # UI interaction case
-                if triple_i < self.inter_num:
-                    key = "user"
-                    relation_key = "entity"
+        graph_dict = {"user": {}, "entity": {}}
+        for idx, (src_id, rel_id, tgt_id) in enumerate(zip(src, rels, tgt)):
+            if rel_id == ui_relation_id:
+                if idx < self.inter_num:
+                    src_type = "user"
                 else:
-                    key = "entity"
-                    relation_key = "user"
+                    src_type = "entity"
 
-                if head not in self.G[key]:
-                    self.G[key][head] = dict()
-                if relation not in self.G[key][head]:
-                    self.G[key][head][relation] = list()
+                if src_id not in graph_dict[src_type]:
+                    graph_dict[src_type][src_id] = dict()
+                if rel_id not in graph_dict[src_type][src_id]:
+                    graph_dict[src_type][src_id][rel_id] = list()
 
-                self.G[key][head][relation].append(tail)
-                self.kg_relation[key][relation] = relation_key
+                # UI interaction case
+                graph_dict[src_type][src_id][rel_id].append(tgt_id)
             else:
-                if head not in self.G["entity"]:
-                    self.G["entity"][head] = dict()
-                if relation not in self.G["entity"][head]:
-                    self.G["entity"][head][relation] = list()
-                if tail not in self.G["entity"]:
-                    self.G["entity"][tail] = dict()
-                if relation not in self.G["entity"][tail]:
-                    self.G["entity"][tail][relation] = list()
+                if src_id not in graph_dict["entity"]:
+                    graph_dict["entity"][src_id] = dict()
+                if rel_id not in graph_dict["entity"][src_id]:
+                    graph_dict["entity"][src_id][rel_id] = list()
+
+                if tgt_id not in graph_dict["entity"]:
+                    graph_dict["entity"][tgt_id] = dict()
+                if rel_id not in graph_dict["entity"][tgt_id]:
+                    graph_dict["entity"][tgt_id][rel_id] = list()
 
                 # KG case
-                self.G["entity"][head][relation].append(tail)
-                self.G["entity"][tail][relation].append(head)
+                graph_dict["entity"][src_id][rel_id].append(tgt_id)
+                graph_dict["entity"][tgt_id][rel_id].append(src_id)
 
-                self.kg_relation["entity"][relation] = "entity"
-
-    def __call__(self, eh_type, eh_id=None, relation=None):
-        data = self.G
-        if eh_type is not None:
-            data = data.get(eh_type, None)
-        if eh_id is not None:
-            data = data.get(eh_id, None)
-        if relation is not None:
-            data = data.get(relation, None)
-        return data
+        return graph_dict
