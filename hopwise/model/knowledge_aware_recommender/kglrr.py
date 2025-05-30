@@ -1,4 +1,3 @@
-import gc
 import logging
 import os
 
@@ -94,18 +93,18 @@ class KGEncoder(nn.Module):
             self.user_history_dict[user_id].append(item_id)
 
         self.maxhis = config["maxhis"]
-        self.batch_size = config["batch_size"]
         self.kgcn = config["kgcn"]
         self.dropout = config["dropout"]
         self.keep_prob = 1 - self.dropout  # Added
         self.A_split = config["A_split"]
+        self.device = config["device"]
 
         self.latent_dim = config["latent_dim_rec"]
         self.n_layers = config["lightGCN_n_layers"]
         self.max_entities_per_user = config["max_entities_per_user"]
         self.kg_dataset = kg_dataset
         self.gat = GAT(self.latent_dim, self.latent_dim, dropout=0.4, alpha=0.2).train()
-        
+
         self.inter_feat = dataset.inter_feat
         self.num_users = dataset.user_num
         self.num_items = dataset.item_num
@@ -139,7 +138,7 @@ class KGEncoder(nn.Module):
         nn.init.normal_(self.embedding_relation.weight, std=0.1)
 
         self.f = nn.Sigmoid()
-        self.Graph = self.dataset.norm_adjacency_matrix().to(self.device)
+        self.Graph = dataset.norm_adjacency_matrix().coalesce().to(self.device)
         self.kg_dict, self.item2relations = self.get_kg_dict(self.num_items)
 
     def process_inter_feat(self, filetype):
@@ -186,17 +185,17 @@ class KGEncoder(nn.Module):
                 tails = list(set([ent for tail_list in rts.values() for ent in tail_list]))
                 relations = list(rts.keys())
                 if len(tails) > self.max_entities_per_user:
-                    i2es[item] = torch.IntTensor(tails).cuda()[: self.max_entities_per_user]
-                    i2rs[item] = torch.IntTensor(relations).cuda()[: self.max_entities_per_user]
+                    i2es[item] = torch.IntTensor(tails).to(self.device)[: self.max_entities_per_user]
+                    i2rs[item] = torch.IntTensor(relations).to(self.device)[: self.max_entities_per_user]
                 else:
                     # last embedding pos as padding idx
                     tails.extend([self.dataset.entity_count] * (self.max_entities_per_user - len(tails)))
                     relations.extend([self.dataset.relation_count] * (self.max_entities_per_user - len(relations)))
-                    i2es[item] = torch.IntTensor(tails).cuda()
-                    i2rs[item] = torch.IntTensor(relations).cuda()
+                    i2es[item] = torch.IntTensor(tails).to(self.device)
+                    i2rs[item] = torch.IntTensor(relations).to(self.device)
             else:
-                i2es[item] = torch.IntTensor([self.dataset.item_num] * self.max_entities_per_user).cuda()
-                i2rs[item] = torch.IntTensor([self.dataset.relation_num] * self.max_entities_per_user).cuda()
+                i2es[item] = torch.IntTensor([self.num_items] * self.max_entities_per_user).to(self.device)
+                i2rs[item] = torch.IntTensor([self.relation_count] * self.max_entities_per_user).to(self.device)
         return i2es, i2rs
 
     def computer(self):
@@ -256,55 +255,31 @@ class KGEncoder(nn.Module):
             return self.embedding_item.weight
 
     def cal_item_embedding_gat(self, kg: dict):
-        batch_size = self.batch_size
-        item_keys = list(kg.keys())
-        item_embs_list = []
-
-        for i in range(0, len(item_keys), batch_size):
-            batch_keys = item_keys[i : i + batch_size]
-            item_embs = self.embedding_item(torch.IntTensor(batch_keys).cuda())  # batch_size, emb_dim
-            # batch_size, entity_num_each
-            item_entities = torch.stack([kg[key] for key in batch_keys])
-            # batch_size, entity_num_each, emb_dim
-            entity_embs = self.embedding_entity(item_entities)
-            # batch_size, entity_num_each
-            padding_mask = torch.where(
-                item_entities != self.entity_count, torch.ones_like(item_entities), torch.zeros_like(item_entities)
-            ).float()
-            batch_embs = self.gat(item_embs, entity_embs, padding_mask)
-            item_embs_list.append(batch_embs)
-
-        return torch.cat(item_embs_list, dim=0)
+        item_embs = self.embedding_item(torch.IntTensor(list(kg.keys())).to(self.device))  # item_num, emb_dim
+        # item_num, entity_num_each
+        item_entities = torch.stack(list(kg.values()))
+        # item_num, entity_num_each, emb_dim
+        entity_embs = self.embedding_entity(item_entities)
+        # item_num, entity_num_each
+        padding_mask = torch.where(
+            item_entities != self.entity_count, torch.ones_like(item_entities), torch.zeros_like(item_entities)
+        ).float()
+        return self.gat(item_embs, entity_embs, padding_mask)
 
     def cal_item_embedding_rgat(self, kg: dict):
-        batch_size = 128
-        item_keys = list(kg.keys())
-        item_embs_list = []
-
-        for i in range(0, len(item_keys), batch_size):
-            batch_keys = item_keys[i : i + batch_size]
-
-            # Cleans cache
-            gc.collect()
-            torch.cuda.empty_cache() # activate in case of memory leak
-
-            item_embs = self.embedding_item(torch.IntTensor(batch_keys).cuda())
-            item_entities = torch.stack([kg[key] for key in batch_keys])
-            item_relations = torch.stack([self.item2relations[key] for key in batch_keys])
-
-            entity_embs = self.embedding_entity(item_entities)
-            relation_embs = self.embedding_relation(item_relations)
-
-            padding_mask = torch.where(
-                item_entities != self.entity_count, torch.ones_like(item_entities), torch.zeros_like(item_entities)
-            ).float()
-
-            with torch.no_grad():
-                batch_embs = self.gat.forward_relation(item_embs, entity_embs, relation_embs, padding_mask)
-
-            item_embs_list.append(batch_embs)
-
-        return torch.cat(item_embs_list, dim=0)
+        item_embs = self.embedding_item(torch.IntTensor(list(kg.keys())).to(self.device))  # item_num, emb_dim
+        # item_num, entity_num_each
+        item_entities = torch.stack(list(kg.values()))
+        item_relations = torch.stack(list(self.item2relations.values()))
+        # item_num, entity_num_each, emb_dim
+        entity_embs = self.embedding_entity(item_entities)
+        relation_embs = self.embedding_relation(item_relations)  # item_num, entity_num_each, emb_dim
+        # w_r = self.W_R[relation_embs] # item_num, entity_num_each, emb_dim, emb_dim
+        # item_num, entity_num_each
+        padding_mask = torch.where(
+            item_entities != self.entity_count, torch.ones_like(item_entities), torch.zeros_like(item_entities)
+        ).float()
+        return self.gat.forward_relation(item_embs, entity_embs, relation_embs, padding_mask)
 
 
 class KGLRR(KnowledgeRecommender):
@@ -333,7 +308,7 @@ class KGLRR(KnowledgeRecommender):
 
     def _init_weights(self):
         self.true = torch.nn.Parameter(
-            torch.from_numpy(np.random.uniform(0, 1, size=[1, self.latent_dim]).astype(np.float32)).cuda(),
+            torch.from_numpy(np.random.uniform(0, 1, size=[1, self.latent_dim]).astype(np.float32)),
             requires_grad=False,
         )
 
@@ -391,7 +366,7 @@ class KGLRR(KnowledgeRecommender):
         if self.r_logic > 0:
             r_loss = r_loss * self.r_logic
         else:
-            r_loss = torch.from_numpy(np.array(0.0, dtype=np.float32)).cuda()
+            r_loss = torch.from_numpy(np.array(0.0, dtype=np.float32)).to(self.device)
             r_loss.requires_grad = True
 
         r_loss += r_length * self.r_length
@@ -412,8 +387,8 @@ class KGLRR(KnowledgeRecommender):
         elif vector2.size() != vector1.size():
             vector2 = vector2.expand_as(vector1)
         if train:
-            r12 = torch.Tensor(vector1.size()[:-1]).uniform_(0, 1).bernoulli()
-            r12 = r12.cuda().unsqueeze(-1)
+            r12 = torch.Tensor(vector1.size()[:-1]).to(self.device).uniform_(0, 1).bernoulli()
+            r12 = r12.unsqueeze(-1)
             new_v1 = r12 * vector1 + (-r12 + 1) * vector2
             new_v2 = r12 * vector2 + (-r12 + 1) * vector1
             return new_v1, new_v2
@@ -462,7 +437,7 @@ class KGLRR(KnowledgeRecommender):
             ithpred = self.similarity(sent_vector, self.true, sigmoid=True)  # item_size
             prediction.append(ithpred)
 
-        prediction = torch.stack(prediction).cuda()
+        prediction = torch.stack(prediction).to(self.device)  # [B, item_size]
 
         if self.is_explain:
             topk_items = torch.topk(prediction, k=1, dim=1).indices  # shape: [B, 1]
@@ -470,11 +445,11 @@ class KGLRR(KnowledgeRecommender):
             explaination = self.explain(users, history, topk_embeds)
             return prediction, explaination
         return prediction
-    
+
     def explain(self, users, history, items):
         bs = users.size(0)
-        _, item_embed = self.encoder.computer()   # user_num/item_num * V
-        
+        _, item_embed = self.encoder.computer()  # user_num/item_num * V
+
         his_valid = history.ge(0).float()  # B * H
         # maxlen = int(his_valid.sum(dim=1).max().item())
         elements = item_embed[history.abs()] * his_valid.unsqueeze(-1)  # B * H * V
@@ -485,8 +460,8 @@ class KGLRR(KnowledgeRecommender):
             tmp_item = items[i].unsqueeze(0).expand(elements[i].size(0), -1)  # [H, V]
             tmp_a = self.logic_and(tmp_item, elements[i]) * tmp_a_valid
             similarity_rlt.append(self.similarity(tmp_a, self.true))
-        
-        return torch.stack(similarity_rlt).cuda()
+
+        return torch.stack(similarity_rlt).to(self.device)  # [H, V]
 
     def full_sort_predict(self, interaction):
         r"""Full sort prediction function.
@@ -500,7 +475,7 @@ class KGLRR(KnowledgeRecommender):
             shape: [n_batch_users, n_candidate_items]
         """
         # The predict function already does what is needed (users vs all items)
-        prediction = self.predict(interaction, explain=False)  # [batch_size, num_items]
+        prediction = self.predict(interaction)
         return prediction
 
     def predict_or_and(self, users, pos, neg, history):
@@ -540,10 +515,10 @@ class KGLRR(KnowledgeRecommender):
 
         constraint.append(right_vector_true.view([bs, 1, self.latent_dim]))  # B * 1 * V
         constraint_valid.append(
-            torch.ones((bs, 1), device="cuda")
+            torch.ones((bs, 1)).to(self.device)
         )  # B * 1   # Indicates that all items to be judged are valid
         constraint.append(right_vector_false.view([bs, 1, self.latent_dim]))  # B * 1 * V
-        constraint_valid.append(torch.ones((bs, 1), device="cuda"))  # B * 1
+        constraint_valid.append(torch.ones((bs, 1)).to(self.device))  # B * 1
 
         sent_vector = (
             self.logic_and(or_vector, right_vector_true) * left_valid + (-left_valid + 1) * right_vector_true
@@ -574,9 +549,9 @@ class KGLRR(KnowledgeRecommender):
         - L2 Loss (l2loss)
         """
         # Extraction of tensors from the interaction dictionary
-        batch_users = interaction["user_id"].long().cuda()
-        batch_pos = interaction["item_id"].long().cuda()
-        batch_neg = interaction["neg_item_id"].long().cuda()
+        batch_users = interaction["user_id"].long()
+        batch_pos = interaction["item_id"].long()
+        batch_neg = interaction["neg_item_id"].long()
 
         # Build the history in the same way as in predict
         maxhis = self.encoder.maxhis
