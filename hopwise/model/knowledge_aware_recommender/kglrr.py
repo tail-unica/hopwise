@@ -4,7 +4,6 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
-from scipy.sparse import csr_matrix
 from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
@@ -86,11 +85,7 @@ class KGEncoder(nn.Module):
     def __init__(self, config, dataset, kg_dataset):
         super().__init__()
 
-        self.user_history_dict = dict()
-        for user_id, item_id in zip(dataset.inter_feat["user_id"].numpy(), dataset.inter_feat["item_id"].numpy()):
-            if user_id not in self.user_history_dict:
-                self.user_history_dict[user_id] = []
-            self.user_history_dict[user_id].append(item_id)
+        self.user_history_matrix = dataset.history_item_matrix()[0].to(config["device"])
 
         self.maxhis = config["maxhis"]
         self.kgcn = config["kgcn"]
@@ -109,11 +104,6 @@ class KGEncoder(nn.Module):
         self.num_users = dataset.user_num
         self.num_items = dataset.item_num
 
-        self.process_inter_feat("train")
-        self.UserItemNet = csr_matrix(
-            (np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
-            shape=(dataset.user_num, dataset.item_num),
-        )
         self.__init_weight(dataset)
         self.config = config
 
@@ -140,41 +130,6 @@ class KGEncoder(nn.Module):
         self.f = nn.Sigmoid()
         self.Graph = dataset.norm_adjacency_matrix().coalesce().to(self.device)
         self.kg_dict, self.item2relations = self.get_kg_dict(self.num_items)
-
-    def process_inter_feat(self, filetype):
-        # Process interaction features to extract user-item interactions and user history.
-        inter_feat = self.inter_feat
-        UniqueUsers, Item, User = [], [], []
-        UsersHis = []
-        dataSize = 0
-
-        user_ids = inter_feat["user_id"].numpy()
-        item_ids = inter_feat["item_id"].numpy()
-
-        last_uid = None
-        user_items = []
-
-        for uid, iid in zip(user_ids, item_ids):
-            if filetype == "train":
-                if last_uid is None or uid != last_uid:
-                    user_items = []
-                this_his = user_items[-self.maxhis :] if self.maxhis > 0 else user_items[:]
-                this_his += [-1] * (self.maxhis - len(this_his))
-                UsersHis.append(this_his)
-                user_items.append(iid)
-            UniqueUsers.append(uid)
-            User.append(uid)
-            Item.append(iid)
-            self.m_item = max(self.num_items, iid)
-            self.n_user = max(self.num_users, uid)
-            dataSize += 1
-            last_uid = uid
-
-        setattr(self, f"{filetype}UniqueUsers", np.array(UniqueUsers))
-        setattr(self, f"{filetype}User", np.array(User))
-        setattr(self, f"{filetype}Item", np.array(Item))
-        setattr(self, f"{filetype}UsersHis", np.array(UsersHis))
-        setattr(self, f"{filetype}Size", dataSize)
 
     def get_kg_dict(self, item_num):
         i2es = dict()
@@ -396,25 +351,15 @@ class KGLRR(KnowledgeRecommender):
 
     def predict(self, interaction):
         users = interaction[self.USER_ID]
-        bs = users.size(0)
-        maxhis = self.encoder.maxhis
 
-        history_list = []
-
-        for uid in users.tolist():
-            user_his = self.encoder.user_history_dict.get(uid, [])
-            user_his = user_his[-maxhis:]  # limits to max length
-            user_his += [-1] * (maxhis - len(user_his))  # padding
-            history_list.append(user_his)
-
-        history = torch.tensor(history_list, dtype=torch.long, device=users.device)  # [B, H]
+        history = self.encoder.user_history_matrix[users, : self.encoder.maxhis]  # B * H
         item_embed = self.encoder.computer()[1]  # item_num * V
 
         his_valid = history.ge(0).float()  # B * H
 
         maxlen = int(his_valid.sum(dim=1).max().item())
 
-        elements = item_embed[history.abs()] * his_valid.unsqueeze(-1)  # B * H * V
+        elements = item_embed[history] * his_valid.unsqueeze(-1)  # B * H * V
 
         tmp_o = None
         for i in range(maxlen):
@@ -429,7 +374,7 @@ class KGLRR(KnowledgeRecommender):
         left_valid = his_valid[:, 0].unsqueeze(-1)  # B * 1
 
         prediction = []
-        for i in range(bs):
+        for i in range(users.size(0)):
             sent_vector = (
                 left_valid[i] * self.logic_and(or_vector[i].unsqueeze(0).repeat(self.num_items, 1), item_embed)
                 + (-left_valid[i] + 1) * item_embed
@@ -549,21 +494,12 @@ class KGLRR(KnowledgeRecommender):
         - L2 Loss (l2loss)
         """
         # Extraction of tensors from the interaction dictionary
-        batch_users = interaction["user_id"].long()
-        batch_pos = interaction["item_id"].long()
-        batch_neg = interaction["neg_item_id"].long()
+        batch_users = interaction["user_id"]
+        batch_pos = interaction["item_id"]
+        batch_neg = interaction["neg_item_id"]
 
         # Build the history in the same way as in predict
-        maxhis = self.encoder.maxhis
-        history_list = []
-
-        for uid in batch_users.tolist():
-            user_his = self.encoder.user_history_dict.get(uid, [])
-            user_his = user_his[-maxhis:]  # limits to the maximum length
-            user_his += [-1] * (maxhis - len(user_his))  # padding
-            history_list.append(user_his)
-
-        batch_history = torch.tensor(history_list, dtype=torch.long, device=batch_users.device)
+        batch_history = self.encoder.user_history_matrix[batch_users, : self.encoder.maxhis]
 
         # Forward of the model with the 3 loss components
         rloss, tloss, l2loss = self.forward(False, 0, batch_users, batch_pos, batch_neg, batch_history)
