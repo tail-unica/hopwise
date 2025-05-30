@@ -1020,13 +1020,13 @@ class TestPathLanguageModelingRecommender(unittest.TestCase):
         },
     }
 
+    def test_plm(self):
+        config_dict = {"model": "PLM", **self.lm_base_config}
+        quick_test(config_dict)
+
     def test_pearlm(self):
         config_dict = {"model": "PEARLM", **self.lm_base_config}
         quick_test(config_dict)
-
-    # def test_plm(self):
-    #     config_dict = {"model": "PLM", **self.lm_base_config}
-    #     quick_test(config_dict)
 
     def test_kgglm(self):
         with tempfile.TemporaryDirectory() as tmpdirname:

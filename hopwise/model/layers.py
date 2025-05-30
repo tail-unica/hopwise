@@ -1769,7 +1769,7 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
 
         unique_input_ids = input_ids
         if self.task == self.RECOMMENDATION_TASK and current_len == (self.max_sequence_length - 1 - has_bos_token):
-            user_idx = 1 + has_bos_token
+            user_idx = has_bos_token
             _, input_ids_indices, input_ids_inv = np.unique(
                 input_ids.cpu().numpy()[:, [user_idx]], axis=0, return_index=True, return_inverse=True
             )
