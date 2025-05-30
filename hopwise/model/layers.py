@@ -24,7 +24,7 @@ from torch import nn
 from torch.nn.init import normal_
 from transformers import LogitsProcessor
 
-from hopwise.utils import FeatureSource, FeatureType
+from hopwise.utils import FeatureSource, FeatureType, KnowledgeEvaluationType
 
 
 class MLPLayers(nn.Module):
@@ -1535,9 +1535,6 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     If task is link prediction (LP) logit processor forces last token to reachable ones
     """
 
-    RECOMMENDATION_TASK = "recommendation"
-    LINK_PREDICTION_TASK = "link_prediction"
-
     def __init__(
         self,
         tokenized_kg,
@@ -1546,7 +1543,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         tokenizer,
         mask_cache_size=3 * 10**4,
         pos_candidates_cache_size=1 * 10**5,
-        task="recommendation",
+        task=KnowledgeEvaluationType.REC,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1560,7 +1557,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         self.mask_cache = LFUCache(mask_cache_size)
         self.task = task
 
-        if self.task == self.LINK_PREDICTION_TASK:
+        if self.task == KnowledgeEvaluationType.LP:
             self.special_tokens_ids = [
                 self.tokenizer.encode(x, add_special_tokens=False)[0]
                 for x in self.tokenizer.all_special_tokens_extended
@@ -1585,7 +1582,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
             self.mask_non_eos_tokens(scores)
         else:
             unique_input_ids = input_ids
-            if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
+            if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
                 last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
                 _, input_ids_indices, input_ids_inv = np.unique(
                     input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True
@@ -1594,15 +1591,15 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
             full_mask = np.zeros((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
             for idx in range(unique_input_ids.shape[0]):
-                if self.task == self.RECOMMENDATION_TASK:
+                if self.task == KnowledgeEvaluationType.REC:
                     key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
-                elif self.task == self.LINK_PREDICTION_TASK:
+                elif self.task == KnowledgeEvaluationType.LP:
                     key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
 
                 banned_mask = self.get_banned_mask(key, candidate_tokens)
                 full_mask[idx] = banned_mask
 
-            if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
+            if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
                 scores[full_mask[input_ids_inv]] = -math.inf
             else:
                 scores[full_mask] = -math.inf
@@ -1738,7 +1735,7 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
         max_sequence_length,
         tokenizer,
         pos_candidates_cache_size=1 * 10**5,
-        task="recommendation",
+        task=KnowledgeEvaluationType.REC,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1750,7 +1747,7 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
         self.pos_candidates_cache = LFUCache(pos_candidates_cache_size)
         self.task = task
 
-        if self.task == self.LINK_PREDICTION_TASK:
+        if self.task == KnowledgeEvaluationType.LP:
             self.special_tokens_ids = [
                 self.tokenizer.encode(x, add_special_tokens=False)[0]
                 for x in self.tokenizer.all_special_tokens_extended
@@ -1768,8 +1765,8 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
         has_bos_token = self.is_bos_token_in_input(input_ids)
 
         unique_input_ids = input_ids
-        if self.task == self.RECOMMENDATION_TASK and current_len == (self.max_sequence_length - 1 - has_bos_token):
-            user_idx = has_bos_token
+        if self.task == KnowledgeEvaluationType.REC and current_len == (self.max_sequence_length - 1 - has_bos_token):
+            user_idx = int(has_bos_token)
             _, input_ids_indices, input_ids_inv = np.unique(
                 input_ids.cpu().numpy()[:, [user_idx]], axis=0, return_index=True, return_inverse=True
             )
