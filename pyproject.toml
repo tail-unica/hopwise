@@ -69,6 +69,7 @@ dependencies = [
     "pandas>2.0.0 ; python_version == '3.12'",
     "transformers",
     "accelerate>=0.34.2",
+    "datasets",
     "tqdm",
     "wandb",
     "igraph",
@@ -79,7 +80,6 @@ dependencies = [
     "tensorboard>=2.5.0",
     "psutil",
     "texttable",
-    "datasets",
     "colorlog>=4.7.2",
     "protobuf==3.19.0",
     "joblib",
@@ -151,9 +151,9 @@ lint = [
   "pre-commit"
 ]
 dev = [
+  "hopwise[cu121]",
   "hopwise[all-models]",
   "hopwise[hyper]",
-  "hopwise[cu121]",
   "plotly",
   "opentsne",
   "nbformat",
@@ -168,7 +168,7 @@ env_list = ["3.12", "3.11", "3.10", "3.9"]
 
 [tool.tox.env_run_base]
 description = "uv_sync run base"
-dependency_groups = ["dev", "test", "cu121"]
+dependency_groups = ["dev", "test"]
 commands = [
   ["uv", "run", "--active", "run_hopwise.py", "--epochs=2"],
   ["uv", "run", "--active", "run_hopwise.py", "--model", "LightGCN", "--epochs=2"],
