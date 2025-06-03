@@ -467,11 +467,9 @@ class TPRec(KnowledgeRecommender, ExplainableRecommender):
             if next_node_type == "user":
                 src_embed = user_embed
             elif next_node_type == "entity" and next_node_id < self.n_items:
-                src_embed = user_embed + self.relation_embedding[self.ui_relation_id] + item_emb
+                src_embed = user_embed + item_emb
             else:
-                src_embed = (
-                    user_embed + self.relation_embedding[self.ui_relation_id] + self.relation_embedding[r] + item_emb
-                )
+                src_embed = user_embed + item_emb + self.relation_embedding[r]
 
             score = np.matmul(src_embed, self.node_type2emb[next_node_type][next_node_id])
             # This trimming may filter out target products!
@@ -647,9 +645,10 @@ class TPRec(KnowledgeRecommender, ExplainableRecommender):
         Returns:
             pd.Dataframe: explanation results with columns: "user", "product", "score", "path"
         """
-        users = interaction[self.USER_ID]
+        users, temporal_weight = interaction[self.USER_ID]
         paths, probs = self.beam_search(users)
-        _, explanations = self.collect_scores(users, paths, probs)
+        interacted_matrix = self._build_interacted_matrix(temporal_weight)
+        _, explanations = self.collect_scores(users, paths, probs, interacted_matrix)
 
         # make explanations as pandas dataframe, then return the results
         df = pd.DataFrame(explanations, columns=["user", "product", "score", "path"])
@@ -730,11 +729,11 @@ class TPRec(KnowledgeRecommender, ExplainableRecommender):
 
     def collect_scores(self, users, paths, probs, interacted_matrix):
         collect_results = list()
+        pad_emb = np.zeros((1, self.embedding_size))
+        interacted_embeds = np.concatenate((pad_emb, np.array(interacted_matrix)))
         # 1) get all valid paths for each user, compute path score and path probability
         pred_paths = {uid.item(): defaultdict(list) for uid in users}
-        path_scores = np.dot(
-            self.user_embedding + self.relation_embedding[self.ui_relation_id], self.entity_embedding[: self.n_items].T
-        )
+        path_scores = np.dot(self.user_embedding + interacted_embeds, self.entity_embedding[: self.n_items].T)
         for path, prob in zip(paths, probs):
             if "self_loop" in [node[0] for node in path[1:]]:
                 continue
