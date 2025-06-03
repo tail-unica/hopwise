@@ -30,7 +30,7 @@ jobs:
       # Sync pipeline
       - name: Install the project
         run: |
-          uv sync
+          uv sync --extra ${{ inputs.env }}
 
       - if: ${{ inputs.env == 'cu124' }}
         run: |

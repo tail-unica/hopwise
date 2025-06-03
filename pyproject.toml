@@ -134,7 +134,7 @@ cu121 = [
 ]
 cu124 = [
   "torch==2.4.*",
-  "dgl==2.4.*",
+  "dgl",
 ]
 
 [dependency-groups]
@@ -151,7 +151,6 @@ lint = [
   "pre-commit"
 ]
 dev = [
-  "hopwise[cu121]",
   "hopwise[all-models]",
   "hopwise[hyper]",
   "plotly",
@@ -177,9 +176,6 @@ commands = [
 
 [tool.uv]
 find-links = [
-  "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html",
-  "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html",
-  "https://data.dgl.ai/wheels/torch-2.3/repo.html",
   "https://data.pyg.org/whl/torch-2.4.0+cu124.html",
   "https://data.pyg.org/whl/torch-2.3.0+cu121.html"
 ]
@@ -195,19 +191,49 @@ no-build-isolation-package = ["torch-scatter"]
 
 [tool.uv.sources]
 dgl = [
-  { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp39-cp39-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.9'" },
-  { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp310-cp310-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.10'" },
-  { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp311-cp311-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.11'" },
-  { url = "https://data.dgl.ai/wheels/dgl-2.2.1-cp312-cp312-win_amd64.whl", extra = "cpu", marker = "sys_platform == 'win32' and python_version == '3.12'" },
-  { url = "https://data.dgl.ai/wheels/cu118/dgl-2.2.1%2Bcu118-cp39-cp39-win_amd64.whl", extra = "cu118", marker = "sys_platform == 'win32' and python_version == '3.9'" },
-  { url = "https://data.dgl.ai/wheels/cu118/dgl-2.2.1%2Bcu118-cp310-cp310-win_amd64.whl", extra = "cu118", marker = "sys_platform == 'win32' and python_version == '3.10'" },
-  { url = "https://data.dgl.ai/wheels/cu118/dgl-2.2.1%2Bcu118-cp311-cp311-win_amd64.whl", extra = "cu118", marker = "sys_platform == 'win32' and python_version == '3.11'" },
-  { url = "https://data.dgl.ai/wheels/cu118/dgl-2.2.1%2Bcu118-cp312-cp312-win_amd64.whl", extra = "cu118", marker = "sys_platform == 'win32' and python_version == '3.12'" },
-  { url = "https://data.dgl.ai/wheels/cu121/dgl-2.2.1%2Bcu121-cp39-cp39-win_amd64.whl", extra = "cu121", marker = "sys_platform == 'win32' and python_version == '3.9'" },
-  { url = "https://data.dgl.ai/wheels/cu121/dgl-2.2.1%2Bcu121-cp310-cp310-win_amd64.whl", extra = "cu121", marker = "sys_platform == 'win32' and python_version == '3.10'" },
-  { url = "https://data.dgl.ai/wheels/cu121/dgl-2.2.1%2Bcu121-cp311-cp311-win_amd64.whl", extra = "cu121", marker = "sys_platform == 'win32' and python_version == '3.11'" },
-  { url = "https://data.dgl.ai/wheels/cu121/dgl-2.2.1%2Bcu121-cp312-cp312-win_amd64.whl", extra = "cu121", marker = "sys_platform == 'win32' and python_version == '3.12'" },
+  { index = "dgl-win-cu121", extra = "cu121", marker = "sys_platform == 'win32'" },
+  { index = "dgl-win-cu118", extra = "cu118", marker = "sys_platform == 'win32'" },
+  { index = "dgl-win-cpu", extra = "cpu", marker = "sys_platform == 'win32'" },
+  { index = "dgl-cu124", extra = "cu124", marker = "sys_platform != 'win32'" },
+  { index = "dgl-cu121", extra = "cu121", marker = "sys_platform != 'win32'" },
+  { index = "dgl-cu118", extra = "cu118", marker = "sys_platform != 'win32'" },
+  { index = "dgl-cpu", extra = "cpu", marker = "sys_platform != 'win32'" },
 ]
+
+[[tool.uv.index]]
+name = "dgl-win-cu121"
+url = "https://data.dgl.ai/wheels/cu121/repo.html"
+format = "flat"
+
+[[tool.uv.index]]
+name = "dgl-win-cu118"
+url = "https://data.dgl.ai/wheels/cu118/repo.html"
+format = "flat"
+
+[[tool.uv.index]]
+name = "dgl-win-cpu"
+url = "https://data.dgl.ai/wheels/repo.html"
+format = "flat"
+
+[[tool.uv.index]]
+name = "dgl-cu124"
+url = "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html"
+format = "flat"
+
+[[tool.uv.index]]
+name = "dgl-cu121"
+url = "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html"
+format = "flat"
+
+[[tool.uv.index]]
+name = "dgl-cu118"
+url = "https://data.dgl.ai/wheels/torch-2.3/cu118/repo.html"
+format = "flat"
+
+[[tool.uv.index]]
+name = "dgl-cpu"
+url = "https://data.dgl.ai/wheels/torch-2.3/repo.html"
+format = "flat"
 
 [tool.ruff]
 line-length = 119
