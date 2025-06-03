@@ -124,10 +124,6 @@ cpu = [
   "torch==2.4.0 ; sys_platform == 'win32'",
   "dgl",
 ]
-cu118 = [
-  "torch==2.3.*",
-  "dgl",
-]
 cu121 = [
   "torch==2.3.*",
   "dgl",
@@ -168,6 +164,7 @@ env_list = ["3.12", "3.11", "3.10", "3.9"]
 [tool.tox.env_run_base]
 description = "uv_sync run base"
 dependency_groups = ["dev", "test"]
+extras = ["cu121"]
 commands = [
   ["uv", "run", "--active", "run_hopwise.py", "--epochs=2"],
   ["uv", "run", "--active", "run_hopwise.py", "--model", "LightGCN", "--epochs=2"],
@@ -192,11 +189,9 @@ no-build-isolation-package = ["torch-scatter"]
 [tool.uv.sources]
 dgl = [
   { index = "dgl-win-cu121", extra = "cu121", marker = "sys_platform == 'win32'" },
-  { index = "dgl-win-cu118", extra = "cu118", marker = "sys_platform == 'win32'" },
   { index = "dgl-win-cpu", extra = "cpu", marker = "sys_platform == 'win32'" },
   { index = "dgl-cu124", extra = "cu124", marker = "sys_platform != 'win32'" },
   { index = "dgl-cu121", extra = "cu121", marker = "sys_platform != 'win32'" },
-  { index = "dgl-cu118", extra = "cu118", marker = "sys_platform != 'win32'" },
   { index = "dgl-cpu", extra = "cpu", marker = "sys_platform != 'win32'" },
 ]
 
@@ -204,36 +199,31 @@ dgl = [
 name = "dgl-win-cu121"
 url = "https://data.dgl.ai/wheels/cu121/repo.html"
 format = "flat"
-
-[[tool.uv.index]]
-name = "dgl-win-cu118"
-url = "https://data.dgl.ai/wheels/cu118/repo.html"
-format = "flat"
+explicit = true
 
 [[tool.uv.index]]
 name = "dgl-win-cpu"
 url = "https://data.dgl.ai/wheels/repo.html"
 format = "flat"
+explicit = true
 
 [[tool.uv.index]]
 name = "dgl-cu124"
 url = "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html"
 format = "flat"
+explicit = true
 
 [[tool.uv.index]]
 name = "dgl-cu121"
 url = "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html"
 format = "flat"
-
-[[tool.uv.index]]
-name = "dgl-cu118"
-url = "https://data.dgl.ai/wheels/torch-2.3/cu118/repo.html"
-format = "flat"
+explicit = true
 
 [[tool.uv.index]]
 name = "dgl-cpu"
 url = "https://data.dgl.ai/wheels/torch-2.3/repo.html"
 format = "flat"
+explicit = true
 
 [tool.ruff]
 line-length = 119
