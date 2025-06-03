@@ -24,7 +24,7 @@ from torch import nn
 from torch.nn.init import normal_
 from transformers import LogitsProcessor
 
-from hopwise.utils import FeatureSource, FeatureType
+from hopwise.utils import FeatureSource, FeatureType, KnowledgeEvaluationType
 
 
 class MLPLayers(nn.Module):
@@ -1535,19 +1535,15 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     If task is link prediction (LP) logit processor forces last token to reachable ones
     """
 
-    RECOMMENDATION_TASK = "recommendation"
-    LINK_PREDICTION_TASK = "link_prediction"
-
     def __init__(
         self,
         tokenized_kg,
         tokenized_ignored_ids,
         max_sequence_length,
         tokenizer,
-        num_return_sequences,
         mask_cache_size=3 * 10**4,
         pos_candidates_cache_size=1 * 10**5,
-        task="recommendation",
+        task=KnowledgeEvaluationType.REC,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1555,14 +1551,13 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         self.tokenized_ignored_ids = tokenized_ignored_ids
         self.max_sequence_length = max_sequence_length
         self.tokenizer = tokenizer
-        self.num_return_sequences = num_return_sequences
         self.eos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.eos_token)
         self.bos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.bos_token)
         self.pos_candidates_cache = LFUCache(pos_candidates_cache_size)
         self.mask_cache = LFUCache(mask_cache_size)
         self.task = task
 
-        if self.task == self.LINK_PREDICTION_TASK:
+        if self.task == KnowledgeEvaluationType.LP:
             self.special_tokens_ids = [
                 self.tokenizer.encode(x, add_special_tokens=False)[0]
                 for x in self.tokenizer.all_special_tokens_extended
@@ -1587,7 +1582,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
             self.mask_non_eos_tokens(scores)
         else:
             unique_input_ids = input_ids
-            if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
+            if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
                 last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
                 _, input_ids_indices, input_ids_inv = np.unique(
                     input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True
@@ -1596,15 +1591,15 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
             full_mask = np.zeros((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
             for idx in range(unique_input_ids.shape[0]):
-                if self.task == self.RECOMMENDATION_TASK:
+                if self.task == KnowledgeEvaluationType.REC:
                     key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
-                elif self.task == self.LINK_PREDICTION_TASK:
+                elif self.task == KnowledgeEvaluationType.LP:
                     key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
 
                 banned_mask = self.get_banned_mask(key, candidate_tokens)
                 full_mask[idx] = banned_mask
 
-            if self.task == self.RECOMMENDATION_TASK and current_len < self.max_sequence_length - 1 - has_bos_token:
+            if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
                 scores[full_mask[input_ids_inv]] = -math.inf
             else:
                 scores[full_mask] = -math.inf
@@ -1692,7 +1687,6 @@ class PrefixConstrainedLogitsProcessorWordLevel(ConstrainedLogitsProcessorWordLe
         tokenized_ignored_ids,
         total_length,
         tokenizer,
-        num_return_sequences,
         id_to_uid_token_map,
         mask_cache_size=3 * 10**4,
         cand_cache_size=1 * 10**5,
@@ -1703,7 +1697,6 @@ class PrefixConstrainedLogitsProcessorWordLevel(ConstrainedLogitsProcessorWordLe
             tokenized_ignored_ids,
             total_length,
             tokenizer,
-            num_return_sequences,
             id_to_uid_token_map,
             mask_cache_size=mask_cache_size,
             cand_cache_size=cand_cache_size,
@@ -1727,3 +1720,101 @@ class PrefixConstrainedLogitsProcessorWordLevel(ConstrainedLogitsProcessorWordLe
             scores = masked_scores
 
         return scores
+
+
+class PLMLogitsProcessorWordLevel(LogitsProcessor):
+    """
+    https://dl.acm.org/doi/pdf/10.1145/3485447.3511937
+    Constraint decoding strategy for PLM, it forces the model to generate alternatively entities and relations
+    """
+
+    def __init__(
+        self,
+        tokenized_kg,
+        tokenized_ignored_ids,
+        max_sequence_length,
+        tokenizer,
+        pos_candidates_cache_size=1 * 10**5,
+        task=KnowledgeEvaluationType.REC,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.tokenized_kg = tokenized_kg
+        self.tokenized_ignored_ids = tokenized_ignored_ids
+        self.max_sequence_length = max_sequence_length
+        self.tokenizer = tokenizer
+        self.bos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.bos_token)
+        self.pos_candidates_cache = LFUCache(pos_candidates_cache_size)
+        self.task = task
+
+        if self.task == KnowledgeEvaluationType.LP:
+            self.special_tokens_ids = [
+                self.tokenizer.encode(x, add_special_tokens=False)[0]
+                for x in self.tokenizer.all_special_tokens_extended
+            ]
+        else:
+            self.special_tokens_ids = None
+
+        self.entity_token_ids = torch.LongTensor(list(set(self.tokenized_kg.keys())))
+        self.relation_token_ids = torch.LongTensor(
+            list(set([rel for rel_dict in self.tokenized_kg.values() for rel in rel_dict.keys()]))
+        )
+
+    def __call__(self, input_ids, scores):
+        current_len = input_ids.shape[-1]
+        has_bos_token = self.is_bos_token_in_input(input_ids)
+
+        unique_input_ids = input_ids
+        if self.task == KnowledgeEvaluationType.REC and current_len == (self.max_sequence_length - 1 - has_bos_token):
+            user_idx = int(has_bos_token)
+            _, input_ids_indices, input_ids_inv = np.unique(
+                input_ids.cpu().numpy()[:, [user_idx]], axis=0, return_index=True, return_inverse=True
+            )
+            unique_input_ids = input_ids[input_ids_indices]
+
+            full_mask = np.ones((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
+            for idx in range(unique_input_ids.shape[0]):
+                candidate_tokens = self.process_scores(unique_input_ids, idx)
+                full_mask[idx, candidate_tokens] = False
+
+            scores[full_mask[input_ids_inv]] = -math.inf
+        else:
+            # Paths are expected to be the same type and length, so we can use the same mask for all
+            full_mask = np.ones((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
+            candidate_tokens = self.process_scores(input_ids, 0)
+            full_mask[:, candidate_tokens] = False
+            scores[full_mask] = -math.inf
+
+        return scores
+
+    def is_bos_token_in_input(self, input_ids):
+        """Check if the input contains a BOS token. Checking the first sequence is enough."""
+        return (input_ids[0, 0] == self.bos_token_id).item()
+
+    def is_next_token_entity(self, input_ids):
+        current_len = input_ids.shape[-1]
+        has_bos_token = self.is_bos_token_in_input(input_ids)
+
+        # bos_token determines if the current length is even or odd
+        return current_len % 2 == has_bos_token
+
+    def process_scores(self, input_ids, idx):
+        """Process each score based on input length and update mask to allow only entities or only relations."""
+        current_len = input_ids.shape[-1]
+        has_bos_token = self.is_bos_token_in_input(input_ids)
+
+        if current_len == self.max_sequence_length - 1 - has_bos_token:
+            current_uid = input_ids[idx, int(has_bos_token)].item()
+            candidate_tokens = self.pos_candidates_cache.get(current_uid)
+            if candidate_tokens is None:
+                candidate_tokens = np.arange(len(self.tokenizer))
+
+                user_used_ids = self.tokenized_ignored_ids[current_uid]
+                candidate_tokens = np.setdiff1d(candidate_tokens, list(user_used_ids), assume_unique=True)
+                self.pos_candidates_cache[current_uid] = candidate_tokens
+        elif self.is_next_token_entity(input_ids):
+            candidate_tokens = self.entity_token_ids
+        else:
+            candidate_tokens = self.relation_token_ids
+
+        return candidate_tokens
