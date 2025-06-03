@@ -621,7 +621,30 @@ class KnowledgeBasedDataset(Dataset):
         """
         return self.kg_feat[self.relation_field].numpy()
 
-    def _create_norm_adjacency_matrix(self, size=None, symmetric=True):
+    def norm_ckg_adjacency_matrix(self, form="torch_sparse"):
+        """Get the collaborative normalized adjacency matrix of users and items.
+
+        Construct the square matrix from the training data and normalize it
+        using the laplace matrix.
+
+        .. math::
+            A_{hat} = D^{-0.5} \times A \times D^{-0.5}
+
+        Args:
+            form (str, optional): Format of the normalized adjacency matrix. Defaults to ``torch_sparse``.
+
+        Returns:
+            torch.sparse.FloatTensor: Normalized adjacency matrix.
+
+        Raises:
+            NotImplementedError: If the format of the normalized adjacency matrix is not implemented.
+        """
+        if form == "torch_sparse":
+            return self._create_norm_ckg_adjacency_matrix()
+        else:
+            raise NotImplementedError(f"Normalized adjacency matrix format [{form}] has not been implemented.")
+
+    def _create_norm_ckg_adjacency_matrix(self, size=None, symmetric=True):
         """Get the normalized interaction matrix of users and entities (items) and
         the normalized adjacency matrix of the collaborative knowledge graph.
 
@@ -638,7 +661,7 @@ class KnowledgeBasedDataset(Dataset):
         if size is None:
             size = self.user_num + self.entity_num
 
-        norm_graph = super()._create_norm_adjacency_matrix(size=size, symmetric=symmetric)
+        norm_graph = self._create_norm_adjacency_matrix(size=size, symmetric=symmetric)
         if not norm_graph.is_coalesced():
             norm_graph = norm_graph.coalesce()
 

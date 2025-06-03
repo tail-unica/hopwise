@@ -36,6 +36,7 @@ from tqdm import tqdm
 from hopwise.data.dataloader import FullSortLPEvalDataLoader, NegSampleDataLoader
 from hopwise.data.interaction import Interaction
 from hopwise.evaluator import Collector, Collector_KG, Evaluator, Evaluator_KG
+from hopwise.model.layers import ConstrainedLogitsProcessorWordLevel, PLMLogitsProcessorWordLevel
 from hopwise.utils import (
     EvaluatorType,
     KGDataLoaderState,
@@ -2274,7 +2275,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         self.model = get_model(self.config["model"])(self.config, train_data.dataset).to(self.config["device"])
         weights = load_file(os.path.join(hf_resume_file, "model.safetensors"))
         self.model.load_state_dict(weights, strict=False)
-        self.hf_trainer.processing_class.tokenizer = AutoTokenizer.from_pretrained(hf_resume_file)
+        self.processing_class.tokenizer = AutoTokenizer.from_pretrained(hf_resume_file)
 
     def fit(
         self,
@@ -2295,7 +2296,6 @@ class HFPathLanguageModelingTrainer(Trainer):
             callback_fn=callback_fn,
         )
         self.hf_trainer.train()
-        self.hf_trainer._load_best_model()
         self.hf_trainer.save_model()
 
         return self.best_valid_score, self.best_valid_result
@@ -2338,9 +2338,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             num_sample += len(batched_data)
             interaction, history_index, positive_u, positive_i = batched_data
 
-            inputs = self.hf_trainer.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(
-                self.device
-            )
+            inputs = self.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(self.device)
             scores, paths, avg_topk_size = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
 
             if hasattr(self.model, "decode_path"):
@@ -2365,7 +2363,127 @@ class HFPathLanguageModelingTrainer(Trainer):
         return result
 
 
-class KGGLMTrainer(HFPathLanguageModelingTrainer, PretrainTrainer):
+class PLMTrainer(HFPathLanguageModelingTrainer):
+    """PLMTrainer is designed for PLM, which is a path-based language model for knowledge-aware recommendation.
+    It includes a logits processor to alternatively generate entity and relation tokens during evaluation.
+    """
+
+    def init_hf_trainer(
+        self,
+        train_data,
+        valid_data=None,
+        verbose=True,
+        saved=True,
+        show_progress=False,
+        hf_callbacks=None,
+        callback_fn=None,
+        training_args=None,
+    ):
+        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
+
+        training_args = training_args or {}
+
+        hf_callbacks = hf_callbacks or []
+        training_arguments = self.prepare_training_arguments(**training_args)
+
+        callbacks = [
+            HopwiseCallback(
+                self,
+                train_data,
+                valid_data=valid_data,
+                verbose=verbose,
+                saved=saved,
+                show_progress=show_progress,
+                callback_fn=callback_fn,
+            ),
+            *hf_callbacks,
+        ]
+
+        self.logits_processor_list = [
+            PLMLogitsProcessorWordLevel(
+                train_data.dataset.get_tokenized_ckg(),
+                train_data.get_tokenized_used_ids(),
+                train_data.token_sequence_length,
+                train_data.dataset.tokenizer,
+                task=KnowledgeEvaluationType.REC,
+            )
+        ]
+
+        self.hf_trainer = HFPathTrainer(
+            train_data,
+            self.config,
+            callbacks,
+            model=self.model,
+            args=training_arguments,
+            path_hop_length=self.path_hop_length,
+            paths_per_user=self.paths_per_user,
+            path_generation_args=self.path_gen_args,
+            eval_device=self.device,
+            logits_processor_list=self.logits_processor_list,
+        )
+
+
+class PEARLMTrainer(HFPathLanguageModelingTrainer):
+    """PEARLMTrainer is designed for PEARLM, which is a path-based language model for knowledge-aware recommendation.
+    It includes the knowledge graph constrained decoding (KGCD) logits processor.
+    """
+
+    def init_hf_trainer(
+        self,
+        train_data,
+        valid_data=None,
+        verbose=True,
+        saved=True,
+        show_progress=False,
+        hf_callbacks=None,
+        callback_fn=None,
+        training_args=None,
+    ):
+        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
+
+        training_args = training_args or {}
+
+        hf_callbacks = hf_callbacks or []
+        training_arguments = self.prepare_training_arguments(**training_args)
+
+        callbacks = [
+            HopwiseCallback(
+                self,
+                train_data,
+                valid_data=valid_data,
+                verbose=verbose,
+                saved=saved,
+                show_progress=show_progress,
+                callback_fn=callback_fn,
+            ),
+            *hf_callbacks,
+        ]
+
+        self.logits_processor_list = [
+            ConstrainedLogitsProcessorWordLevel(
+                train_data.dataset.get_tokenized_ckg(),
+                train_data.get_tokenized_used_ids(),
+                train_data.token_sequence_length,
+                train_data.dataset.tokenizer,
+                task=KnowledgeEvaluationType.REC,
+            )
+        ]
+
+        self.hf_trainer = HFPathTrainer(
+            train_data,
+            self.config,
+            callbacks,
+            model=self.model,
+            args=training_arguments,
+            path_hop_length=self.path_hop_length,
+            paths_per_user=self.paths_per_user,
+            path_generation_args=self.path_gen_args,
+            eval_device=self.device,
+            logits_processor_list=self.logits_processor_list,
+        )
+
+
+class KGGLMTrainer(PEARLMTrainer, PretrainTrainer):
     r"""KGGLM is designed for KGGLM, which is a path-based language model for knowledge-aware recommendation.
     It includes two training stages: link prediction pre-training and recommendation path generation fine-tuning.
     """

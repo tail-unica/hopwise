@@ -21,7 +21,14 @@ from transformers import (
 )
 
 from hopwise.model.layers import ConstrainedBeamLogitsProcessorWordLevel, ConstrainedLogitsProcessorWordLevel
-from hopwise.utils import PathLanguageModelingTokenType, dict2str, early_stopping, get_gpu_usage, set_color
+from hopwise.utils import (
+    PathLanguageModelingTokenType,
+    dict2str,
+    early_stopping,
+    get_gpu_usage,
+    set_color,
+)
+from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
 def normalize_tuple(logits_tuple):
@@ -145,58 +152,6 @@ class CumulativeSequenceScoreRanker:
         return scores, user_topk_sequences
 
 
-class BeamSearchSequenceScoreRanker:
-    """
-    Ranker that uses the sequence score of the beam search to rank sequences.
-    """
-
-    def __init__(self, tokenizer, used_ids, item_num, topk=10, max_new_tokens=24):
-        self.tokenizer = tokenizer
-        self.used_ids = used_ids
-        self.item_num = item_num
-        self.topk = topk
-        self.avg_topk_size = {}
-
-    def get_sequences(self, batch_len, generation_outputs):
-        user_num = batch_len
-        scores = torch.full((user_num, self.item_num), -torch.inf)
-        user_topk_sequences = list()
-
-        sequences = generation_outputs.sequences
-        num_return_sequences = sequences.shape[0] // user_num
-        batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
-
-        sorted_indices = generation_outputs.sequences_scores.argsort(descending=True)
-        sorted_sequences = sequences[sorted_indices]
-        sorted_batch_user_index = batch_user_index[sorted_indices]
-
-        for sequence, user_index, sequence_score in zip(sorted_sequences, sorted_batch_user_index, sorted_indices):
-            seq = self.tokenizer.decode(sequence).split(" ")
-            uid_token = seq[1]
-            recommended_token = seq[-1]
-
-            if not (
-                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
-                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
-            ):
-                continue
-
-            uid = int(uid_token[1:])
-            recommended_item = int(recommended_token[1:])
-
-            if torch.isfinite(scores[user_index, recommended_item]) or recommended_item in self.used_ids[uid]:
-                continue
-            scores[user_index, recommended_item] = sequence_score
-
-            if uid not in self.avg_topk_size:
-                self.avg_topk_size[uid] = set()
-
-            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
-            self.avg_topk_size[uid].add(seq[-1])
-
-        return scores, user_topk_sequences
-
-
 class SampleSearchSequenceScoreRanker:
     """
     Ranker that uses the sequence score of the beam search to rank sequences.
@@ -272,6 +227,57 @@ class SampleSearchSequenceScoreRanker:
         return scores, user_topk_sequences
 
 
+class BeamSearchSequenceScoreRanker:
+    """
+    Ranker that uses the sequence score of the beam search to rank sequences.
+    """
+
+    def __init__(self, tokenizer, used_ids, item_num, topk=10, max_new_tokens=24):
+        self.tokenizer = tokenizer
+        self.used_ids = used_ids
+        self.item_num = item_num
+        self.topk = topk
+        self.avg_topk_size = {}
+
+    def get_sequences(self, batch_len, generation_outputs):
+        user_num = batch_len
+        scores = torch.full((user_num, self.item_num), -torch.inf)
+        user_topk_sequences = list()
+
+        sequences = generation_outputs.sequences
+        num_return_sequences = sequences.shape[0] // user_num
+        batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
+
+        sorted_indices = generation_outputs.sequences_scores.argsort(descending=True)
+        sorted_sequences = sequences[sorted_indices]
+        sorted_batch_user_index = batch_user_index[sorted_indices]
+
+        for sequence, user_index, sequence_score in zip(sorted_sequences, sorted_batch_user_index, sorted_indices):
+            seq = self.tokenizer.decode(sequence).split(" ")
+            uid_token = seq[1]
+            recommended_token = seq[-1]
+
+            if not (
+                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
+                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
+            ):
+                continue
+
+            uid = int(uid_token[1:])
+            recommended_item = int(recommended_token[1:])
+
+            if torch.isfinite(scores[user_index, recommended_item]) or recommended_item in self.used_ids[uid]:
+                continue
+            scores[user_index, recommended_item] = sequence_score
+            if uid not in self.avg_topk_size:
+                self.avg_topk_size[uid] = set()
+
+            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
+            self.avg_topk_size[uid].add(seq[-1])
+
+        return scores, user_topk_sequences
+
+
 def get_tokenized_used_ids(used_ids, tokenizer):
     """
     Convert the used ids to tokenized ids for the user and item tokens.
@@ -306,6 +312,7 @@ class HFPathTrainer(Trainer):
         path_generation_args=None,
         eval_device="cpu",
         tokenizer=None,
+        logits_processor_list=None,
     ):
         hopwise_dataset = hopwise_train_data.dataset
         tokenizer = tokenizer or hopwise_dataset.tokenizer
@@ -327,6 +334,7 @@ class HFPathTrainer(Trainer):
         self.path_generation_args = path_generation_args
 
         self.path_hop_length = path_hop_length
+        self.token_sequence_length = hopwise_train_data.token_sequence_length
         self.eval_device = eval_device
 
         used_ids = hopwise_train_data.general_dataloader._sampler.used_ids
@@ -378,7 +386,7 @@ class HFPathTrainer(Trainer):
                         self.token_sequence_length,
                         self.processing_class,
                         self.paths_per_user,
-                        task=ConstrainedLogitsProcessorWordLevel.RECOMMENDATION_TASK,
+                        task=KnowledgeEvaluationType.REC,
                     )
                 ]
             )
@@ -391,7 +399,7 @@ class HFPathTrainer(Trainer):
                         self.token_sequence_length,
                         self.processing_class,
                         self.paths_per_user,
-                        task=ConstrainedBeamLogitsProcessorWordLevel.RECOMMENDATION_TASK,
+                        task=KnowledgeEvaluationType.REC,
                     )
                 ]
             )
