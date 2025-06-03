@@ -7,6 +7,10 @@
 # @Author : Zihan Lin, Yupeng Hou, Gaowei Zhang, Lei Wang
 # @Email  : linzihan.super@foxmail.com, houyupeng@ruc.edu.cn, zgw15630559577@163.com, zxcptss@gmail.com
 
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
 import argparse
 from datetime import datetime
 

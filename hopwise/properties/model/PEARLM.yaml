@@ -5,9 +5,7 @@ context_length: 24              # (int) Maximum length of the context.
 embedding_size: 768             # (int) Size of the embeddings.
 num_heads: 12                   # (int) Number of heads in the multi-head attention.
 num_layers: 6                   # (int) Number of layers in the transformer.
-save_dataloaders: False
-save_dataset: False
-ranker: BeamSearchSequenceScoreRanker # one of ['SampleSearchSequenceScoreRanker', 'BeamSearchSequenceScoreRanker', 'SimilaritySequenceScoreRanker', 'CumulativeSequenceScoreRanker']
+ranker: BeamSearchSequenceScoreRanker # one of ['SampleSearchSequenceScoreRanker', 'BeamSearchSequenceScoreRanker', 'CumulativeSequenceScoreRanker']
 logits_processor: ConstrainedBeamLogitsProcessorWordLevel # one of ['ConstrainedBeamLogitsProcessorWordLevel', 'ConstrainedLogitsProcessorWordLevel']
 use_kg_token_types: True        # (bool) Whether to use token types for the knowledge graph.
 

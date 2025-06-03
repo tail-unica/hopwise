@@ -8,6 +8,10 @@
 # @Author : Gaowei Zhang
 # @Email  : zgw15630559577@163.com
 
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
 """hopwise.trainer.hyper_tuning
 ############################
 """

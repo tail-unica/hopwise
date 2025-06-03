@@ -1,8 +1,16 @@
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
+# UPDATE:
+# @Time   : 2025
+# @Author : Alessandro Soccol
+# @Email  : alessandro.soccol@unica.it
+
 from collections import defaultdict
 from time import time
 
 import torch
-import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import (
     DataCollatorForLanguageModeling,
@@ -264,71 +272,6 @@ class SampleSearchSequenceScoreRanker:
         return scores, user_topk_sequences
 
 
-class SimilaritySequenceScoreRanker:
-    """
-    Ranker that uses as sequence score the dot product between user and item embeddings.
-    """
-
-    def __init__(
-        self, tokenizer, used_ids, item_num, topk=10, max_new_tokens=24, user_embeddings=None, entity_embeddings=None
-    ):
-        self.tokenizer = tokenizer
-        self.used_ids = used_ids
-        self.item_num = item_num
-        self.max_new_tokens = max_new_tokens
-        self.topk = topk
-        self.avg_topk_size = {}
-        self.user_embeddings = user_embeddings
-        self.entity_embeddings = entity_embeddings
-
-    def get_sequences(self, batch_len, generation_outputs):
-        user_num = batch_len
-        scores = torch.full((user_num, self.item_num), -torch.inf)
-        user_topk_sequences = list()
-
-        sequences = generation_outputs.sequences
-        num_return_sequences = sequences.shape[0] // user_num
-        batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
-
-        sorted_indices = generation_outputs.sequences_scores.argsort(descending=True)
-        sorted_sequences = sequences[sorted_indices]
-        sorted_batch_user_index = batch_user_index[sorted_indices]
-
-        for sequence, user_index in zip(sorted_sequences, sorted_batch_user_index):
-            seq = self.tokenizer.decode(sequence).split(" ")
-
-            uid_token = seq[0]
-            recommended_token = seq[-1]
-
-            if not (
-                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
-                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
-            ):
-                continue
-
-            uid = int(uid_token[1:])
-            recommended_item = int(recommended_token[1:])
-
-            if torch.isfinite(scores[user_index, recommended_item]) or recommended_item in self.used_ids[uid]:
-                continue
-
-            # Use as score the dot product of the user and item kgat embeddings
-            u_emb = F.normalize(self.user_embeddings[uid], p=2, dim=0)
-            i_emb = F.normalize(self.entity_embeddings[recommended_item], p=2, dim=0)
-
-            ui_similarity = torch.mul(u_emb, i_emb).sum()
-
-            scores[user_index, recommended_item] = ui_similarity
-
-            if uid not in self.avg_topk_size:
-                self.avg_topk_size[uid] = set()
-
-            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
-            self.avg_topk_size[uid].add(seq[-1])
-
-        return scores, user_topk_sequences
-
-
 def get_tokenized_used_ids(used_ids, tokenizer):
     """
     Convert the used ids to tokenized ids for the user and item tokens.
@@ -419,14 +362,11 @@ class HFPathTrainer(Trainer):
                 max_new_tokens=ranker_max_new_tokens,
             )
         else:
-            self.ranker_rec = SimilaritySequenceScoreRanker(
-                self.processing_class,
-                used_ids,
-                hopwise_dataset.item_num,
-                topk=10,
-                max_new_tokens=ranker_max_new_tokens,
-                user_embeddings=self.model.pretrained_user_embeddings,
-                entity_embeddings=self.model.pretrained_entity_embeddings,
+            raise ValueError(
+                f"Ranker {self.hopwise_config['ranker']} not supported. "
+                "Supported rankers are: CumulativeSequenceScoreRanker, "
+                "                       BeamSearchSequenceScoreRanker, "
+                "                       SampleSearchSequenceScoreRanker."
             )
 
         if self.hopwise_config["logits_processor"] == "ConstrainedLogitsProcessorWordLevel":

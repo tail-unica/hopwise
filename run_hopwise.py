@@ -7,6 +7,12 @@
 # @Author : Zhen Tian, Yupeng Hou, Zihan Lin
 # @Email  : chenyuwuxinn@gmail.com, houyupeng@ruc.edu.cn, zhlin@ruc.edu.cn
 
+# UPDATE
+# @Time   : 2025
+# @Author : Alessandro Soccol
+# @Email  : alessandro.soccol@unica.it
+
+
 import argparse
 
 from setproctitle import setproctitle

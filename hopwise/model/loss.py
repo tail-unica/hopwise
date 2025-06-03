@@ -7,6 +7,10 @@
 # @Author : Shanlei Mu, Gaowei Zhang
 # @Email  : slmu@ruc.edu.cn, 1462034631@qq.com
 
+# UPDATE
+# @Time   : 2025
+# @Author : Alessandro Soccol
+# @Email  : alessandro.soccol@unica.it
 
 """hopwise.model.loss
 #######################

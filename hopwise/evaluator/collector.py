@@ -107,9 +107,7 @@ class Collector:
             # this data should belong to the train set
             self.data_struct.set("data.timestamp", self.timestamp_dict(train_data))
         if self.register.need("data.max_path_type"):
-            import numpy as np
-
-            self.data_struct.set("data.max_path_type", np.arange(train_data.dataset.relation_num))
+            self.data_struct.set("data.max_path_type", torch.arange(train_data.dataset.relation_num))
         if self.register.need("data.node_degree"):
             self.data_struct.set("data.node_degree", self.node_degree_dict(train_data))
         if self.register.need("data.max_path_length"):
@@ -117,11 +115,15 @@ class Collector:
             # 'path_constraint' is hardcoded and may change in the future
             if self.config["path_constraint"] is None:
                 # PEARLM or KGGLM
-                sampled_path_len = len(train_data.dataset._path_dataset.split("\n")[0].split(" "))
+                sampled_path_len = len(
+                    train_data.dataset._path_dataset.split("\n")[0].split(self.config["path_separator"])
+                )
                 self.data_struct.set("data.max_path_length", sampled_path_len)
             else:
                 # PGPR or CAFE
-                self.data_struct.set("data.max_path_length", len(self.config["path_constraint"]))
+                self.data_struct.set(
+                    "data.max_path_length", max([len(path) for path in self.config["path_constraint"]]) * 2 - 1
+                )
 
         if self.register.need("data.rid2relation"):
             self.data_struct.set("data.rid2relation", train_data.dataset.field2id_token["relation_id"])

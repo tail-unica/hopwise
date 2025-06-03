@@ -9,7 +9,7 @@ save_step: 50                   # (int) Number of steps to save the model during
 pretrain_epochs: 150            # (int) Number of epochs for pre-training.
 train_stage: 'lp_pretrain'      # (str) The training stage. Range in ['lp_pretrain', 'finetune'].
 pre_model_path: ''              # (str) The path of pretrained model.
-ranker: BeamSearchSequenceScoreRanker # one of ['SampleSearchSequenceScoreRanker', 'BeamSearchSequenceScoreRanker', 'SimilaritySequenceScoreRanker', 'CumulativeSequenceScoreRanker']
+ranker: BeamSearchSequenceScoreRanker # one of ['SampleSearchSequenceScoreRanker', 'BeamSearchSequenceScoreRanker', 'CumulativeSequenceScoreRanker']
 logits_processor: ConstrainedBeamLogitsProcessorWordLevel # one of ['ConstrainedBeamLogitsProcessorWordLevel', 'ConstrainedLogitsProcessorWordLevel']
 
 path_sample_args:

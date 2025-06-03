@@ -7,6 +7,11 @@
 # @Author  :   Kaiyuan Li, Zhichao Feng, Xingyu Pan, Zihan Lin
 # @email   :   tsotfsk@outlook.com, fzcbupt@gmail.com, panxy@ruc.edu.cn, zhlin@ruc.edu.cn
 
+# UPDATE
+# @Time   : 2025
+# @Author : Giacomo Medda, Alessandro Soccol
+# @Email  : giacomo.medda@unica.it, alessandro.soccol@unica.it
+
 r"""hopwise.evaluator.metrics
 ############################
 
@@ -200,48 +205,6 @@ class NDCG(TopkMetric):
 
         result = dcg / idcg
         return result
-
-
-class NDCG_old(TopkMetric):
-    def __init__(self, config):
-        super().__init__(config)
-
-    def calculate_metric(self, dataobject):
-        pos_index, pos_len = self.used_info(dataobject)
-        result = self.metric_info(pos_index, pos_len)
-        metric_dict = self.topk_result("ndcg_old", result)
-        return metric_dict
-
-    def metric_info(self, pos_index, pos_len):
-        k = pos_index.shape[1]
-        dcg = self.dcg_at_k(pos_index, k)
-        # Ideal DCG by sorting relevance
-        idcg = self.dcg_at_k(np.sort(pos_index, axis=1)[:, ::-1], k)
-        idcg[idcg == 0] = 1
-        return dcg / idcg
-
-    def dcg_at_k(self, hit_list, k):
-        r = np.asfarray(hit_list)[:, :k]
-        if not r.size:
-            return 0.0
-        return np.sum(r / np.log2(np.arange(2, k + 2)), axis=1)
-
-    def topk_result(self, metric, value):
-        """Match the metric value to the `k` and put them in `dictionary` form.
-
-        Args:
-            metric(str): the name of calculated metric.
-            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
-
-        Returns:
-            dict: metric values required in the configuration.
-        """
-        metric_dict = {}
-        avg_result = value.mean(axis=0)
-        for k in self.topk:
-            key = f"{metric}@{k}"
-            metric_dict[key] = round(avg_result, self.decimal_place)
-        return metric_dict
 
 
 class Precision(TopkMetric):

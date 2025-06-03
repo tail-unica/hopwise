@@ -1,23 +1,41 @@
-# CAFE Parameters
-rank_weight: 10.0
-use_dropout: True
-deep_module: True
-topk_candidates: 10
-sample_size: 500
-kg_reverse_r: True
-topk_paths: 25
-clip_grad_norm:
-  max_norm: 5.0
-
-save_dataset: True
-save_dataloaders: True
-epochs: 50
-eval_step: 50
+context_length: 9              # (int) Maximum length of the context.
+epochs: 30
+eval_step: 1
+data_path: /home/recsysdatasets
 topk: [10]
 valid_metric: 'ndcg@10'
+train_batch_size: 4096
+eval_batch_size: 100
+# Training Arguments
+learning_rate: 0.001
+weight_decay: 0.0
 
-# Embeddings
+
+### Decoder PARAMETERS ###
+n_layers: 1
+n_heads: 1
+hidden_size: 100
+temperature: 1.0
+dropout: 0.1
+bias: True
+
+
+### PATH SAMPLING PROCESS ###
+
+max_hop_length: 3
+infer_path_length: 9
+MAX_PATHS_PER_USER: 1
+path_sample_args:
+    temporal_causality: False
+    strategy: simple-ui
+    parallel_max_workers: -1
+
+path_generation_args:
+    paths_per_user: 10
+
+
 additional_feat_suffix: [useremb, entityemb, relationemb]
+
 # To load the pretrained embeddings (Typically from TransE) necessary to score the paths
 load_col:
     useremb: [user_embedding_id, user_embedding]

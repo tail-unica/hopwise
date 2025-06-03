@@ -7,6 +7,11 @@
 # @Author : Jiawei Guan, Lei Wang, Gaowei Zhang
 # @Email  : guanjw@ruc.edu.cn, zxcptss@gmail.com, zgw2022101006@ruc.edu.cn
 
+# UPDATE
+# @Time   : 2025
+# @Author : Alessandro Soccol
+# @Email  : alessandro.soccol@unica.it
+
 """hopwise.utils.utils
 ################################
 """
@@ -91,7 +96,11 @@ def get_trainer(model_type, model_name):
     Returns:
         Trainer: trainer class
     """
-    register_table = {}
+    register_table = {
+        "PEARLMgpt2": "PEARLMfromscratchTrainer",
+        "PEARLMllama2": "PEARLMfromscratchTrainer",
+        "PEARLMllama3": "PEARLMfromscratchTrainer",
+    }
 
     try:
         return getattr(importlib.import_module("hopwise.trainer"), model_name + "Trainer")

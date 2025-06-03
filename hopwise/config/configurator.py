@@ -7,6 +7,11 @@
 # @Author : Shanlei Mu, Yupeng Hou, Jiawei Guan, Xingyu Pan, Gaowei Zhang
 # @Email  : slmu@ruc.edu.cn, houyupeng@ruc.edu.cn, Guanjw@ruc.edu.cn, xy_pan@foxmail.com, zgw15630559577@163.com
 
+# @Time   : 2025
+# @Author : Giacomo Medda, Alessandro Soccol
+# @Email  : giacomo.medda@unica.it, alessandro.soccol@unica.it
+
+
 """hopwise.config.configurator
 ################################
 """
@@ -90,6 +95,7 @@ class Config:
         self.final_config_dict = self._get_final_config_dict()
         self._set_default_parameters()
         self._init_device()
+        self._set_torch_dtype()
         self._set_train_neg_sample_args()
         self._set_eval_neg_sample_args("valid")
         self._set_eval_neg_sample_args("test")
@@ -606,6 +612,25 @@ class Config:
         else:
             raise ValueError(f"the mode [{eval_mode}] in eval_args is not supported.")
         self.final_config_dict[f"{phase}_neg_sample_args"] = eval_neg_sample_args
+
+    def _set_torch_dtype(self):
+        """
+        Convert a string dtype to a torch dtype.
+        """
+        import torch
+
+        dtype = self.final_config_dict.get("dtype", "float32")
+
+        if dtype == "float32":
+            dtype = torch.float32
+        elif dtype == "float16":
+            dtype = torch.float16
+        elif dtype == "bfloat16":
+            dtype = torch.bfloat16
+        else:
+            raise ValueError(f"Unsupported dtype: {dtype}")
+
+        self.final_config_dict["dtype"] = dtype
 
     def __setitem__(self, key, value):
         if not isinstance(key, str):

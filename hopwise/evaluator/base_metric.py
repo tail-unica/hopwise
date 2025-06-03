@@ -214,7 +214,7 @@ class ConsumerTopKMetric(AbstractMetric):
         return metric_dict
 
 
-class PathQualityMetric(AbstractMetric):
+class PathQualityMetric(TopkMetric):
     # TODO: add support for gender and age based metrics
     """:class:`PathQualityMetric` is a base object of path-based metrics. If you want to
     implement a path based metric, you can inherit this class.
@@ -237,7 +237,6 @@ class PathQualityMetric(AbstractMetric):
 
     def __init__(self, config):
         super().__init__(config)
-        self.topk = config["topk"]
 
     def used_info(self, dataobject):
         paths = dataobject.get("rec.paths")
@@ -256,16 +255,3 @@ class PathQualityMetric(AbstractMetric):
         min_res = min(ema_vals)
         max_res = max(ema_vals)
         return [(x - min_res) / (max_res - min_res) for x in ema_vals]
-
-    def metric_info(self, **kwargs):
-        """Calculate the value of the metric.
-
-        Args:
-            pos_index(numpy.ndarray): a bool matrix, shape of ``n_users * max(topk)``. The item with the (j+1)-th \
-            highest score of i-th user is positive if ``pos_index[i][j] == True`` and negative otherwise.
-            pos_len(numpy.ndarray): a vector representing the number of positive items per user, shape of ``(n_users,)``.
-
-        Returns:
-            numpy.ndarray: metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
-        """  # noqa: E501
-        raise NotImplementedError("Method [metric_info] of top-k metric should be implemented.")

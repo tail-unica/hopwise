@@ -1,3 +1,7 @@
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
 from enum import IntEnum
 from typing import Optional, Union
 

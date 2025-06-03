@@ -1,4 +1,0 @@
-data_path: /home/recsysdatasets
-metrics: ['NDCG', 'MRR', 'Hit', 'Precision', 'Recall', 'Serendipity', 'GiniIndex', 'ShannonEntropy', 'ItemCoverage']
-topk: [10,20]
-epochs: 30

@@ -7,6 +7,12 @@
 # @Author : Zhen Tian, Yupeng Hou, Yushuo Chen, Kaiyuan Li
 # @email  : chenyuwuxinn@gmail.com, houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, tsotfsk@outlook.com
 
+# UPDATE
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
+
 """hopwise.data.dataloader.knowledge_dataloader
 ################################################
 """

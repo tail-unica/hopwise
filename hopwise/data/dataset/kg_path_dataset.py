@@ -1,3 +1,7 @@
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
 import random
 import warnings
 from itertools import chain, zip_longest

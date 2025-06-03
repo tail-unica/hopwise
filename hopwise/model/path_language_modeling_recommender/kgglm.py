@@ -1,3 +1,7 @@
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
 import os
 
 from transformers import GPT2LMHeadModel

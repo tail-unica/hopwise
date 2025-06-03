@@ -7,6 +7,10 @@
 # @Author : Zhen Tian, Junjie Zhang, Gaowei Zhang
 # @Email  : chenyuwuxinn@gmail.com, zjj001128@163.com, zgw15630559577@163.com
 
+# @Time   : 2025
+# @Author : Alessandro Soccol, Giacomo Medda
+# @Email  : alessandro.soccol@unica.it, giacomo.medda@unica.it
+
 """hopwise.quick_start
 ########################
 """
@@ -128,7 +132,12 @@ def run_hopwise(
     )
 
     if checkpoint is not None:
-        _, model, dataset, train_data, valid_data, test_data = load_data_and_model(model_file=checkpoint)
+        loaded_config, model, dataset, train_data, valid_data, test_data = load_data_and_model(model_file=checkpoint)
+        # Update loaded configuration with new arguments
+        # the first argument is updated_dict, the second updating_dict
+        config.deep_dict_update(loaded_config.final_config_dict, config.final_config_dict)
+        config = loaded_config
+
         logger = get_logger(config)
         logger.info(f"A checkpoint is provided from which to resume training {checkpoint}")
     else:
@@ -142,7 +151,9 @@ def run_hopwise(
 
         # model loading and initialization
         init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
-        model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
+        model = get_model(config["model"])(config, train_data.dataset).to(
+            device=config["device"], dtype=config["dtype"]
+        )
 
     logger.info(model)
 

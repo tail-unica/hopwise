@@ -257,12 +257,18 @@ def data_preparation(config, dataset):
         model = config["model"]
         built_datasets = dataset.build()
 
-        special_knowledge_aware = ["PGPR", "CAFE"]
+        # we allow some models to have a pretrain phase characterized by the need to load the kg while
+        #   not using it during finetune phase where they're threated as ModelType.USERWISE typically
+
+        special_knowledge_aware = ["PGPR", "CAFE", "UCPR", "TPRec"]
+        knowledge_pretrain_phase = model in special_knowledge_aware and config["train_stage"] == "pretrain"
+        if knowledge_pretrain_phase:
+            config["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
 
         if (
             model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]
             and model not in special_knowledge_aware
-        ):
+        ) or knowledge_pretrain_phase:
             if isinstance(built_datasets, dict):
                 # then the kg has been split
                 train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets[KnowledgeEvaluationType.LP]
@@ -381,6 +387,7 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
     Returns:
         type: The dataloader class that meets the requirements in :attr:`config` and :attr:`phase`.
     """
+
     if phase not in ["train", "valid", "test", "evaluation"]:
         raise ValueError("`phase` can only be 'train', 'valid', 'test' or 'evaluation'.")
     if phase == "evaluation":
@@ -391,7 +398,11 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
         )
 
     if config["MODEL_INPUT_TYPE"] == InputType.USERWISE:
-        return _get_user_dataloader(config, phase)
+        if config["model"] in ["TPRec"]:
+            if config["train_stage"] in ["policy"]:
+                return _get_user_dataloader(config, phase)
+        else:
+            return _get_user_dataloader(config, phase)
 
     model_type = config["MODEL_TYPE"]
     if phase == "train":
