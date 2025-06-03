@@ -197,6 +197,8 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         self._tokenized_dataset = None
         # needs to be pre-generated
         self._dataset.generate_user_path_dataset(sampler.used_ids)
+        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
+        self.token_sequence_length = (1 + dataset.path_hop_length) + dataset.path_hop_length + 2
 
     @property
     def tokenized_dataset(self):
@@ -226,6 +228,29 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
             tokenized_dataset = hf_path_dataset.map(tokenization, batched=True, remove_columns=["path"])
             tokenized_dataset = DatasetDict({phase: tokenized_dataset})
             self._tokenized_dataset = tokenized_dataset
+
+    def get_tokenized_used_ids(self):
+        """Convert the used ids to tokenized ids.
+
+        Args:
+            used_ids (dict): A dictionary where keys are user ids and values are lists of item ids.
+            tokenizer: The tokenizer to convert ids to tokenized ids.
+        Returns:
+            dict: A dictionary where keys are tokenized user ids and values are lists of tokenized item ids.
+        """
+        user_token_type = PathLanguageModelingTokenType.USER.value
+        item_token_type = PathLanguageModelingTokenType.ITEM.value
+
+        used_ids = self.general_dataloader._sampler.used_ids
+        tokenizer = self._dataset.tokenizer
+
+        tokenized_used_ids = {}
+        for uid in range(used_ids.shape[0]):
+            uid_token = tokenizer.convert_tokens_to_ids(user_token_type + str(uid))
+            tokenized_used_ids[uid_token] = set(
+                [tokenizer.convert_tokens_to_ids(item_token_type + str(item)) for item in used_ids[uid]]
+            )
+        return tokenized_used_ids
 
 
 class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):

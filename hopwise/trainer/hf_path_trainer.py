@@ -11,7 +11,6 @@ from transformers import (
     TrainerCallback,
 )
 
-from hopwise.model.layers import ConstrainedLogitsProcessorWordLevel
 from hopwise.utils import (
     PathLanguageModelingTokenType,
     dict2str,
@@ -136,27 +135,6 @@ class CumulativeSequenceScoreRanker:
         return scores, user_topk_sequences
 
 
-def get_tokenized_used_ids(used_ids, tokenizer):
-    """
-    Convert the used ids to tokenized ids for the user and item tokens.
-    Args:
-        used_ids (dict): A dictionary where keys are user ids and values are lists of item ids.
-        tokenizer: The tokenizer to convert ids to tokenized ids.
-    Returns:
-        dict: A dictionary where keys are tokenized user ids and values are lists of tokenized item ids.
-    """
-    user_token_type = PathLanguageModelingTokenType.USER.value
-    item_token_type = PathLanguageModelingTokenType.ITEM.value
-
-    tokenized_used_ids = {}
-    for uid in range(used_ids.shape[0]):
-        uid_token = tokenizer.convert_tokens_to_ids(user_token_type + str(uid))
-        tokenized_used_ids[uid_token] = set(
-            [tokenizer.convert_tokens_to_ids(item_token_type + str(item)) for item in used_ids[uid]]
-        )
-    return tokenized_used_ids
-
-
 class HFPathTrainer(Trainer):
     def __init__(
         self,
@@ -172,6 +150,7 @@ class HFPathTrainer(Trainer):
         # n_beams_lp=50,
         eval_device="cpu",
         tokenizer=None,
+        logits_processor_list=None,
     ):
         hopwise_dataset = hopwise_train_data.dataset
         tokenizer = tokenizer or hopwise_dataset.tokenizer
@@ -196,19 +175,14 @@ class HFPathTrainer(Trainer):
         # self.N_BEAMS_LP = n_beams_lp
 
         self.path_hop_length = path_hop_length
+        self.token_sequence_length = hopwise_train_data.token_sequence_length
         self.eval_device = eval_device
-
-        used_ids = hopwise_train_data.general_dataloader._sampler.used_ids
-        tokenized_used_ids = get_tokenized_used_ids(used_ids, self.processing_class)
-
-        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
-        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 2
 
         # TODO: add inference template as config param and use that instead of the hardcoded values
         ranker_max_new_tokens = self.token_sequence_length - 4
         self.ranker_rec = CumulativeSequenceScoreRanker(
             self.processing_class,
-            used_ids,
+            hopwise_train_data.general_dataloader._sampler.used_ids,
             hopwise_dataset.item_num,
             topk=10,
             max_new_tokens=ranker_max_new_tokens,
@@ -237,18 +211,7 @@ class HFPathTrainer(Trainer):
         # self.test_dataset_lp = Dataset.from_dict(self.inference_paths_lp)
         # print(f"Sequence length rec: {self.token_sequence_length}")  # , lp: {self.SEQUENCE_LEN_LP}")
 
-        self.logits_processor_rec = LogitsProcessorList(
-            [
-                ConstrainedLogitsProcessorWordLevel(
-                    hopwise_dataset.get_tokenized_ckg(),
-                    tokenized_used_ids,
-                    self.token_sequence_length,
-                    self.processing_class,
-                    self.paths_per_user,
-                    task=ConstrainedLogitsProcessorWordLevel.RECOMMENDATION_TASK,
-                )
-            ]
-        )
+        self.logits_processor_rec = LogitsProcessorList(logits_processor_list or [])
 
         # self.logits_processor_lp = LogitsProcessorList(
         #     [
