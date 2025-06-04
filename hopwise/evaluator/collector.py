@@ -15,6 +15,7 @@ import copy
 
 import torch
 
+from hopwise.data.dataloader import KnowledgePathDataLoader
 from hopwise.evaluator.register import Register, Register_KG
 from hopwise.evaluator.utils import train_tsne
 
@@ -111,13 +112,9 @@ class Collector:
         if self.register.need("data.node_degree"):
             self.data_struct.set("data.node_degree", self.node_degree_dict(train_data))
         if self.register.need("data.max_path_length"):
-            # how many path constraint are set?
-            # 'path_constraint' is hardcoded and may change in the future
-            if self.config["path_constraint"] is None:
+            if isinstance(train_data, KnowledgePathDataLoader):
                 # PEARLM or KGGLM
-                sampled_path_len = len(
-                    train_data.dataset._path_dataset.split("\n")[0].split(self.config["path_separator"])
-                )
+                sampled_path_len = len(train_data.tokenized_dataset["train"]["input_ids"][0]) - 2
                 self.data_struct.set("data.max_path_length", sampled_path_len)
             else:
                 # PGPR or CAFE
