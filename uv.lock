@@ -1455,6 +1455,10 @@ all-models = [
     { name = "xgboost", version = "2.1.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10' or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu118') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu121') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu124') or (extra == 'extra-7-hopwise-cu118' and extra == 'extra-7-hopwise-cu121') or (extra == 'extra-7-hopwise-cu118' and extra == 'extra-7-hopwise-cu124') or (extra == 'extra-7-hopwise-cu121' and extra == 'extra-7-hopwise-cu124')" },
     { name = "xgboost", version = "3.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10' or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu118') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu121') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu124') or (extra == 'extra-7-hopwise-cu118' and extra == 'extra-7-hopwise-cu121') or (extra == 'extra-7-hopwise-cu118' and extra == 'extra-7-hopwise-cu124') or (extra == 'extra-7-hopwise-cu121' and extra == 'extra-7-hopwise-cu124')" },
 ]
+cli = [
+    { name = "click" },
+    { name = "rich" },
+]
 cpu = [
     { name = "dgl", version = "2.2.1+cu121", source = { registry = "https://data.dgl.ai/wheels/repo.html" }, marker = "(sys_platform == 'win32' and extra == 'extra-7-hopwise-cpu') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu118') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu121') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu124') or (extra == 'extra-7-hopwise-cu118' and extra == 'extra-7-hopwise-cu121') or (extra == 'extra-7-hopwise-cu118' and extra == 'extra-7-hopwise-cu124') or (extra == 'extra-7-hopwise-cu121' and extra == 'extra-7-hopwise-cu124')" },
     { name = "dgl", version = "2.4.0", source = { registry = "https://data.dgl.ai/wheels/torch-2.3/repo.html" }, marker = "(sys_platform != 'win32' and extra == 'extra-7-hopwise-cpu') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu118') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu121') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu124') or (extra == 'extra-7-hopwise-cu118' and extra == 'extra-7-hopwise-cu121') or (extra == 'extra-7-hopwise-cu118' and extra == 'extra-7-hopwise-cu124') or (extra == 'extra-7-hopwise-cu121' and extra == 'extra-7-hopwise-cu124')" },
@@ -1497,7 +1501,7 @@ xgboost = [
 [package.dev-dependencies]
 dev = [
     { name = "furo" },
-    { name = "hopwise", extra = ["all-models", "hyper"] },
+    { name = "hopwise", extra = ["all-models", "cli", "hyper"] },
     { name = "nbformat" },
     { name = "opentsne" },
     { name = "plotly" },
@@ -1527,6 +1531,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "accelerate", specifier = ">=0.34.2" },
+    { name = "click", marker = "extra == 'cli'", specifier = ">=8.0.0" },
     { name = "colorama", specifier = ">=0.4.4" },
     { name = "colorlog", specifier = ">=4.7.2" },
     { name = "community", marker = "extra == 'all-models'" },
@@ -1558,6 +1563,7 @@ requires-dist = [
     { name = "python-louvain", marker = "extra == 'all-models'" },
     { name = "python-louvain", marker = "extra == 'nncf'" },
     { name = "ray", extras = ["tune"], marker = "extra == 'hyper'" },
+    { name = "rich", marker = "extra == 'cli'", specifier = ">=12.0.0" },
     { name = "scikit-learn" },
     { name = "scipy", specifier = ">=1.12.0" },
     { name = "tabulate" },
@@ -1573,13 +1579,12 @@ requires-dist = [
     { name = "xgboost", marker = "extra == 'all-models'" },
     { name = "xgboost", marker = "extra == 'xgboost'" },
 ]
-provides-extras = ["all-models", "cpu", "cu121", "cu124", "hyper", "ldiffrec", "lightgbm", "ncl", "nncf", "xgboost"]
+provides-extras = ["all-models", "cli", "cpu", "cu121", "cu124", "hyper", "ldiffrec", "lightgbm", "ncl", "nncf", "xgboost"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "furo" },
-    { name = "hopwise", extras = ["all-models"] },
-    { name = "hopwise", extras = ["hyper"] },
+    { name = "hopwise", extras = ["all-models", "hyper", "cli"] },
     { name = "nbformat" },
     { name = "opentsne" },
     { name = "plotly" },
@@ -2010,6 +2015,18 @@ wheels = [
 ]
 
 [[package]]
+name = "markdown-it-py"
+version = "3.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mdurl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/38/71/3b932df36c1a044d397a1f92d1cf91ee0a503d91e470cbd670aa66b07ed0/markdown-it-py-3.0.0.tar.gz", hash = "sha256:e3f60a94fa066dc52ec76661e37c851cb232d92f9886b15cb560aaada2df8feb", size = 74596 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/42/d7/1ec15b46af6af88f19b8e5ffea08fa375d433c998b8a7639e76935c14f1f/markdown_it_py-3.0.0-py3-none-any.whl", hash = "sha256:355216845c60bd96232cd8d8c40e8f9765cc86f46880e43a8fd22dc1a1a8cab1", size = 87528 },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2075,6 +2092,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/17/d8/5811082f85bb88410ad7e452263af048d685669bbbfb7b595e8689152498/MarkupSafe-3.0.2-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:eb7972a85c54febfb25b5c4b4f3af4dcc731994c7da0d8a0b4a6eb0640e1d178", size = 20946 },
     { url = "https://files.pythonhosted.org/packages/7c/31/bd635fb5989440d9365c5e3c47556cfea121c7803f5034ac843e8f37c2f2/MarkupSafe-3.0.2-cp39-cp39-win32.whl", hash = "sha256:8c4e8c3ce11e1f92f6536ff07154f9d49677ebaaafc32db9db4620bc11ed480f", size = 15063 },
     { url = "https://files.pythonhosted.org/packages/b3/73/085399401383ce949f727afec55ec3abd76648d04b9f22e1c0e99cb4bec3/MarkupSafe-3.0.2-cp39-cp39-win_amd64.whl", hash = "sha256:6e296a513ca3d94054c2c881cc913116e90fd030ad1c656b3869762b754f5f8a", size = 15506 },
+]
+
+[[package]]
+name = "mdurl"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979 },
 ]
 
 [[package]]
@@ -3996,6 +4022,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/42/f2/05f29bc3913aea15eb670be136045bf5c5bbf4b99ecb839da9b422bb2c85/requests-oauthlib-2.0.0.tar.gz", hash = "sha256:b3dffaebd884d8cd778494369603a9e7b58d29111bf6b41bdc2dcd87203af4e9", size = 55650 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3b/5d/63d4ae3b9daea098d5d6f5da83984853c1bbacd5dc826764b249fe119d24/requests_oauthlib-2.0.0-py2.py3-none-any.whl", hash = "sha256:7dd8a5c40426b779b0868c404bdef9768deccf22749cde15852df527e6269b36", size = 24179 },
+]
+
+[[package]]
+name = "rich"
+version = "14.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+    { name = "pygments" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11' or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu118') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu121') or (extra == 'extra-7-hopwise-cpu' and extra == 'extra-7-hopwise-cu124') or (extra == 'extra-7-hopwise-cu118' and extra == 'extra-7-hopwise-cu121') or (extra == 'extra-7-hopwise-cu118' and extra == 'extra-7-hopwise-cu124') or (extra == 'extra-7-hopwise-cu121' and extra == 'extra-7-hopwise-cu124')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a1/53/830aa4c3066a8ab0ae9a9955976fb770fe9c6102117c8ec4ab3ea62d89e8/rich-14.0.0.tar.gz", hash = "sha256:82f1bc23a6a21ebca4ae0c45af9bdbc492ed20231dcb63f297d6d1021a9d5725", size = 224078 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0d/9b/63f4c7ebc259242c89b3acafdb37b41d1185c07ff0011164674e9076b491/rich-14.0.0-py3-none-any.whl", hash = "sha256:1c9491e1951aac09caffd42f448ee3d04e58923ffe14993f6e83068dc395d7e0", size = 243229 },
 ]
 
 [[package]]
