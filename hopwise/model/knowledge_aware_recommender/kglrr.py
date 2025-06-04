@@ -387,8 +387,8 @@ class KGLRR(KnowledgeRecommender):
         if self.is_explain:
             topk_items = torch.topk(prediction, k=1, dim=1).indices  # shape: [B, 1]
             topk_embeds = self.encoder.computer()[1][topk_items.squeeze(1)]  # shape: [B, V]
-            explaination = self.explain(users, history, topk_embeds)
-            return prediction, explaination
+            explanation = self.explain(users, history, topk_embeds)
+            return prediction, explanation
         return prediction
 
     def explain(self, users, history, items):
@@ -396,7 +396,6 @@ class KGLRR(KnowledgeRecommender):
         _, item_embed = self.encoder.computer()  # user_num/item_num * V
 
         his_valid = history.ge(0).float()  # B * H
-        # maxlen = int(his_valid.sum(dim=1).max().item())
         elements = item_embed[history.abs()] * his_valid.unsqueeze(-1)  # B * H * V
 
         similarity_rlt = []
@@ -494,9 +493,9 @@ class KGLRR(KnowledgeRecommender):
         - L2 Loss (l2loss)
         """
         # Extraction of tensors from the interaction dictionary
-        batch_users = interaction["user_id"]
-        batch_pos = interaction["item_id"]
-        batch_neg = interaction["neg_item_id"]
+        batch_users = interaction[self.USER_ID]
+        batch_pos = interaction[self.ITEM_ID]
+        batch_neg = interaction[self.NEG_ITEM_ID]
 
         # Build the history in the same way as in predict
         batch_history = self.encoder.user_history_matrix[batch_users, : self.encoder.maxhis]
@@ -515,9 +514,9 @@ class KGLRR(KnowledgeRecommender):
         )
         # Input positive and negative example scores, maximizing the score difference
         if self.loss_sum:
-            loss = torch.sum(torch.nn.functional.softplus(-(TItemScore - FItemScore)))
+            loss = torch.sum(F.softplus(-(TItemScore - FItemScore)))
         else:
-            loss = torch.mean(torch.nn.functional.softplus(-(TItemScore - FItemScore)))
+            loss = torch.mean(F.softplus(-(TItemScore - FItemScore)))
         return (loss + bce_loss) * 0.5
 
     def l2_loss(self, users, pos, neg, history):
