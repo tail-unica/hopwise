@@ -24,8 +24,7 @@ path = "hopwise/__init__.py"
 "run_hopwise_group.py" = "hopwise/run_hopwise_group.py"
 
 [project.scripts]
-hopwise = "hopwise.run_hopwise:main"
-hopwise_group = "hopwise.run_hopwise_group:main"
+hopwise = "hopwise.cli:cli"
 
 [project]
 name = "hopwise"
@@ -132,6 +131,10 @@ cu124 = [
   "torch==2.4.*",
   "dgl",
 ]
+cli = [
+  "click>=8.0.0",
+  "rich>=12.0.0",
+]
 
 [dependency-groups]
 docs = [
@@ -147,8 +150,7 @@ lint = [
   "pre-commit"
 ]
 dev = [
-  "hopwise[all-models]",
-  "hopwise[hyper]",
+  "hopwise[all-models,hyper,cli]",
   "plotly",
   "opentsne",
   "nbformat",

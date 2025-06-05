@@ -30,3 +30,5 @@ hyper/
 *.txt
 *.*emb
 !tests/test_data/test/*.*emb
+
+latex/
