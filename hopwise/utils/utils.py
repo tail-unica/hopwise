@@ -27,8 +27,19 @@ import torch
 from texttable import Texttable
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
+from transformers import LogitsProcessorList
 
-from hopwise.utils.enum_type import ModelType
+from hopwise.model.logits_processor import (
+    ConstrainedBeamLogitsProcessorWordLevel,
+    ConstrainedLogitsProcessorWordLevel,
+    PLMLogitsProcessorWordLevel,
+)
+from hopwise.model.ranker import (
+    BeamSearchSequenceScoreRanker,
+    CumulativeSequenceScoreRanker,
+    SampleSearchSequenceScoreRanker,
+)
+from hopwise.utils.enum_type import ModelType, PathLanguageModelingTokenType
 
 
 def get_local_time():
@@ -441,3 +452,112 @@ def get_environment(config):
     )
 
     return table
+
+
+def get_ranker(config, params):
+    processing_class = params.get("processing_class", None)
+    used_ids = params.get("used_ids", None)
+    item_num = params.get("item_num", None)
+    ranker_max_new_tokens = params.get("ranker_max_new_tokens", None)
+
+    if config["ranker"] == "CumulativeSequenceScoreRanker":
+        ranker = CumulativeSequenceScoreRanker(
+            processing_class,
+            used_ids,
+            item_num,
+            topk=10,
+            max_new_tokens=ranker_max_new_tokens,
+        )
+    elif config["ranker"] == "BeamSearchSequenceScoreRanker":
+        ranker = BeamSearchSequenceScoreRanker(
+            processing_class,
+            used_ids,
+            item_num,
+            topk=10,
+        )
+    elif config["ranker"] == "SampleSearchSequenceScoreRanker":
+        ranker = SampleSearchSequenceScoreRanker(
+            processing_class,
+            used_ids,
+            item_num,
+            topk=10,
+            max_new_tokens=ranker_max_new_tokens,
+        )
+    else:
+        raise ValueError(
+            f"Ranker {config['ranker']} not supported. "
+            "Supported rankers are: CumulativeSequenceScoreRanker, "
+            "                       BeamSearchSequenceScoreRanker, "
+            "                       SampleSearchSequenceScoreRanker."
+        )
+
+    return ranker
+
+
+def get_logits_processor(config, params):
+    tokenized_ckg = params.get("tokenized_ckg", None)
+    tokenized_used_ids = params.get("tokenized_used_ids", None)
+    token_sequence_length = params.get("token_sequence_length", None)
+    processing_class = params.get("processing_class", None)
+    paths_per_user = params.get("paths_per_user", None)
+    task = params.get("task", None)
+
+    if config["logits_processor"] == "ConstrainedLogitsProcessorWordLevel":
+        logits_processor = LogitsProcessorList(
+            [
+                ConstrainedLogitsProcessorWordLevel(
+                    tokenized_ckg,
+                    tokenized_used_ids,
+                    token_sequence_length,
+                    processing_class,
+                    paths_per_user,
+                    task=task,
+                )
+            ]
+        )
+    elif config["logits_processor"] == "PLMLogitsProcessorWordLevel":
+        logits_processor = [
+            PLMLogitsProcessorWordLevel(
+                tokenized_ckg,
+                tokenized_used_ids,
+                token_sequence_length,
+                processing_class,
+                task=task,
+            )
+        ]
+    else:
+        logits_processor = LogitsProcessorList(
+            [
+                ConstrainedBeamLogitsProcessorWordLevel(
+                    tokenized_ckg,
+                    tokenized_used_ids,
+                    token_sequence_length,
+                    processing_class,
+                    paths_per_user,
+                    task=task,
+                )
+            ]
+        )
+
+    return logits_processor
+
+
+def get_tokenized_used_ids(used_ids, tokenizer):
+    """
+    Convert the used ids to tokenized ids for the user and item tokens.
+    Args:
+        used_ids (dict): A dictionary where keys are user ids and values are lists of item ids.
+        tokenizer: The tokenizer to convert ids to tokenized ids.
+    Returns:
+        dict: A dictionary where keys are tokenized user ids and values are lists of tokenized item ids.
+    """
+    user_token_type = PathLanguageModelingTokenType.USER.value
+    item_token_type = PathLanguageModelingTokenType.ITEM.value
+
+    tokenized_used_ids = {}
+    for uid in range(used_ids.shape[0]):
+        uid_token = tokenizer.convert_tokens_to_ids(user_token_type + str(uid))
+        tokenized_used_ids[uid_token] = set(
+            [tokenizer.convert_tokens_to_ids(item_token_type + str(item)) for item in used_ids[uid]]
+        )
+    return tokenized_used_ids

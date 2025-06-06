@@ -10,8 +10,14 @@ import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.trainer.hf_path_trainer import ConstrainedLogitsProcessorWordLevel, get_tokenized_used_ids
-from hopwise.utils import InputType, ModelType, PathLanguageModelingTokenType
+from hopwise.trainer.hf_path_trainer import get_tokenized_used_ids
+from hopwise.utils import (
+    InputType,
+    KnowledgeEvaluationType,
+    ModelType,
+    PathLanguageModelingTokenType,
+    get_logits_processor,
+)
 
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("USER", 1), ("ENTITY", 2), ("RELATION", 3)])
 
@@ -19,28 +25,32 @@ TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("USER", 1), ("ENTITY", 2), ("
 class AutoregressiveGroupQuerySelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.hidden_size = config["hidden_size"]
-        self.num_heads = config["n_heads"]
+        self.hidden_size = config["embedding_size"]
+        self.num_heads = config["num_heads"]
         self.dropout = config["dropout"]
 
         # Reduce the projection dim to match desired output dim
-        self.head_dim = config["hidden_size"] // config["n_heads"]
+        self.head_dim = config["embedding_size"] // config["num_heads"]
 
-        assert config["hidden_size"] % config["n_heads"] == 0
+        assert config["embedding_size"] % config["num_heads"] == 0
 
         # the second hidden size could be different
-        self.W_key = nn.Linear(self.hidden_size, self.hidden_size, bias=False, dtype=config["dtype"])
-        self.W_value = nn.Linear(self.hidden_size, self.hidden_size, bias=False, dtype=config["dtype"])
+        self.W_key = nn.Linear(self.hidden_size, self.hidden_size, bias=False, dtype=config["weight_precision"])
+        self.W_value = nn.Linear(self.hidden_size, self.hidden_size, bias=False, dtype=config["weight_precision"])
 
         num_kv_groups = config["num_kv_groups"]
         self.group_size = self.num_heads // num_kv_groups
 
-        self.W_query = nn.Linear(self.hidden_size, self.hidden_size, bias=False, dtype=config["dtype"])
-        self.out_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=False, dtype=config["dtype"])
+        self.W_query = nn.Linear(self.hidden_size, self.hidden_size, bias=False, dtype=config["weight_precision"])
+        self.out_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=False, dtype=config["weight_precision"])
 
         # RoPE pe
         self.mask, self.cos, self.sin = SharedBuffers.get_buffers(
-            config["context_length"], self.head_dim, config["rope_base"], config["rope_config"], config["dtype"]
+            config["context_length"],
+            self.head_dim,
+            config["rope_base"],
+            config["rope_config"],
+            config["weight_precision"],
         )
 
         self.mask, self.cos, self.sin = (
@@ -105,9 +115,9 @@ class AutoregressiveGroupQuerySelfAttention(nn.Module):
 class FeedForward(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.fc1 = nn.Linear(config["hidden_size"], config["hidden_size"], bias=False)
-        self.fc2 = nn.Linear(config["hidden_size"], config["hidden_size"], bias=False)
-        self.fc3 = nn.Linear(config["hidden_size"], config["hidden_size"], bias=False)
+        self.fc1 = nn.Linear(config["embedding_size"], config["embedding_size"], bias=False)
+        self.fc2 = nn.Linear(config["embedding_size"], config["embedding_size"], bias=False)
+        self.fc3 = nn.Linear(config["embedding_size"], config["embedding_size"], bias=False)
         self.silu = nn.SiLU()
 
     def forward(self, x):
@@ -120,9 +130,9 @@ class FeedForward(nn.Module):
 class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.rmsnorm1 = nn.RMSNorm(config["hidden_size"], eps=1e-5)
+        self.rmsnorm1 = nn.RMSNorm(config["embedding_size"], eps=1e-5)
         self.causal_attn = AutoregressiveGroupQuerySelfAttention(config)
-        self.rmsnorm2 = nn.RMSNorm(config["hidden_size"], eps=1e-5)
+        self.rmsnorm2 = nn.RMSNorm(config["embedding_size"], eps=1e-5)
         self.feedforward = FeedForward(config)
 
     def forward(self, x):
@@ -166,11 +176,13 @@ class PEARLMllama3(KnowledgeRecommender):
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
+        config["context_length"] = dataset.context_length
+
         self.config = config
 
         self.dataset = dataset
         self.tokenizer = dataset.tokenizer
-        self.used_ids = dataset._used_ids
+        self.used_ids = dataset.general_dataloader._sampler.used_ids
         self.tokenized_ckg = dataset.get_tokenized_ckg()
         self.tokenized_used_ids = get_tokenized_used_ids(self.used_ids, self.tokenizer)
         self.n_users = dataset.user_num
@@ -185,31 +197,35 @@ class PEARLMllama3(KnowledgeRecommender):
         self.token_sequence_length = 1 + self.path_hop_length + self.path_hop_length + 1
         self.ranker_max_new_tokens = self.token_sequence_length - 3
 
-        self.wte = nn.Embedding(len(self.tokenizer), config["hidden_size"]).to(dtype=config["dtype"])
-        self.wpe = nn.Embedding(len(TokenType), config["hidden_size"]).to(dtype=config["dtype"])
-        self.blocks = nn.ModuleList([Block(config) for _ in range(config["n_layers"])])
-        self.rmsnorm = nn.RMSNorm(config["hidden_size"], eps=1e-5)
+        self.wte = nn.Embedding(len(self.tokenizer), config["embedding_size"]).to(dtype=config["weight_precision"])
+        self.wpe = nn.Embedding(len(TokenType), config["embedding_size"]).to(dtype=config["weight_precision"])
+        self.blocks = nn.ModuleList([Block(config) for _ in range(config["num_layers"])])
+        self.rmsnorm = nn.RMSNorm(config["embedding_size"], eps=1e-5)
 
-        self.lm_head = nn.Linear(config["hidden_size"], len(self.tokenizer), bias=False).to(dtype=config["dtype"])
+        self.lm_head = nn.Linear(config["embedding_size"], len(self.tokenizer), bias=False).to(
+            dtype=config["weight_precision"]
+        )
 
         # weight tying
         self.wte.weight = self.lm_head.weight
 
-        self.logit_processor = ConstrainedLogitsProcessorWordLevel(
-            self.tokenized_ckg,
-            self.tokenized_used_ids,
-            self.token_sequence_length,
-            self.tokenizer,
-            self.path_gen_args["paths_per_user"],
-            task=ConstrainedLogitsProcessorWordLevel.RECOMMENDATION_TASK,
+        # define logits processor
+        logits_processor_params = dict(
+            tokenized_ckg=self.tokenized_ckg,
+            tokenized_used_ids=self.tokenized_used_ids,
+            token_sequence_length=self.token_sequence_length,
+            processing_class=self.tokenizer,
+            paths_per_user=self.path_gen_args["paths_per_user"],
+            task=KnowledgeEvaluationType.REC,
         )
+        self.logit_processor = get_logits_processor(config, logits_processor_params)
 
         # init all weights
         self.apply(self._init_weights)
         # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
             if pn.endswith("c_proj.weight"):
-                torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config["n_layers"]))
+                torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config["num_layers"]))
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -240,7 +256,7 @@ class PEARLMllama3(KnowledgeRecommender):
         pos_emb = self.wpe(pos)[: tok_emb.size(1)]
         x = tok_emb + pos_emb
         for block in self.blocks:
-            x = block(x.to(self.config["dtype"]))
+            x = block(x.to(self.config["weight_precision"]))
         x = self.rmsnorm(x)
 
         if targets is not None:

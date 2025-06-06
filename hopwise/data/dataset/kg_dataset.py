@@ -28,7 +28,6 @@ from scipy.sparse import coo_matrix
 
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
-from hopwise.model.layers import TPRecTimestampDataset
 from hopwise.utils import FeatureSource, FeatureType, set_color
 from hopwise.utils.enum_type import KnowledgeEvaluationType
 from hopwise.utils.url import decide_download, download_url, extract_zip
@@ -1032,36 +1031,3 @@ class KnowledgeBasedDataset(Dataset):
                 graph_dict["entity"][tgt_id][rel_id].append(src_id)
 
         return graph_dict
-
-
-class TPRecDataset(KnowledgeBasedDataset):
-    """
-    A dataset class for temporal recommendation tasks, inheriting from :class:`KnowledgeBasedDataset`.
-    This class is designed only to preprocess train, valid and test sets for temporal recommendation tasks.
-    """
-
-    def __init__(self, config):
-        super().__init__(config)
-
-    def build(self):
-        datasets = super().build()
-        # Preprocess the datasets for temporal recommendation tasks
-        train_set = datasets[0]  # train split
-        valid_set = datasets[1]  # validation split
-        test_set = datasets[2]  # test split
-
-        # preprocess validation and test set and link them to train so we can use it in the model as attr
-        train_set.temporal_weights = TPRecTimestampDataset(self.config, train_set.inter_feat, "train")
-        valid_set.temporal_weights = TPRecTimestampDataset(
-            self.config, valid_set.inter_feat, "validation", gmm=train_set.temporal_weights.gmm_model
-        )
-        test_set.temporal_weights = TPRecTimestampDataset(
-            self.config, test_set.inter_feat, "test", gmm=train_set.temporal_weights.gmm_model
-        )
-
-        # update train set
-        datasets[0] = train_set
-        datasets[1] = valid_set
-        datasets[2] = test_set
-
-        return datasets

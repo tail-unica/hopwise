@@ -11,8 +11,14 @@ import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.trainer.hf_path_trainer import ConstrainedLogitsProcessorWordLevel, get_tokenized_used_ids
-from hopwise.utils import InputType, ModelType, PathLanguageModelingTokenType
+from hopwise.trainer.hf_path_trainer import get_tokenized_used_ids
+from hopwise.utils import (
+    InputType,
+    KnowledgeEvaluationType,
+    ModelType,
+    PathLanguageModelingTokenType,
+    get_logits_processor,
+)
 
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("USER", 1), ("ENTITY", 2), ("RELATION", 3)])
 
@@ -32,13 +38,13 @@ class LayerNorm(nn.Module):
 class AutoregressiveSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.hidden_size = config["hidden_size"]
-        self.num_heads = config["n_heads"]
+        self.hidden_size = config["embedding_size"]
+        self.num_heads = config["num_heads"]
         self.dropout = config["dropout"]
         # Reduce the projection dim to match desired output dim
-        self.head_dim = config["hidden_size"] // config["n_heads"]
+        self.head_dim = config["embedding_size"] // config["num_heads"]
 
-        assert config["hidden_size"] % config["n_heads"] == 0
+        assert config["embedding_size"] % config["num_heads"] == 0
 
         # the second hidden size could be different
         self.W_query = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
@@ -102,9 +108,9 @@ class AutoregressiveSelfAttention(nn.Module):
 class FeedForward(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config["hidden_size"], 4 * config["hidden_size"], bias=config["bias"])
+        self.c_fc = nn.Linear(config["embedding_size"], 4 * config["embedding_size"], bias=config["bias"])
         self.silu = nn.GELU()
-        self.c_proj = nn.Linear(4 * config["hidden_size"], config["hidden_size"], bias=config["bias"])
+        self.c_proj = nn.Linear(4 * config["embedding_size"], config["embedding_size"], bias=config["bias"])
         self.dropout = nn.Dropout(config["dropout"])
 
     def forward(self, x):
@@ -118,9 +124,9 @@ class FeedForward(nn.Module):
 class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.layernorm_1 = LayerNorm(config["hidden_size"], bias=config["bias"])
+        self.layernorm_1 = LayerNorm(config["embedding_size"], bias=config["bias"])
         self.causal_attn = AutoregressiveSelfAttention(config)
-        self.layernorm_2 = LayerNorm(config["hidden_size"], bias=config["bias"])
+        self.layernorm_2 = LayerNorm(config["embedding_size"], bias=config["bias"])
         self.feedforward = FeedForward(config)
 
     def forward(self, x):
@@ -144,12 +150,14 @@ class PEARLMgpt2(KnowledgeRecommender):
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
+        config["context_length"] = dataset.context_length
+
         self.config = config
         self.dataset = dataset
 
         self.tokenizer = dataset.tokenizer
 
-        self.used_ids = dataset._used_ids
+        self.used_ids = dataset.used_ids
         self.tokenized_ckg = dataset.get_tokenized_ckg()
         self.tokenized_used_ids = get_tokenized_used_ids(self.used_ids, self.tokenizer)
         self.n_users = dataset.user_num
@@ -164,26 +172,27 @@ class PEARLMgpt2(KnowledgeRecommender):
         self.token_sequence_length = 1 + self.path_hop_length + self.path_hop_length + 1
         self.ranker_max_new_tokens = self.token_sequence_length - 3
 
-        self.wte = nn.Embedding(len(self.tokenizer), config["hidden_size"])
-        self.wpe = nn.Embedding(config["context_length"], config["hidden_size"])
-        self.wp_type_e = nn.Embedding(len(TokenType), config["hidden_size"])
+        self.wte = nn.Embedding(len(self.tokenizer), config["embedding_size"])
+        self.wpe = nn.Embedding(config["context_length"], config["embedding_size"])
+        self.wp_type_e = nn.Embedding(len(TokenType), config["embedding_size"])
 
-        self.blocks = nn.ModuleList([Block(config) for _ in range(config["n_layers"])])
-        self.layernorm = nn.LayerNorm(config["hidden_size"], bias=config["bias"])
+        self.blocks = nn.ModuleList([Block(config) for _ in range(config["num_layers"])])
+        self.layernorm = nn.LayerNorm(config["embedding_size"], bias=config["bias"])
 
-        self.lm_head = nn.Linear(config["hidden_size"], len(self.tokenizer), bias=False)
+        self.lm_head = nn.Linear(config["embedding_size"], len(self.tokenizer), bias=False)
 
         # weight tying
         self.wte.weight = self.lm_head.weight
 
-        self.logit_processor = ConstrainedLogitsProcessorWordLevel(
-            self.tokenized_ckg,
-            self.tokenized_used_ids,
-            self.token_sequence_length,
-            self.tokenizer,
-            self.path_gen_args["paths_per_user"],
-            task=ConstrainedLogitsProcessorWordLevel.RECOMMENDATION_TASK,
+        logits_processor_params = dict(
+            tokenized_ckg=self.tokenized_ckg,
+            tokenized_used_ids=self.tokenized_used_ids,
+            token_sequence_length=self.token_sequence_length,
+            processing_class=self.tokenizer,
+            paths_per_user=self.path_gen_args["paths_per_user"],
+            task=KnowledgeEvaluationType.REC,
         )
+        self.logit_processor = get_logits_processor(config, logits_processor_params)
 
         self.loss = nn.CrossEntropyLoss()
 
@@ -192,7 +201,7 @@ class PEARLMgpt2(KnowledgeRecommender):
         # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
             if pn.endswith("c_proj.weight"):
-                torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config["n_layers"]))
+                torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config["num_layers"]))
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):

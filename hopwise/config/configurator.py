@@ -366,6 +366,13 @@ class Config:
         else:
             raise ValueError("Either Model has attr 'input_type',or arg 'loss_type' should exist in config.")
 
+        # handle special cases for models that needs pretrain in one way
+        if self.final_config_dict["model"] in ["TPRec"]:
+            train_stage = self.final_config_dict.get("train_stage", None)
+
+            if train_stage is not None and train_stage in ["pretrain"]:
+                self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
+
         metrics = self.final_config_dict["metrics"]
         if isinstance(metrics, str):
             self.final_config_dict["metrics"] = [metrics]
@@ -619,18 +626,18 @@ class Config:
         """
         import torch
 
-        dtype = self.final_config_dict.get("dtype", "float32")
+        weight_precision = self.final_config_dict.get("weight_precision", "float32")
 
-        if dtype == "float32":
-            dtype = torch.float32
-        elif dtype == "float16":
-            dtype = torch.float16
-        elif dtype == "bfloat16":
-            dtype = torch.bfloat16
+        if weight_precision == "float32":
+            weight_precision = torch.float32
+        elif weight_precision == "float16":
+            weight_precision = torch.float16
+        elif weight_precision == "bfloat16":
+            weight_precision = torch.bfloat16
         else:
-            raise ValueError(f"Unsupported dtype: {dtype}")
+            raise ValueError(f"Unsupported weight_precision: {weight_precision}")
 
-        self.final_config_dict["dtype"] = dtype
+        self.final_config_dict["weight_precision"] = weight_precision
 
     def __setitem__(self, key, value):
         if not isinstance(key, str):

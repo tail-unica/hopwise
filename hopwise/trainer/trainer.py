@@ -36,7 +36,6 @@ from tqdm import tqdm
 from hopwise.data.dataloader import FullSortLPEvalDataLoader, NegSampleDataLoader
 from hopwise.data.interaction import Interaction
 from hopwise.evaluator import Collector, Collector_KG, Evaluator, Evaluator_KG
-from hopwise.model.layers import ConstrainedLogitsProcessorWordLevel, PLMLogitsProcessorWordLevel
 from hopwise.utils import (
     EvaluatorType,
     KGDataLoaderState,
@@ -47,6 +46,7 @@ from hopwise.utils import (
     ensure_dir,
     get_gpu_usage,
     get_local_time,
+    get_logits_processor,
     get_tensorboard,
     set_color,
 )
@@ -2238,7 +2238,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             hf_output_dir = self.hf_trainer.args.output_dir
             self.logger.info(set_color("HuggingFace model is saved at", "blue") + f": {hf_output_dir}")
 
-    def resume_checkpoint(self, resume_file, train_data):
+    def resume_checkpoint(self, resume_file):
         """
         Load the model parameters and training information based on the directory name,
         and navigate into subdirectories if necessary.
@@ -2249,8 +2249,6 @@ class HFPathLanguageModelingTrainer(Trainer):
         """
         from safetensors.torch import load_file
         from transformers import AutoTokenizer
-
-        from hopwise.utils import get_model
 
         if not hasattr(self, "hf_trainer"):
             raise ValueError("The HuggingFace Trainer has not been initialized. Please call `init_hf_trainer` first.")
@@ -2269,10 +2267,6 @@ class HFPathLanguageModelingTrainer(Trainer):
         self.cur_step = checkpoint["cur_step"]
         self.best_valid_score = checkpoint["best_valid_score"]
 
-        # We have created a custom model, so we need to take our new class and load the weights.
-        # otherwise, we cannot access to the new methods/embeddings we wrote.
-
-        self.model = get_model(self.config["model"])(self.config, train_data.dataset).to(self.config["device"])
         weights = load_file(os.path.join(hf_resume_file, "model.safetensors"))
         self.model.load_state_dict(weights, strict=False)
         self.processing_class.tokenizer = AutoTokenizer.from_pretrained(hf_resume_file)
@@ -2399,15 +2393,14 @@ class PLMTrainer(HFPathLanguageModelingTrainer):
             *hf_callbacks,
         ]
 
-        self.logits_processor_list = [
-            PLMLogitsProcessorWordLevel(
-                train_data.dataset.get_tokenized_ckg(),
-                train_data.get_tokenized_used_ids(),
-                train_data.token_sequence_length,
-                train_data.dataset.tokenizer,
-                task=KnowledgeEvaluationType.REC,
-            )
-        ]
+        logits_processor_params = dict(
+            tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
+            tokenized_used_ids=train_data.get_tokenized_used_ids(),
+            token_sequence_length=train_data.token_sequence_length,
+            processing_class=train_data.dataset.tokenizer,
+            task=KnowledgeEvaluationType.REC,
+        )
+        self.logits_processor_list = get_logits_processor(self.hopwise_config, logits_processor_params)
 
         self.hf_trainer = HFPathTrainer(
             train_data,
@@ -2459,16 +2452,6 @@ class PEARLMTrainer(HFPathLanguageModelingTrainer):
             *hf_callbacks,
         ]
 
-        self.logits_processor_list = [
-            ConstrainedLogitsProcessorWordLevel(
-                train_data.dataset.get_tokenized_ckg(),
-                train_data.get_tokenized_used_ids(),
-                train_data.token_sequence_length,
-                train_data.dataset.tokenizer,
-                task=KnowledgeEvaluationType.REC,
-            )
-        ]
-
         self.hf_trainer = HFPathTrainer(
             train_data,
             self.config,
@@ -2479,7 +2462,6 @@ class PEARLMTrainer(HFPathLanguageModelingTrainer):
             paths_per_user=self.paths_per_user,
             path_generation_args=self.path_gen_args,
             eval_device=self.device,
-            logits_processor_list=self.logits_processor_list,
         )
 
 

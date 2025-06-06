@@ -1,16 +1,6 @@
-context_length: 9              # (int) Maximum length of the context.
-epochs: 30
-eval_step: 1
-data_path: /home/recsysdatasets
-topk: [10]
-valid_metric: 'ndcg@10'
-train_batch_size: 4096
-eval_batch_size: 100
 base_model: llama3
-# Training Arguments
-learning_rate: 1e-5
-weight_decay: 0.0
 
+logits_processor: ConstrainedLogitsProcessorWordLevel
 ### Decoder PARAMETERS ###
 
 n_layers: 1

@@ -152,7 +152,7 @@ def run_hopwise(
         # model loading and initialization
         init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
         model = get_model(config["model"])(config, train_data.dataset).to(
-            device=config["device"], dtype=config["dtype"]
+            device=config["device"], dtype=config["weight_precision"]
         )
 
     logger.info(model)
@@ -175,7 +175,7 @@ def run_hopwise(
 
         if isinstance(trainer, HFPathLanguageModelingTrainer):
             trainer.init_hf_trainer(train_data, valid_data, show_progress=config["show_progress"])
-            trainer.resume_checkpoint(checkpoint, train_data)
+            trainer.resume_checkpoint(checkpoint)
 
             best_valid_result = trainer.evaluate(
                 valid_data, load_best_model=False, model_file=checkpoint, show_progress=config["show_progress"]
@@ -199,7 +199,7 @@ def run_hopwise(
     # model evaluation
     test_result = trainer.evaluate(
         test_data,
-        load_best_model=not isinstance(trainer, HFPathLanguageModelingTrainer),
+        load_best_model=True,
         model_file=checkpoint,
         show_progress=config["show_progress"],
     )

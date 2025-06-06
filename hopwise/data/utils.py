@@ -75,6 +75,31 @@ def create_dataset(config):
     return dataset
 
 
+def _get_dataloader_name(config, dataloaders_folder):
+    path_gen_args = config["path_sample_args"]
+
+    max_path_per_user = config["MAX_PATHS_PER_USER"]
+    max_rw_tries_per_iid = config["MAX_RW_TRIES_PER_IID"]
+    restrict_by_phase = path_gen_args["restrict_by_phase"]
+    temporal_causality = path_gen_args["temporal_causality"]
+    strategy = path_gen_args["strategy"]
+    collaborative_path = path_gen_args["collaborative_path"]
+
+    file_path = os.path.join(
+        config["checkpoint_dir"],
+        dataloaders_folder,
+        f'{config["dataset"]}-for-{config["model"]}'
+        f'-str {strategy}'
+        f'-mppu {max_path_per_user}'
+        f'-max_tries {max_rw_tries_per_iid}'
+        f'-temp {temporal_causality}'
+        f'-col {collaborative_path}'
+        f'-restrbyphase {restrict_by_phase}-dataloader.pth',
+    )
+
+    return file_path
+
+
 def save_split_dataloaders(config, dataloaders):
     """Save split dataloaders.
 
@@ -86,26 +111,7 @@ def save_split_dataloaders(config, dataloaders):
     if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
         dataloaders_folder = f'{config["model"]} - {config["dataset"]} - dataloaders'
         ensure_dir(os.path.join(config["checkpoint_dir"], dataloaders_folder))
-        path_gen_args = config["path_sample_args"]
-
-        max_path_per_user = config["MAX_PATHS_PER_USER"]
-        max_rw_tries_per_iid = config["MAX_RW_TRIES_PER_IID"]
-        restrict_by_phase = path_gen_args["restrict_by_phase"]
-        temporal_causality = path_gen_args["temporal_causality"]
-        strategy = path_gen_args["strategy"]
-        collaborative_path = path_gen_args["collaborative_path"]
-
-        file_path = os.path.join(
-            config["checkpoint_dir"],
-            dataloaders_folder,
-            f'{config["dataset"]}-for-{config["model"]}'
-            f'-str {strategy}'
-            f'-mppu {max_path_per_user}'
-            f'-max_tries {max_rw_tries_per_iid}'
-            f'-temp {temporal_causality}'
-            f'-col {collaborative_path}'
-            f'-restrbyphase {restrict_by_phase}-dataloader.pth',
-        )
+        file_path = _get_dataloader_name(config, dataloaders_folder)
     else:
         file_path = os.path.join(
             config["checkpoint_dir"],
@@ -147,26 +153,7 @@ def load_split_dataloaders(config):
 
     if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
         dataloaders_folder = f'{config["model"]} - {config["dataset"]} - dataloaders'
-        path_gen_args = config["path_sample_args"]
-
-        max_path_per_user = config["MAX_PATHS_PER_USER"]
-        max_rw_tries_per_iid = config["MAX_RW_TRIES_PER_IID"]
-        restrict_by_phase = path_gen_args["restrict_by_phase"]
-        temporal_causality = path_gen_args["temporal_causality"]
-        strategy = path_gen_args["strategy"]
-        collaborative_path = path_gen_args["collaborative_path"]
-
-        dataloaders_save_path = os.path.join(
-            config["checkpoint_dir"],
-            dataloaders_folder,
-            f'{config["dataset"]}-for-{config["model"]}'
-            f'-str {strategy}'
-            f'-mppu {max_path_per_user}'
-            f'-max_tries {max_rw_tries_per_iid}'
-            f'-temp {temporal_causality}'
-            f'-col {collaborative_path}'
-            f'-restrbyphase {restrict_by_phase}-dataloader.pth',
-        )
+        dataloaders_save_path = _get_dataloader_name(config, dataloaders_folder)
 
     else:
         default_file = os.path.join(
@@ -254,21 +241,13 @@ def data_preparation(config, dataset):
         dataset._change_feat_format()
     else:
         model_type = config["MODEL_TYPE"]
-        model = config["model"]
+        model_input_type = config["MODEL_INPUT_TYPE"]
+        # model = config["model"]
         built_datasets = dataset.build()
 
-        # we allow some models to have a pretrain phase characterized by the need to load the kg while
-        #   not using it during finetune phase where they're threated as ModelType.USERWISE typically
-
-        special_knowledge_aware = ["PGPR", "CAFE", "UCPR", "TPRec"]
-        knowledge_pretrain_phase = model in special_knowledge_aware and config["train_stage"] == "pretrain"
-        if knowledge_pretrain_phase:
-            config["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
-
-        if (
-            model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]
-            and model not in special_knowledge_aware
-        ) or knowledge_pretrain_phase:
+        if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING] and model_input_type not in [
+            InputType.USERWISE
+        ]:
             if isinstance(built_datasets, dict):
                 # then the kg has been split
                 train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets[KnowledgeEvaluationType.LP]

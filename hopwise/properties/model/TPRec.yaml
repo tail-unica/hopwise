@@ -11,9 +11,8 @@ beam_search_hop: [25,5,1]
 fix_scores_sorting_bug: False
 epochs: 50
 eval_step: 50
-learning_rate: 1e-4
 
-train_stage: policy # one in {'pretrain', 'policy'}
+train_stage: pretrain # one in {'pretrain', 'policy'}
 margin: 1.0 # transe
 pretrain_epochs: 5 # https://github.com/Go0day/TPRec/blob/main/train_transe_model.py
 cluster_num: 14

@@ -68,7 +68,7 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
         self.post_init()
 
         self.model_config = config
-        self.used_ids = dataset._used_ids
+        self.used_ids = dataset.used_ids
         self.tokenizer = dataset.tokenizer
         self.dataset = dataset
 

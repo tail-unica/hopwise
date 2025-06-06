@@ -206,6 +206,8 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
         self.token_sequence_length = (1 + dataset.path_hop_length) + dataset.path_hop_length + 2
 
+        dataset.used_ids = self.general_dataloader._sampler.used_ids
+
     @property
     def tokenized_dataset(self):
         if self._tokenized_dataset is None:
@@ -220,17 +222,13 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         """
 
         if self._tokenized_dataset is None:
-            special_token_ids = [
-                self._dataset.tokenizer.bos_token_id,
-                self._dataset.tokenizer.eos_token_id,
-                self._dataset.tokenizer.unk_token_id,
-                self._dataset.tokenizer.pad_token_id,
-                self._dataset.tokenizer.mask_token_id,
-            ]
 
             def remove_incorrect_paths(tokenized_dataset):
                 # remove paths that contain special tokens. The token in position 0 and -1 are [BOS] and [EOS]
-                return not any(path in special_token_ids for path in tokenized_dataset["input_ids"][1:-1])
+                return not any(
+                    path in self._dataset.tokenizer.all_special_ids
+                    for path in tokenized_dataset["input_ids"][1:-1]  # noqa: E501
+                )
 
             def tokenization(example):
                 return self._dataset.tokenizer(

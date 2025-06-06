@@ -1029,9 +1029,7 @@ class TestPathLanguageModelingRecommender(unittest.TestCase):
     }
 
     scratch_lm_base_config = {
-        "hidden_size": 4,
-        "n_heads": 2,
-        "n_layers": 2,
+        **hf_lm_base_config,
         "user_inter_num_interval": [1, 10],
         "path_generation_args": {"paths_per_user": 2},
     }

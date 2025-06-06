@@ -10,11 +10,9 @@ ui_relation: "[UI-Relation]"            # (str) Name assigned to the interaction
 kg_reverse_r: False                     # (bool) Whether to reverse relations of triples for bidirectional edges.
 entity_kg_num_interval: "[0,inf)"       # (str) Entity interval for filtering kg.
 relation_kg_num_interval: "[0,inf)"     # (str) Relation interval for filtering kg.
-base_model: distilgpt2
 path_hop_length: 3              # (int) Number of hops in the knowledge path.
 MAX_PATHS_PER_USER: 250         # (int) Maximum number of kg sampled paths per user.
 metapaths: ~                    # (list) Metapaths used to sample paths.
-ranker: BeamSearchSequenceScoreRanker # (str) of ['BeamSearchSequenceScoreRanker', 'SimilaritySequenceScoreRanker', 'CumulativeSequenceScoreRanker']
 path_sample_args:
     temporal_causality: False   # (bool) Whether to use temporal causality.
     collaborative_path: True    # (bool) Whether to include users in sampled paths.

@@ -1,20 +1,11 @@
-context_length: 9              # (int) Maximum length of the context.
-epochs: 30
-eval_step: 1
-data_path: /home/recsysdatasets
-topk: [10]
-valid_metric: 'ndcg@10'
-train_batch_size: 4096
-eval_batch_size: 100
 # Training Arguments
-learning_rate: 0.001
-weight_decay: 0.0
-
+base_model: gpt2
+logits_processor: ConstrainedLogitsProcessorWordLevel
 
 ### Decoder PARAMETERS ###
-n_layers: 1
-n_heads: 1
-hidden_size: 100
+num_layers: 1
+num_heads: 1
+embedding_size: 100
 temperature: 1.0
 dropout: 0.1
 bias: True

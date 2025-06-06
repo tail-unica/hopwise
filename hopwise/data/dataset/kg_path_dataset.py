@@ -51,14 +51,13 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def __init__(self, config):
         super().__init__(config)
         self._path_dataset = None  # path dataset is generated with generate_user_path_dataset
-        self._tokenized_dataset = None  # tokenized dataset is generated with tokenize_path_dataset
         self._tokenizer = None
-        self._used_ids = None
+        self.used_ids = None
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
 
-        self.context_length = self.config["context_length"]
+        self.context_length = (self.config["path_hop_length"] * 2) + 3  # 2 * hop_length + 1(U) + BOS + EOS
 
         # Path sampling parameters
         self.path_hop_length = self.config["path_hop_length"]
@@ -235,7 +234,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         Args:
             used_ids (numpy.ndarray): The used ids.
         """
-        self._used_ids = used_ids
         if not isinstance(self.inter_feat, Interaction):
             raise ValueError("The data should be prepared before generating the path dataset.")
 
