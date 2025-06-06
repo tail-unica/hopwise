@@ -342,7 +342,7 @@ class Config:
     def _set_default_parameters(self):
         self.final_config_dict["dataset"] = self.dataset
         self.final_config_dict["model"] = self.model
-        if self.dataset == "ml-100k":
+        if self.dataset == "ml-100k" and self.external_config_dict.get("data_path", None) is None:
             current_path = os.path.dirname(os.path.realpath(__file__))
             self.final_config_dict["data_path"] = os.path.join(current_path, "../dataset_example/" + self.dataset)
         else:

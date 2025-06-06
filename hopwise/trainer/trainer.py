@@ -31,7 +31,7 @@ import torch
 from torch import optim
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from tqdm import tqdm
+from tqdm import rich
 
 from hopwise.data.dataloader import FullSortLPEvalDataLoader, NegSampleDataLoader
 from hopwise.data.interaction import Interaction
@@ -224,7 +224,7 @@ class Trainer(AbstractTrainer):
         loss_func = loss_func or self.model.calculate_loss
         total_loss = None
         iter_data = (
-            tqdm(
+            rich.tqdm(
                 train_data,
                 total=len(train_data),
                 ncols=100,
@@ -558,7 +558,7 @@ class Trainer(AbstractTrainer):
             item_tensor = eval_data._dataset.get_item_feature().to(self.device)
 
         iter_data = (
-            tqdm(
+            rich.tqdm(
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
@@ -831,7 +831,7 @@ class KGTrainer(Trainer):
             evaluator = self.evaluator_kg
 
         iter_data = (
-            tqdm(
+            rich.tqdm(
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
@@ -1255,7 +1255,7 @@ class TPRecTrainer(PretrainTrainer):
             item_tensor = eval_data._dataset.get_item_feature().to(self.device)
 
         iter_data = (
-            tqdm(
+            rich.tqdm(
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
@@ -1890,7 +1890,7 @@ class NCLTrainer(Trainer):
         loss_func = loss_func or self.model.calculate_loss
         total_loss = None
         iter_data = (
-            tqdm(
+            rich.tqdm(
                 train_data,
                 total=len(train_data),
                 ncols=100,
@@ -1979,7 +1979,7 @@ class PEARLMfromscratchTrainer(Trainer):
         total_loss = None
 
         iter_data = (
-            tqdm(
+            rich.tqdm(
                 train_data,
                 total=len(train_data),
                 ncols=100,
@@ -2063,7 +2063,7 @@ class PEARLMfromscratchTrainer(Trainer):
         batched_eval_data = DataLoader(eval_paths, batch_size=self.config["eval_batch_size"], shuffle=False)
 
         iter_data = (
-            tqdm(
+            rich.tqdm(
                 batched_eval_data,
                 total=len(batched_eval_data),
                 ncols=100,
@@ -2316,7 +2316,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             self.tot_item_num = eval_data._dataset.item_num
 
         iter_data = (
-            tqdm(
+            rich.tqdm(
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
