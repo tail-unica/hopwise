@@ -4,7 +4,7 @@ warmup_steps: 250               # (int) Number of warmup steps for learning rate
 embedding_size: 768             # (int) Size of the embeddings.
 num_heads: 12                   # (int) Number of heads in the multi-head attention.
 num_layers: 6                   # (int) Number of layers in the transformer.
-
+ranker: BeamSearchSequenceScoreRanker # one of ['SampleSearchSequenceScoreRanker', 'BeamSearchSequenceScoreRanker', 'CumulativeSequenceScoreRanker']
 path_sample_args:
     restrict_by_phase: False    # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.
 
