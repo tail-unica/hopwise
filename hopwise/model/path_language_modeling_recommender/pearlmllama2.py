@@ -10,13 +10,13 @@ import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.trainer.hf_path_trainer import get_tokenized_used_ids
 from hopwise.utils import (
     InputType,
     KnowledgeEvaluationType,
     ModelType,
     PathLanguageModelingTokenType,
     get_logits_processor,
+    get_tokenized_used_ids,
 )
 
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("USER", 1), ("ENTITY", 2), ("RELATION", 3)])
@@ -180,9 +180,8 @@ class PEARLMllama2(KnowledgeRecommender):
         logits_processor_params = dict(
             tokenized_ckg=self.tokenized_ckg,
             tokenized_used_ids=self.tokenized_used_ids,
-            token_sequence_length=self.token_sequence_length,
-            processing_class=self.tokenizer,
-            paths_per_user=self.path_gen_args["paths_per_user"],
+            max_sequence_length=self.token_sequence_length,
+            tokenizer=self.tokenizer,
             task=KnowledgeEvaluationType.REC,
         )
         self.logit_processor = get_logits_processor(config, logits_processor_params)

@@ -88,13 +88,13 @@ def _get_dataloader_name(config, dataloaders_folder):
     file_path = os.path.join(
         config["checkpoint_dir"],
         dataloaders_folder,
-        f'{config["dataset"]}-for-{config["model"]}'
-        f'-str {strategy}'
-        f'-mppu {max_path_per_user}'
-        f'-max_tries {max_rw_tries_per_iid}'
-        f'-temp {temporal_causality}'
-        f'-col {collaborative_path}'
-        f'-restrbyphase {restrict_by_phase}-dataloader.pth',
+        f"{config['dataset']}-for-{config['model']}"
+        f"-str {strategy}"
+        f"-mppu {max_path_per_user}"
+        f"-max_tries {max_rw_tries_per_iid}"
+        f"-temp {temporal_causality}"
+        f"-col {collaborative_path}"
+        f"-restrbyphase {restrict_by_phase}-dataloader.pth",
     )
 
     return file_path
@@ -109,13 +109,13 @@ def save_split_dataloaders(config, dataloaders):
     """
     ensure_dir(config["checkpoint_dir"])
     if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
-        dataloaders_folder = f'{config["model"]} - {config["dataset"]} - dataloaders'
+        dataloaders_folder = f"{config['model']} - {config['dataset']} - dataloaders"
         ensure_dir(os.path.join(config["checkpoint_dir"], dataloaders_folder))
         file_path = _get_dataloader_name(config, dataloaders_folder)
     else:
         file_path = os.path.join(
             config["checkpoint_dir"],
-            f'{config["dataset"]}-for-{config["model"]}-dataloader.pth',
+            f"{config['dataset']}-for-{config['model']}-dataloader.pth",
         )
 
     logger = getLogger()
@@ -152,13 +152,13 @@ def load_split_dataloaders(config):
     """
 
     if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
-        dataloaders_folder = f'{config["model"]} - {config["dataset"]} - dataloaders'
+        dataloaders_folder = f"{config['model']} - {config['dataset']} - dataloaders"
         dataloaders_save_path = _get_dataloader_name(config, dataloaders_folder)
 
     else:
         default_file = os.path.join(
             config["checkpoint_dir"],
-            f'{config["dataset"]}-for-{config["model"]}-dataloader.pth',
+            f"{config['dataset']}-for-{config['model']}-dataloader.pth",
         )
         # used if you want to load a specific dataloader
         dataloaders_save_path = config["dataloaders_save_path"] or default_file

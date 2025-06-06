@@ -29,11 +29,7 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from transformers import LogitsProcessorList
 
-from hopwise.model.logits_processor import (
-    ConstrainedBeamLogitsProcessorWordLevel,
-    ConstrainedLogitsProcessorWordLevel,
-    PLMLogitsProcessorWordLevel,
-)
+from hopwise.model.logits_processor import ConstrainedLogitsProcessorWordLevel
 from hopwise.model.ranker import (
     BeamSearchSequenceScoreRanker,
     CumulativeSequenceScoreRanker,
@@ -495,51 +491,14 @@ def get_ranker(config, params):
 
 
 def get_logits_processor(config, params):
-    tokenized_ckg = params.get("tokenized_ckg", None)
-    tokenized_used_ids = params.get("tokenized_used_ids", None)
-    token_sequence_length = params.get("token_sequence_length", None)
-    processing_class = params.get("processing_class", None)
-    paths_per_user = params.get("paths_per_user", None)
-    task = params.get("task", None)
-
-    if config["logits_processor"] == "ConstrainedLogitsProcessorWordLevel":
-        logits_processor = LogitsProcessorList(
-            [
-                ConstrainedLogitsProcessorWordLevel(
-                    tokenized_ckg,
-                    tokenized_used_ids,
-                    token_sequence_length,
-                    processing_class,
-                    paths_per_user,
-                    task=task,
-                )
-            ]
+    try:
+        logits_processor_class = getattr(
+            importlib.import_module("hopwise.model.logits_processor"), config["model"] + "LogitsProcessorWordLevel"
         )
-    elif config["logits_processor"] == "PLMLogitsProcessorWordLevel":
-        logits_processor = [
-            PLMLogitsProcessorWordLevel(
-                tokenized_ckg,
-                tokenized_used_ids,
-                token_sequence_length,
-                processing_class,
-                task=task,
-            )
-        ]
-    else:
-        logits_processor = LogitsProcessorList(
-            [
-                ConstrainedBeamLogitsProcessorWordLevel(
-                    tokenized_ckg,
-                    tokenized_used_ids,
-                    token_sequence_length,
-                    processing_class,
-                    paths_per_user,
-                    task=task,
-                )
-            ]
-        )
+    except AttributeError:
+        logits_processor_class = ConstrainedLogitsProcessorWordLevel
 
-    return logits_processor
+    return LogitsProcessorList([logits_processor_class(**params)])
 
 
 def get_tokenized_used_ids(used_ids, tokenizer):

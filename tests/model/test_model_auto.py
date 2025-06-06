@@ -1070,7 +1070,7 @@ class TestPathLanguageModelingRecommender(unittest.TestCase):
             config_dict = {
                 "model": "KGGLM",
                 "train_stage": "finetune",
-                "pre_model_path": os.path.join(tmpdirname, "huggingface-KGGLM-test-pretrained.pth"),
+                "pre_model_path": os.path.join(tmpdirname, "huggingface-distilgpt2-KGGLM-test-pretrained.pth"),
                 **self.hf_lm_base_config,
             }
             quick_test(config_dict)

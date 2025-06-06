@@ -19,7 +19,7 @@ from transformers import LogitsProcessor
 from hopwise.utils import KnowledgeEvaluationType
 
 
-class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
+class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
     """
     Force the last token to be one of the force_tokens if the total length is reached, in the path generation stage
     this means to limit the hop size. This is a word-level constraint, does not work with piece tokenizers.
@@ -28,8 +28,8 @@ class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
 
     def __init__(
         self,
-        tokenized_kg,
-        tokenized_ignored_ids,
+        tokenized_ckg,
+        tokenized_used_ids,
         max_sequence_length,
         tokenizer,
         mask_cache_size=3 * 10**4,
@@ -38,11 +38,10 @@ class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.tokenized_kg = tokenized_kg
-        self.tokenized_ignored_ids = tokenized_ignored_ids
+        self.tokenized_ckg = tokenized_ckg
+        self.tokenized_used_ids = tokenized_used_ids
         self.max_sequence_length = max_sequence_length
         self.tokenizer = tokenizer
-        self.eos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.eos_token)
         self.bos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.bos_token)
         self.pos_candidates_cache = LFUCache(pos_candidates_cache_size)
         self.mask_cache = LFUCache(mask_cache_size)
@@ -65,7 +64,9 @@ class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
         has_bos_token = self.is_bos_token_in_input(input_ids)
 
         if has_bos_token and current_len == self.max_sequence_length - 1:
-            self.mask_non_eos_tokens(scores)
+            pass
+            # TODO: confirm that handling EOS is not needed here
+            # self.mask_non_eos_tokens(scores)
         else:
             unique_input_ids = input_ids
             if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
@@ -82,8 +83,8 @@ class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
                 elif self.task == KnowledgeEvaluationType.LP:
                     key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
 
-            banned_mask = self.get_banned_mask(key, candidate_tokens)
-            full_mask[idx] = banned_mask
+                banned_mask = self.get_banned_mask(key, candidate_tokens)
+                full_mask[idx] = banned_mask
 
             if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
                 scores[full_mask[input_ids_inv]] = -math.inf
@@ -107,7 +108,7 @@ class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
                 candidate_tokens = self.get_candidates_rec(*key)
 
                 # Get user positives
-                user_used_ids = self.tokenized_ignored_ids[current_uid]
+                user_used_ids = self.tokenized_used_ids[current_uid]
                 # Select negatives
                 candidate_tokens = list(candidate_tokens - user_used_ids)
                 # Useless if during evaluation a user is seen once
@@ -148,18 +149,18 @@ class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
         :param key1:
         :param key2: if key2 is not None, it returns entity candidates, otherwise relation candidates
         """
-        if key1 in self.tokenized_kg:
-            if key2 is not None and key2 in self.tokenized_kg[key1]:
+        if key1 in self.tokenized_ckg:
+            if key2 is not None and key2 in self.tokenized_ckg[key1]:
                 # return tail given head + relation
-                return self.tokenized_kg[key1][key2]
+                return self.tokenized_ckg[key1][key2]
             else:
                 # return relations given head
-                return set(self.tokenized_kg[key1].keys())
+                return set(self.tokenized_ckg[key1].keys())
         else:
-            raise ValueError(f"Key {key1} ('{self.tokenizer.convert_ids_to_tokens(key1)}') not found in tokenized_kg")
+            raise ValueError(f"Key {key1} ('{self.tokenizer.convert_ids_to_tokens(key1)}') not found in tokenized_ckg")
 
     def get_candidates_lp(self, key):
-        return list(self.tokenized_ignored_ids[key]) + self.special_tokens_ids
+        return list(self.tokenized_used_ids[key]) + self.special_tokens_ids
 
     def get_banned_mask(self, key, candidate_tokens):
         """Retrieve or cache the banned token mask for a specific key."""
@@ -171,155 +172,20 @@ class ConstrainedBeamLogitsProcessorWordLevel(LogitsProcessor):
         return banned_mask
 
 
-class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
-    def __init__(
-        self,
-        tokenized_kg,
-        tokenized_ignored_ids,
-        max_sequence_length,
-        tokenizer,
-        num_return_sequences,
-        mask_cache_size=3 * 10**4,
-        pos_candidates_cache_size=1 * 10**5,
-        task="recommendation",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.tokenized_kg = tokenized_kg
-        self.tokenized_ignored_ids = tokenized_ignored_ids
-        self.max_sequence_length = max_sequence_length
-        self.tokenizer = tokenizer
-        self.num_return_sequences = num_return_sequences
-        self.eos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.eos_token)
-        self.bos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.bos_token)
-        self.pos_candidates_cache = LFUCache(pos_candidates_cache_size)
-        self.mask_cache = LFUCache(mask_cache_size)
-        self.task = task
-
-        if self.task == KnowledgeEvaluationType.LP:
-            self.special_tokens_ids = [
-                self.tokenizer.encode(x, add_special_tokens=False)[0]
-                for x in self.tokenizer.all_special_tokens_extended
-            ]
-        else:
-            self.special_tokens_ids = None
-
-    def __call__(self, input_ids, scores):
-        full_mask = torch.zeros((input_ids.shape[0], len(self.tokenizer)), dtype=bool, device=scores.device)
-        for idx in range(input_ids.shape[0]):
-            if self.task == KnowledgeEvaluationType.REC:
-                key, candidate_tokens = self.process_scores_rec(input_ids, idx)
-            elif self.task == KnowledgeEvaluationType.LP:
-                key, candidate_tokens = self.process_scores_lp(input_ids, idx)
-
-            banned_mask = self.get_banned_mask(key, candidate_tokens)
-
-            if banned_mask.all():
-                banned_mask[self.tokenizer.pad_token_id] = False
-
-            full_mask[idx] = banned_mask
-
-        scores[full_mask] = -math.inf
-        return scores
-
-    def process_scores_rec(self, input_ids, idx):
-        """Process each score based on input length and update mask list."""
-        current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
-
-        key = self.get_current_key(input_ids, idx)
-        if current_len == self.max_sequence_length - 1 - has_bos_token:
-            current_uid = input_ids[idx, int(has_bos_token)].item()
-            uid_cond_key = (current_uid, *key)
-            candidate_tokens = self.pos_candidates_cache.get(uid_cond_key)
-            if candidate_tokens is None:
-                candidate_tokens = self.get_candidates_rec(*key)
-
-                # Get user positives
-                user_used_ids = self.tokenized_ignored_ids[current_uid]
-                # Select negatives
-                candidate_tokens = list(candidate_tokens - user_used_ids)
-                # Useless if during evaluation a user is seen once
-                self.pos_candidates_cache[uid_cond_key] = candidate_tokens
-        else:
-            candidate_tokens = list(self.get_candidates_rec(*key))
-
-        return key, candidate_tokens
-
-    def process_scores_lp(self, input_ids, idx):
-        """Process each score based on input length or skip."""
-        current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
-
-        key, candidate_tokens = None, None
-        if current_len % 2 == has_bos_token:
-            key = self.get_current_key(input_ids, idx)
-            candidate_tokens = self.get_candidates_lp(key)
-
-        return key, candidate_tokens
-
-    def is_next_token_entity(self, input_ids):
-        current_len = input_ids.shape[-1]
-        has_bos_token = (input_ids[:, 0] == self.bos_token_id).any().item()
-
-        # bos_token determines if the current length is even or odd
-        return current_len % 2 == has_bos_token
-
-    def get_current_key(self, input_ids, idx):
-        if self.is_next_token_entity(input_ids):
-            return input_ids[idx, -2].item(), input_ids[idx, -1].item()
-        else:
-            # The next token is a relation
-            return (input_ids[idx, -1].item(),)
-
-    def get_candidates_rec(self, key1, key2=None):
-        """
-        :param key1:
-        :param key2: if key2 is not None, it returns entity candidates, otherwise relation candidates
-        """
-        if key1 in self.tokenized_kg:
-            if key2 is not None and key2 in self.tokenized_kg[key1]:
-                # return tail given head + relation
-                return self.tokenized_kg[key1][key2]
-            else:
-                # return relations given head
-                return set(self.tokenized_kg[key1].keys())
-        else:
-            raise ValueError(f"Key {key1} ('{self.tokenizer.convert_ids_to_tokens(key1)}') not found in tokenized_kg")
-
-    def get_candidates_lp(self, key):
-        return list(self.tokenized_ignored_ids[key]) + self.special_tokens_ids
-
-    def get_banned_mask(self, key, candidate_tokens):
-        """Retrieve or cache the banned token mask for a specific key."""
-        banned_mask = self.mask_cache.get(key)
-        if banned_mask is None:
-            banned_mask = torch.ones(len(self.tokenizer), dtype=bool)
-            banned_mask[candidate_tokens] = False
-            self.mask_cache[key] = banned_mask
-        return banned_mask
-
-
 class PrefixConstrainedLogitsProcessorWordLevel(ConstrainedLogitsProcessorWordLevel):
     def __init__(
         self,
-        tokenized_kg,
-        tokenized_ignored_ids,
-        total_length,
+        tokenized_ckg,
+        tokenized_used_ids,
+        max_sequence_length,
         tokenizer,
-        id_to_uid_token_map,
-        mask_cache_size=3 * 10**4,
-        cand_cache_size=1 * 10**5,
         **kwargs,
     ):
         super().__init__(
-            tokenized_kg,
-            tokenized_ignored_ids,
-            total_length,
+            tokenized_ckg,
+            tokenized_used_ids,
+            max_sequence_length,
             tokenizer,
-            id_to_uid_token_map,
-            mask_cache_size,
-            cand_cache_size=cand_cache_size,
             **kwargs,
         )
         self.mask_cache = None
@@ -350,8 +216,8 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
 
     def __init__(
         self,
-        tokenized_kg,
-        tokenized_ignored_ids,
+        tokenized_ckg,
+        tokenized_used_ids,
         max_sequence_length,
         tokenizer,
         pos_candidates_cache_size=1 * 10**5,
@@ -359,8 +225,8 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.tokenized_kg = tokenized_kg
-        self.tokenized_ignored_ids = tokenized_ignored_ids
+        self.tokenized_ckg = tokenized_ckg
+        self.tokenized_used_ids = tokenized_used_ids
         self.max_sequence_length = max_sequence_length
         self.tokenizer = tokenizer
         self.bos_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.bos_token)
@@ -375,9 +241,9 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
         else:
             self.special_tokens_ids = None
 
-        self.entity_token_ids = torch.LongTensor(list(set(self.tokenized_kg.keys())))
+        self.entity_token_ids = torch.LongTensor(list(set(self.tokenized_ckg.keys())))
         self.relation_token_ids = torch.LongTensor(
-            list(set([rel for rel_dict in self.tokenized_kg.values() for rel in rel_dict.keys()]))
+            list(set([rel for rel_dict in self.tokenized_ckg.values() for rel in rel_dict.keys()]))
         )
 
     def __call__(self, input_ids, scores):
@@ -429,7 +295,7 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
             if candidate_tokens is None:
                 candidate_tokens = np.arange(len(self.tokenizer))
 
-                user_used_ids = self.tokenized_ignored_ids[current_uid]
+                user_used_ids = self.tokenized_used_ids[current_uid]
                 candidate_tokens = np.setdiff1d(candidate_tokens, list(user_used_ids), assume_unique=True)
                 self.pos_candidates_cache[current_uid] = candidate_tokens
         elif self.is_next_token_entity(input_ids):

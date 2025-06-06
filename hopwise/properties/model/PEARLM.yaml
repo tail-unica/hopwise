@@ -6,7 +6,6 @@ num_heads: 12                   # (int) Number of heads in the multi-head attent
 num_layers: 6                   # (int) Number of layers in the transformer.
 base_model: distilgpt2
 ranker: BeamSearchSequenceScoreRanker # one of ['SampleSearchSequenceScoreRanker', 'BeamSearchSequenceScoreRanker', 'CumulativeSequenceScoreRanker']
-logits_processor: ConstrainedBeamLogitsProcessorWordLevel # one of ['ConstrainedBeamLogitsProcessorWordLevel', 'ConstrainedLogitsProcessorWordLevel']
 use_kg_token_types: True        # (bool) Whether to use token types for the knowledge graph.
 MAX_PATHS_PER_USER: 1
 path_sample_args:

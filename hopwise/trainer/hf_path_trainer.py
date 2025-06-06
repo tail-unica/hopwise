@@ -14,15 +14,13 @@ from tqdm import tqdm
 from transformers import DataCollatorForLanguageModeling, IntervalStrategy, Trainer, TrainerCallback
 
 from hopwise.utils import (
+    KnowledgeEvaluationType,
     dict2str,
     early_stopping,
     get_gpu_usage,
-    get_logits_processor,
     get_ranker,
-    get_tokenized_used_ids,
     set_color,
 )
-from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
 class HFPathTrainer(Trainer):
@@ -38,6 +36,7 @@ class HFPathTrainer(Trainer):
         path_generation_args=None,
         eval_device="cpu",
         tokenizer=None,
+        logits_processor_list=None,
     ):
         hopwise_dataset = hopwise_train_data.dataset
         tokenizer = tokenizer or hopwise_dataset.tokenizer
@@ -54,48 +53,29 @@ class HFPathTrainer(Trainer):
         # Overwrite the callbacks to only use the HopwiseCallback
         self.callback_handler.callbacks = callbacks
 
-        self.hopwise_config = hopwise_config
         self.paths_per_user = paths_per_user
         self.path_generation_args = path_generation_args
 
         self.path_hop_length = path_hop_length
-        self.token_sequence_length = hopwise_train_data.token_sequence_length
+        self.token_sequence_length = hopwise_train_data.token_sequence_length - 1
         self.eval_device = eval_device
-
-        used_ids = hopwise_train_data.general_dataloader._sampler.used_ids
-        tokenized_used_ids = get_tokenized_used_ids(used_ids, self.processing_class)
-
-        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
-        self.token_sequence_length = (1 + path_hop_length) + path_hop_length + 1
-
-        # TODO: add inference template as config param and use that instead of the hardcoded values
-        ranker_max_new_tokens = self.token_sequence_length - 2
 
         ranker_params = dict(
             processing_class=self.processing_class,
-            used_ids=used_ids,
+            used_ids=hopwise_train_data.general_dataloader._sampler.used_ids,
             item_num=hopwise_dataset.item_num,
-            max_new_tokens=ranker_max_new_tokens,
-        )
-        logits_processor_params = dict(
-            tokenized_ckg=hopwise_dataset.get_tokenized_ckg(),
-            tokenized_used_ids=tokenized_used_ids,
-            token_sequence_length=self.token_sequence_length,
-            processing_class=self.processing_class,
-            paths_per_user=self.paths_per_user,
-            task=KnowledgeEvaluationType.REC,
         )
 
-        self.ranker_rec = get_ranker(self.hopwise_config, ranker_params)
-        self.logits_processor_rec = get_logits_processor(self.hopwise_config, logits_processor_params)
+        self.ranker_rec = get_ranker(hopwise_config, ranker_params)
+        self.logits_processor_rec = logits_processor_list
 
-    def _full_sort_batch_eval(self, inputs, task="rec"):
+    def _full_sort_batch_eval(self, inputs, task=KnowledgeEvaluationType.REC):
         if isinstance(self.model, torch.nn.DataParallel):
             model = self.model.module
         else:
             model = self.model
 
-        if task == "rec":
+        if task == KnowledgeEvaluationType.REC:
             sequence_len = self.token_sequence_length
             num_return_sequences = self.paths_per_user
             logits_processor = self.logits_processor_rec
@@ -105,6 +85,7 @@ class HFPathTrainer(Trainer):
             num_return_sequences = self.N_RET_SEQ_LP
             logits_processor = self.logits_processor_lp
             ranker = self.ranker_lp
+
         outputs = model.generate(
             **inputs,
             max_length=sequence_len,
@@ -116,9 +97,9 @@ class HFPathTrainer(Trainer):
             **self.path_generation_args,
         )
 
-        scores, user_topk_sequences, avg_topk_size = ranker.get_sequences(inputs["input_ids"].shape[0], outputs)
+        scores, user_topk_sequences = ranker.get_sequences(outputs)
 
-        return scores, user_topk_sequences, avg_topk_size
+        return scores, user_topk_sequences
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)

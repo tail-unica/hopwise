@@ -31,7 +31,7 @@ relation_kg_num_interval: ~     # (str) Relation interval for filtering kg, such
 # Knowledge Path Sampling-based Model Needed
 path_hop_length: 3              # (int) Number of hops in the knowledge path.
 MAX_PATHS_PER_USER: 250         # (int) Maximum number of kg sampled paths per user.
-context_length: 24              # (int) Maximum length of the context.
+context_length: ~               # (int) Maximum length of the context. Set to (path_hop_length * 2) + 1 (U) + 2 (BOS/EOS) by default.
 metapaths: ~                    # (list) Metapaths used to sample paths.
 path_sample_args:
     temporal_causality: False   # (bool) Whether to use temporal causality.

@@ -520,6 +520,10 @@ class Config:
                 if isinstance(metapaths[i][0], list):
                     metapaths[i] = list(map(tuple, metapaths[i]))
 
+        if self.final_config_dict.get("context_length", None) is None:
+            # 2 * path_hop_length + 1(U) + BOS + EOS
+            self.final_config_dict["context_length"] = (self.final_config_dict["path_hop_length"] * 2) + 3
+
         default_path_sample_args = {
             "temporal_causality": False,
             "collaborative_path": True,

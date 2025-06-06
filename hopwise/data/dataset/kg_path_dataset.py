@@ -57,7 +57,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def _get_field_from_config(self):
         super()._get_field_from_config()
 
-        self.context_length = (self.config["path_hop_length"] * 2) + 3  # 2 * hop_length + 1(U) + BOS + EOS
+        self.context_length = self.config["context_length"]
 
         # Path sampling parameters
         self.path_hop_length = self.config["path_hop_length"]

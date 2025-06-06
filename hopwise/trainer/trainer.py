@@ -2281,26 +2281,33 @@ class HFPathLanguageModelingTrainer(Trainer):
         callback_fn=None,
     ):
         self.eval_collector.train_data_collect(train_data)
-        self.init_hf_trainer(
-            train_data,
-            valid_data=valid_data,
-            verbose=verbose,
-            saved=saved,
-            show_progress=show_progress,
-            callback_fn=callback_fn,
-        )
+
+        if not hasattr(self, "hf_trainer"):
+            self.init_hf_trainer(
+                train_data,
+                valid_data=valid_data,
+                verbose=verbose,
+                saved=saved,
+                show_progress=show_progress,
+                callback_fn=callback_fn,
+            )
+
         self.hf_trainer.train()
         self.hf_trainer.save_model()
 
         return self.best_valid_score, self.best_valid_result
 
     def _valid_epoch(self, valid_data, show_progress=False):
-        valid_result = self.evaluate(valid_data, load_best_model=False, show_progress=show_progress, task="rec")
+        valid_result = self.evaluate(
+            valid_data, load_best_model=False, show_progress=show_progress, task=KnowledgeEvaluationType.REC
+        )
         valid_score = calculate_valid_score(valid_result, self.valid_metric)
         return valid_score, valid_result
 
     @torch.no_grad()
-    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False, task="rec"):
+    def evaluate(
+        self, eval_data, load_best_model=True, model_file=None, show_progress=False, task=KnowledgeEvaluationType.REC
+    ):
         if not eval_data:
             return
 
@@ -2326,14 +2333,13 @@ class HFPathLanguageModelingTrainer(Trainer):
             else eval_data
         )
 
-        avg_topk_size = None
         num_sample = 0
         for batch_idx, batched_data in enumerate(iter_data):
             num_sample += len(batched_data)
             interaction, history_index, positive_u, positive_i = batched_data
 
             inputs = self.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(self.device)
-            scores, paths, avg_topk_size = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
+            scores, paths = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
 
             if hasattr(self.model, "decode_path"):
                 paths = self.model.decode_path(paths)
@@ -2346,8 +2352,13 @@ class HFPathLanguageModelingTrainer(Trainer):
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
             self.eval_collector.eval_batch_collect((scores, paths), None, positive_u, positive_i)
-        set_sizes = [len(s) for s in avg_topk_size.values()]
-        self.logger.info(f'{set_color("Average topk size: ", "blue")}{sum(set_sizes)/len(set_sizes):.2f}')
+
+        if "rec.paths" in self.eval_collector.data_struct:
+            collected_paths = self.eval_collector.data_struct.get("rec.paths")
+            path_uids = [path_data[-1][0][-1] for path_data in collected_paths]
+            _, topk_sizes = np.unique(path_uids, return_counts=True)
+            self.logger.info(f"{set_color('Average paths per user: ', 'blue')}{np.mean(topk_sizes):.2f}")
+
         self.eval_collector.model_collect(self.model)
         struct = self.eval_collector.get_data_struct()
         result = self.evaluator.evaluate(struct)
@@ -2396,11 +2407,11 @@ class PLMTrainer(HFPathLanguageModelingTrainer):
         logits_processor_params = dict(
             tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
             tokenized_used_ids=train_data.get_tokenized_used_ids(),
-            token_sequence_length=train_data.token_sequence_length,
-            processing_class=train_data.dataset.tokenizer,
+            max_sequence_length=train_data.token_sequence_length,
+            tokenizer=train_data.dataset.tokenizer,
             task=KnowledgeEvaluationType.REC,
         )
-        self.logits_processor_list = get_logits_processor(self.hopwise_config, logits_processor_params)
+        self.logits_processor_list = get_logits_processor(self.config, logits_processor_params)
 
         self.hf_trainer = HFPathTrainer(
             train_data,
@@ -2452,6 +2463,15 @@ class PEARLMTrainer(HFPathLanguageModelingTrainer):
             *hf_callbacks,
         ]
 
+        logits_processor_params = dict(
+            tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
+            tokenized_used_ids=train_data.get_tokenized_used_ids(),
+            max_sequence_length=train_data.token_sequence_length,
+            tokenizer=train_data.dataset.tokenizer,
+            task=KnowledgeEvaluationType.REC,
+        )
+        self.logits_processor_list = get_logits_processor(self.config, logits_processor_params)
+
         self.hf_trainer = HFPathTrainer(
             train_data,
             self.config,
@@ -2462,6 +2482,7 @@ class PEARLMTrainer(HFPathLanguageModelingTrainer):
             paths_per_user=self.paths_per_user,
             path_generation_args=self.path_gen_args,
             eval_device=self.device,
+            logits_processor_list=self.logits_processor_list,
         )
 
 
@@ -2513,7 +2534,9 @@ class KGGLMTrainer(PEARLMTrainer, PretrainTrainer):
 
         return self.best_valid_score, self.best_valid_result
 
-    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False, task="rec"):
+    def evaluate(
+        self, eval_data, load_best_model=True, model_file=None, show_progress=False, task=KnowledgeEvaluationType.REC
+    ):
         if load_best_model and self.model.train_stage == "lp_pretrain":
             self.hf_trainer.state.best_model_checkpoint = self.hf_trainer.args.output_dir
 
