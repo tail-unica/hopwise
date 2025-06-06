@@ -131,7 +131,7 @@ class CumulativeSequenceScoreRanker:
             user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
             self.avg_topk_size[uid].add(seq[-1])
 
-        return scores, user_topk_sequences
+        return scores, user_topk_sequences, self.avg_topk_size
 
 
 class SampleSearchSequenceScoreRanker:
@@ -206,7 +206,7 @@ class SampleSearchSequenceScoreRanker:
             user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
             self.avg_topk_size[uid].add(seq[-1])
 
-        return scores, user_topk_sequences
+        return scores, user_topk_sequences, self.avg_topk_size
 
 
 class BeamSearchSequenceScoreRanker:
@@ -257,4 +257,4 @@ class BeamSearchSequenceScoreRanker:
             user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
             self.avg_topk_size[uid].add(seq[-1])
 
-        return scores, user_topk_sequences
+        return scores, user_topk_sequences, self.avg_topk_size

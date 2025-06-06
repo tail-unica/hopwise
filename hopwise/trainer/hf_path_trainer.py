@@ -116,9 +116,9 @@ class HFPathTrainer(Trainer):
             **self.path_generation_args,
         )
 
-        scores, user_topk_sequences = ranker.get_sequences(inputs["input_ids"].shape[0], outputs)
+        scores, user_topk_sequences, avg_topk_size = ranker.get_sequences(inputs["input_ids"].shape[0], outputs)
 
-        return scores, user_topk_sequences, self.ranker_rec.avg_topk_size
+        return scores, user_topk_sequences, avg_topk_size
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)
