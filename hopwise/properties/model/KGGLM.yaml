@@ -14,7 +14,8 @@ base_model: distilgpt2
 path_sample_args:
     restrict_by_phase: False    # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.
     pretrain_hop_length: (3,3)  # (tuple) The range of the hop length for pre-training.
-    pretrain_paths: 10000       # (int) Number of paths for pre-training.
+    pretrain_paths: 50          # (int) Number of paths for pre-training.
+    MAX_RW_TRIES_PER_IID: 1     # (int) Maximum number of tries per positive item (during pretraining applies per entity).
 
 path_generation_args:
     paths_per_user: 30          # (int) Number of paths generated per user.

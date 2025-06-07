@@ -827,13 +827,17 @@ def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_fiel
             else:
                 item_candidates = None
 
-            # First hop is the relation user-item already addressed
-            generated_path = graph.random_walk(start_node, path_hop_length, weights="weight")
-            full_path = (u, *generated_path)
+            while iid_tries > 0:
+                # First hop is the relation user-item already addressed
+                generated_path = graph.random_walk(start_node, path_hop_length, weights="weight")
+                full_path = (u, *generated_path)
 
-            valid_path = KnowledgePathDataset._check_kg_path(
-                (*full_path, -1), user_num, item_num, check_last_node=False, collaborative_path=collaborative_path
-            )
+                valid_path = KnowledgePathDataset._check_kg_path(
+                    (*full_path, -1), user_num, item_num, check_last_node=False, collaborative_path=collaborative_path
+                )
+                if not valid_path:
+                    iid_tries -= 1
+
             if valid_path:
                 if item_candidates is not None:
                     reachable_candidates = graph.es.select(_source=full_path[-1], _target=item_candidates)

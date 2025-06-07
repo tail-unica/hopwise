@@ -1063,7 +1063,7 @@ class TestPathLanguageModelingRecommender(unittest.TestCase):
                 "checkpoint_dir": tmpdirname,
                 "pretrain_epochs": 1,
                 **self.hf_lm_base_config,
-                "path_sample_args": {"pretrain_paths": 100},
+                "path_sample_args": {"pretrain_paths": 2},
             }
             quick_test(config_dict, saved=True)
 

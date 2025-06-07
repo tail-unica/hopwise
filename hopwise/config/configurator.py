@@ -531,7 +531,7 @@ class Config:
             "path_token_separator": " ",
             "restrict_by_phase": False,
             "MAX_CONSECUTIVE_INVALID": 10,
-            "MAX_RW_TRIES_PER_IID": 50,
+            "MAX_RW_TRIES_PER_IID": 1,
             "MAX_RW_PATHS_PER_HOP": 1,
         }
         if not isinstance(self.final_config_dict["path_sample_args"], dict):

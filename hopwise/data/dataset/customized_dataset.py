@@ -179,30 +179,28 @@ class KGGLMDataset(KnowledgePathDataset):
 
             paths = set()
             iter_paths = tqdm(
-                range(self.pretrain_paths),
+                range(graph_min_iid + 1, len(graph.vs)),
                 ncols=100,
-                total=self.pretrain_paths,
+                total=len(graph.vs) - graph_min_iid,
                 desc=set_color("KGGLM Pre-training Path Sampling", "red"),
             )
+            max_tries_per_entity = self.config["path_sample_args"]["MAX_RW_TRIES_PER_IID"]
 
-            def _generate_paths_random_walks():
-                start_node = np.random.randint(graph_min_iid, len(graph.vs))
-                path_hop_length = np.random.randint(min_hop, max_hop + 1)
-
-                while True:
-                    generated_path = graph.random_walk(start_node, path_hop_length, weights="weight")
-                    generated_path = tuple(generated_path)
-                    if generated_path not in paths:
-                        break
-
-                paths.add(generated_path)
+            kwargs = dict(
+                graph=graph,
+                min_hop=min_hop,
+                max_hop=max_hop,
+                pretrain_paths=self.pretrain_paths,
+                max_tries_per_entity=max_tries_per_entity,
+                paths=paths,
+            )
 
             if not self.parallel_max_workers:
-                for _ in iter_paths:
-                    _generate_paths_random_walks()
+                for entity in iter_paths:
+                    _generate_paths_random_walks(entity)
             else:
-                joblib.Parallel(n_jobs=self.parallel_max_workers, prefer="threads")(
-                    joblib.delayed(_generate_paths_random_walks)() for _ in iter_paths
+                joblib.Parallel(n_jobs=self.parallel_max_workers, prefer="processes")(
+                    joblib.delayed(_generate_paths_random_walks)(entity, **kwargs) for entity in iter_paths
                 )
 
             paths_with_relations = self._add_paths_relations(graph, paths)
@@ -212,6 +210,28 @@ class KGGLMDataset(KnowledgePathDataset):
                 path_string += self._format_path(path) + "\n"
 
             self._path_dataset = path_string
+
+
+def _generate_paths_random_walks(start_node, **kwargs):
+    graph = kwargs.get("graph")
+    min_hop = kwargs.get("min_hop")
+    max_hop = kwargs.get("max_hop")
+    pretrain_paths = kwargs.get("pretrain_paths")
+    max_tries_per_entity = kwargs.get("max_tries_per_entity")
+    paths = kwargs.get("paths")
+
+    for _ in range(pretrain_paths):
+        path_hop_length = np.random.randint(min_hop, max_hop + 1)
+        tries_per_entity = max_tries_per_entity
+
+        while tries_per_entity > 0:
+            generated_path = graph.random_walk(start_node, path_hop_length, weights="weight")
+            generated_path = tuple(generated_path)
+            if generated_path not in paths:
+                break
+            tries_per_entity -= 1
+
+        paths.add(generated_path)
 
 
 class TPRecTimestampDataset:
