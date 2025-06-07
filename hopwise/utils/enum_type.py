@@ -2,6 +2,11 @@
 # @Author : Yupeng Hou
 # @Email  : houyupeng@ruc.edu.cn
 
+# UPDATE
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
 """hopwise.utils.enum_type
 #######################
 """
@@ -75,12 +80,14 @@ class InputType(Enum):
     - ``PAIRWISE``: Pair-wise input, like ``uid, pos_iid, neg_iid``.
     - ``LISTWISE``: List-wise input, like ``uid, [iid1, iid2, ...]``.
     - ``PATHWISE``: KG Path-wise input, like ``uid, pos_iid, eid1, eid2, next_pos_iid``.
+    - ``USERWISE``: User-wise input, like ``uid0, uid1, ...., uidn``.
     """
 
     POINTWISE = 1
     PAIRWISE = 2
     LISTWISE = 3
     PATHWISE = 4
+    USERWISE = 5
 
 
 class FeatureType(Enum):

@@ -7,6 +7,10 @@
 # @Author : Shanlei Mu, Gaowei Zhang
 # @Email  : slmu@ruc.edu.cn, 1462034631@qq.com
 
+# UPDATE
+# @Time   : 2025
+# @Author : Alessandro Soccol
+# @Email  : alessandro.soccol@unica.it
 
 """hopwise.model.loss
 #######################
@@ -16,6 +20,56 @@ Common Loss in recommender system
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+
+class SSMLoss(nn.Module):
+    """Samples Softmax Loss (SSM) according to the implementation in"""
+
+    def __init__(self, cosine_sim=True, temperature=1.0, eps=1e-7):
+        super().__init__()
+        self.cosine_sim = cosine_sim
+        self.temperature = temperature
+        self.eps = eps
+
+    def forward(self, user_emb, pos_item_emb, neg_item_emb):
+        if self.cosine_sim:
+            user_emb = nn.functional.normalize(user_emb, p=2, dim=-1)
+            pos_item_emb = nn.functional.normalize(pos_item_emb, p=2, dim=-1)
+            neg_item_emb = nn.functional.normalize(neg_item_emb, p=2, dim=-1)
+
+        pos_score = torch.mul(user_emb, pos_item_emb).sum(dim=1, keepdim=True)
+        neg_score = torch.einsum("ijk, ik->ij", neg_item_emb, user_emb)
+
+        # Temperatue-aware
+        pos_score = torch.exp(pos_score / self.temperature)
+        neg_score = torch.exp(neg_score / self.temperature).sum(dim=1, keepdim=True)
+
+        total_score = pos_score + neg_score
+        nce_loss = -(pos_score / total_score + self.eps).log().sum()
+
+        return nce_loss
+
+
+class SimCELoss(nn.Module):
+    """Simplified Sampled Softmax Cross- Entropy Loss (SimCE),
+    based on the implementation in https://arxiv.org/pdf/2406.16170"""
+
+    def __init__(self, margin=5.0):
+        super().__init__()
+        self.margin = margin
+
+    def forward(self, user_emb, pos_item_emb, neg_item_emb):
+        # user_emb: [batch, dim]
+        # pos_item_emb: [batch, dim]
+        # neg_item_emb: [batch, num_neg, dim]
+        num_neg, dim = neg_item_emb.shape[1], neg_item_emb.shape[2]
+        neg_item_emb = neg_item_emb.reshape(-1, num_neg, dim)
+        pos_score = torch.mul(user_emb, pos_item_emb).sum(dim=1)
+        neg_score = torch.mul(user_emb.unsqueeze(dim=1), neg_item_emb).sum(dim=-1)
+        neg_score = torch.max(neg_score, dim=-1).values
+        loss = torch.relu(self.margin - pos_score + neg_score)
+
+        return torch.mean(loss)
 
 
 class BPRLoss(nn.Module):

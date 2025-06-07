@@ -79,7 +79,7 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
     We implement the the DiffRec model with only user dataloader.
     """
 
-    input_type = InputType.LISTWISE
+    input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)

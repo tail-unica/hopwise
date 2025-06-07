@@ -7,6 +7,11 @@
 # @Author : Yupeng Hou, Xingyu Pan, Yushuo Chen, Lanling Xu
 # @Email  : houyupeng@ruc.edu.cn, panxy@ruc.edu.cn, chenyushuo@ruc.edu.cn, xulanling_sherry@163.com
 
+# UPDATE:
+# @Time   : 2025
+# @Author : Giacomo Medda, Alessandro Soccol
+# @Email  : giacomo.medda@unica.it, alessandro.soccol@unica.it
+
 """hopwise.data.kg_dataset
 ##########################
 """
@@ -212,7 +217,6 @@ class KnowledgeBasedDataset(Dataset):
         group_by = self.config["eval_args"]["group_by"]
 
         datasets = dict()
-
         if knowledge_split_mode == "RS":
             # Manage knowledge graph split
             if not isinstance(knowledge_split_args["RS"], list):
@@ -270,7 +274,6 @@ class KnowledgeBasedDataset(Dataset):
             )
         else:
             raise NotImplementedError(f"The splitting_method [{split_mode}] has not been implemented.")
-
         return datasets[KnowledgeEvaluationType.REC] if KnowledgeEvaluationType.LP not in datasets else datasets
 
     def copy(self, new_inter_feat, data_type=KnowledgeEvaluationType.REC):
@@ -1004,8 +1007,6 @@ class KnowledgeBasedDataset(Dataset):
             if rel_id == ui_relation_id:
                 if idx < self.inter_num:
                     src_type = "user"
-                else:
-                    src_type = "entity"
 
                 if src_id not in graph_dict[src_type]:
                     graph_dict[src_type][src_id] = dict()

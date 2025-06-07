@@ -8,6 +8,10 @@
 # @Author : Gaowei Zhang
 # @Email  : zgw15630559577@163.com
 
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
 """hopwise.trainer.hyper_tuning
 ############################
 """
@@ -161,6 +165,7 @@ class HyperTuning:
         early_stop=10,
         output_path=None,
         timeout=None,
+        show_progress=False,
         study_name=None,
         resume=False,
     ):
@@ -172,6 +177,7 @@ class HyperTuning:
         self.params_list = []
         self.score_list = []
 
+        self.show_progress = show_progress
         self.objective_function = objective_function
         self.max_evals = max_evals
         self.timeout = timeout

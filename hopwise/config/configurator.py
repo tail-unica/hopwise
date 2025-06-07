@@ -7,6 +7,11 @@
 # @Author : Shanlei Mu, Yupeng Hou, Jiawei Guan, Xingyu Pan, Gaowei Zhang
 # @Email  : slmu@ruc.edu.cn, houyupeng@ruc.edu.cn, Guanjw@ruc.edu.cn, xy_pan@foxmail.com, zgw15630559577@163.com
 
+# @Time   : 2025
+# @Author : Giacomo Medda, Alessandro Soccol
+# @Email  : giacomo.medda@unica.it, alessandro.soccol@unica.it
+
+
 """hopwise.config.configurator
 ################################
 """
@@ -90,6 +95,7 @@ class Config:
         self.final_config_dict = self._get_final_config_dict()
         self._set_default_parameters()
         self._init_device()
+        self._set_torch_dtype()
         self._set_train_neg_sample_args()
         self._set_eval_neg_sample_args("valid")
         self._set_eval_neg_sample_args("test")
@@ -267,9 +273,6 @@ class Config:
         knowledge_base_init = os.path.join(quick_start_config_path, "knowledge_base.yaml")
         knowledge_base_on_ml_100k_init = os.path.join(quick_start_config_path, "knowledge_base_on_ml-100k.yaml")
         knowledge_path_base_init = os.path.join(quick_start_config_path, "knowledge_path_base.yaml")
-        knowledge_path_base_on_ml_100k_init = os.path.join(
-            quick_start_config_path, "knowledge_path_base_on_ml-100k.yaml"
-        )
 
         self.internal_config_dict = dict()
         for file in [
@@ -317,7 +320,7 @@ class Config:
         elif self.internal_config_dict["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
             self._update_internal_config_dict(knowledge_path_base_init)
             if dataset == "ml-100k":
-                self._update_internal_config_dict(knowledge_path_base_on_ml_100k_init)
+                self._update_internal_config_dict(knowledge_base_on_ml_100k_init)
 
         for file in [
             dataset_init_file,
@@ -362,6 +365,13 @@ class Config:
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
         else:
             raise ValueError("Either Model has attr 'input_type',or arg 'loss_type' should exist in config.")
+
+        # handle special cases for models that needs pretrain in one way
+        if self.final_config_dict["model"] in ["TPRec"]:
+            train_stage = self.final_config_dict.get("train_stage", None)
+
+            if train_stage is not None and train_stage in ["pretrain"]:
+                self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
 
         metrics = self.final_config_dict["metrics"]
         if isinstance(metrics, str):
@@ -510,6 +520,10 @@ class Config:
                 if isinstance(metapaths[i][0], list):
                     metapaths[i] = list(map(tuple, metapaths[i]))
 
+        if self.final_config_dict.get("context_length", None) is None:
+            # 2 * path_hop_length + 1(U) + BOS + EOS
+            self.final_config_dict["context_length"] = (self.final_config_dict["path_hop_length"] * 2) + 3
+
         default_path_sample_args = {
             "temporal_causality": False,
             "collaborative_path": True,
@@ -517,7 +531,7 @@ class Config:
             "path_token_separator": " ",
             "restrict_by_phase": False,
             "MAX_CONSECUTIVE_INVALID": 10,
-            "MAX_RW_TRIES_PER_IID": 50,
+            "MAX_RW_TRIES_PER_IID": 1,
             "MAX_RW_PATHS_PER_HOP": 1,
         }
         if not isinstance(self.final_config_dict["path_sample_args"], dict):
@@ -609,6 +623,25 @@ class Config:
         else:
             raise ValueError(f"the mode [{eval_mode}] in eval_args is not supported.")
         self.final_config_dict[f"{phase}_neg_sample_args"] = eval_neg_sample_args
+
+    def _set_torch_dtype(self):
+        """
+        Convert a string dtype to a torch dtype.
+        """
+        import torch
+
+        weight_precision = self.final_config_dict.get("weight_precision", "float32")
+
+        if weight_precision == "float32":
+            weight_precision = torch.float32
+        elif weight_precision == "float16":
+            weight_precision = torch.float16
+        elif weight_precision == "bfloat16":
+            weight_precision = torch.bfloat16
+        else:
+            raise ValueError(f"Unsupported weight_precision: {weight_precision}")
+
+        self.final_config_dict["weight_precision"] = weight_precision
 
     def __setitem__(self, key, value):
         if not isinstance(key, str):

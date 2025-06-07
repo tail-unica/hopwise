@@ -1,20 +1,32 @@
-# CAFE Parameters
-rank_weight: 10.0
-use_dropout: True
-deep_module: True
-topk_candidates: 10
-sample_size: 500
-kg_reverse_r: True
-topk_paths: 25
-clip_grad_norm:
-  max_norm: 5.0
+# Training Arguments
+base_model: gpt2
+logits_processor: ConstrainedLogitsProcessorWordLevel
 
-epochs: 50
-eval_step: 50
+### Decoder PARAMETERS ###
+num_layers: 1
+num_heads: 1
+embedding_size: 100
+temperature: 1.0
+dropout: 0.1
+bias: True
 
 
-# Embeddings
+### PATH SAMPLING PROCESS ###
+
+max_hop_length: 3
+infer_path_length: 9
+MAX_PATHS_PER_USER: 1
+path_sample_args:
+    temporal_causality: False
+    strategy: simple-ui
+    parallel_max_workers: -1
+
+path_generation_args:
+    paths_per_user: 10
+
+
 additional_feat_suffix: [useremb, entityemb, relationemb]
+
 # To load the pretrained embeddings (Typically from TransE) necessary to score the paths
 load_col:
     useremb: [user_embedding_id, user_embedding]
