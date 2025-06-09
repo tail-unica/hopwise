@@ -143,55 +143,6 @@ class DIENDataset(SequentialDataset):
         self.inter_feat = new_data
 
 
-class CAFEDataset(KnowledgeBasedDataset):
-    def __init__(self, config):
-        super().__init__(config)
-
-    def ckg_dict_graph(self):
-        """Get a dictionary representation of the collaborative knowledge graph where ui-interactions
-        are NOT BIDIRECTIONAL
-
-        Returns:
-            dict: Dictionary representation of the collaborative knowledge graph.
-        """
-
-        uids = self.inter_feat[self.uid_field].numpy()
-        iids = self.inter_feat[self.iid_field].numpy()
-
-        src = np.concatenate([uids, self.head_entities])
-        tgt = np.concatenate([iids, self.tail_entities])
-
-        ui_relation_id = self.field2token_id[self.relation_field][self.ui_relation]
-        rels = np.concatenate([np.full(self.inter_num, ui_relation_id), self.relations])
-
-        graph_dict = {"user": {}, "entity": {}}
-        for idx, (src_id, rel_id, tgt_id) in enumerate(zip(src, rels, tgt)):
-            if rel_id == ui_relation_id:
-                if src_id not in graph_dict["user"]:
-                    graph_dict["user"][src_id] = dict()
-                if rel_id not in graph_dict["user"][src_id]:
-                    graph_dict["user"][src_id][rel_id] = list()
-
-                # UI interaction case
-                graph_dict["user"][src_id][rel_id].append(tgt_id)
-            else:
-                if src_id not in graph_dict["entity"]:
-                    graph_dict["entity"][src_id] = dict()
-                if rel_id not in graph_dict["entity"][src_id]:
-                    graph_dict["entity"][src_id][rel_id] = list()
-
-                if tgt_id not in graph_dict["entity"]:
-                    graph_dict["entity"][tgt_id] = dict()
-                if rel_id not in graph_dict["entity"][tgt_id]:
-                    graph_dict["entity"][tgt_id][rel_id] = list()
-
-                # KG case
-                graph_dict["entity"][src_id][rel_id].append(tgt_id)
-                graph_dict["entity"][tgt_id][rel_id].append(src_id)
-
-        return graph_dict
-
-
 class KGGLMDataset(KnowledgePathDataset):
     def _get_field_from_config(self):
         super()._get_field_from_config()

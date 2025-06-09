@@ -75,7 +75,7 @@ class CAFE(KnowledgeRecommender):
         self.positives = dataset.history_item_matrix()[0]
 
         # Load Full Knowledge Graph in dict form
-        self.graph_dict = dataset.ckg_dict_graph()
+        self.graph_dict = dataset.ckg_dict_graph(ui_bidirectional=False)
         self.num_products = self.n_items
         self.memory_size = 10000  # number of paths to save for each metapath
         self.replay_memory = {}
@@ -84,6 +84,9 @@ class CAFE(KnowledgeRecommender):
         for relation_name in self.rid2relation.values():
             if relation_name == "[PAD]":
                 continue
+
+            if relation_name == f"{dataset.ui_relation}_r":
+                raise ValueError("The ui_relation name should not end with '_r'.")
 
             if relation_name == dataset.ui_relation:
                 head, tail = "user", "entity"

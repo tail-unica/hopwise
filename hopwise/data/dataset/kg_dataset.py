@@ -987,27 +987,26 @@ class KnowledgeBasedDataset(Dataset):
         else:
             raise NotImplementedError("ckg hetero graph format [{}] has not been implemented.")
 
-    def ckg_dict_graph(self):
+    def ckg_dict_graph(self, ui_bidirectional=True):
         """Get a dictionary representation of the collaborative knowledge graph.
 
         Returns:
             dict: Dictionary representation of the collaborative knowledge graph.
         """
-        src, tgt = self._create_ckg_source_target(form="numpy")
-        # Adjust the indices to account for the user_num offset
-        src[src >= self.user_num] -= self.user_num
-        tgt[tgt >= self.user_num] -= self.user_num
+        uids = self.inter_feat[self.uid_field].numpy()
+        iids = self.inter_feat[self.iid_field].numpy()
+
+        src = np.concatenate([uids, self.head_entities])
+        tgt = np.concatenate([iids, self.tail_entities])
 
         ui_relation_id = self.field2token_id[self.relation_field][self.ui_relation]
-        rels = np.concatenate([np.full(self.inter_num * 2, ui_relation_id), self.relations])
+        rels = np.concatenate([np.full(self.inter_num, ui_relation_id), self.relations])
 
         graph_dict = {"user": {}, "entity": {}}
         for idx, (src_id, rel_id, tgt_id) in enumerate(zip(src, rels, tgt)):
             if rel_id == ui_relation_id:
-                if idx < self.inter_num:
-                    src_type = "user"
-                else:
-                    src_type = "entity"
+                src_type = "user"
+                end_type = "entity"
 
                 if src_id not in graph_dict[src_type]:
                     graph_dict[src_type][src_id] = dict()
@@ -1016,6 +1015,9 @@ class KnowledgeBasedDataset(Dataset):
 
                 # UI interaction case
                 graph_dict[src_type][src_id][rel_id].append(tgt_id)
+                if ui_bidirectional:
+                    graph_dict[end_type][tgt_id][rel_id].append(src_id)
+
             else:
                 if src_id not in graph_dict["entity"]:
                     graph_dict["entity"][src_id] = dict()
