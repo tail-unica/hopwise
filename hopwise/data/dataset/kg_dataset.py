@@ -735,7 +735,6 @@ class KnowledgeBasedDataset(Dataset):
 
             uids = self.inter_feat[self.uid_field].numpy()
             iids = self.inter_feat[self.iid_field].numpy() + user_num
-
             src = np.concatenate([uids, iids, hids])
             tgt = np.concatenate([iids, uids, tids])
         elif form == "torch":
@@ -1007,6 +1006,8 @@ class KnowledgeBasedDataset(Dataset):
             if rel_id == ui_relation_id:
                 if idx < self.inter_num:
                     src_type = "user"
+                else:
+                    src_type = "entity"
 
                 if src_id not in graph_dict[src_type]:
                     graph_dict[src_type][src_id] = dict()
