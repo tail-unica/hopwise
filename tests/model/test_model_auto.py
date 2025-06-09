@@ -1058,7 +1058,7 @@ class TestPathLanguageModelingRecommender(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdirname:
             config_dict = {
                 "model": "KGGLM",
-                "train_stage": "lp_pretrain",
+                "train_stage": "pretrain",
                 "save_step": 1,
                 "checkpoint_dir": tmpdirname,
                 "pretrain_epochs": 1,

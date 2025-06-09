@@ -7,8 +7,6 @@
 Common logits processor in recommender system
 """
 
-import math
-
 import numpy as np
 import torch
 
@@ -84,12 +82,16 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
                     key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
 
                 banned_mask = self.get_banned_mask(key, candidate_tokens)
+
+                if banned_mask.all():
+                    banned_mask[self.tokenizer.pad_token_id] = False
+
                 full_mask[idx] = banned_mask
 
             if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
-                scores[full_mask[input_ids_inv]] = -math.inf
+                scores[full_mask[input_ids_inv]] = -torch.inf
             else:
-                scores[full_mask] = -math.inf
+                scores[full_mask] = -torch.inf
 
         return scores
 
@@ -196,7 +198,7 @@ class PrefixConstrainedLogitsProcessorWordLevel(ConstrainedLogitsProcessorWordLe
             self.mask_non_eos_tokens(scores)
         else:
             indices = []
-            masked_scores = torch.full_like(scores, -math.inf)
+            masked_scores = torch.full_like(scores, -torch.inf)
             for idx in range(scores.shape[0]):
                 _, candidate_tokens = self.process_scores(input_ids, idx, current_len)
 
@@ -263,13 +265,13 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
                 candidate_tokens = self.process_scores(unique_input_ids, idx)
                 full_mask[idx, candidate_tokens] = False
 
-            scores[full_mask[input_ids_inv]] = -math.inf
+            scores[full_mask[input_ids_inv]] = -torch.inf
         else:
             # Paths are expected to be the same type and length, so we can use the same mask for all
             full_mask = np.ones((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
             candidate_tokens = self.process_scores(input_ids, 0)
             full_mask[:, candidate_tokens] = False
-            scores[full_mask] = -math.inf
+            scores[full_mask] = -torch.inf
 
         return scores
 

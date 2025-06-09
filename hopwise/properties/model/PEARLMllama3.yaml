@@ -1,11 +1,11 @@
 base_model: llama3
 
-logits_processor: ConstrainedLogitsProcessorWordLevel
+ranker: SampleSearchSequenceScoreRanker
 ### Decoder PARAMETERS ###
 
-n_layers: 1
-n_heads: 4
-hidden_size: 256
+num_layers: 1
+num_heads: 1
+embedding_size: 100
 temperature: 1.0
 rope_base: 10_000
 rope_config: ~
@@ -15,7 +15,6 @@ num_kv_groups: 8
 
 max_hop_length: 3
 infer_path_length: 9
-MAX_PATHS_PER_USER: 1
 path_sample_args:
     temporal_causality: False
     strategy: simple-ui
@@ -23,3 +22,4 @@ path_sample_args:
 
 path_generation_args:
     paths_per_user: 10
+    top_k: 10

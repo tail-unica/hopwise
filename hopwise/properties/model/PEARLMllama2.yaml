@@ -2,11 +2,10 @@ base_model: llama2
 ### Decoder PARAMETERS ###
 
 num_layers: 1
-num_heads: 4
-embedding_size: 256
+num_heads: 1
+embedding_size: 100
 temperature: 1.0
-logits_processor: ConstrainedLogitsProcessorWordLevel
-
+ranker: SampleSearchSequenceScoreRanker
 ### PATH SAMPLING PROCESS ###
 
 max_hop_length: 3
@@ -20,3 +19,4 @@ path_sample_args:
 
 path_generation_args:
     paths_per_user: 10
+    top_k: 10

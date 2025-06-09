@@ -85,16 +85,21 @@ def _get_dataloader_name(config, dataloaders_folder):
     strategy = path_gen_args["strategy"]
     collaborative_path = path_gen_args["collaborative_path"]
 
+    filename = f"{config['dataset']}-for-{config['model']}"
+    f"-str {strategy}"
+    f"-mppu {max_path_per_user}"
+    f"-max_tries {max_rw_tries_per_iid}"
+    f"-temp {temporal_causality}"
+    f"-col {collaborative_path}"
+    f"-restrbyphase {restrict_by_phase}-dataloader.pth"
+
+    if "train_stage" in config and config["MODEL_TYPE"] in [ModelType.PATH_LANGUAGE_MODELING]:
+        filename += f"-{config['train_stage']}"
+
     file_path = os.path.join(
         config["checkpoint_dir"],
         dataloaders_folder,
-        f"{config['dataset']}-for-{config['model']}"
-        f"-str {strategy}"
-        f"-mppu {max_path_per_user}"
-        f"-max_tries {max_rw_tries_per_iid}"
-        f"-temp {temporal_causality}"
-        f"-col {collaborative_path}"
-        f"-restrbyphase {restrict_by_phase}-dataloader.pth",
+        filename,
     )
 
     return file_path

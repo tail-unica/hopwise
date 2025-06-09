@@ -20,6 +20,7 @@ import datetime
 import importlib
 import os
 import random
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -35,7 +36,7 @@ from hopwise.model.ranker import (
     CumulativeSequenceScoreRanker,
     SampleSearchSequenceScoreRanker,
 )
-from hopwise.utils.enum_type import ModelType, PathLanguageModelingTokenType
+from hopwise.utils.enum_type import ModelType
 
 
 def get_local_time():
@@ -454,7 +455,6 @@ def get_ranker(config, params):
     processing_class = params.get("processing_class", None)
     used_ids = params.get("used_ids", None)
     item_num = params.get("item_num", None)
-    ranker_max_new_tokens = params.get("ranker_max_new_tokens", None)
 
     if config["ranker"] == "CumulativeSequenceScoreRanker":
         ranker = CumulativeSequenceScoreRanker(
@@ -462,7 +462,6 @@ def get_ranker(config, params):
             used_ids,
             item_num,
             topk=10,
-            max_new_tokens=ranker_max_new_tokens,
         )
     elif config["ranker"] == "BeamSearchSequenceScoreRanker":
         ranker = BeamSearchSequenceScoreRanker(
@@ -477,7 +476,6 @@ def get_ranker(config, params):
             used_ids,
             item_num,
             topk=10,
-            max_new_tokens=ranker_max_new_tokens,
         )
     else:
         raise ValueError(
@@ -501,22 +499,6 @@ def get_logits_processor(config, params):
     return LogitsProcessorList([logits_processor_class(**params)])
 
 
-def get_tokenized_used_ids(used_ids, tokenizer):
-    """
-    Convert the used ids to tokenized ids for the user and item tokens.
-    Args:
-        used_ids (dict): A dictionary where keys are user ids and values are lists of item ids.
-        tokenizer: The tokenizer to convert ids to tokenized ids.
-    Returns:
-        dict: A dictionary where keys are tokenized user ids and values are lists of tokenized item ids.
-    """
-    user_token_type = PathLanguageModelingTokenType.USER.value
-    item_token_type = PathLanguageModelingTokenType.ITEM.value
-
-    tokenized_used_ids = {}
-    for uid in range(used_ids.shape[0]):
-        uid_token = tokenizer.convert_tokens_to_ids(user_token_type + str(uid))
-        tokenized_used_ids[uid_token] = set(
-            [tokenizer.convert_tokens_to_ids(item_token_type + str(item)) for item in used_ids[uid]]
-        )
-    return tokenized_used_ids
+class GenerationOutputs(SimpleNamespace):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)

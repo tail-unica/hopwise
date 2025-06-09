@@ -13,7 +13,7 @@ from tokenizers import Tokenizer, pre_tokenizers
 from tokenizers import models as token_models
 from tokenizers import processors as token_processors
 from tokenizers import trainers as token_trainers
-from tqdm import tqdm
+from tqdm import rich
 from transformers import PreTrainedTokenizerFast
 
 from hopwise.data import Interaction
@@ -434,7 +434,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         final_paths = set()
 
-        iter_users = tqdm(
+        iter_users = rich.tqdm(
             range(1, self.user_num),
             total=self.user_num - 1,
             ncols=100,
@@ -651,7 +651,7 @@ def _user_parallel_sampling(sampling_func_factory):
 
     def wrapper(*args, **kwargs):
         user_num = kwargs.get("user_num", None)
-        iter_users = tqdm(
+        iter_users = rich.tqdm(
             range(1, user_num),
             total=user_num - 1,
             ncols=100,

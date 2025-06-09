@@ -1,6 +1,7 @@
 # Training Arguments
 base_model: gpt2
 logits_processor: ConstrainedLogitsProcessorWordLevel
+ranker: SampleSearchSequenceScoreRanker
 
 ### Decoder PARAMETERS ###
 num_layers: 1
@@ -9,7 +10,6 @@ embedding_size: 100
 temperature: 1.0
 dropout: 0.1
 bias: True
-
 
 ### PATH SAMPLING PROCESS ###
 
@@ -23,21 +23,4 @@ path_sample_args:
 
 path_generation_args:
     paths_per_user: 10
-
-
-additional_feat_suffix: [useremb, entityemb, relationemb]
-
-# To load the pretrained embeddings (Typically from TransE) necessary to score the paths
-load_col:
-    useremb: [user_embedding_id, user_embedding]
-    entityemb: [entity_embedding_id, entity_embedding]
-    relationemb: [relation_embedding_id, relation_embedding]
-
-alias_of_user_id: [user_embedding_id]
-alias_of_entity_id: [entity_embedding_id]
-alias_of_relation_id: [relation_embedding_id]
-
-preload_weight:
-  user_embedding_id: user_embedding
-  entity_embedding_id: entity_embedding
-  relation_embedding_id: relation_embedding
+    top_k: 10

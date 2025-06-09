@@ -38,6 +38,7 @@ from hopwise.data.interaction import Interaction
 from hopwise.evaluator import Collector, Collector_KG, Evaluator, Evaluator_KG
 from hopwise.utils import (
     EvaluatorType,
+    GenerationOutputs,
     KGDataLoaderState,
     WandbLogger,
     calculate_valid_score,
@@ -47,6 +48,7 @@ from hopwise.utils import (
     get_gpu_usage,
     get_local_time,
     get_logits_processor,
+    get_ranker,
     get_tensorboard,
     set_color,
 )
@@ -1940,6 +1942,12 @@ class PEARLMfromscratchTrainer(Trainer):
     def __init__(self, config, model):
         super().__init__(config, model)
         self.tokenizer = None
+        self.logit_processor = None
+        self.ranker = None
+        self.path_gen_args = config["path_generation_args"]
+        path_hop_length = config["path_hop_length"]
+        token_sequence_length = 1 + path_hop_length + path_hop_length + 1
+        self.ranker_max_new_tokens = token_sequence_length - 3
 
     def fit(
         self,
@@ -1951,6 +1959,23 @@ class PEARLMfromscratchTrainer(Trainer):
         callback_fn=None,
     ):
         self.tokenizer = train_data.dataset.tokenizer
+        logits_processor_params = dict(
+            tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
+            tokenized_used_ids=train_data.get_tokenized_used_ids(),
+            max_sequence_length=train_data.token_sequence_length,
+            tokenizer=self.tokenizer,
+            task=KnowledgeEvaluationType.REC,
+        )
+
+        ranker_params = dict(
+            processing_class=self.tokenizer,
+            used_ids=train_data.general_dataloader._sampler.used_ids,
+            item_num=train_data.dataset.item_num,
+        )
+
+        self.logit_processor = get_logits_processor(self.config, logits_processor_params)
+        self.ranker = get_ranker(self.config, ranker_params)
+
         from torch.utils.data import DataLoader
 
         train_data = train_data.tokenized_dataset["train"]
@@ -2001,6 +2026,7 @@ class PEARLMfromscratchTrainer(Trainer):
                 sync_loss = self.sync_grad_loss()
 
             with autocast(device_type=self.device.type, enabled=self.enable_amp):
+                batch_interaction = torch.tensor(batch_interaction["input_ids"]).to(self.device)  # noqa: PLW2901
                 losses = loss_func(batch_interaction)
 
             if isinstance(losses, tuple):
@@ -2053,29 +2079,23 @@ class PEARLMfromscratchTrainer(Trainer):
 
         item_tensor = None
         tot_item_num = eval_data._dataset.item_num
-        neg_sampling = isinstance(eval_data, NegSampleDataLoader)
-        if not neg_sampling:
-            item_tensor = eval_data._dataset.get_item_feature().to(self.device)
+        # neg_sampling = isinstance(eval_data, NegSampleDataLoader)
+        # if not neg_sampling:
+        #     item_tensor = eval_data._dataset.get_item_feature().to(self.device)
 
-        from torch.utils.data import DataLoader
-
-        eval_paths = eval_data.inference_path_dataset["user_id"]
-        batched_eval_data = DataLoader(eval_paths, batch_size=self.config["eval_batch_size"], shuffle=False)
+        # from torch.utils.data import DataLoader
+        # eval_paths = eval_data.inference_path_dataset["user_id"]
+        # batched_eval_data = DataLoader(eval_paths, batch_size=self.config["eval_batch_size"], shuffle=False)
 
         iter_data = (
-            rich.tqdm(
-                batched_eval_data,
-                total=len(batched_eval_data),
-                ncols=100,
-                desc=set_color("Evaluate   ", "pink"),
-            )
+            rich.tqdm(eval_data, total=len(eval_data), ncols=100, desc=set_color("Evaluate   ", "pink"))
             if show_progress
             else eval_data
         )
 
         num_sample = 0
         for batch_idx, batched_data in enumerate(iter_data):
-            batched_data = eval_data.collate_fn(range(num_sample, num_sample + len(batched_data)))  # noqa: PLW2901
+            # batched_data = eval_data.collate_fn(range(num_sample, num_sample + len(batched_data)))  # noqa: PLW2901
             num_sample += len(batched_data)
 
             interaction, results, positive_u, positive_i = self._full_sort_batch_eval(
@@ -2101,9 +2121,20 @@ class PEARLMfromscratchTrainer(Trainer):
     def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
         interaction, history_index, positive_u, positive_i = batched_data
         inputs = self.tokenizer(interaction, return_tensors="pt", add_special_tokens=False).to(self.device)
-        inputs = torch.tensor(inputs["input_ids"]).to(self.device)
 
-        scores, paths = self.model.full_sort_predict(inputs)
+        predictions, probs = self.model.generate(
+            inputs=inputs,
+            logit_processor=self.logit_processor,
+            max_new_tokens=self.ranker_max_new_tokens,
+            top_k=self.path_gen_args["top_k"],
+            paths_per_user=self.path_gen_args["paths_per_user"],
+        )
+
+        generation_outputs = GenerationOutputs(sequences=predictions, scores=probs)
+        scores, paths = self.ranker.get_sequences(
+            generation_outputs,
+            self.ranker_max_new_tokens,
+        )
 
         scores = scores.view(-1, tot_item_num)
         scores[:, 0] = -np.inf
@@ -2323,12 +2354,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             self.tot_item_num = eval_data._dataset.item_num
 
         iter_data = (
-            rich.tqdm(
-                eval_data,
-                total=len(eval_data),
-                ncols=100,
-                desc=set_color("Evaluate   ", "pink"),
-            )
+            rich.tqdm(eval_data, total=len(eval_data), ncols=100, desc=set_color("Evaluate   ", "pink"))
             if show_progress
             else eval_data
         )
@@ -2470,6 +2496,7 @@ class PEARLMTrainer(HFPathLanguageModelingTrainer):
             tokenizer=train_data.dataset.tokenizer,
             task=KnowledgeEvaluationType.REC,
         )
+
         self.logits_processor_list = get_logits_processor(self.config, logits_processor_params)
 
         self.hf_trainer = HFPathTrainer(
@@ -2537,7 +2564,7 @@ class KGGLMTrainer(PEARLMTrainer, PretrainTrainer):
     def evaluate(
         self, eval_data, load_best_model=True, model_file=None, show_progress=False, task=KnowledgeEvaluationType.REC
     ):
-        if load_best_model and self.model.train_stage == "lp_pretrain":
+        if load_best_model and self.model.train_stage == "pretrain":
             self.hf_trainer.state.best_model_checkpoint = self.hf_trainer.args.output_dir
 
         return super().evaluate(
@@ -2557,7 +2584,7 @@ class KGGLMTrainer(PEARLMTrainer, PretrainTrainer):
         show_progress=False,
         callback_fn=None,
     ):
-        if self.model.train_stage == "lp_pretrain":
+        if self.model.train_stage == "pretrain":
             return self.pretrain(train_data, verbose, show_progress)
         elif self.model.train_stage == "finetune":
             return super().fit(train_data, valid_data, verbose, saved, show_progress, callback_fn)

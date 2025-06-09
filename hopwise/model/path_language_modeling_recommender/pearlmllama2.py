@@ -10,14 +10,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.utils import (
-    InputType,
-    KnowledgeEvaluationType,
-    ModelType,
-    PathLanguageModelingTokenType,
-    get_logits_processor,
-    get_tokenized_used_ids,
-)
+from hopwise.utils import InputType, ModelType
 
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("USER", 1), ("ENTITY", 2), ("RELATION", 3)])
 
@@ -149,23 +142,9 @@ class PEARLMllama2(KnowledgeRecommender):
 
         self.config = config
         self.dataset = dataset
-
         self.tokenizer = dataset.tokenizer
 
-        self.used_ids = dataset.used_ids
-        self.tokenized_ckg = dataset.get_tokenized_ckg()
-        self.tokenized_used_ids = get_tokenized_used_ids(self.used_ids, self.tokenizer)
-        self.n_users = dataset.user_num
-        self.n_entities = dataset.entity_num
-        self.n_items = dataset.item_num
-        self.n_relations = dataset.relation_num
         self.temperature = config["temperature"]
-        self.path_hop_length = config["path_hop_length"]
-        self.path_gen_args = self.config["path_generation_args"]
-
-        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
-        self.token_sequence_length = 1 + self.path_hop_length + self.path_hop_length + 1
-        self.ranker_max_new_tokens = self.token_sequence_length - 3
 
         self.wte = nn.Embedding(len(self.tokenizer), config["embedding_size"])
         self.wpe = nn.Embedding(len(TokenType), config["embedding_size"])
@@ -177,14 +156,7 @@ class PEARLMllama2(KnowledgeRecommender):
         # weight tying
         self.wte.weight = self.lm_head.weight
 
-        logits_processor_params = dict(
-            tokenized_ckg=self.tokenized_ckg,
-            tokenized_used_ids=self.tokenized_used_ids,
-            max_sequence_length=self.token_sequence_length,
-            tokenizer=self.tokenizer,
-            task=KnowledgeEvaluationType.REC,
-        )
-        self.logit_processor = get_logits_processor(config, logits_processor_params)
+        self.loss = nn.CrossEntropyLoss()
 
         # init all weights
         self.apply(self._init_weights)
@@ -204,7 +176,6 @@ class PEARLMllama2(KnowledgeRecommender):
     def forward(self, idx, targets=None):
         device = idx.device
         bs, t = idx.size()
-        # noqa: PLR2004 assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
         pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
 
         # forward the GPT model itself
@@ -225,114 +196,65 @@ class PEARLMllama2(KnowledgeRecommender):
             x = block(x)
         x = self.rmsnorm(x)
 
-        if targets is not None:
-            # if we are given some desired targets also calculate the loss
-            logits = self.lm_head(x)
-            logits = logits[:, :-1, :].contiguous()
-
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
-        else:
-            # inference-time mini-optimization: only forward the lm_head on the very last position
-            # note: using list [-1] to preserve the time dim
-            logits = self.lm_head(x[:, [-1], :])
-            loss = None
-
-        return logits, loss
+        return x
 
     def calculate_loss(self, interaction):
-        interaction = torch.tensor(interaction["input_ids"]).to(self.device)
-
         labels = interaction[:, 1:].contiguous()
         input_ids = interaction
-        logits, loss = self.forward(input_ids, labels)
+        lm_output = self.forward(input_ids)
 
-        return loss
+        logits = self.lm_head(lm_output)
+        logits = logits[:, :-1, :].contiguous()
+
+        return self.loss(logits.view(-1, logits.size(-1)), labels.view(-1))
 
     def predict(self, interaction):
-        return self.forward(interaction["input_ids"])
+        interaction = interaction["input_ids"]
+        lm_output = self.forward(interaction)
+        logits = self.lm_head(lm_output[:, [-1], :])
 
-    def full_sort_predict(self, interaction):
-        predictions, probs = self.generate(interaction)
-        scores, paths = self.get_sequences(interaction.size(0), predictions, probs)
-
-        return scores, paths
-
-    def _get_scores(self, sequences, scores):
-        sequences_scores = None
-        for i in range(scores.size(1)):
-            tstep = scores[:, i]
-            score = torch.softmax(tstep, dim=-1)
-            if sequences_scores is None:
-                sequences_scores = score[:, sequences[:, i]].sum(-1)
-            else:
-                sequences_scores += score[:, sequences[:, i]].sum(-1)
-
-        return sequences_scores
-
-    def get_sequences(self, batch_len, paths, probs):
-        user_num = batch_len
-        scores = torch.full((user_num, self.n_items), -torch.inf)
-        user_topk_sequences = list()
-
-        num_return_sequences = paths.shape[0] // user_num
-        batch_user_index = torch.arange(user_num, device=paths.device).repeat_interleave(num_return_sequences)
-
-        sequences_score = self._get_scores(paths[:, -self.ranker_max_new_tokens :], probs)
-
-        for sequence, user_index, sequence_score in zip(paths, batch_user_index, sequences_score):
-            seq = self.tokenizer.decode(sequence).split(" ")
-
-            uid = int(seq[1][1:])
-            recommended_token = seq[-1]
-
-            if not recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value):
-                continue
-
-            recommended_item = int(recommended_token[1:])
-
-            if recommended_item in self.used_ids[uid]:
-                continue
-
-            scores[user_index, recommended_item] = max(scores[user_index, recommended_item], sequence_score)
-
-            user_topk_sequences.append((uid, recommended_item, scores[user_index, recommended_item].item(), seq))
-
-        return scores, user_topk_sequences
+        return logits
 
     @torch.no_grad()
-    def generate(self, path, top_k=10):
+    def generate(self, **kwargs):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+        inputs = kwargs.get("inputs")
+        topk = kwargs.get("top_k")
+        logit_processor = kwargs.get("logit_processor")
+        max_new_tokens = kwargs.get("max_new_tokens")
+        paths_per_user = kwargs.get("paths_per_user")
+
         # How many paths to return?
-        path = path.repeat_interleave(self.path_gen_args["paths_per_user"], dim=0)
-        scores = torch.full((path.size(0), self.ranker_max_new_tokens, len(self.tokenizer)), -float("Inf")).to(
+        inputs["input_ids"] = inputs["input_ids"].repeat_interleave(paths_per_user, dim=0)
+        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, len(self.tokenizer)), -torch.inf).to(
             self.device
         )
-        for i in range(self.ranker_max_new_tokens):
+        for i in range(max_new_tokens):
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self.forward(path)
+            logits = self.predict(inputs)
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / self.temperature
 
             # KGCD
-            logits = self.logit_processor(path, logits)
+            logits = logit_processor(inputs["input_ids"], logits)
 
             # optionally crop the logits to only the top k options
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -float("Inf")
+            if topk is not None:
+                v, _ = torch.topk(logits, min(topk, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -torch.inf
             # apply softmax to convert logits to (normalized) probabilities
             probs = F.softmax(logits, dim=-1)
             scores[:, i] = probs
             # sample from the distribution
             path_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
-            path = torch.cat((path, path_next), dim=1)
+            inputs["input_ids"] = torch.cat((inputs["input_ids"], path_next), dim=1)
 
-        return path, scores
+        return inputs["input_ids"], torch.unbind(scores, dim=1)
 
 
 # RoPE

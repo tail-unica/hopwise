@@ -10,7 +10,7 @@
 from time import time
 
 import torch
-from tqdm import tqdm
+from tqdm import rich
 from transformers import DataCollatorForLanguageModeling, IntervalStrategy, Trainer, TrainerCallback
 
 from hopwise.utils import (
@@ -85,7 +85,6 @@ class HFPathTrainer(Trainer):
             num_return_sequences = self.N_RET_SEQ_LP
             logits_processor = self.logits_processor_lp
             ranker = self.ranker_lp
-
         outputs = model.generate(
             **inputs,
             max_length=sequence_len,
@@ -97,7 +96,7 @@ class HFPathTrainer(Trainer):
             **self.path_generation_args,
         )
 
-        scores, user_topk_sequences = ranker.get_sequences(outputs)
+        scores, user_topk_sequences = ranker.get_sequences(outputs, self.token_sequence_length - 3)
 
         return scores, user_topk_sequences
 
@@ -151,7 +150,7 @@ class HopwiseCallback(TrainerCallback):
         steps_in_epoch = len_hf_dataloader // self.hopwise_trainer.config["train_batch_size"]
         steps_in_epoch += int(len_hf_dataloader % self.hopwise_trainer.config["train_batch_size"] > 0)
         self.progress_bar = (
-            tqdm(
+            rich.tqdm(
                 total=steps_in_epoch,
                 ncols=100,
                 desc=set_color(f"Train {int(state.epoch):>5}", "pink"),
