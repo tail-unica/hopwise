@@ -22,7 +22,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
       - name: Install the project to follow ruff directives in pyproject.toml
         run: |
-          uv sync --group "cu121"
+          uv sync
       - uses: astral-sh/ruff-action@v3
       - name: Lint code
         run: |

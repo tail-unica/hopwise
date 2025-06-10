@@ -1,3 +1,7 @@
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
 import random
 import warnings
 from itertools import chain, zip_longest
@@ -9,7 +13,7 @@ from tokenizers import Tokenizer, pre_tokenizers
 from tokenizers import models as token_models
 from tokenizers import processors as token_processors
 from tokenizers import trainers as token_trainers
-from tqdm import tqdm
+from tqdm import rich
 from transformers import PreTrainedTokenizerFast
 
 from hopwise.data import Interaction
@@ -46,9 +50,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
     def __init__(self, config):
         super().__init__(config)
-
-        self._path_dataset = None
+        self._path_dataset = None  # path dataset is generated with generate_user_path_dataset
         self._tokenizer = None
+        self.used_ids = None
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
@@ -210,10 +214,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
             tokenized_kg[head_token][relation_token].add(tail_token)
 
-            # if relation is user-item and collaborative path is False, the reverse path is not added
-            if relation == self.ui_relation and not self.collaborative_path:
-                continue
-
             if relation_token not in tokenized_kg[tail_token]:
                 tokenized_kg[tail_token][relation_token] = set()
 
@@ -243,7 +243,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             path_string = ""
             for path in generated_paths:
                 path_string += self._format_path(path) + "\n"
-
             self._path_dataset = path_string
 
     def generate_user_paths(self, used_ids):
@@ -268,7 +267,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         Returns:
             list: List of paths with relations.
         """
-        if self.strategy in ["weighted-rw", "constrained-rw", "simple"]:
+        if self.strategy in ["weighted-rw", "constrained-rw", "simple", "simple-ui"]:
             graph = self._create_ckg_igraph(show_relation=True, directed=False)
         elif self.strategy in ["metapath"]:
             graph = self.ckg_hetero_graph(form="dgl", directed=not self.collaborative_path)
@@ -304,6 +303,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             )
         elif self.strategy == "simple":
             generated_paths = self._generate_user_paths_all_simple(graph, used_ids, temporal_matrix=temporal_matrix)
+        elif self.strategy == "simple-ui":
+            generated_paths = self._generate_user_paths_all_simple_ui(graph, used_ids, temporal_matrix=temporal_matrix)
         elif self.strategy == "metapath":
             generated_paths = self._generate_user_paths_from_metapaths(
                 graph, used_ids, temporal_matrix=temporal_matrix
@@ -357,7 +358,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             Defaults to 1.
         """
         paths = set()
-
         kwargs = dict(
             parallel_max_workers=self.parallel_max_workers,
             temporal_matrix=temporal_matrix,
@@ -402,6 +402,29 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         return paths
 
+    def _generate_user_paths_all_simple_ui(self, graph, used_ids, temporal_matrix=None):
+        """Generate paths from the knowledge graph by extracting all simple paths for all the positives..
+        Refer to igraph's https://python.igraph.org/en/stable/api/igraph.Graph.html#get_all_simple_paths.
+
+        It sample all the paths from a user to all the positive items. If U1 has 3 positive items, we'd have
+        k distinct paths from U1 to each of the positive items.
+        """
+        paths = set()
+
+        kwargs = dict(
+            parallel_max_workers=self.parallel_max_workers,
+            temporal_matrix=temporal_matrix,
+            path_hop_length=self.path_hop_length - 1,
+            user_num=self.user_num,
+            item_num=self.item_num,
+            max_paths_per_user=self.max_paths_per_user,
+            collaborative_path=self.collaborative_path,
+        )
+
+        user_paths = _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwargs)
+        paths = set.union(*user_paths)
+        return paths
+
     def _generate_user_paths_from_metapaths(self, graph, used_ids, temporal_matrix=None):
         """Generate paths from pre-defined metapaths. Refer to DGL's random walk based on metapaths
         https://docs.dgl.ai/en/1.1.x/generated/dgl.sampling.random_walk.html for more details.
@@ -411,7 +434,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         final_paths = set()
 
-        iter_users = tqdm(
+        iter_users = rich.tqdm(
             range(1, self.user_num),
             total=self.user_num - 1,
             ncols=100,
@@ -542,7 +565,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
                 if user_path_sample_size == self.max_paths_per_user or user_invalid_paths == 0:
                     break
-
         return final_paths
 
     @staticmethod
@@ -629,7 +651,7 @@ def _user_parallel_sampling(sampling_func_factory):
 
     def wrapper(*args, **kwargs):
         user_num = kwargs.get("user_num", None)
-        iter_users = tqdm(
+        iter_users = rich.tqdm(
             range(1, user_num),
             total=user_num - 1,
             ncols=100,
@@ -642,7 +664,7 @@ def _user_parallel_sampling(sampling_func_factory):
         if not parallel_max_workers:
             return [sampling_func(u) for u in iter_users]
         else:
-            return joblib.Parallel(n_jobs=parallel_max_workers, prefer="threads")(
+            return joblib.Parallel(n_jobs=parallel_max_workers, prefer="processes")(
                 joblib.delayed(sampling_func)(u) for u in iter_users
             )
 
@@ -805,13 +827,17 @@ def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_fiel
             else:
                 item_candidates = None
 
-            # First hop is the relation user-item already addressed
-            generated_path = graph.random_walk(start_node, path_hop_length, weights="weight")
-            full_path = (u, *generated_path)
+            while iid_tries > 0:
+                # First hop is the relation user-item already addressed
+                generated_path = graph.random_walk(start_node, path_hop_length, weights="weight")
+                full_path = (u, *generated_path)
 
-            valid_path = KnowledgePathDataset._check_kg_path(
-                (*full_path, -1), user_num, item_num, check_last_node=False, collaborative_path=collaborative_path
-            )
+                valid_path = KnowledgePathDataset._check_kg_path(
+                    (*full_path, -1), user_num, item_num, check_last_node=False, collaborative_path=collaborative_path
+                )
+                if not valid_path:
+                    iid_tries -= 1
+
             if valid_path:
                 if item_candidates is not None:
                     reachable_candidates = graph.es.select(_source=full_path[-1], _target=item_candidates)
@@ -844,6 +870,51 @@ def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_fiel
 
             if user_path_sample_size == max_paths_per_user or user_invalid_paths == 0:
                 break
+
+        return user_paths
+
+    return process_user
+
+
+@_user_parallel_sampling
+def _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwargs):
+    """Parallel version of the simple path generation."""
+    temporal_matrix = kwargs.pop("temporal_matrix", None)
+    path_hop_length = kwargs.pop("path_hop_length", None)
+    user_num = kwargs.pop("user_num", None)
+    item_num = kwargs.pop("item_num", None)
+    max_paths_per_user = kwargs.pop("max_paths_per_user", None)
+    collaborative_path = kwargs.pop("collaborative_path", None)
+
+    def process_user(u):
+        user_paths = set()
+
+        pos_iid = np.array(list(used_ids[u]))
+        if temporal_matrix is not None:
+            pos_iid = pos_iid[np.argsort(temporal_matrix[u, pos_iid])]
+
+        # reindex item ids according to the igraph
+        pos_iid += user_num
+
+        for target_item in pos_iid:
+            user_path_sample_size = 0
+
+            # First hop is the relation user-item already addressed
+            generated_paths = graph.get_all_simple_paths(u, to=target_item, cutoff=path_hop_length + 1, mode="all")
+
+            random.shuffle(generated_paths)
+            # U R I R I R I
+            for full_path in generated_paths:
+                valid_path = KnowledgePathDataset._check_kg_path(
+                    full_path, user_num, item_num, check_last_node=True, collaborative_path=collaborative_path
+                )
+
+                if valid_path not in user_paths:
+                    user_paths.add(tuple(full_path))
+                    user_path_sample_size += 1
+
+                if user_path_sample_size == max_paths_per_user:
+                    break
 
         return user_paths
 

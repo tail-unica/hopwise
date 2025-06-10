@@ -7,6 +7,12 @@
 # @Author : Zhen Tian, Yupeng Hou, Yushuo Chen, Kaiyuan Li
 # @email  : chenyuwuxinn@gmail.com, houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, tsotfsk@outlook.com
 
+# UPDATE
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
+
 """hopwise.data.dataloader.knowledge_dataloader
 ################################################
 """
@@ -197,6 +203,10 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         self._tokenized_dataset = None
         # needs to be pre-generated
         self._dataset.generate_user_path_dataset(sampler.used_ids)
+        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
+        self.token_sequence_length = (1 + dataset.path_hop_length) + dataset.path_hop_length + 2
+
+        dataset.used_ids = self.general_dataloader._sampler.used_ids
 
     @property
     def tokenized_dataset(self):
@@ -213,6 +223,13 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
 
         if self._tokenized_dataset is None:
 
+            def remove_incorrect_paths(tokenized_dataset):
+                # remove paths that contain special tokens. The token in position 0 and -1 are [BOS] and [EOS]
+                return not any(
+                    path in self._dataset.tokenizer.all_special_ids
+                    for path in tokenized_dataset["input_ids"][1:-1]  # noqa: E501
+                )
+
             def tokenization(example):
                 return self._dataset.tokenizer(
                     example["path"],
@@ -224,8 +241,32 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
 
             hf_path_dataset = HuggingFaceDataset.from_dict({"path": self._dataset.path_dataset.split("\n")})
             tokenized_dataset = hf_path_dataset.map(tokenization, batched=True, remove_columns=["path"])
+            tokenized_dataset = tokenized_dataset.filter(remove_incorrect_paths)
             tokenized_dataset = DatasetDict({phase: tokenized_dataset})
             self._tokenized_dataset = tokenized_dataset
+
+    def get_tokenized_used_ids(self):
+        """Convert the used ids to tokenized ids.
+
+        Args:
+            used_ids (dict): A dictionary where keys are user ids and values are lists of item ids.
+            tokenizer: The tokenizer to convert ids to tokenized ids.
+        Returns:
+            dict: A dictionary where keys are tokenized user ids and values are lists of tokenized item ids.
+        """
+        user_token_type = PathLanguageModelingTokenType.USER.value
+        item_token_type = PathLanguageModelingTokenType.ITEM.value
+
+        used_ids = self.general_dataloader._sampler.used_ids
+        tokenizer = self._dataset.tokenizer
+
+        tokenized_used_ids = {}
+        for uid in range(used_ids.shape[0]):
+            uid_token = tokenizer.convert_tokens_to_ids(user_token_type + str(uid))
+            tokenized_used_ids[uid_token] = set(
+                [tokenizer.convert_tokens_to_ids(item_token_type + str(item)) for item in used_ids[uid]]
+            )
+        return tokenized_used_ids
 
 
 class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):

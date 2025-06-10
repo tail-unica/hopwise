@@ -211,6 +211,43 @@ class KnowledgeRecommender(AbstractRecommender):
             self.device = config["device"]
 
 
+class ExplainableRecommender:
+    """This is a abstract explainable-based recommender. All the explainable-based model should implement this class.
+    This class use templates to make the explanation more interpretable.
+
+    """
+
+    def explain(self, interaction):
+        r"""
+        Explain the prediction function.
+
+        Given users, calculate the scores and paths between users and all candidate items,
+        then return the templates filled with path data.
+
+        Args:
+            interaction (Interaction): The interaction batch.
+
+        Returns:
+            torch.Tensor: Predicted scores for given users and all candidate items,
+                with shape [n_batch_users * n_candidate_items].
+            pandas.DataFrame: Explanation of the prediction, containing paths and corresponding templates,
+                with shape [n_paths * [uid, pid, score, template1, template2, ..., #templates]].
+        """
+        raise NotImplementedError("explain is not implemented")
+
+    def decode_path(self, path):
+        r"""
+        Decode the path into a string. Path decoding is specific to each model.
+
+        Args:
+            path (list): The path data.
+
+        Returns:
+            str: The decoded path string.
+        """
+        raise NotImplementedError("decode_path is not implemented")
+
+
 class PathLanguageModelingRecommender(KnowledgeRecommender):
     """This is an abstract path-language-modeling recommender.
     All the path-language-modeling model should implement this class.

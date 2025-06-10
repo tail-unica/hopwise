@@ -24,7 +24,7 @@ class MultiVAE(GeneralRecommender, AutoEncoderMixin):
     We implement the MultiVAE model with only user dataloader.
     """
 
-    input_type = InputType.PAIRWISE
+    input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)

@@ -293,6 +293,10 @@ class FullSortRecEvalDataLoader(FullSortEvalDataLoader):
     def __init__(self, config, dataset, sampler, shuffle=False):
         self.check_sequential(config)
 
+        # needed for TPRec
+        if hasattr(dataset, "temporal_weights"):
+            self.temporal_weights = dataset.temporal_weights
+
         self.uid_field = dataset.uid_field
         self.iid_field = dataset.iid_field
         self._source_field = self.uid_field

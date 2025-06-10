@@ -1,10 +1,10 @@
-# @Time   : 2025/02/19
+# @Time   : 2025/05/28
 # @Author : Alessandro Soccol
 # @Email  : alessandro.soccol@unica.it
 
-"""PGPR
+"""TPRec
 ##################################################
-Reference: Reinforcement Knowledge Graph Reasoning for Explainable Recommendation (https://dl.acm.org/doi/10.1145/3331184.3331203)
+Reference: Time-aware Path Reasoning on Knowledge Graph for Recommendation (https://arxiv.org/pdf/2108.02634)
 
 """
 
@@ -22,7 +22,16 @@ from hopwise.model.abstract_recommender import ExplainableRecommender, Knowledge
 from hopwise.utils import InputType, PathLanguageModelingTokenType
 
 
-class PGPR(KnowledgeRecommender, ExplainableRecommender):
+class TPRec(KnowledgeRecommender, ExplainableRecommender):
+    """
+    TPRec
+
+    1. Train TransE embeddings and preprocess it according to the preprocess embedding notebook
+    2. Run TPRec with 'pretrain' train stage set
+    3. Run TPRec with 'policy' train stage set
+
+    """
+
     input_type = InputType.USERWISE
 
     import warnings
@@ -31,6 +40,8 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
+        self.config = config
+
         # Load parameters info from config
         self.user_num = dataset.user_num
         self.device = config["device"]
@@ -47,21 +58,54 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         self.weight_factor = config["weight_factor"]
         self.path_pattern = config["path_constraint"]
         self.beam_search_hop = config["beam_search_hop"]
-
+        self.train_stage = config["train_stage"]
+        self.margin = config["margin"]
+        self.n_clusters = config["cluster_num"]
         self.fix_scores_sorting_bug = config["fix_scores_sorting_bug"]
 
         # user-item relation
+        self.ui_relation = dataset.ui_relation
         self.ui_relation_id = dataset.field2token_id["relation_id"][dataset.ui_relation]
 
         self.graph_dict = dataset.ckg_dict_graph()
-
         # Items
         self.positives = dataset.history_item_matrix()[0]
+        self.pretrained_weights = {}  # during pretraining is None, otherwise it contain pretrained weights
+        self.uc_weight = dataset.temporal_weights.uc_weight
+        self.timenum = dataset.temporal_weights.timenum
+        self.ui2label_dict = dataset.temporal_weights.timeClassifyLabel
 
         # Load Knowledge Graph Embedding Checkpoint
-        self.user_embedding = dataset.get_preload_weight("user_embedding_id")
-        self.entity_embedding = dataset.get_preload_weight("entity_embedding_id")
-        self.relation_embedding = dataset.get_preload_weight("relation_embedding_id")
+        if self.train_stage == "pretrain":
+            # then load transe embeddings and initialize new torch embeddings
+            self.user_embedding = dataset.get_preload_weight("user_embedding_id")
+            self.entity_embedding = dataset.get_preload_weight("entity_embedding_id")
+            self.relation_embedding = dataset.get_preload_weight("relation_embedding_id")
+
+            # make embeddings learnable
+            self.user_embedding = torch.from_numpy(self.user_embedding)
+            self.entity_embedding = torch.from_numpy(self.entity_embedding)
+            self.relation_embedding = torch.from_numpy(self.relation_embedding)
+
+            self.user_embedding = nn.Embedding.from_pretrained(self.user_embedding)
+            self.entity_embedding = nn.Embedding.from_pretrained(self.entity_embedding)
+            self.relation_embedding = nn.Embedding.from_pretrained(self.relation_embedding)
+
+            # TPRec temporal embeddings
+            embedding_size = self.user_embedding.weight.size(1)
+            self.ui_clust_relation_embedding = nn.Embedding(self.n_clusters, embedding_size)
+
+            self.transe_loss = nn.TripletMarginLoss(margin=config["margin"], p=2, reduction="mean")
+            return
+        else:
+            # load pretrained weights
+            pretrained_weights = self._get_pretrained_weights()
+            # then transform torch embedding in numpy
+            # transform torch.load self.pretrained_weights in numpy
+            self.user_embedding = pretrained_weights["user_embedding.weight"].cpu().numpy()
+            self.entity_embedding = pretrained_weights["entity_embedding.weight"].cpu().numpy()
+            self.relation_embedding = pretrained_weights["relation_embedding.weight"].cpu().numpy()
+            self.ui_clust_relation_embedding = pretrained_weights["ui_clust_relation_embedding.weight"].cpu().numpy()
         self.embedding_size = self.user_embedding.shape[1]
         self.state_gen = KGState(self.embedding_size, self.state_history)
 
@@ -104,6 +148,14 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
                         path_rel = path_rel[:-2]
                     relations.append(path_rel)
             self.patterns.append(tuple(["self_loop"]) + tuple(relations))
+
+        # this second step is added separately for clarity
+        # expand UI-Relation to the number of clusters according to path preprocessing in TPRec
+        extended_paths = []
+        for path_constraint in self.patterns.copy():
+            extended_paths.extend(self.expand_paths(path_constraint))
+        self.patterns = extended_paths  # remove duplicates
+
         # Following is current episode information.
         self._batch_path = None
         self._batch_curr_actions = None
@@ -116,8 +168,49 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
         # random generator
         self.rng = np.random.default_rng()
-
         self.SavedAction = namedtuple("SavedAction", ["log_prob", "value"])
+
+    def expand_paths(self, path_constraint):
+        """
+        Expand the path constraint by replacing the ui_relation with multiple clusters
+        like ui_relation0 to ui_relation_n with n being the number of clusters.
+
+        Args:
+            path_constraint in the form of [rel1, rel2, rel3]
+        """
+
+        def _expand_recursive(current_path, remaining_relations):
+            # Base case - path complete
+            if not remaining_relations:
+                return [current_path]
+
+            # Get next relation
+            relation = remaining_relations[0]
+
+            # If ui_relation, branch into n_clusters paths
+            if relation == self.ui_relation:
+                expanded = []
+                for i in range(self.n_clusters):
+                    cluster_path = current_path + [f"{relation}_{i}"]
+                    expanded.extend(_expand_recursive(cluster_path, remaining_relations[1:]))
+                return expanded
+            else:
+                # Regular relation - add and continue
+                return _expand_recursive(current_path + [relation], remaining_relations[1:])
+
+        # Start expansion from empty path
+        return _expand_recursive([], path_constraint[1:])  # Skip self-loop
+
+    def _get_pretrained_weights(self):
+        import os
+
+        checkpoint_file = os.path.join(
+            self.config["checkpoint_dir"],
+            "{}-{}-{}.pth".format(self.config["model"], self.config["dataset"], "pretrained"),
+        )
+        checkpoint = torch.load(checkpoint_file, weights_only=False, map_location=self.device)
+        weights = checkpoint["state_dict"]
+        return weights
 
     def select_action(self, batch_state, batch_act_mask):
         # Tensor [bs, state_dim]
@@ -188,7 +281,99 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         state_values = self.critic(x)  # Tensor of [bs, 1]
         return act_probs, state_values
 
+    def _get_transe_rec_embedding(self, user, pos_item, neg_item):
+        user_e = self.user_embedding(user)
+        pos_item_e = self.entity_embedding(pos_item)
+        neg_item_e = self.entity_embedding(neg_item)
+        rec_r_e = self.relation_embedding.weight[-1]
+        rec_r_e = rec_r_e.expand_as(user_e)
+
+        return user_e, pos_item_e, neg_item_e, rec_r_e
+
+    def _get_transe_kg_embedding(self, head, pos_tail, neg_tail, relation):
+        head_e = self.entity_embedding(head)
+        pos_tail_e = self.entity_embedding(pos_tail)
+        neg_tail_e = self.entity_embedding(neg_tail)
+        relation_e = self.relation_embedding(relation)
+        return head_e, pos_tail_e, neg_tail_e, relation_e
+
+    def calculate_loss_transe(self, interaction):
+        user = interaction[self.USER_ID]
+        pos_item = interaction[self.ITEM_ID]
+        ui_clusters_nums = [
+            self.ui2label_dict[(user.item(), pos_item.item())] for user, pos_item in zip(user, pos_item)
+        ]
+        num_id, num_index, num_n = np.unique(ui_clusters_nums, return_index=True, return_counts=True)
+        neg_item = interaction[self.NEG_ITEM_ID]
+        head = interaction[self.HEAD_ENTITY_ID]
+        relation = interaction[self.RELATION_ID]
+        pos_tail = interaction[self.TAIL_ENTITY_ID]
+        neg_tail = interaction[self.NEG_TAIL_ENTITY_ID]
+
+        user_e, pos_item_e, neg_item_e, rec_r_e = self._get_transe_rec_embedding(user, pos_item, neg_item)
+        head_e, pos_tail_e, neg_tail_e, relation_e = self._get_transe_kg_embedding(head, pos_tail, neg_tail, relation)
+
+        loss = 0
+        if len(num_id) == 1:
+            rec_r_e = self.ui_clust_relation_embedding.weight[num_id[0]]
+        else:
+            tmp_vec_rel = None
+            for i, cur_cls in enumerate(num_id):
+                startID = num_index[i]
+                endID = num_index[i] + num_n[i]
+                rec_clus_r_e = self.ui_clust_relation_embedding.weight[cur_cls]
+                if tmp_vec_rel is None:
+                    tmp_vec_rel = rec_r_e
+                else:
+                    torch.cat((rec_r_e[0], tmp_vec_rel[0]), 0)
+                loss += self.transe_loss(
+                    user_e[startID:endID] + rec_clus_r_e, pos_item_e[startID:endID], neg_item_e[startID:endID]
+                )
+        h_e = torch.cat([user_e, head_e])
+        r_e = torch.cat([rec_r_e, relation_e])
+        pos_t_e = torch.cat([pos_item_e, pos_tail_e])
+        neg_t_e = torch.cat([neg_item_e, neg_tail_e])
+
+        loss += self.transe_loss(h_e + r_e, pos_t_e, neg_t_e)
+
+        return loss
+
+    def forward_transe(self, user, relation, item):
+        score = -torch.norm(user + relation - item, p=2, dim=1)
+        return score
+
+    def predict_transe(self, interaction):
+        user = interaction[self.USER_ID]
+        item = interaction[self.ITEM_ID]
+
+        user_e = self.user_embedding(user)
+        item_e = self.entity_embedding(item)
+
+        rec_r_e = self.relation_embedding.weight[-1]
+        rec_r_e = rec_r_e.expand_as(user_e)
+
+        return self.forward_transe(user_e, rec_r_e, item_e)
+
+    def full_sort_predict_transe(self, interaction):
+        user = interaction[self.USER_ID]
+        user_e = self.user_embedding(user)
+
+        rec_r_e = self.relation_embedding.weight[-1]
+        rec_r_e = rec_r_e.expand_as(user_e)
+
+        item_indices = torch.tensor(range(self.n_items)).to(self.device)
+        all_item_e = self.entity_embedding.weight[item_indices]
+
+        user_e = user_e.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
+        rec_r_e = rec_r_e.unsqueeze(1).expand(-1, all_item_e.shape[0], -1)
+        t = all_item_e.unsqueeze(0)
+
+        return -torch.norm(user_e + rec_r_e - t, p=2, dim=2)
+
     def calculate_loss(self, interaction):
+        if self.train_stage == "pretrain":
+            return self.calculate_loss_transe(interaction)
+
         users = interaction[self.USER_ID]
         users = users[users != 0]
 
@@ -263,17 +448,28 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
             return actions
 
         # (5) If there are too many actions, do some deterministic trimming here!
-        user_embed = self.user_embedding[path[0][-1]]
+        uid = path[0][-1]
+        user_embed = self.user_embedding[uid]
 
         scores = []
+        item_emb = None
+        if isinstance(uid, torch.Tensor):
+            uid = uid.item()
+
+        for clus_wt in self.uc_weight[uid]:
+            if item_emb is None:
+                item_emb = self.ui_clust_relation_embedding[clus_wt] * self.uc_weight[uid][clus_wt]
+            else:
+                item_emb += self.ui_clust_relation_embedding[clus_wt] * self.uc_weight[uid][clus_wt]
+
         for r, next_node_id in candidate_acts:
             next_node_type = self._get_next_node_type(curr_node_type, r)
             if next_node_type == "user":
                 src_embed = user_embed
             elif next_node_type == "entity" and next_node_id < self.n_items:
-                src_embed = user_embed + self.relation_embedding[self.ui_relation_id]
+                src_embed = user_embed + item_emb
             else:
-                src_embed = user_embed + self.relation_embedding[self.ui_relation_id] + self.relation_embedding[r]
+                src_embed = user_embed + item_emb + self.relation_embedding[r]
 
             score = np.matmul(src_embed, self.node_type2emb[next_node_type][next_node_id])
             # This trimming may filter out target products!
@@ -315,7 +511,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         else:
             last_relation_embed = self.self_loop_embedding
 
-        if len(path) == 2:
+        if len(path) == 2:  # noqa: PLR2004
             state = self.state_gen(
                 user_embed, curr_node_embed, last_node_embed, last_relation_embed, zero_embed, zero_embed
             )
@@ -340,7 +536,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
     def _get_reward(self, path):
         # If it is initial state or 1-hop search, reward is 0.
-        if len(path) <= 2:
+        if len(path) <= 2:  # noqa: PLR2004
             return 0.0
 
         if not self._has_pattern(path):
@@ -352,7 +548,14 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         if curr_node_type == "entity" and curr_node_id < self.n_items:
             # Give soft reward for other reached products.
             uid = path[0][-1]
-            u_vec = self.user_embedding[uid] + self.relation_embedding[self.ui_relation_id]
+            item_emb = None
+            for clus_wt in self.uc_weight[uid.item()]:
+                if item_emb is None:
+                    item_emb = self.ui_clust_relation_embedding[clus_wt] * self.uc_weight[uid.item()][clus_wt]
+                else:
+                    item_emb += self.ui_clust_relation_embedding[clus_wt] * self.uc_weight[uid.item()][clus_wt]
+
+            u_vec = self.user_embedding[uid] + item_emb
             p_vec = self.entity_embedding[curr_node_id]
             score = np.dot(u_vec, p_vec) / self.u_p_scales[uid]
             target_score = max(score, 0.0)
@@ -388,7 +591,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         batch_mask = []
         for actions in self._batch_curr_actions:
             act_idxs = np.arange(len(actions))
-            if dropout > 0 and len(act_idxs) >= 5:
+            if dropout > 0 and len(act_idxs) >= 5:  # noqa: PLR2004
                 keep_size = int(len(act_idxs[1:]) * (1.0 - dropout))
                 tmp = self.rng.choice(act_idxs[1:], keep_size, replace=False).tolist()
                 act_idxs = np.concatenate([[act_idxs[0]], tmp])
@@ -405,14 +608,33 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         return batch_masks
 
     def predict(self, interaction):
+        if self.train_stage == "pretrain":
+            return self.predict_transe(interaction)
         return
 
     def full_sort_predict(self, interaction):
+        if self.train_stage == "pretrain":
+            return self.full_sort_predict_transe(interaction)
+
+        # get set temporal weights
+        interaction, temporal_weight = interaction
         users = interaction[self.USER_ID]
-
         paths, probs = self.beam_search(users)
+        interacted_matrix = self._build_interacted_matrix(temporal_weight)
+        return self.collect_scores(users, paths, probs, interacted_matrix)
 
-        return self.collect_scores(users, paths, probs)
+    def _build_interacted_matrix(self, temporal_weight):
+        item_emb = None
+        purchase_matrix = []
+        for uid in range(1, len(temporal_weight.uc_weight) + 1):
+            for clus_wt in temporal_weight.uc_weight[uid]:
+                if item_emb is None:
+                    item_emb = self.ui_clust_relation_embedding[clus_wt] * temporal_weight.uc_weight[uid][clus_wt]
+                else:
+                    item_emb += self.ui_clust_relation_embedding[clus_wt] * temporal_weight.uc_weight[uid][clus_wt]
+            purchase_matrix.append(item_emb)
+
+        return purchase_matrix
 
     def explain(self, interaction):
         """Support function used for case study.
@@ -423,11 +645,10 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         Returns:
             pd.Dataframe: explanation results with columns: "user", "product", "score", "path"
         """
-        users = interaction[self.USER_ID]
-
+        users, temporal_weight = interaction[self.USER_ID]
         paths, probs = self.beam_search(users)
-
-        _, explanations = self.collect_scores(users, paths, probs)
+        interacted_matrix = self._build_interacted_matrix(temporal_weight)
+        _, explanations = self.collect_scores(users, paths, probs, interacted_matrix)
 
         # make explanations as pandas dataframe, then return the results
         df = pd.DataFrame(explanations, columns=["user", "product", "score", "path"])
@@ -470,7 +691,8 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
             acts_pool = self._batch_get_actions(path_pool, False)  # list of list, size=bs
             actmask_pool = self._batch_acts_to_masks(acts_pool)  # numpy of [bs, dim]
             actmask_tensor = torch.BoolTensor(actmask_pool).to(self.device)
-            probs, _ = self.forward((state_tensor, actmask_tensor))  # Tensor of [bs, act_dim]
+            # Tensor of [bs, act_dim]
+            probs, _ = self.forward((state_tensor, actmask_tensor))
             # In order to differ from masked actions
             probs = probs + actmask_tensor.float()
             topk_probs, topk_idxs = torch.topk(probs, k, dim=1)  # LongTensor of [bs, k]
@@ -500,18 +722,18 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
                     new_probs_pool.append(probs + [p])
             path_pool = new_path_pool
             probs_pool = new_probs_pool
-            if hop < 2:
+            if hop < 2:  # noqa: PLR2004
                 state_pool = self._batch_get_state(path_pool)
 
         return path_pool, probs_pool
 
-    def collect_scores(self, users, paths, probs):
+    def collect_scores(self, users, paths, probs, interacted_matrix):
         collect_results = list()
+        pad_emb = np.zeros((1, self.embedding_size))
+        interacted_embeds = np.concatenate((pad_emb, np.array(interacted_matrix)))
         # 1) get all valid paths for each user, compute path score and path probability
         pred_paths = {uid.item(): defaultdict(list) for uid in users}
-        path_scores = np.dot(
-            self.user_embedding + self.relation_embedding[self.ui_relation_id], self.entity_embedding[: self.n_items].T
-        )
+        path_scores = np.dot(self.user_embedding + interacted_embeds, self.entity_embedding[: self.n_items].T)
         for path, prob in zip(paths, probs):
             if "self_loop" in [node[0] for node in path[1:]]:
                 continue
@@ -566,7 +788,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
             top_products = top_products[::-1]
             top_paths = top_paths[::-1]
             for (product, score), path in zip(top_products, top_paths):
-                results[i, product] = score
+                results[i, product] = score.tolist()
 
                 # collect user, product, score and paths.
                 collect_results.append([user, product, score, path])
@@ -582,7 +804,7 @@ class KGState:
             self.dim = 2 * embedding_size
         elif history_len == 1:
             self.dim = 4 * embedding_size
-        elif history_len == 2:
+        elif history_len == 2:  # noqa: PLR2004
             self.dim = 6 * embedding_size
         else:
             raise Exception("history length should be one of {0, 1, 2}")
@@ -594,7 +816,7 @@ class KGState:
             return np.concatenate([user_embed, node_embed])
         elif self.history_len == 1:
             return np.concatenate([user_embed, node_embed, last_node_embed, last_relation_embed])
-        elif self.history_len == 2:
+        elif self.history_len == 2:  # noqa: PLR2004
             return np.concatenate(
                 [user_embed, node_embed, last_node_embed, last_relation_embed, older_node_embed, older_relation_embed]
             )

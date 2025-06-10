@@ -30,20 +30,17 @@ jobs:
       # Sync pipeline
       - name: Install the project
         run: |
-          uv sync --group ${{ inputs.env }}
+          uv sync --extra ${{ inputs.env }}
 
       - if: ${{ inputs.env == 'cu124' }}
         run: |
           uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
-      - if: ${{ inputs.env == 'cpu' }}
-        run: |
-          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
-      - if: ${{ inputs.env == 'cu118' }}
-        run: |
-          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cu118.html
       - if: ${{ inputs.env == 'cu121' }}
         run: |
           uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.3.1+cu121.html
+      - if: ${{ inputs.env == 'cpu' }}
+        run: |
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
 
       # Testing pipeline
       - name: Test Overall

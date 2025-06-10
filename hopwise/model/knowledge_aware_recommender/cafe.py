@@ -14,19 +14,21 @@ import random
 from functools import reduce
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.utils import InputType
+from hopwise.utils import InputType, PathLanguageModelingTokenType
 
 
 class CAFE(KnowledgeRecommender):
-    input_type = InputType.PAIRWISE
+    input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
+        self.dataset = dataset
 
         # Load parameters info from config
         self.device = config["device"]
@@ -52,7 +54,6 @@ class CAFE(KnowledgeRecommender):
 
         # Topk Candidates
         self.topk_user_products = self._compute_top_items()
-
         # Turn into torch, so that the weight is updated.
         self.user_embedding = torch.from_numpy(self.user_embedding).to(device=self.device, dtype=torch.float32)
         self.entity_embedding = torch.from_numpy(self.entity_embedding).to(self.device, dtype=torch.float32)
@@ -74,8 +75,7 @@ class CAFE(KnowledgeRecommender):
         self.positives = dataset.history_item_matrix()[0]
 
         # Load Full Knowledge Graph in dict form
-        self.graph_dict = dataset.ckg_dict_graph()
-
+        self.graph_dict = dataset.ckg_dict_graph(ui_bidirectional=False)
         self.num_products = self.n_items
         self.memory_size = 10000  # number of paths to save for each metapath
         self.replay_memory = {}
@@ -84,6 +84,9 @@ class CAFE(KnowledgeRecommender):
         for relation_name in self.rid2relation.values():
             if relation_name == "[PAD]":
                 continue
+
+            if relation_name == f"{dataset.ui_relation}_r":
+                raise ValueError("The ui_relation name should not end with '_r'.")
 
             if relation_name == dataset.ui_relation:
                 head, tail = "user", "entity"
@@ -176,7 +179,6 @@ class CAFE(KnowledgeRecommender):
 
         pos_path_batch = np.array(pos_path_batch)
         neg_pid_batch = np.array(neg_pid_batch)
-
         return mpid, pos_path_batch, neg_pid_batch
 
     def _rev_rel(self, rel):
@@ -214,7 +216,6 @@ class CAFE(KnowledgeRecommender):
                 for next_id in next_ids:
                     tmp_paths.append(fp + [next_id])
             forward_paths = tmp_paths
-
         # Backward BFS (e.g. e4--e5--e6).
         backward_paths = [[target_id]]
         for i in reversed(range(mid_level + 2, path_len + 1)):  # i=l, l-2,..., mid+2
@@ -231,7 +232,6 @@ class CAFE(KnowledgeRecommender):
                 for curr_id in curr_ids:
                     tmp_paths.append([curr_id] + bp)
             backward_paths = tmp_paths
-
         # Build hash map for indexing backward paths.
         # e.g. a dict with key=e3 and value=(e4--e5--e6).
         backward_map = {}
@@ -252,7 +252,6 @@ class CAFE(KnowledgeRecommender):
                 if curr_id not in backward_map:
                     backward_map[curr_id] = []
                 backward_map[curr_id].append(bp)
-
         # Find intersection of forward paths and backward paths.
         final_paths = []
         for fp_idx in self.rng.permutation(len(forward_paths)):
@@ -267,6 +266,7 @@ class CAFE(KnowledgeRecommender):
                     break
             if len(final_paths) >= num_paths:
                 break
+
         return final_paths
 
     def count_paths_with_target(self, mpath_id, user_id, target_id, sample_size=50):
@@ -317,7 +317,6 @@ class CAFE(KnowledgeRecommender):
 
         pos_paths = torch.from_numpy(pos_paths).to(self.device)
         neg_pids = torch.from_numpy(neg_pids).to(self.device)
-
         reg_loss, rank_loss = self.model.forward(self.metapaths[mpid], pos_paths, neg_pids)
         rank_loss *= self.rank_weight
 
@@ -332,7 +331,65 @@ class CAFE(KnowledgeRecommender):
         predicted_paths = self._infer_paths(users, kg_mask)
         path_counts = self._estimate_path_count(users)
         results = self.run_program(users, path_counts, predicted_paths)
-        return results
+        scores, paths = results
+        paths = self.convert_path_relations(paths)
+        return scores, paths
+
+    def convert_path_relations(self, paths):
+        new_data = []
+        for user, item, score, path in paths:
+            sanitized_path = [path[0]] + [
+                (self.relation2rid[relation], e_type, eid) for relation, e_type, eid in path[1:]
+            ]
+            new_data.append([user, item, score, sanitized_path])
+        return new_data
+
+    def explain(self, interaction):
+        """Support function used for case study.
+
+        Args:
+            interaction : test interaction data
+
+        Returns:
+            pd.Dataframe: explanation results with columns: "user", "product", "score", "path"
+        """
+        users = interaction[self.USER_ID]
+
+        kg_mask = KGMask(self.graph_dict, self.ui_relation_id)
+        predicted_paths = self._infer_paths(users, kg_mask)
+        path_counts = self._estimate_path_count(users)
+        _, explanations = self.run_program(users, path_counts, predicted_paths)
+
+        # make explanations as pandas dataframe, then return the results
+        df = pd.DataFrame(explanations, columns=["user", "product", "score", "path"])
+        df["path"] = df["path"].apply(self.decode_path)
+
+        return df
+
+    def decode_path(self, path):
+        decoded_path = []
+        for node in path:
+            # append relations
+            if node[0] != "self_loop":
+                relation = self.dataset.token2id(self.dataset.relation_field, node[0])
+                decoded_path.append(f"{PathLanguageModelingTokenType.RELATION.value}{relation}")
+
+            # append everything else
+
+            e_type = node[1]
+            eid = node[2]
+
+            if e_type == "user":
+                e_type = PathLanguageModelingTokenType.USER.value
+            elif eid in range(self.n_items):
+                e_type = PathLanguageModelingTokenType.ITEM.value
+            else:
+                e_type = PathLanguageModelingTokenType.ENTITY.value
+
+            # node[1] is the node type, node[2] is the node id
+            decoded_path.append(f"{e_type}{eid}")
+
+        return decoded_path
 
     def _infer_paths(self, users, kg_mask):
         predictions = dict()
@@ -365,6 +422,7 @@ class CAFE(KnowledgeRecommender):
 
     def run_program(self, users, path_counts, predicted_paths):
         results = torch.full((len(users), self.n_items), -torch.inf)
+        collect_results = list()
 
         kg_mask = KGMask(self.graph_dict, self.ui_relation_id)
         program_exe = MetaProgramExecutor(self.model, self.rng, self.device, kg_mask, self.relation2rid)
@@ -384,15 +442,18 @@ class CAFE(KnowledgeRecommender):
                 path = [("self_loop", "user", r[0][0])]
                 for j in range(len(r[-1])):
                     path.append((r[-1][j], r[2][j], r[0][j + 1]))
+                    # stop when a path is created
                     if j == len(r[-1]) - 1:
                         continue
-                pred_paths_instances[r[0][0]][r[0][-1]] = [(reduce(lambda x, y: x * y, r[1]), np.mean(r[1][-1]), path)]
+                pred_paths_instances[r[0][0]][r[0][-1]] = (reduce(lambda x, y: x * y, r[1]), np.mean(r[1][-1]), path)
+
             top_products_scores = sorted(tmp, key=lambda x: x[1], reverse=True)
             for product, score in top_products_scores:
                 if product < self.n_items and results[i, product] < score:  # if it's an item
                     results[i, product] = score.tolist()
+                    collect_results.append([user, product, score, pred_paths_instances[user][product][2]])
 
-        return results
+        return results, collect_results
 
     def create_heuristic_program(self, metapaths, predicted_paths, path_counts):
         pcount = path_counts.astype(np.float32)
@@ -435,7 +496,6 @@ class SymbolicNetwork(nn.Module):
         self.relation2rid = relation2rid
 
         self._create_modules(relation_info, deep_module, use_dropout)
-        self.nll_criterion = nn.NLLLoss(reduction="none")
         self.ce_loss = nn.CrossEntropyLoss()
 
     def _create_modules(self, relation_info, use_deep=False, use_dropout=True):
@@ -475,8 +535,6 @@ class SymbolicNetwork(nn.Module):
             uid: a LongTensor of user ids, with size [bs, ].
             target_path: a LongTensor of node ids, with size [bs, len(metapath)],
                     e.g. each path contains [u, e1,..., e_n].
-            indicator: an integer value indicating good/bad path.
-            teacher_forcing: use teacher forcing or not.
         Returns:
             logprobs: sum of log probabilities of given target node ids, with size [bs, ].
         """
@@ -493,7 +551,6 @@ class SymbolicNetwork(nn.Module):
 
         # Ranking loss
         logprobs = F.log_softmax(scores, dim=1)  # [bs, vocab_size]
-
         pos_score = torch.gather(logprobs, 1, pos_paths[:, -1].view(-1, 1))
         neg_score = torch.gather(logprobs, 1, neg_pids.view(-1, 1))
         rank_loss = torch.sigmoid(neg_score - pos_score).mean()
