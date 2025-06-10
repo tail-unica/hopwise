@@ -1016,6 +1016,11 @@ class KnowledgeBasedDataset(Dataset):
                 # UI interaction case
                 graph_dict[src_type][src_id][rel_id].append(tgt_id)
                 if ui_bidirectional:
+                    if tgt_id not in graph_dict[end_type]:
+                        graph_dict[end_type][tgt_id] = dict()
+                    if rel_id not in graph_dict[end_type][tgt_id]:
+                        graph_dict[end_type][tgt_id][rel_id] = list()
+
                     graph_dict[end_type][tgt_id][rel_id].append(src_id)
 
             else:
