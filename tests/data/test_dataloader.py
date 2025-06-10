@@ -434,7 +434,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
@@ -446,11 +446,10 @@ class TestKnowledgePathDataLoader:
         }
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         used_ids = train_data.general_dataloader._sampler.used_ids
-        # randomness forces us to retry until we get a valid path
-        while True:
-            paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
-            if len(paths) > 0:
-                break
+        paths = []
+        for _ in range(5):  # try multiple times to get a valid path due to randomness
+            paths.append(train_data.dataset.generate_user_paths(used_ids))  # path ids not remapped
+        paths = np.vstack(paths)
         paths_used_ids = used_ids[paths[:, 0]]
         assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
 
@@ -461,7 +460,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
@@ -485,11 +484,10 @@ class TestKnowledgePathDataLoader:
         )
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         used_ids = train_data.general_dataloader._sampler.used_ids
-        # randomness forces us to retry until we get a valid path
-        while True:
-            paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
-            if len(paths) > 0:
-                break
+        paths = []
+        for _ in range(5):  # try multiple times to get a valid path due to randomness
+            paths.append(train_data.dataset.generate_user_paths(used_ids))  # path ids not remapped
+        paths = np.vstack(paths)
         potential_paths_found = paths[:, None] == potential_paths
         assert potential_paths_found.all(axis=-1).any()
 
@@ -500,7 +498,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
@@ -513,11 +511,10 @@ class TestKnowledgePathDataLoader:
         train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
         user_num = train_data.dataset.user_num
         used_ids = train_data.general_dataloader._sampler.used_ids
-        # randomness forces us to retry until we get a valid path
-        while True:
-            paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
-            if len(paths) > 0:
-                break
+        paths = []
+        for _ in range(5):  # try multiple times to get a valid path due to randomness
+            paths.append(train_data.dataset.generate_user_paths(used_ids))  # path ids not remapped
+        paths = np.vstack(paths)
         assert (paths[:, 4] < user_num).any()
 
     def test_kg_generate_path_weighted_random_walk_no_collaborative_temporal(self):
@@ -527,7 +524,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
@@ -545,11 +542,10 @@ class TestKnowledgePathDataLoader:
         temporal_matrix = np.zeros((dataset.user_num, dataset.item_num), dtype=timestamp.dtype)
         temporal_matrix[user, item] = timestamp
         used_ids = train_data.general_dataloader._sampler.used_ids
-        # randomness forces us to retry until we get a valid path
-        while True:
-            paths = train_data.dataset.generate_user_paths(used_ids)  # path ids not remapped
-            if len(paths) > 0:
-                break
+        paths = []
+        for _ in range(5):  # try multiple times to get a valid path due to randomness
+            paths.append(train_data.dataset.generate_user_paths(used_ids))  # path ids not remapped
+        paths = np.vstack(paths)
         users = paths[:, 0]
         starting_pos_items = paths[:, 2] - dataset.user_num
         subsequent_pos_items = paths[:, -1] - dataset.user_num
@@ -562,7 +558,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
@@ -585,7 +581,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
@@ -620,7 +616,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
@@ -643,7 +639,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
@@ -674,7 +670,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "simple",
@@ -697,7 +693,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "simple",
@@ -732,7 +728,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "simple",
@@ -755,7 +751,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "simple",
@@ -787,7 +783,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "metapath",
@@ -813,7 +809,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "metapath",
@@ -856,7 +852,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "metapath",
@@ -881,7 +877,7 @@ class TestKnowledgePathDataLoader:
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "max_paths_per_user": 2,
+            "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
                 "parallel_max_workers": 0,
                 "strategy": "metapath",

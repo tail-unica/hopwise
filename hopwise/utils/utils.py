@@ -7,6 +7,11 @@
 # @Author : Jiawei Guan, Lei Wang, Gaowei Zhang
 # @Email  : guanjw@ruc.edu.cn, zxcptss@gmail.com, zgw2022101006@ruc.edu.cn
 
+# UPDATE
+# @Time   : 2025
+# @Author : Alessandro Soccol
+# @Email  : alessandro.soccol@unica.it
+
 """hopwise.utils.utils
 ################################
 """
@@ -15,6 +20,7 @@ import datetime
 import importlib
 import os
 import random
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -22,7 +28,14 @@ import torch
 from texttable import Texttable
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
+from transformers import LogitsProcessorList
 
+from hopwise.model.logits_processor import ConstrainedLogitsProcessorWordLevel
+from hopwise.model.ranker import (
+    BeamSearchSequenceScoreRanker,
+    CumulativeSequenceScoreRanker,
+    SampleSearchSequenceScoreRanker,
+)
 from hopwise.utils.enum_type import ModelType
 
 
@@ -91,7 +104,11 @@ def get_trainer(model_type, model_name):
     Returns:
         Trainer: trainer class
     """
-    register_table = {}
+    register_table = {
+        "PEARLMgpt2": "PEARLMfromscratchTrainer",
+        "PEARLMllama2": "PEARLMfromscratchTrainer",
+        "PEARLMllama3": "PEARLMfromscratchTrainer",
+    }
 
     try:
         return getattr(importlib.import_module("hopwise.trainer"), model_name + "Trainer")
@@ -432,3 +449,56 @@ def get_environment(config):
     )
 
     return table
+
+
+def get_ranker(config, params):
+    processing_class = params.get("processing_class", None)
+    used_ids = params.get("used_ids", None)
+    item_num = params.get("item_num", None)
+
+    if config["ranker"] == "CumulativeSequenceScoreRanker":
+        ranker = CumulativeSequenceScoreRanker(
+            processing_class,
+            used_ids,
+            item_num,
+            topk=10,
+        )
+    elif config["ranker"] == "BeamSearchSequenceScoreRanker":
+        ranker = BeamSearchSequenceScoreRanker(
+            processing_class,
+            used_ids,
+            item_num,
+            topk=10,
+        )
+    elif config["ranker"] == "SampleSearchSequenceScoreRanker":
+        ranker = SampleSearchSequenceScoreRanker(
+            processing_class,
+            used_ids,
+            item_num,
+            topk=10,
+        )
+    else:
+        raise ValueError(
+            f"Ranker {config['ranker']} not supported. "
+            "Supported rankers are: CumulativeSequenceScoreRanker, "
+            "                       BeamSearchSequenceScoreRanker, "
+            "                       SampleSearchSequenceScoreRanker."
+        )
+
+    return ranker
+
+
+def get_logits_processor(config, params):
+    try:
+        logits_processor_class = getattr(
+            importlib.import_module("hopwise.model.logits_processor"), config["model"] + "LogitsProcessorWordLevel"
+        )
+    except AttributeError:
+        logits_processor_class = ConstrainedLogitsProcessorWordLevel
+
+    return LogitsProcessorList([logits_processor_class(**params)])
+
+
+class GenerationOutputs(SimpleNamespace):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)

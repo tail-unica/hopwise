@@ -7,6 +7,7 @@ from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.traceback import install
+from setproctitle import setproctitle
 
 from hopwise.quick_start import objective_function, run
 from hopwise.trainer import HyperTuning
@@ -75,9 +76,14 @@ def cli(ctx, debug, rich_traceback):
 @click.option("--port", default="5678", help="Master node port")
 @click.option("--world-size", default=-1, help="Total number of jobs")
 @click.option("--group-offset", default=0, help="Global rank offset")
+@click.option("--proc-title", default=None, help="Processor Title, shown in top, nvidia utils, etc.")
 @click.pass_context
-def train(ctx, model, dataset, config_files, nproc, mode, checkpoint, ip, port, world_size, group_offset):
+def train(ctx, model, dataset, config_files, nproc, mode, checkpoint, ip, port, world_size, group_offset, proc_title):
     """Train or evaluate a single model."""
+
+    if proc_title is None:
+        proc_title = f"[hopwise] {model} {dataset} {mode}"
+    setproctitle(proc_title)
 
     config_file_list = config_files.strip().split(" ") if config_files else None
 
@@ -132,7 +138,10 @@ def train(ctx, model, dataset, config_files, nproc, mode, checkpoint, ip, port, 
 @click.option("--port", default="5678", help="Master node port")
 @click.option("--world-size", default=-1, help="Total number of jobs")
 @click.option("--group-offset", default=0, help="Global rank offset")
-def benchmark(models, dataset, config_files, valid_latex, test_latex, nproc, ip, port, world_size, group_offset):
+@click.option("--proc-title", default=None, help="Processor Title, shown in top, nvidia utils, etc.")
+def benchmark(
+    models, dataset, config_files, valid_latex, test_latex, nproc, ip, port, world_size, group_offset, proc_title
+):
     """
     Run scientific benchmark experiments across multiple models.
 
@@ -143,6 +152,10 @@ def benchmark(models, dataset, config_files, valid_latex, test_latex, nproc, ip,
     Example:
         hopwise benchmark --models "BPR,LightGCN,KGAT" --dataset ml-100k --show-progress
     """
+
+    if proc_title is None:
+        proc_title = f"[hopwise - benchmark] {models} {dataset}"
+    setproctitle(proc_title)
 
     model_list = [m.strip() for m in models.split(",")]
     config_file_list = config_files.strip().split(" ") if config_files else None
@@ -229,11 +242,17 @@ def benchmark(models, dataset, config_files, valid_latex, test_latex, nproc, ip,
 @click.option("--study-name", help="Study name for tuning")
 @click.option("--algo", help="Algorithm for the tuner")
 @click.option("--resume", is_flag=True, help="Resume from checkpoint")
+@click.option("--proc-title", default=None, help="Processor Title, shown in top, nvidia utils, etc.")
 @click.pass_context
-def tune(ctx, params_file, config_files, output_path, display_file, max_evals, tool, study_name, algo, resume):
+def tune(
+    ctx, params_file, config_files, output_path, display_file, max_evals, tool, study_name, algo, resume, proc_title
+):
     """Run hyperparameter tuning."""
-
     from datetime import datetime
+
+    if proc_title is None:
+        proc_title = f"[hopwise - hyper] {study_name}"
+    setproctitle(proc_title)
 
     if not study_name:
         study_name = f"hyper_{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}"

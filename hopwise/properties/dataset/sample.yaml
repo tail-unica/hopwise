@@ -58,7 +58,7 @@ relation_kg_num_interval: "[0,inf)"     # (str) Relation interval for filtering 
 # Knowledge Path Sampling-based Model Needed
 path_hop_length: 3              # (int) Number of hops in the knowledge path.
 MAX_PATHS_PER_USER: 250         # (int) Maximum number of kg sampled paths per user.
-context_length: ~               # (int) Maximum length of the context.
+context_length: ~               # (int) Maximum length of the context. Set to (path_hop_length * 2) + 1 (U) + 2 (BOS/EOS) by default.
 metapaths: ~                    # (list) Metapaths used to sample paths.
 path_sample_args:
     temporal_causality: False   # (bool) Whether to use temporal causality.
@@ -67,7 +67,7 @@ path_sample_args:
     path_token_separator: " "   # (str) Token separator for paths.
     restrict_by_phase: True     # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.
     MAX_CONSECUTIVE_INVALID: 10 # (int) Maximum number of consecutive invalid paths per user.
-    MAX_RW_TRIES_PER_IID: 50    # (int) Maximum number of tries per positive item.
+    MAX_RW_TRIES_PER_IID: 1     # (int) Maximum number of tries per positive item.
     MAX_RW_PATHS_PER_HOP: 1     # (int) Maximum number of paths sampled at each hop for constrained random walk.
     parallel_max_workers: -1    # (int) Maximum number of workers for parallel processing.
 tokenizer:                      # (dict) Tokenizer parameters.

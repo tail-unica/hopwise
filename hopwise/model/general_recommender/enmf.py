@@ -25,7 +25,7 @@ class ENMF(GeneralRecommender):
 
     """
 
-    input_type = InputType.POINTWISE
+    input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)

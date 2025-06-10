@@ -212,3 +212,46 @@ class ConsumerTopKMetric(AbstractMetric):
         result = self.get_dp(ranking_result, group_mask1, group_mask2)
         metric_dict = self.ranking_metric.topk_result(self.__class__.__name__.lower(), result)
         return metric_dict
+
+
+class PathQualityMetric(TopkMetric):
+    # TODO: add support for gender and age based metrics
+    """:class:`PathQualityMetric` is a base object of path-based metrics. If you want to
+    implement a path based metric, you can inherit this class.
+
+    Args:
+        config (Config): The config of evaluator.
+    """
+
+    metric_type = EvaluatorType.RANKING
+    metric_need = [
+        "data.timestamp",
+        "rec.paths",
+        "data.max_path_type",
+        "data.max_path_length",
+        "data.node_degree",
+        "eval_data.user_feat",
+        "data.test_batch_users",
+        "data.rid2relation",
+    ]
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def used_info(self, dataobject):
+        paths = dataobject.get("rec.paths")
+        return paths
+
+    def normalized_ema(self, values):
+        import pandas as pd
+
+        if max(values) == min(values):
+            values = np.array([i for i in range(len(values))])
+        else:
+            values = np.array([i for i in values])
+
+        values = pd.Series(values)
+        ema_vals = values.ewm(span=len(values)).mean().tolist()
+        min_res = min(ema_vals)
+        max_res = max(ema_vals)
+        return [(x - min_res) / (max_res - min_res) for x in ema_vals]

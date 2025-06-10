@@ -21,24 +21,14 @@ from logging import getLogger
 import numpy as np
 import pandas as pd
 import torch
+import torch.distributed as dist
 import torch.nn.utils.rnn as rnn_utils
 import yaml
 from scipy.sparse import coo_matrix, diags, dok_matrix
 
 from hopwise.data.interaction import Interaction
-from hopwise.utils import (
-    FeatureSource,
-    FeatureType,
-    ensure_dir,
-    set_color,
-)
-from hopwise.utils.url import (
-    decide_download,
-    download_url,
-    extract_zip,
-    makedirs,
-    rename_atomic_files,
-)
+from hopwise.utils import FeatureSource, FeatureType, ensure_dir, set_color
+from hopwise.utils.url import decide_download, download_url, extract_zip, makedirs, rename_atomic_files
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -244,9 +234,10 @@ class Dataset(torch.utils.data.Dataset):
             else:
                 self.logger.info("Stop download.")
                 sys.exit(-1)
-            torch.distributed.barrier()
-        else:
-            torch.distributed.barrier()
+            if dist.is_available() and dist.is_initialized():
+                dist.barrier()
+        elif dist.is_available() and dist.is_initialized():
+            dist.barrier()
 
     def _load_data(self, token, dataset_path):
         """Load features.

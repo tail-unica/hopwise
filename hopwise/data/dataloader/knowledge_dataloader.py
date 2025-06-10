@@ -7,6 +7,12 @@
 # @Author : Zhen Tian, Yupeng Hou, Yushuo Chen, Kaiyuan Li
 # @email  : chenyuwuxinn@gmail.com, houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, tsotfsk@outlook.com
 
+# UPDATE
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
+
 """hopwise.data.dataloader.knowledge_dataloader
 ################################################
 """
@@ -200,6 +206,8 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
         self.token_sequence_length = (1 + dataset.path_hop_length) + dataset.path_hop_length + 2
 
+        dataset.used_ids = self.general_dataloader._sampler.used_ids
+
     @property
     def tokenized_dataset(self):
         if self._tokenized_dataset is None:
@@ -215,6 +223,13 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
 
         if self._tokenized_dataset is None:
 
+            def remove_incorrect_paths(tokenized_dataset):
+                # remove paths that contain special tokens. The token in position 0 and -1 are [BOS] and [EOS]
+                return not any(
+                    path in self._dataset.tokenizer.all_special_ids
+                    for path in tokenized_dataset["input_ids"][1:-1]  # noqa: E501
+                )
+
             def tokenization(example):
                 return self._dataset.tokenizer(
                     example["path"],
@@ -226,6 +241,7 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
 
             hf_path_dataset = HuggingFaceDataset.from_dict({"path": self._dataset.path_dataset.split("\n")})
             tokenized_dataset = hf_path_dataset.map(tokenization, batched=True, remove_columns=["path"])
+            tokenized_dataset = tokenized_dataset.filter(remove_incorrect_paths)
             tokenized_dataset = DatasetDict({phase: tokenized_dataset})
             self._tokenized_dataset = tokenized_dataset
 

@@ -33,7 +33,7 @@ class MacridVAE(GeneralRecommender, AutoEncoderMixin):
     We implement the model following the original author.
     """
 
-    input_type = InputType.PAIRWISE
+    input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)

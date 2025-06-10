@@ -2,6 +2,7 @@ from hopwise.utils.argument_list import *
 from hopwise.utils.enum_type import *
 from hopwise.utils.logger import init_logger, set_color
 from hopwise.utils.utils import (
+    GenerationOutputs,
     calculate_valid_score,
     dict2str,
     early_stopping,
@@ -10,7 +11,9 @@ from hopwise.utils.utils import (
     get_flops,
     get_gpu_usage,
     get_local_time,
+    get_logits_processor,
     get_model,
+    get_ranker,
     get_tensorboard,
     get_trainer,
     init_seed,
@@ -47,4 +50,7 @@ __all__ = [
     "get_environment",
     "list_to_latex",
     "WandbLogger",
+    "get_logits_processor",
+    "get_ranker",
+    "GenerationOutputs",
 ]
