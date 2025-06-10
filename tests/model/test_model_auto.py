@@ -957,6 +957,12 @@ class TestKnowledgeRecommender(unittest.TestCase):
         }
         quick_test(config_dict)
 
+    def test_kglrr(self):
+        config_dict = {
+            "model": "KGLRR",
+        }
+        quick_test(config_dict)
+
 
 class TestKnowledgeGraphEmbeddingRecommender(unittest.TestCase):
     def test_transe(self):
