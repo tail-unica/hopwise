@@ -967,12 +967,13 @@ class LIR(PathQualityMetric):
 
     def metric_info(self, lir_matrix, paths):
         lirs_topk = []
-        for user, item, _, _ in paths:
+        for user, _, _, path in paths:
+            linked_interaction_id = path[1][-1]
             # there can be times where the final item predicted, is not seen during training.
             # this depends on how the paths are generated, if the path inference prediction
             # is constrained on the training interactions or not.
             try:
-                lirs_topk.append(lir_matrix[user][item])
+                lirs_topk.append(lir_matrix[user][linked_interaction_id])
             except KeyError:
                 lirs_topk.append(0.0)
         if len(lirs_topk) == 0:
@@ -1007,40 +1008,38 @@ class Fidelity(PathQualityMetric):
 
     def calculate_metric(self, dataobject):
         paths = self.used_info(dataobject)
-        user_batch_size = dataobject.get("data.test_batch_users")
-
-        result = self.metric_info(paths, user_batch_size)
+        result = self.metric_info(paths)
         metric_dict = self.topk_result("Fidelity", result)
         return metric_dict
 
-    def metric_info(self, paths, user_batch_size):
+    def metric_info(self, paths):
         user_paths = dict()
-        for user, _, _, path in paths:
-            if path is not None:
-                if user not in user_paths:
-                    user_paths[user] = 0
-                user_paths[user] += 1
-        user_paths = np.array(list(user_paths.values()))
+        for user, item, _, _ in paths:
+            if user not in user_paths:
+                user_paths[user] = set()
+            user_paths[user].add(item)
 
-        if user_paths.size < user_batch_size:
-            padding = np.zeros(user_batch_size - len(user_paths), dtype=user_paths.dtype)
-            user_paths = np.concatenate([user_paths, padding])
-        return user_paths
+        path_topk_len = []
+        for items in user_paths.values():
+            path_topk_len.append(len(items))
+
+        return np.array(path_topk_len)
 
     def topk_result(self, metric, value):
         """Match the metric value to the `k` and put them in `dictionary` form.
 
         Args:
             metric(str): the name of calculated metric.
-            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to
+            `metric@max(self.topk)`.
 
         Returns:
             dict: metric values required in the configuration.
         """
         metric_dict = {}
-        avg_result = value.mean(axis=0)
         for k in self.topk:
             key = f"{metric}@{k}"
+            avg_result = (value / k).mean(axis=0)
             metric_dict[key] = round(avg_result, self.decimal_place)
         return metric_dict
 
@@ -1094,7 +1093,7 @@ class SEP(PathQualityMetric):
 
         Args:
             metric(str): the name of calculated metric.
-            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`
 
         Returns:
             dict: metric values required in the configuration.

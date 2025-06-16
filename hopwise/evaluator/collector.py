@@ -258,8 +258,6 @@ class Collector:
             self.label_field = self.config["LABEL_FIELD"]
             self.data_struct.update_tensor("data.label", interaction[self.label_field].to(self.device))
 
-        if self.register.need("data.test_batch_users"):
-            self.data_struct.update_tensor("data.test_batch_users", scores_tensor.size(0))
         if self.register.need("rec.paths"):
             self.data_struct.update_tensor("rec.paths", paths)
 
