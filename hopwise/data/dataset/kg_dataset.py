@@ -410,13 +410,78 @@ class KnowledgeBasedDataset(Dataset):
         self.tail_feat = None
         self.item2entity, self.entity2item = self._load_link(self.dataset_name, self.dataset_path)
 
+    @property
+    def kg_num(self):
+        """Get the number of interaction records.
+
+        Returns:
+            int: Number of interaction records.
+        """
+        return len(self.kg_feat)
+
+    @property
+    def sparsity_kg(self):
+        """Get the sparsity of this dataset.
+
+        Returns:
+            float: Sparsity of this dataset.
+        """
+        return 1 - self.kg_num / (self.entity_num**2)
+
+    @property
+    def sparsity_kg_rel(self):
+        """Get the sparsity of this dataset.
+
+        Returns:
+            float: Sparsity of this dataset.
+        """
+        return 1 - self.kg_num / (self.entity_num**2 * self.relation_num)
+
+    @property
+    def avg_degree_kg_item(self):
+        """Get the average degree of items in the knowledge graph.
+
+        Returns:
+            float: Average number of KG triples each product is involved in.
+        """  # assumes a DataFrame or dict with head, relation, tail
+        if isinstance(self.kg_feat, pd.DataFrame):
+            head_counts = self.kg_feat[self.head_entity_field].value_counts()
+            tail_counts = self.kg_feat[self.tail_entity_field].value_counts()
+            total_counts = head_counts.add(tail_counts, fill_value=0)
+            product_degrees = total_counts[total_counts.index.astype(str).isin(self.item2entity.keys())]
+            return product_degrees.mean() if not product_degrees.empty else 0.0
+        else:
+            # fallback if not using pandas
+            from collections import Counter
+
+            head = self.kg_feat[self.head_entity_field].numpy()
+            tail = self.kg_feat[self.tail_entity_field].numpy()
+            counter = Counter(head) + Counter(tail)
+            product_degrees = [counter[pid] for pid in self.item2entity.keys()]
+            return np.mean(product_degrees) if product_degrees else 0.0
+
+    @property
+    def avg_degree_kg(self):
+        """Get the average degree of all entities in the knowledge graph.
+
+        Returns:
+            float: Average number of triples each entity is involved in.
+        """
+        return 2 * self.kg_num / self.entity_num
+
     def __str__(self):
         info = [
             super().__str__(),
-            f"The number of entities: {self.entity_num}",
-            f"The number of relations: {self.relation_num}",
-            f"The number of triples: {len(self.kg_feat)}",
-            f"The number of items that have been linked to KG: {len(self.item2entity)}",
+            set_color("The number of entities","green") + f": {self.entity_num}",
+            set_color("The number of relations","green")+ f": {self.relation_num}",
+            set_color("The number of triples","green")+ f": {self.kg_num}",
+            set_color("The number of items that have been linked to KG", "green") + f": {len(self.item2entity)}",
+            set_color("The number of items that have not been linked to KG",
+                      "green") + f": {self.item_num - len(self.item2entity)}",
+            set_color("The sparsity of the KG","green") + f": {self.sparsity_kg_rel}",
+            set_color("The sparsity of the KG (relation-aware)","green") + f": {self.sparsity_kg}",
+            set_color("The average degree of entities in the KG:","green") + f": {self.avg_degree_kg}",
+            set_color("The average degree of products in the KG:","green") + f": {self.avg_degree_kg_item}",
         ]  # yapf: disable
         return "\n".join(info)
 
