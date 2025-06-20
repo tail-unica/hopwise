@@ -174,6 +174,15 @@ find-links = [
   "https://data.pyg.org/whl/torch-2.4.0+cu124.html",
   "https://data.pyg.org/whl/torch-2.3.0+cu121.html"
 ]
+conflicts = [
+  [
+    { extra = "cpu" },
+    { extra = "cu118" },
+    { extra = "cu121" },
+    { extra = "cu124" },
+  ],
+]
+
 
 
 no-build-isolation-package = ["torch-scatter"]
