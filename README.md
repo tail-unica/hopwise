@@ -77,7 +77,7 @@ By integrating **knowledge embedding models**, **path-based reasoning methods**,
 - **[ConvKB](https://aclanthology.org/N18-2053/)**
 
 
-For some implementations: [TorchKGE](https://torchkge.readthedocs.io/en/latest/)
+*We relied for most of the Knowledge Graph Embeddings methods to: [TorchKGE](https://torchkge.readthedocs.io/en/latest/) due to its popularity, published at a KDD workshop in 2022*x
 
 🆕 **Explanation Path Quality Metrics**
 
@@ -103,9 +103,13 @@ To install the project, you need to use `uv`. Follow the steps below to set up t
 - ✅ Python **3.9**, **3.10**, or **3.11**
 - ✅ [`uv`](https://github.com/astral-sh/uv) package manager
 
-### 🔹 Steps
+---
 
-1️⃣ Install **uv** and create a virtual environment.<br>
+### 🔹 Steps (from PyPI or from Source)
+
+
+1️⃣ **Install **uv** and create a virtual environment.**<br>
+
 We suggest installing **uv** as a [standalone application](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) instead of using pip to avoid issues and let **uv** create a dedicated virtual environment.<br>
 Once installed, create the virtual environment
 
@@ -114,16 +118,17 @@ uv venv --python PYTHON_VERSION --prompt hopwise
 ```
 `PYTHON_VERSION` must be one of 3.9, 3.10, 3.11, while `--prompt hopwise` customizes the virtual environment name that appears on the shell.
 
-1️⃣ **Install via PyPI**
+2️⃣ **Install via PyPI**
 
 ```sh
 pip install hopwise
 ```
 
+**🎉 Done 🎉**
+
 ---
 
-
-1️⃣ **Clone the repository**
+2️⃣ **Install from source: Clone the repository**
 ```sh
 git clone https://github.com/tail-unica/hopwise.git
 cd hopwise
@@ -131,7 +136,6 @@ cd hopwise
 
 
 3️⃣ Install project dependencies
-
 
 *📌 make sure to have uv updated to the latest version*
 
@@ -147,13 +151,15 @@ uv sync --extra nncf
 
 > 📢 **Windows:** For proper DGL installation, please follow the [official DGL installation guide](https://www.dgl.ai/pages/start.html). Windows builds may encounter DLL linking issues with standard installation methods. Pre-built packages from the official source are recommended. Otherwise, using the Windows Subsystem for Linux (WSL) might be feasible as a solution.
 
+**🎉 Done 🎉**
+
 ## 🚀 Usage
 In any chosen setup, a .yaml file must be created containing the configuration to be used. An example:
 ```yaml
 gpu_id: 0
-topk: [10,20,50]
+topk: [10,20,50,...]
 data_path: *your_datasets_folder*
-metrics: ['NDCG', 'MRR', 'Hit', 'Precision', 'Recall','Novelty', 'Serendipity']
+metrics: ['NDCG', 'MRR', 'Hit', 'Precision', 'Recall',...]
 valid_metric: ndcg@10
 eval_batch_size: 1
 epochs: 1
@@ -162,12 +168,13 @@ eval_step: 1
 
 ### 📍 Training
 
-![](https://i.ibb.co/JRzbzKKy/trainpgprclip.gif)
+![](images/trainpgprclip.gif)
 
 
 Run the project with the following command:
 ```sh
-hopwise train --model MODEL --dataset DATASET --config_files CONF_FILE_1.yaml CONF_FILE_2.yaml
+hopwise train --model MODEL --dataset DATASET \
+--config_files CONF_FILE_1.yaml CONF_FILE_2.yaml
 ```
 
 Override config parameters directly from the CLI using =:
@@ -176,10 +183,11 @@ hopwise train --epochs=20
 ```
 
 ### 📍 Evaluating from Checkpoint
-![](https://i.ibb.co/yFsyVxgt/pgprevaluation.gif)
+![](images/pgprevaluation.gif)
 
 ```sh
-hopwise evaluate --dataset DATASET --model MODEL --config-files CONFIG_FILES --checkpoint CHECKPOINT.pth
+hopwise evaluate --dataset DATASET --model MODEL \
+--config-files CONFIG_FILES --checkpoint CHECKPOINT.pth
 ```
 
 ### 📍 Hyperparameters Tuning
@@ -191,10 +199,11 @@ learning_rate uniform 0.0001, 0.1
 embedding_size choice [64, 100, 200]
 ```
 
-![](https://i.ibb.co/YBy1gG5r/bprhypertuning.gif)
+![](images/bprhypertuning.gif)
 
 ```sh
-hopwise tune --params-file hopwise/properties/hyper/PARAMS_FILE.hyper --config-files CONFIG_FILE.yaml --study-name STUDY_NAME
+hopwise tune --params-file hopwise/properties/hyper/PARAMS_FILE.hyper \
+--config-files CONFIG_FILE.yaml --study-name STUDY_NAME
 ```
 
 ## ℹ️ Contributing
@@ -211,12 +220,11 @@ If you find **hopwise** useful for your research or development, please cite wit
 the paper is under revision
 ```
 
-## The Team 🇮🇹
-<div align="center">
+## The Team
 
 [Ludovico Boratto](https://www.ludovicoboratto.com/), [Gianni Fenu](https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371), [Mirko Marras](https://www.mirkomarras.com/), [Giacomo Medda](https://jackmedda.github.io/), [Alessandro Soccol](https://alessandrosocc.github.io)
 
-</div>
+
 
 
 ## License
