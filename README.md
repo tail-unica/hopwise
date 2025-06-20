@@ -24,7 +24,7 @@ By integrating **knowledge embedding models**, **path-based reasoning methods**,
 
 ---
 
-![hopwise pipeline](images/hopwise.png)
+![hopwise pipeline](assets/hopwise.png)
 
 **Our framework: <span style="color:rgb(247, 206, 204)">new functionalities</span>, <span style="color:rgb(213, 232, 212)">datasets utilities</span>, <span style="color:rgb(218, 232, 249)">abstraction layers</span>, <span style="color:rgb(255, 242, 205)">environment utils</span>, <span style="color:rgb(255, 230, 205)">metrics type</span>, <span style="color:rgb(208,206,226)">models</span>**
 
@@ -77,7 +77,7 @@ By integrating **knowledge embedding models**, **path-based reasoning methods**,
 - **[ConvKB](https://aclanthology.org/N18-2053/)**
 
 
-*We relied for most of the Knowledge Graph Embeddings methods to: [TorchKGE](https://torchkge.readthedocs.io/en/latest/) due to its popularity, published at a KDD workshop in 2022*x
+*We relied for most of the Knowledge Graph Embeddings methods to: [TorchKGE](https://torchkge.readthedocs.io/en/latest/) due to its popularity, published at a KDD workshop in 2020.*
 
 🆕 **Explanation Path Quality Metrics**
 
@@ -121,7 +121,7 @@ uv venv --python PYTHON_VERSION --prompt hopwise
 2️⃣ **Install via PyPI**
 
 ```sh
-pip install hopwise
+uv pip install hopwise
 ```
 
 **🎉 Done 🎉**
@@ -168,13 +168,19 @@ eval_step: 1
 
 ### 📍 Training
 
-![](images/trainpgprclip.gif)
+<p align="center">
+    <a href="#readme">
+        <img alt="traintest" src="assets/trainpgprclip.gif">
+    </a>
+</p>
 
 
 Run the project with the following command:
 ```sh
-hopwise train --model MODEL --dataset DATASET \
---config_files CONF_FILE_1.yaml CONF_FILE_2.yaml
+hopwise train \
+    --model MODEL \
+    --dataset DATASET \
+    --config_files CONF_FILE_1.yaml CONF_FILE_2.yaml
 ```
 
 Override config parameters directly from the CLI using =:
@@ -183,7 +189,11 @@ hopwise train --epochs=20
 ```
 
 ### 📍 Evaluating from Checkpoint
-![](images/pgprevaluation.gif)
+<p align="center">
+    <a href="#readme">
+        <img alt="pgprevaltest" src="assets/pgprevaluation.gif">
+    </a>
+</p>
 
 ```sh
 hopwise evaluate --dataset DATASET --model MODEL \
@@ -199,11 +209,17 @@ learning_rate uniform 0.0001, 0.1
 embedding_size choice [64, 100, 200]
 ```
 
-![](images/bprhypertuning.gif)
+<p align="center">
+    <a href="#readme">
+        <img alt="hypertuningtest" src="assets/hypertuningbpr.gif">
+    </a>
+</p>
 
 ```sh
-hopwise tune --params-file hopwise/properties/hyper/PARAMS_FILE.hyper \
---config-files CONFIG_FILE.yaml --study-name STUDY_NAME
+hopwise tune \
+    --params-file hopwise/properties/hyper/PARAMS_FILE.hyper \
+    --config-files CONFIG_FILE.yaml \
+    --study-name STUDY_NAME
 ```
 
 ## ℹ️ Contributing
