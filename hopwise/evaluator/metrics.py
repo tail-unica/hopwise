@@ -932,7 +932,32 @@ class Novelty(AbstractMetric):
 
 class LIR(PathQualityMetric):
     """
-    Time recency of linking interaction
+    Linking Interaction Recency (LIR)
+
+    This property serves to quantify the time since the linking interaction in the explanation path occurred.
+    Given a user :math:`u \in U` and the set :math:`P_u` of products this user interacted with,
+    we denote the list of their interactions, sorted chronologically, by :math:`T_u = [(p^i, t^i)]`,
+    where :math:`p^i \in P_u` is a product experienced by the user, :math:`t^i \in \mathbb N`
+    is the timestamp that interaction occurred, and :math:`t^i \leq t^{i+1}` :math:`\forall i = 1, \dots, |P_u|`.
+
+    They applied an exponentially weighed moving average to the timestamps included in :math:`T_u`,
+    to obtain the LIR of each interaction performed by the user :math:`u`.
+    Specifically, given an interaction :math:`(p^i, t^i) \in T_u`, the LIR for that interaction
+    was computed as follows:
+
+    .. math::
+        \mathrm{LIR(p^i, t^i)} = ( 1 - \beta_{LIR} ) \cdot LIR(p^{i-1}, t^{i-1}) + \beta_{LIR} \cdot t^i
+
+
+    where :math:`\beta_{LIR} \in [0, 1]` is a decay associated to the interaction time,
+    and :math:`LIR(p^1, t^1) = t^1`.
+    The LIR values were min-max normalized for each user to lay in the range :math:`[0, 1]`,
+    with values close to 0 (1)
+    meaning that the linking interaction is far away (recent) in time.
+    The overall LIR for explanations in a recommended list was obtained
+    by averaging the LIR of the linking interactions for the selected explanation path of each recommended product.
+
+    For further details, please refer to the `paper <https://dl.acm.org/doi/pdf/10.1145/3477495.3532041>`.
 
     """
 
@@ -1039,14 +1064,41 @@ class Fidelity(PathQualityMetric):
         metric_dict = {}
         for k in self.topk:
             key = f"{metric}@{k}"
-            avg_result = (value / k).mean(axis=0)
+            avg_result = min((value / k).mean(axis=0), 1.0)
             metric_dict[key] = round(avg_result, self.decimal_place)
         return metric_dict
 
 
 class SEP(PathQualityMetric):
     """
-    Popularity of Shared Entity
+    Popularity of Shared Entity (SEP)
+
+
+    This property serves to quantify the extent to which the shared entity included in an explanation-path is popular.
+    They assume that the number of relationships a shared entity is involved in the KG is a proxy of its popularity.
+    For instance, the popularity of an actor is computed by counting how many movies that actor starred in.
+    They denote the list of entities of a given type $\lambda$ in the KG, sorted based on their popularity,
+    by :math:`_\lambda = [(e^i, v^i)]`, where :math:`e^i \in E_\lambda` is an entity
+    of type :math:`\lambda`, :math:`v^i \in \mathbb N` is the number of relationships a shared entity is involved in
+    (in-degree),
+    and :math:`v^i \leq v^{i+1}` :math:`\forall i = 1, \dots, |E_\lambda|`.
+    We applied an exponential decay to the popularity scores in :math:`S_\lambda$, to get the SEP of an entity
+    of type :math:`\lambda`, as:
+
+    .. math::
+        \mathrm{SEP(e^i, v^i)} = ( 1 - \beta_{SEP} ) \cdot SEP(e^{i-1}, v^{i-1}) + \beta_{SEP} \cdot v^i
+
+    where :math:`\beta_{SEP}` is a decay related to the popularity, and :math:`SEP(e^1, v^1) = v^1`
+    The SEP values w ere min-max normalized for each entity type to lay in the range [0, 1],
+    with values close to 0 (1) when the entity has a low (high) popularity.
+    The shared entity novelty might be obtained as :math:`SEN(e^i, v^i) = 1-SEP(e^i, v^i).
+
+    The overall SEP for explanations in a recommended list was obtained by averaging the SEP
+    values of the shared entity # noqa: E501
+    in the selected path for each recommended product.
+
+    For further details, please refer to the `paper <https://dl.acm.org/doi/pdf/10.1145/3477495.3532041>`.
+
     """
 
     def __init__(self, config):
@@ -1108,7 +1160,8 @@ class SEP(PathQualityMetric):
 
 class LID(PathQualityMetric):
     """
-    Diversity of Linked Interaction
+    Diversity of Linked Interaction (LID)
+
     """
 
     def __init__(self, config):
@@ -1161,6 +1214,7 @@ class LID(PathQualityMetric):
 class SED(PathQualityMetric):
     """
     Diversity of Shared Entities
+
     """
 
     def __init__(self, config):
@@ -1215,6 +1269,8 @@ class SED(PathQualityMetric):
 class PTD(PathQualityMetric):
     """
     Path Type Diversity
+
+
     """
 
     def __init__(self, config):
@@ -1273,7 +1329,7 @@ class PTD(PathQualityMetric):
 
 class PTC(PathQualityMetric):
     """
-    Path Type Concentration
+    Path Type Concentration (PTC)
     """
 
     def __init__(self, config):
@@ -1367,7 +1423,7 @@ class PPT(PathQualityMetric):
         for user in unique_path_pattern:
             n_paths = unique_path_pattern[user][0]
             n_path_patterns = len(unique_path_pattern[user][1])
-            ppt.append(n_path_patterns / min(n_paths, max_path_pattern))
+            ppt.append(min(n_path_patterns / min(n_paths, max_path_pattern), 1.0))
 
         return np.array(ppt)
 

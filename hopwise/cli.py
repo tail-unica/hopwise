@@ -70,7 +70,6 @@ def cli(ctx, debug, rich_traceback):
 @click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
 @click.option("--config-files", help="Space-separated config files")
 @click.option("--nproc", default=1, help="Number of processes")
-@click.option("--mode", type=click.Choice(["train", "evaluate"]), default="train", help="Run mode")
 @click.option("--checkpoint", help="Checkpoint (.pth) file path")
 @click.option("--ip", default="localhost", help="Master node IP")
 @click.option("--port", default="5678", help="Master node port")
@@ -78,11 +77,11 @@ def cli(ctx, debug, rich_traceback):
 @click.option("--group-offset", default=0, help="Global rank offset")
 @click.option("--proc-title", default=None, help="Processor Title, shown in top, nvidia utils, etc.")
 @click.pass_context
-def train(ctx, model, dataset, config_files, nproc, mode, checkpoint, ip, port, world_size, group_offset, proc_title):
+def train(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_size, group_offset, proc_title):
     """Train or evaluate a single model."""
 
     if proc_title is None:
-        proc_title = f"[hopwise] {model} {dataset} {mode}"
+        proc_title = f"[hopwise] {model} {dataset} training"
     setproctitle(proc_title)
 
     config_file_list = config_files.strip().split(" ") if config_files else None
@@ -91,7 +90,7 @@ def train(ctx, model, dataset, config_files, nproc, mode, checkpoint, ip, port, 
         run(
             model,
             dataset,
-            mode,
+            "train",
             checkpoint,
             config_file_list=config_file_list,
             nproc=nproc,
@@ -118,6 +117,67 @@ def train(ctx, model, dataset, config_files, nproc, mode, checkpoint, ip, port, 
                 sys.exit(1)
         else:
             console.print(f"[bold red]✗ Training failed:[/bold red] {type(e).__name__}: {str(e)}")
+            console.print("[dim]Use --debug for full traceback or --rich-traceback for enhanced formatting[/dim]")
+            sys.exit(1)
+
+
+@cli.command(
+    cls=HopwiseClickCommand,
+    context_settings=dict(
+        allow_interspersed_args=True,
+    ),
+)
+@click.option("--model", "-m", default="BPR", help="Model name to train")
+@click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
+@click.option("--config-files", help="Space-separated config files")
+@click.option("--nproc", default=1, help="Number of processes")
+@click.option("--checkpoint", help="Checkpoint (.pth) file path")
+@click.option("--ip", default="localhost", help="Master node IP")
+@click.option("--port", default="5678", help="Master node port")
+@click.option("--world-size", default=-1, help="Total number of jobs")
+@click.option("--group-offset", default=0, help="Global rank offset")
+@click.option("--proc-title", default=None, help="Processor Title, shown in top, nvidia utils, etc.")
+@click.pass_context
+def evaluate(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_size, group_offset, proc_title):
+    """Train or evaluate a single model."""
+
+    if proc_title is None:
+        proc_title = f"[hopwise] {model} {dataset} evaluation"
+    setproctitle(proc_title)
+
+    config_file_list = config_files.strip().split(" ") if config_files else None
+
+    try:
+        run(
+            model,
+            dataset,
+            "evaluate",
+            checkpoint,
+            config_file_list=config_file_list,
+            nproc=nproc,
+            world_size=world_size,
+            ip=ip,
+            port=port,
+            group_offset=group_offset,
+        )
+    except KeyboardInterrupt:
+        console.print("\n[bold yellow]⚠️  Evaluation interrupted by user[/bold yellow]")
+        sys.exit(130)
+
+    except Exception as e:
+        if ctx.obj.get("debug", False):
+            if ctx.obj.get("rich_traceback", False):
+                # Rich will handle this automatically with enhanced formatting
+                raise
+            else:
+                import traceback
+
+                console.print(f"[bold red]✗ Evaluation failed:[/bold red] {type(e).__name__}: {str(e)}")
+                console.print("\n[dim]Traceback:[/dim]")
+                traceback.print_exc()
+                sys.exit(1)
+        else:
+            console.print(f"[bold red]✗ Evaluation failed:[/bold red] {type(e).__name__}: {str(e)}")
             console.print("[dim]Use --debug for full traceback or --rich-traceback for enhanced formatting[/dim]")
             sys.exit(1)
 
@@ -233,7 +293,7 @@ def benchmark(
         allow_interspersed_args=True,
     ),
 )
-@click.argument("params_file")
+@click.option("--params-file", help="Fixed params files")
 @click.option("--config-files", help="Fixed config files")
 @click.option("--output-path", default="saved/hyper", help="Output directory")
 @click.option("--display-file", help="Visualization file")
