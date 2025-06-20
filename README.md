@@ -137,8 +137,7 @@ cd hopwise
 
 3️⃣ Install project dependencies
 
-
-*make sure to have uv updated to the latest version*
+*📌 make sure to have uv updated to the latest version*
 
 ```sh
 uv sync
