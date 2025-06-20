@@ -103,9 +103,13 @@ To install the project, you need to use `uv`. Follow the steps below to set up t
 - ✅ Python **3.9**, **3.10**, or **3.11**
 - ✅ [`uv`](https://github.com/astral-sh/uv) package manager
 
-### 🔹 Steps
+---
 
-1️⃣ Install **uv** and create a virtual environment.<br>
+### 🔹 Steps (from PyPI or from Source)
+
+
+1️⃣ **Install **uv** and create a virtual environment.**<br>
+
 We suggest installing **uv** as a [standalone application](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) instead of using pip to avoid issues and let **uv** create a dedicated virtual environment.<br>
 Once installed, create the virtual environment
 
@@ -114,23 +118,24 @@ uv venv --python PYTHON_VERSION --prompt hopwise
 ```
 `PYTHON_VERSION` must be one of 3.9, 3.10, 3.11, while `--prompt hopwise` customizes the virtual environment name that appears on the shell.
 
-1️⃣ **Install via PyPI**
+2️⃣ **Install via PyPI**
 
 ```sh
 pip install hopwise
 ```
 
+**🎉 Done 🎉**
+
 ---
 
-
-1️⃣ **Clone the repository**
+2️⃣ **Install from source: Clone the repository**
 ```sh
 git clone https://github.com/tail-unica/hopwise.git
 cd hopwise
 ```
 
 
-2️⃣ Install project dependencies
+3️⃣ Install project dependencies
 ```sh
 uv sync
 ```
@@ -143,13 +148,15 @@ uv sync --extra nncf
 
 > 📢 **Windows:** For proper DGL installation, please follow the [official DGL installation guide](https://www.dgl.ai/pages/start.html). Windows builds may encounter DLL linking issues with standard installation methods. Pre-built packages from the official source are recommended. Otherwise, using the Windows Subsystem for Linux (WSL) might be feasible as a solution.
 
+**🎉 Done 🎉**
+
 ## 🚀 Usage
 In any chosen setup, a .yaml file must be created containing the configuration to be used. An example:
 ```yaml
 gpu_id: 0
-topk: [10,20,50]
+topk: [10,20,50,...]
 data_path: *your_datasets_folder*
-metrics: ['NDCG', 'MRR', 'Hit', 'Precision', 'Recall','Novelty', 'Serendipity']
+metrics: ['NDCG', 'MRR', 'Hit', 'Precision', 'Recall',...]
 valid_metric: ndcg@10
 eval_batch_size: 1
 epochs: 1
@@ -211,11 +218,10 @@ the paper is under revision
 ```
 
 ## The Team
-<div align="center">
 
 [Ludovico Boratto](https://www.ludovicoboratto.com/), [Gianni Fenu](https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371), [Mirko Marras](https://www.mirkomarras.com/), [Giacomo Medda](https://jackmedda.github.io/), [Alessandro Soccol](https://alessandrosocc.github.io)
 
-</div>
+
 
 
 ## License
