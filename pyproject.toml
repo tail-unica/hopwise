@@ -180,11 +180,11 @@ no-build-isolation-package = ["torch-scatter"]
 
 [tool.uv.sources]
 dgl = [
-  { index = "dgl-win-cu121", extra = "cu121", marker = "sys_platform == 'win32'" },
-  { index = "dgl-win-cpu", extra = "cpu", marker = "sys_platform == 'win32'" },
-  { index = "dgl-cu124", extra = "cu124", marker = "sys_platform != 'win32'" },
-  { index = "dgl-cu121", extra = "cu121", marker = "sys_platform != 'win32'" },
-  { index = "dgl-cpu", extra = "cpu", marker = "sys_platform != 'win32'" },
+  { index = "dgl-win-cu121", marker = "sys_platform == 'win32' and extra == 'cu121'" },
+  { index = "dgl-win-cpu", marker = "sys_platform == 'win32' and extra == 'cpu' and extra != 'cu121' and extra != 'cu124'" },
+  { index = "dgl-cu124", marker = "sys_platform != 'win32' and extra == 'cu124'" },
+  { index = "dgl-cu121", marker = "sys_platform != 'win32' and extra == 'cu121' and extra != 'cu124'" },
+  { index = "dgl-cpu", marker = "sys_platform != 'win32' and extra == 'cpu' and extra != 'cu121' and extra != 'cu124'" },
 ]
 
 [[tool.uv.index]]
