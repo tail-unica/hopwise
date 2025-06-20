@@ -1,3 +1,2 @@
-recursive-include hopwise/properties *
-recursive-include hopwise/dataset_example *
-recursive-include hopwise *.yaml
+recursive-include recbole/properties *
+recursive-include recbole/dataset_example *

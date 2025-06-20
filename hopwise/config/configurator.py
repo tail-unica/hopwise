@@ -195,6 +195,9 @@ class Config:
                     self.deep_dict_update(cmd_config_dict, nested_cmd_dict)
                 else:
                     cmd_config_dict[cmd_arg_name] = cmd_arg_value
+        if len(unrecognized_args) > 0:
+            logger = getLogger()
+            logger.warning("command line args [{}] will not be used in Hopwise".format(" ".join(unrecognized_args)))
         cmd_config_dict = self._convert_config_dict(cmd_config_dict)
         return cmd_config_dict
 

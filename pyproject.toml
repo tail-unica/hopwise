@@ -4,21 +4,24 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "/hopwise/properties/**/*",
+  "/hopwise/properties",
   "/tests",
   "/run_example",
+  "/run_hyper.py",
   "/significance_test.py",
+  "/run_hopwise.py",
+  "/run_hopwise_group.py"
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["hopwise"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"hopwise/properties" = "hopwise/properties"
-"hopwise/dataset_example/ml-100k" = "hopwise/dataset_example/ml-100k"
-
 [tool.hatch.version]
 path = "hopwise/__init__.py"
+
+[tool.hatch.build.target.sdist.force-include]
+"run_hopwise.py" = "hopwise/run_hopwise.py"
+"run_hopwise_group.py" = "hopwise/run_hopwise_group.py"
 
 [project.scripts]
 hopwise = "hopwise.cli:cli"
@@ -30,6 +33,7 @@ _hopwise_ is an advanced extension of the Recbole library, designed to enhance r
 By integrating knowledge embedding models, path-based reasoning methods, and path language modeling apporaches, hopwise supports both recommendation and link prediction tasks with a focus on interpretability and self-explanation.
 """
 authors = [
+    { name = "Giacomo Balloccu", email = "gballoccu@gmail.com" },
     { name = "Ludovico Boratto", email = "ludovico.boratto@acm.org" },
     { name = "Mirko Marras", email = "mirko.marras@acm.org" },
     { name = "Alessandro Soccol", email = "alessandrosoccol@gmail.com" },
@@ -174,8 +178,14 @@ find-links = [
   "https://data.pyg.org/whl/torch-2.4.0+cu124.html",
   "https://data.pyg.org/whl/torch-2.3.0+cu121.html"
 ]
-
-
+conflicts = [
+  [
+    { extra = "cpu" },
+    { extra = "cu118" },
+    { extra = "cu121" },
+    { extra = "cu124" },
+  ],
+]
 no-build-isolation-package = ["torch-scatter"]
 
 [tool.uv.sources]
@@ -248,7 +258,7 @@ fixable = ["ALL"]
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "F403", "F405"]
 "**/{tests,docs,run_example}/*" = ["D", "PLR2004"]
-"**/{significance_test.py}" = ["D", "PLR2004"]
+"**/{significance_test.py,run_hyper.py}" = ["D", "PLR2004"]
 "**/hopwise/evaluator/__init__.py" = ["I"]
 "**/hopwise/data/dataset/__init__.py" = ["I"]
 "**/hopwise/model/knowledge_aware_recommender/pgpr.py" = ["PLR2004"]
