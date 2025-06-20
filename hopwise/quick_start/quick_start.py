@@ -139,7 +139,7 @@ def run_hopwise(
         config = loaded_config
 
         logger = get_logger(config)
-        logger.info(f"A checkpoint is provided from which to resume training {checkpoint}")
+        logger.info(set_color(f"A checkpoint is provided from which to resume training {checkpoint}", "red"))
     else:
         logger = get_logger(config)
         # dataset filtering
