@@ -77,7 +77,7 @@ By integrating **knowledge embedding models**, **path-based reasoning methods**,
 - **[ConvKB](https://aclanthology.org/N18-2053/)**
 
 
-For some implementations: [TorchKGE](https://torchkge.readthedocs.io/en/latest/)
+*We relied for most of the Knowledge Graph Embeddings methods to: [TorchKGE](https://torchkge.readthedocs.io/en/latest/) due to its popularity, published at a KDD workshop in 2022*x
 
 🆕 **Explanation Path Quality Metrics**
 
@@ -158,12 +158,13 @@ eval_step: 1
 
 ### 📍 Training
 
-![](https://i.ibb.co/JRzbzKKy/trainpgprclip.gif)
+![](images/trainpgprclip.gif)
 
 
 Run the project with the following command:
 ```sh
-hopwise train --model MODEL --dataset DATASET --config_files CONF_FILE_1.yaml CONF_FILE_2.yaml
+hopwise train --model MODEL --dataset DATASET \
+--config_files CONF_FILE_1.yaml CONF_FILE_2.yaml
 ```
 
 Override config parameters directly from the CLI using =:
@@ -172,10 +173,11 @@ hopwise train --epochs=20
 ```
 
 ### 📍 Evaluating from Checkpoint
-![](https://i.ibb.co/yFsyVxgt/pgprevaluation.gif)
+![](images/pgprevaluation.gif)
 
 ```sh
-hopwise evaluate --dataset DATASET --model MODEL --config-files CONFIG_FILES --checkpoint CHECKPOINT.pth
+hopwise evaluate --dataset DATASET --model MODEL \
+--config-files CONFIG_FILES --checkpoint CHECKPOINT.pth
 ```
 
 ### 📍 Hyperparameters Tuning
@@ -187,10 +189,11 @@ learning_rate uniform 0.0001, 0.1
 embedding_size choice [64, 100, 200]
 ```
 
-![](https://i.ibb.co/YBy1gG5r/bprhypertuning.gif)
+![](images/bprhypertuning.gif)
 
 ```sh
-hopwise tune --params-file hopwise/properties/hyper/PARAMS_FILE.hyper --config-files CONFIG_FILE.yaml --study-name STUDY_NAME
+hopwise tune --params-file hopwise/properties/hyper/PARAMS_FILE.hyper \
+--config-files CONFIG_FILE.yaml --study-name STUDY_NAME
 ```
 
 ## ℹ️ Contributing
@@ -207,7 +210,7 @@ If you find **hopwise** useful for your research or development, please cite wit
 the paper is under revision
 ```
 
-## The Team 🇮🇹
+## The Team
 <div align="center">
 
 [Ludovico Boratto](https://www.ludovicoboratto.com/), [Gianni Fenu](https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371), [Mirko Marras](https://www.mirkomarras.com/), [Giacomo Medda](https://jackmedda.github.io/), [Alessandro Soccol](https://alessandrosocc.github.io)
