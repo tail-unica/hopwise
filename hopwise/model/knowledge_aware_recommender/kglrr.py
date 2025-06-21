@@ -238,6 +238,10 @@ class KGEncoder(nn.Module):
 
 
 class KGLRR(KnowledgeRecommender):
+    """
+    KGLRR: Reinforced logical reasoning over KGs for interpretable recommendation system
+    """
+
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset) -> None:

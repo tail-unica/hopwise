@@ -45,13 +45,9 @@ By integrating **knowledge embedding models**, **path-based reasoning methods**,
 **📌 Translational Models**
 
 - **[TransE](https://proceedings.neurips.cc/paper_files/paper/2013/file/1cecc7a77928ca8133fa24680a88d2f9-Paper.pdf)**
-
 - **[TransH](https://ojs.aaai.org/index.php/AAAI/article/view/8870)**
-
 - **[TransD](https://aclanthology.org/P15-1067/)**
-
 - **[TransR](https://linyankai.github.io/publications/aaai2015_transr.pdf)**
-
 - **[TorusE](https://cdn.aaai.org/ojs/11538/11538-13-15066-1-2-20201228.pdf)**
 - **[RotatE](https://arxiv.org/abs/1902.10197)**
 
@@ -59,23 +55,16 @@ By integrating **knowledge embedding models**, **path-based reasoning methods**,
 
 
 - **[ComplEx](https://arxiv.org/abs/1606.06357)**
-
 - **[Analogy](https://proceedings.mlr.press/v70/liu17d/liu17d.pdf)**
-
 - **[TuckER](https://arxiv.org/abs/1901.09590)**
-
 - **[RESCAL](https://icml.cc/2011/papers/438_icmlpaper.pdf)**
-
 - **[DistMult](https://arxiv.org/abs/1412.6575)**
-
 - **[HolE](https://arxiv.org/abs/1510.04935)**
 
 **📌 Convolution-Based Models**
 
 - **[ConvE](https://arxiv.org/abs/1707.01476)**
-
 - **[ConvKB](https://aclanthology.org/N18-2053/)**
-
 
 *We relied for most of the Knowledge Graph Embeddings methods to: [TorchKGE](https://torchkge.readthedocs.io/en/latest/) due to its popularity, published at a KDD workshop in 2020.*
 
