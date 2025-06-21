@@ -80,6 +80,7 @@ dependencies = [
     "joblib",
     "numba",
     "scikit-learn",
+    "rich"
 ]
 
 [project.optional-dependencies]
