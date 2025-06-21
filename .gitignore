@@ -2,7 +2,7 @@
 /saved*
 *.pth
 .tox
-
+build/
 .vscode/
 .idea/
 *.pyc
@@ -14,7 +14,7 @@ saved*/
 docs/build/
 wandb/*
 /ray_log*
-config/
+
 !hopwise/config/
 !tests/config/
 .venv/
