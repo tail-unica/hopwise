@@ -28,7 +28,7 @@ dataset/
 !hopwise/properties/dataset
 hyper/
 # model/
-*.txt
+
 *.*emb
 !tests/test_data/test/*.*emb
 test.py
