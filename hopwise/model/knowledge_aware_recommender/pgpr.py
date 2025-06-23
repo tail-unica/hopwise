@@ -4,8 +4,11 @@
 
 """PGPR
 ##################################################
-Reference: Reinforcement Knowledge Graph Reasoning for Explainable Recommendation (https://dl.acm.org/doi/10.1145/3331184.3331203)
+Reference:
+    Xian et al. "Reinforcement Knowledge Graph Reasoning for Explainable Recommendation." in SIGIR 2019.
 
+Reference code:
+    https://github.com/orcax/PGPR
 """
 
 from collections import defaultdict, namedtuple

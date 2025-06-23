@@ -5,9 +5,10 @@
 """TorusE
 ##################################################
 Reference:
-    Takuma Ebisu and Ryutaro Ichise TorusE: Knowledge Graph Embedding on a Lie Group.
-    In Proceedings of the 32nd AAAI Conference on Artificial Intelligence
-    (New Orleans, LA, USA, Feb. 2018), AAAI Press, pp. 1819-1826.
+    Takuma Ebisu and Ryutaro Ichise. "TorusE: Knowledge Graph Embedding on a Lie Group." in AAAI 2018.
+
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import torch

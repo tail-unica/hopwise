@@ -1,6 +1,8 @@
 Data Flow
 ===========
 
+**hopwise is based on Recbole, so the data flow is the same.**
+
 For extensibility and reusability, our data module designs an elegant data flow that transforms raw data into the model input.
 
 The overall data flow can be described as follows:

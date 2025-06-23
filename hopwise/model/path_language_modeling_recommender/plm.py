@@ -6,6 +6,9 @@ r"""PLM
 ################################################
 Reference:
      Shijie Geng et al. "Path Language Modeling over Knowledge Graphs for Explainable Recommendation." in WWW 2022.
+
+Reference code:
+    https://github.com/mirkomarras/kgglm
 """
 
 from enum import IntEnum
@@ -29,7 +32,6 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
     from a knowledge graph as a next-token prediction task and employs two feature transformations separately
     for entities and relations. Its decoding process is unbounded, meaning that it can generate paths that are
     not faithful to the knowledge graph structure, i.e., it can generate paths that do not exist in the KG.
-    https://dl.acm.org/doi/pdf/10.1145/3485447.3511937
     """
 
     def __init__(self, config, dataset):

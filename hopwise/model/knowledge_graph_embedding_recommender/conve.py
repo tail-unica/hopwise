@@ -5,8 +5,10 @@
 """ConvE
 ##################################################
 Reference:
-    Tim Dettmers and Pasquale Minervini and Pontus Stenetorp and Sebastian Riedel.
-    Convolutional 2D Knowledge Graph Embeddings. CORR, 2017.
+    Dettmers et al. "Convolutional 2D Knowledge Graph Embeddings." in AAAI 2018.
+
+Reference code:
+    https://github.com/TimDettmers/ConvE
 """
 
 import torch

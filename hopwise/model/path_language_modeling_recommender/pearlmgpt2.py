@@ -2,6 +2,16 @@
 # @Author : Alessandro Soccol
 # @Email  : alessandro.soccol@unica.it
 
+r"""PEARLMGPT2
+##################################################
+Reference:
+    Balloccu et al. "Faithful Path Language Modeling for Explainable Recommendation over Knowledge Graph." - preprint.
+
+Reference code:
+    https://github.com/Chris1nexus/pearlm
+    https://github.com/karpathy/nanoGPT/blob/master/model.py
+    https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/07_gpt_to_llama/converting-gpt-to-llama2.ipynb
+"""
 
 import math
 from enum import IntEnum
@@ -134,11 +144,9 @@ class Block(nn.Module):
         return x
 
 
-class PEARLMgpt2(KnowledgeRecommender):
+class PEARLMGPT2(KnowledgeRecommender):
     """
-    Reference:
-    https://github.com/karpathy/nanoGPT/blob/master/model.py
-    https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/07_gpt_to_llama/converting-gpt-to-llama2.ipynb
+    Low-level implementation of PEARLM model based on GPT-2 architecture that does not rely on HuggingFace tools.
     """
 
     input_type = InputType.PATHWISE

@@ -808,6 +808,10 @@ DeltaRecall = create_consumer_metric_class("Recall")
 
 
 class Serendipity(AbstractMetric):
+    r"""Serendipity_ is a measure of how surprising the recommended items are to the user.
+    It is defined as the fraction of recommended items that are not popular in the training data.
+    """
+
     metric_type = EvaluatorType.RANKING
     metric_need = ["rec.items", "data.num_items", "data.num_users", "data.count_items", "data.history_index"]
 
@@ -931,8 +935,7 @@ class Novelty(AbstractMetric):
 
 
 class LIR(PathQualityMetric):
-    """
-    Linking Interaction Recency (LIR)
+    r"""Linking Interaction Recency (LIR)
 
     This property serves to quantify the time since the linking interaction in the explanation path occurred.
     Given a user :math:`u \in U` and the set :math:`P_u` of products this user interacted with,
@@ -958,7 +961,6 @@ class LIR(PathQualityMetric):
     by averaging the LIR of the linking interactions for the selected explanation path of each recommended product.
 
     For further details, please refer to the `paper <https://dl.acm.org/doi/pdf/10.1145/3477495.3532041>`.
-
     """
 
     def __init__(self, config):
@@ -1070,9 +1072,7 @@ class Fidelity(PathQualityMetric):
 
 
 class SEP(PathQualityMetric):
-    """
-    Popularity of Shared Entity (SEP)
-
+    r"""Popularity of Shared Entity (SEP)
 
     This property serves to quantify the extent to which the shared entity included in an explanation-path is popular.
     They assume that the number of relationships a shared entity is involved in the KG is a proxy of its popularity.
@@ -1098,7 +1098,6 @@ class SEP(PathQualityMetric):
     in the selected path for each recommended product.
 
     For further details, please refer to the `paper <https://dl.acm.org/doi/pdf/10.1145/3477495.3532041>`.
-
     """
 
     def __init__(self, config):

@@ -2,6 +2,16 @@
 # @Author : Alessandro Soccol
 # @Email  : alessandro.soccol@unica.it
 
+r"""PEARLMLlama2
+##################################################
+Reference:
+    Balloccu et al. "Faithful Path Language Modeling for Explainable Recommendation over Knowledge Graph." - preprint.
+
+Reference code:
+    https://github.com/Chris1nexus/pearlm
+    https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/07_gpt_to_llama/converting-gpt-to-llama2.ipynb
+"""
+
 import math
 from enum import IntEnum
 
@@ -122,15 +132,14 @@ class Block(nn.Module):
         return x
 
 
-class PEARLMllama2(KnowledgeRecommender):
+class PEARLMLlama2(KnowledgeRecommender):
     """
-    Reference:
-    https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/07_gpt_to_llama/converting-gpt-to-llama2.ipynb
+    Low-level implementation of PEARLM model based on Llama2 architecture.
 
     Novelties:
     - LayerNorm is replaced with RMSNorm
     - GeLU is replaced with SiLU
-    - Feedforward is replaced
+    - Feedforward is replaced with a simple linear head
     """
 
     input_type = InputType.PATHWISE

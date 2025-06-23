@@ -2,6 +2,16 @@
 # @Author : Giacomo Medda, Alessandro Soccol
 # @Email  : giacomo.medda@unica.it, alessandro.soccol@unica.it
 
+r"""KGGLM
+##################################################
+Reference:
+    Balloccu et al. "KGGLM: A Generative Language Model for Generalizable Knowledge
+    Graph Representation Learning in Recommendation." in RecSys 2024.
+
+Reference code:
+    https://github.com/mirkomarras/kgglm
+"""
+
 import os
 
 from transformers.trainer_utils import get_last_checkpoint

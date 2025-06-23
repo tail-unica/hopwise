@@ -1045,15 +1045,15 @@ class TestPathLanguageModelingRecommender(unittest.TestCase):
         quick_test(config_dict)
 
     def test_pearlmgpt2(self):
-        config_dict = {"model": "PEARLMgpt2", **self.scratch_lm_base_config}
+        config_dict = {"model": "PEARLMGPT2", **self.scratch_lm_base_config}
         quick_test(config_dict)
 
     def test_pearlmllama2(self):
-        config_dict = {"model": "PEARLMllama2", **self.scratch_lm_base_config}
+        config_dict = {"model": "PEARLMLlama2", **self.scratch_lm_base_config}
         quick_test(config_dict)
 
     def test_pearlmllama3(self):
-        config_dict = {"model": "PEARLMllama3", **self.scratch_lm_base_config}
+        config_dict = {"model": "PEARLMLlama3", **self.scratch_lm_base_config}
         quick_test(config_dict)
 
     def test_plm(self):

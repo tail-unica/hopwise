@@ -2,6 +2,16 @@
 # @Author : Alessandro Soccol
 # @Email  : alessandro.soccol@unica.it
 
+r"""PEARLMLlama3
+##################################################
+Reference:
+    Balloccu et al. "Faithful Path Language Modeling for Explainable Recommendation over Knowledge Graph." - preprint.
+
+Reference code:
+    https://github.com/Chris1nexus/pearlm
+    https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/07_gpt_to_llama/converting-llama2-to-llama3.ipynb
+"""
+
 import math
 from enum import IntEnum
 
@@ -143,19 +153,9 @@ class Block(nn.Module):
         return x
 
 
-class PEARLMllama3(KnowledgeRecommender):
+class PEARLMLlama3(KnowledgeRecommender):
     """
-    Reference:
-    https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/07_gpt_to_llama/converting-llama2-to-llama3.ipynb
-
-    Novelties from LLaMA 2:
-    - Context Length up to 8192
-    - Rotary Position Embeddings Theta Base of 500_000 instead of 10_000
-    - Grouped Query Attention instead of Multi-Head Attention
-    - Shared Buffers to reuse sin, cos and causal mask in transformer blocks
-    to improve efficiency (crucial in llama3.1 and 3.2)
-
-
+    Low-level implementation of PEARLM model based on LLaMA 3 architecture.
 
     With 8 kv-groups (that's how many Llama 3 8B uses), we can see that the number of rows
     of the key and value matrices are reduced by a factor of 4

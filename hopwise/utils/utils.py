@@ -105,9 +105,9 @@ def get_trainer(model_type, model_name):
         Trainer: trainer class
     """
     register_table = {
-        "PEARLMgpt2": "PEARLMfromscratchTrainer",
-        "PEARLMllama2": "PEARLMfromscratchTrainer",
-        "PEARLMllama3": "PEARLMfromscratchTrainer",
+        "PEARLMGPT2": "PEARLMfromscratchTrainer",
+        "PEARLMLlama2": "PEARLMfromscratchTrainer",
+        "PEARLMLlama3": "PEARLMfromscratchTrainer",
     }
 
     try:

@@ -39,7 +39,7 @@ Run the following command to install:
 
 Try to run:
 -------------------------
-To check if you have successfully installed the RecBole, you can run:
+To check if you have successfully installed hopwise, you can run:
 
 .. code:: bash
 

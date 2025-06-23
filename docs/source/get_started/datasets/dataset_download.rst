@@ -1,6 +1,8 @@
 Dataset Download
 ================================
 
+**hopwise provides 4 more datasets in addition to the set of downloadable datasets provided by Recbole.**
+
 In RecBole, they have collected and released 28 commonly-used publiced dataset (detailed as `Dataset List </dataset_list.html>`_).
 Users can freely download these datasets in the following three ways:
 

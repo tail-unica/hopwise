@@ -5,8 +5,10 @@
 """TransH
 ##################################################
 Reference:
-    Wang Z. et al. Knowledge Graph Embedding by Translating on Hyperplanes.
-    In Twenty-Eighth AAAI Conference on Artificial Intelligence, June 2014.
+    Wang Z. et al. "Knowledge Graph Embedding by Translating on Hyperplanes." in AAAI 2014.
+
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import torch

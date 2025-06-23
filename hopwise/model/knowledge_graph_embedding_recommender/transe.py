@@ -5,8 +5,10 @@
 """TransE
 ##################################################
 Reference:
-    Bordes. A et al. Translating Embeddings for Modeling Multi-relational Data.
-    In Advances in Neural Information Processing Systems 26, pages 2787-2795, 2013.
+    Bordes. A et al. "Translating Embeddings for Modeling Multi-relational Data." in NeurIPS 2013.
+
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import torch
