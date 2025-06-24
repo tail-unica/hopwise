@@ -31,17 +31,14 @@ jobs:
       # Sync pipeline
       - name: Install the project
         run: |
-          uv sync --extra ${{ inputs.env }}
+          uv sync
 
-      - if: ${{ inputs.env == 'cu124' }}
+      - if: ${{ inputs.env == 'cuda' }}
         run: |
-          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
-      - if: ${{ inputs.env == 'cu121' }}
-        run: |
-          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.3.1+cu121.html
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
       - if: ${{ inputs.env == 'cpu' }}
         run: |
-          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.7.0+cpu.html
 
       # Testing pipeline
       - name: Test Overall

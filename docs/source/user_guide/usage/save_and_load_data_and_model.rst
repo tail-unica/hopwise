@@ -12,7 +12,7 @@ If you want to save filtered dataset and split dataloaders,
 you can set parameter :attr:`save_dataset` and parameter :attr:`save_dataloaders` to ``True``
 to save filtered dataset and split dataloaders.
 
-You can refer to :doc:`../config_settings` for more details about :attr:`save_dataset` and :attr:`save_dataloaders`.
+You can refer to :doc:`../configuration` for more details about :attr:`save_dataset` and :attr:`save_dataloaders`.
 
 
 Load data and model

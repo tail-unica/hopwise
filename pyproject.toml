@@ -32,7 +32,7 @@ authors = [
     { name = "Alessandro Soccol", email = "alessandrosoccol@gmail.com" },
 ]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9,<=3.12"
 license = { file = "LICENSE" }
 dynamic = ["version"]
 keywords = [
@@ -55,38 +55,38 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "numpy>=2.0.0",
-    "pandas>2.0.0",
-    "torch>=2.5.0",
-    "transformers",
-    "accelerate>=0.34.2",
-    "datasets",
-    "tqdm",
-    "wandb",
-    "igraph",
-    "colorama>=0.4.4",
-    "scipy>=1.12.0",
-    "thop",
-    "tabulate",
-    "tensorboard>=2.5.0",
-    "psutil",
-    "texttable",
-    "colorlog>=4.7.2",
-    "protobuf==3.20.*",
-    "joblib",
-    "numba",
-    "scikit-learn",
-    "rich",
-    "cachetools",
+  "numpy>=2.0.0",
+  "pandas>2.0.0",
+  "torch>=2.5.0",
+  "transformers",
+  "accelerate>=0.34.2",
+  "datasets",
+  "tqdm",
+  "wandb",
+  "igraph",
+  "colorama>=0.4.4",
+  "scipy>=1.12.0",
+  "thop",
+  "tabulate",
+  "tensorboard>=2.5.0",
+  "psutil",
+  "texttable",
+  "colorlog>=4.7.2",
+  "protobuf==3.20.*",
+  "joblib",
+  "numba",
+  "scikit-learn",
+  "rich",
+  "cachetools",
 ]
 
 [project.optional-dependencies]
+ldiffrec = [
+  "kmeans-pytorch"
+]
 nncf = [
   "community",
   "python-louvain"
-]
-xgboost = [
-  "xgboost"
 ]
 ncl = [
   "faiss-cpu"
@@ -94,8 +94,11 @@ ncl = [
 lightgbm = [
   "lightgbm"
 ]
-ldiffrec = [
-  "kmeans-pytorch"
+xgboost = [
+  "xgboost"
+]
+kgat = [
+  "dgl>=2.4.0"
 ]
 # kgin = [
 #   "torch-scatter",
@@ -111,21 +114,17 @@ all-models = [
   "hopwise[ncl]",
   "hopwise[lightgbm]",
   "hopwise[ldiffrec]",
+  "hopwise[kgat]",
   # "hopwise[kgin]",
 ]
 cli = [
   "click>=8.0.0",
 ]
-cpu = [
-  "dgl>=2.4.0",
-]
-cuda = [
-  "dgl>=2.4.0",
-]
 
 [dependency-groups]
 docs = [
   "sphinx",
+  "sphinx-autoapi",
   "furo",
   "sphinx-copybutton"
 ]
@@ -162,45 +161,17 @@ commands = [
 
 [tool.uv]
 find-links = [
-  "https://data.pyg.org/whl/torch-2.4.0+cu124.html"
+  "https://data.pyg.org/whl/torch-2.4.0+cu124.html",
+  "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html",
+  "https://data.dgl.ai/wheels/torch-2.4/repo.html",
+  "https://data.dgl.ai/wheels/cu121/repo.html",
+  "https://data.dgl.ai/wheels/repo.html"
 ]
 dependency-metadata = [
     { name = "dgl", requires-dist = [], requires-python = ">=3.9,<=3.12" },
 ]
 
 no-build-isolation-package = ["torch-scatter"]
-
-[tool.uv.sources]
-dgl = [
-  { index = "dgl-win-cuda", marker = "sys_platform == 'win32' and extra == 'cuda'" },
-  { index = "dgl-win-cpu", marker = "sys_platform == 'win32' and extra == 'cpu' and extra != 'cuda'" },
-  { index = "dgl-cuda", marker = "sys_platform != 'win32' and extra == 'cuda'" },
-  { index = "dgl-cpu", marker = "sys_platform != 'win32' and extra == 'cpu' and extra != 'cuda'" },
-]
-
-[[tool.uv.index]]
-name = "dgl-win-cuda"
-url = "https://data.dgl.ai/wheels/cu121/repo.html"
-format = "flat"
-explicit = true
-
-[[tool.uv.index]]
-name = "dgl-win-cpu"
-url = "https://data.dgl.ai/wheels/repo.html"
-format = "flat"
-explicit = true
-
-[[tool.uv.index]]
-name = "dgl-cuda"
-url = "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html"
-format = "flat"
-explicit = true
-
-[[tool.uv.index]]
-name = "dgl-cpu"
-url = "https://data.dgl.ai/wheels/torch-2.4/repo.html"
-format = "flat"
-explicit = true
 
 [[tool.uv.index]]
 name = "testpypi"

@@ -1,12 +1,12 @@
 Usage
 ===================
-In order to help users learn the depth usage of RecBole, we write the following usage docs
-to give a detailed introduction about RecBole's features.
+In order to help users learn the depth usage of hopwise, we write the following usage docs
+to give a detailed introduction about hopwise's features.
 
 .. toctree::
    :maxdepth: 1
 
-   usage/run_recbole
+   usage/run_hopwise
    usage/use_modules
    usage/parameter_tuning
    usage/running_new_dataset

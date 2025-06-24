@@ -808,7 +808,7 @@ DeltaRecall = create_consumer_metric_class("Recall")
 
 
 class Serendipity(AbstractMetric):
-    r"""Serendipity_ is a measure of how surprising the recommended items are to the user.
+    r"""Serendipity is a measure of how surprising the recommended items are to the user.
     It is defined as the fraction of recommended items that are not popular in the training data.
     """
 

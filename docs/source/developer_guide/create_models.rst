@@ -12,7 +12,7 @@ To begin with, we should create a new model implementing from one of :class:`~ho
 :class:`~hopwise.model.abstract_recommender.KnowledgeRecommender`.
 For example, we would like to develop a general model named as NewModel and write the code to `newmodel.py`.
 
-.. code:: python
+.. code-block:: python
 
     from hopwise.model.abstract_recommender import GeneralRecommender
 
@@ -28,7 +28,7 @@ hopwise supports two input types: :obj:`~hopwise.utils.enum_type.InputType.POINT
 
 Suppose we want to use pairwise loss:
 
-.. code:: python
+.. code-block:: python
 
     from hopwise.utils import InputType
     from hopwise.model.abstract_recommender import GeneralRecommender
@@ -47,7 +47,7 @@ Then we redefine :meth:`__init__` method, :meth:`__init__` is used to initialize
 
 Here, we suppose the NewModel encode the users and items, where we use :func:`~hopwise.model.init.xavier_normal_initialization` to initialize the parameters, and use inner product to compute the score.
 
-.. code:: python
+.. code-block:: python
 
     import torch
     import torch.nn as nn
@@ -79,7 +79,7 @@ Implement calcualte_loss()
 Then we define the :meth:`calculate_loss` method, :meth:`calculate_loss` is used to compute the loss,
 the input parameters are :class:`~hopwise.data.interaction.Interaction`, at last the method return a :class:`torch.Tensor` for computing the BP information.
 
-.. code:: python
+.. code-block:: python
 
     import torch
 
@@ -104,7 +104,7 @@ Implement predict()
 At last, we define the :meth:`predict` method, which is used to compute the score for a give user-item pair.
 The input is a :class:`~hopwise.data.interaction.Interaction`, and the output is a score.
 
-.. code:: python
+.. code-block:: python
 
     import torch
 
@@ -121,7 +121,7 @@ The input is a :class:`~hopwise.data.interaction.Interaction`, and the output is
 
 If you would like to evaluate the full ranking in the NewModel, hopwise also supports an accelerated predict method.
 
-.. code:: python
+.. code-block:: python
 
    import torch
 
@@ -143,7 +143,7 @@ Complete Code
 ------------------------
 Thus the final implemented NewModel is:
 
-.. code:: python
+.. code-block:: python
 
     import torch
     import torch.nn as nn
@@ -214,7 +214,7 @@ Thus the final implemented NewModel is:
 
 Then, we can use NewModel in hopwise as follows (e.g., `run.py`):
 
-.. code:: python
+.. code-block:: python
 
     from logging import getLogger
     from hopwise.utils import init_logger, init_seed

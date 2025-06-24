@@ -49,10 +49,9 @@ For more details of data config, please refer to :doc:`../user_guide/config/data
 2. Choose a model:
 >>>>>>>>>>>>>>>>>>>>>>>>>
 In RecBole, we implement more than 100 recommendation models covering general recommendation, sequential recommendation,
-context-aware recommendation and knowledge-based recommendation. You can choose a model from our :doc:`../user_guide/model_intro`.
-Here we choose BPR model to train and test.
+context-aware recommendation and knowledge-based recommendation. Here we choose BPR model to train and test.
 
-Then, you need to set the parameter for BPR model. You can check the :doc:`../user_guide/model/general/bpr` and add the model settings into the `test.yaml`, like:
+Then, you need to set the parameter for BPR model. You can check the :doc:`/user_guide/tasks_models/model/general/bpr` and add the model settings into the `test.yaml`, like:
 
 .. code:: yaml
 

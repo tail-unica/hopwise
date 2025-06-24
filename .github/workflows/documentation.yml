@@ -1,14 +1,13 @@
 name: Deploy Sphinx documentation to Pages
 
 on:
-  [
-    push,
-    pull_request,
-    workflow_dispatch
-  ]
+  pull_request:
+    types:
+      - closed
 
 jobs:
   pages:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment:
       name: github-pages

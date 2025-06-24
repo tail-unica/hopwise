@@ -5,14 +5,13 @@
   <b>RecBole extension with a focus on Knowledge Graphs (KGs) and explainability.</b>
 </p>
 <p align="center">
+  <a href="http://tail-unica.github.io/hopwise/"><img alt="Static Badge" src="https://img.shields.io/badge/docs-hopwise-purple?logo=sphinx&link=http%3A%2F%2Ftail-unica.github.io%2Fhopwise%2F"></a>
   <img src="https://img.shields.io/badge/Python-3.9%7C3.10%7C3.11-green" />
   <img src="https://img.shields.io/github/license/tail-unica/hopwise" />
   <img src="https://img.shields.io/github/repo-size/tail-unica/hopwise">
   <a href="https://github.com/tail-unica/hopwise/network"><img alt="GitHub forks" src="https://img.shields.io/github/forks/tail-unica/hopwise"></a>
 <a href="https://github.com/tail-unica/hopwise/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/tail-unica/hopwise"></a>
 </p>
-
-
 
 
 ---
@@ -24,7 +23,7 @@ By integrating **knowledge embedding models**, **path-based reasoning methods**,
 
 ---
 
-![hopwise pipeline](assets/hopwise.png)
+![hopwise pipeline](https://github.com/tail-unica/hopwise/blob/main/assets/hopwise.png)
 
 **Our framework: <span style="color:rgb(247, 206, 204)">new functionalities</span>, <span style="color:rgb(213, 232, 212)">datasets utilities</span>, <span style="color:rgb(218, 232, 249)">abstraction layers</span>, <span style="color:rgb(255, 242, 205)">environment utils</span>, <span style="color:rgb(255, 230, 205)">metrics type</span>, <span style="color:rgb(208,206,226)">models</span>**
 
@@ -81,6 +80,14 @@ By integrating **knowledge embedding models**, **path-based reasoning methods**,
 - **PTD/PPC (Path Type Diversity)**
 - **Model Fidelity**
 
+🆕 **New Datasets**
+- **MovieLens-1M Small**: used in the papers [PEARLM](https://arxiv.org/abs/2310.16452) and [KGGLM](https://dl.acm.org/doi/10.1145/3640457.3691703)
+- **Last.FM-1M Small**: used in the papers [PEARLM](https://arxiv.org/abs/2310.16452) and [KGGLM](https://dl.acm.org/doi/10.1145/3640457.3691703)
+- **Yelp 2018**: used in the paper [KGAT](https://dl.acm.org/doi/10.1145/3292500.3330989)
+- **Alibaba Fashion**: used in the paper [KGRec](https://dl.acm.org/doi/10.1145/3580305.3599400)
+
+All the datasets are available as zip archives on [Google Drive](https://drive.google.com/drive/folders/1Zv57Xfo3mC2DemQbHf5XkYKBluRALQNm?usp=drive_link).
+
 > [!IMPORTANT]
 > **Check the paper for the other changes.**
 
@@ -113,6 +120,14 @@ uv venv --python PYTHON_VERSION --prompt hopwise
 uv pip install hopwise
 ```
 
+Some models require extra dependencies.
+For example, to install NNCF:
+```sh
+uv pip install hopwise[nncf]
+```
+
+Please check the [PyPI page](https://pypi.org/project/hopwise/) for the complete list of extra dependencies and the [documentation](https://hopwise.readthedocs.io/en/latest/installation.html#extra-dependencies) for more details on how to install hopwise with specific dependencies.
+
 **🎉 Done 🎉**
 
 ---
@@ -130,12 +145,6 @@ cd hopwise
 
 ```sh
 uv sync
-```
-Some models require extra dependencies.
-Check out pyproject.toml for optional dependencies.
-For example, to install NNCF:
-```sh
-uv sync --extra nncf
 ```
 
 > 📢 **Windows:** For proper DGL installation, please follow the [official DGL installation guide](https://www.dgl.ai/pages/start.html). Windows builds may encounter DLL linking issues with standard installation methods. Pre-built packages from the official source are recommended. Otherwise, using the Windows Subsystem for Linux (WSL) might be feasible as a solution.
@@ -159,7 +168,7 @@ eval_step: 1
 
 <p align="center">
     <a href="#readme">
-        <img alt="traintest" src="assets/trainpgprclip.gif">
+        <img alt="traintest" src="https://github.com/tail-unica/hopwise/blob/main/assets/trainpgprclip.gif">
     </a>
 </p>
 
@@ -180,7 +189,7 @@ hopwise train --epochs=20
 ### 📍 Evaluating from Checkpoint
 <p align="center">
     <a href="#readme">
-        <img alt="pgprevaltest" src="assets/pgprevaluation.gif">
+        <img alt="pgprevaltest" src="https://github.com/tail-unica/hopwise/blob/main/assets/pgprevaluation.gif">
     </a>
 </p>
 
@@ -200,7 +209,7 @@ embedding_size choice [64, 100, 200]
 
 <p align="center">
     <a href="#readme">
-        <img alt="hypertuningtest" src="assets/hypertuningbpr.gif">
+        <img alt="hypertuningtest" src="https://github.com/tail-unica/hopwise/blob/main/assets/hypertuningbpr.gif">
     </a>
 </p>
 

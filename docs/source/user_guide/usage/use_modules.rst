@@ -58,7 +58,7 @@ Configurations Initialization
     config = Config(model='BPR', dataset='ml-100k')
 
 :class:`~hopwise.config.configurator.Config` module is used to set parameters and experiment setup. 　
-Please refer to :doc:`../config_settings` for more details.
+Please refer to :doc:`../configuration` for more details.
 
 
 Init Random Seed

@@ -63,15 +63,8 @@ New Features:
    user_guide/usage
 
    user_guide/configuration
-   user_guide/datasets
-
-   user_guide/general_recommendation
-   user_guide/context_aware_recommendation
-   user_guide/sequential_recommendation
-   user_guide/knowledge_based_recommendation
-   user_guide/path_reasoning_recommendation
-   user_guide/knowledge_graph_embeddings
-
+   user_guide/data_intro
+   user_guide/tasks_models_intro
    user_guide/training_and_evaluation
    user_guide/hyperparameters_tuning
 

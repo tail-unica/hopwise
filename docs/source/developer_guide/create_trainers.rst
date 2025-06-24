@@ -26,7 +26,7 @@ We revise the :meth:`~hopwise.trainer.trainer.Trainer._train_epoch` method.
 To begin with, we need to create a new class for
 :class:`NewTrainer` based on :class:`~hopwise.trainer.trainer.Trainer`.
 
-.. code:: python
+.. code-block:: python
 
     from hopwise.trainer import Trainer
 
@@ -41,7 +41,7 @@ Here, the losses are alternatively optimized after each epoch,
 and the losses are computed by :meth:`calculate_loss1` and :meth:`calculate_loss2`
 
 
-.. code:: python
+.. code-block:: python
 
     def _train_epoch(self, train_data, epoch_idx):
         self.model.train()
@@ -71,7 +71,7 @@ and the losses are computed by :meth:`calculate_loss1` and :meth:`calculate_loss
 Complete Code
 ^^^^^^^^^^^^^^^^
 
-.. code:: python
+.. code-block:: python
 
     from hopwise.trainer import Trainer
 
@@ -115,7 +115,7 @@ network. Let's give an example based on torch ``torch.autocast``. To
 begin with, we need to create a new class for ``NewTrainer`` based on
 ``Trainer``.
 
-.. code:: python
+.. code-block:: python
 
   from hopwise.trainer import Trainer
   import torch.cuda.amp as amp
@@ -125,7 +125,7 @@ begin with, we need to create a new class for ``NewTrainer`` based on
 
 Then we revise ``_train_epoch()``.
 
-.. code:: python
+.. code-block:: python
 
   def _train_epoch(self, train_data, epoch_idx):
       self.model.train()
@@ -142,7 +142,7 @@ Then we revise ``_train_epoch()``.
 
 Complete Code
 ^^^^^^^^^^^^^^^^
-.. code:: python
+.. code-block:: python
 
   from hopwise.trainer import Trainer
   import torch.cuda.amp as amp
@@ -185,7 +185,7 @@ features. On the other hand, later layers of the model learn the
 detailed features. In this case, we can set different learning rate
 for different layers. We can do this by modifying the optimizer.
 
-.. code:: python
+.. code-block:: python
 
       def _build_optimizer(self, learner, learning_rate, weight_decay):
           pretrained_params = list(map(id, self.model.pretrained_part.parameters())
@@ -201,7 +201,7 @@ for different layers. We can do this by modifying the optimizer.
 
 Complete Code
 ^^^^^^^^^^^^^^^^
-.. code:: python
+.. code-block:: python
 
   from hopwise.trainer import Trainer
   class NewTrainer(Trainer):
