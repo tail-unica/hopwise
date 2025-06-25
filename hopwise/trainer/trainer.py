@@ -28,6 +28,7 @@ from time import time
 
 import numpy as np
 import torch
+from scipy import sparse
 from torch import optim
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
@@ -1439,16 +1440,13 @@ class DecisionTreeTrainer(AbstractTrainer):
                     cur_data = np.hstack((cur_data, value))
 
         if self.convert_token_to_onehot:
-            from scipy import sparse
-            from scipy.sparse import dok_matrix
-
             convert_col_list = dataloader._dataset.convert_col_list
             hash_count = dataloader._dataset.hash_count
 
             new_col = cur_data.shape[1] - len(convert_col_list)
             for key, values in hash_count.items():
                 new_col = new_col + values
-            onehot_data = dok_matrix((cur_data.shape[0], new_col))
+            onehot_data = sparse.dok_matrix((cur_data.shape[0], new_col))
 
             cur_j = 0
             new_j = 0

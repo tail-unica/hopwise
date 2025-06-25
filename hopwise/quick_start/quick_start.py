@@ -20,8 +20,8 @@ import sys
 from collections.abc import MutableMapping
 from logging import getLogger
 
+import torch
 import torch.distributed as dist
-from torch import nn
 
 from hopwise.config import Config
 from hopwise.data import create_dataset, data_preparation
@@ -153,7 +153,7 @@ def run_hopwise(
         # model loading and initialization
         init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
         model = get_model(config["model"])(config, train_data.dataset)
-        if isinstance(model, nn.Module):
+        if isinstance(model, torch.nn.Module):
             model = model.to(device=config["device"], dtype=config["weight_precision"])
 
     logger.info(model)
@@ -323,8 +323,6 @@ def load_data_and_model(model_file, load_only_data=False):
             - valid_data (AbstractDataLoader): The dataloader for validation.
             - test_data (AbstractDataLoader): The dataloader for testing.
     """
-    import torch
-
     checkpoint = torch.load(model_file, weights_only=False)
     config = checkpoint["config"]
     init_seed(config["seed"], config["reproducibility"])

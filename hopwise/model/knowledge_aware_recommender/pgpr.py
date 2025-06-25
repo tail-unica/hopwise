@@ -28,10 +28,6 @@ from hopwise.utils import InputType, PathLanguageModelingTokenType
 class PGPR(KnowledgeRecommender, ExplainableRecommender):
     input_type = InputType.USERWISE
 
-    import warnings
-
-    warnings.filterwarnings("ignore")
-
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
         # Load parameters info from config

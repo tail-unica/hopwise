@@ -25,6 +25,14 @@ To install hopwise with pip, run the following command:
 Some models and functionalities require additional dependencies, such as `torch-scatter` for `KGIN` or `faiss-cpu` for `NCL`.
 Here we list and describe the available optional dependencies (a.k.a. "extras") and suggested procedures to install them:
 
+- `pathlm`: for all the language models for KG path reasoning, you can install it with the following command:
+
+  .. code:: bash
+
+    uv pip install hopwise[pathlm]
+
+  This will install HuggingFace libraries `transformers`, `datasets` and other utilities (`joblib`, `numba`, `igraph`) as well,
+  which are required for the language models.
 - `ldiffrec`: for the `LDiffRec` model, you can install it with the following command:
 
   .. code:: bash
@@ -68,7 +76,7 @@ Here we list and describe the available optional dependencies (a.k.a. "extras") 
     uv pip install dgl>=2.4.0 -f https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html
 
   Please check out the `DGL installation guide <https://www.dgl.ai/pages/start.html>`__ for more details and for the URLs of other flat indexes for different CUDA/CPU versions.
-- `kgin`: for the `KGIN` model, installation with `hopwise[kgin]` is not supported, as `torch-scatter` needs to be installed separately.
+- `scatter`: for the `KGIN` and `MCCLK` models, installation with `hopwise[scatter]` is not supported, as `torch-scatter` needs to be installed separately.
   You can install it with the following command (assuming you have PyTorch 2.7.* and CUDA 12.8 installed):
 
   .. code:: bash
@@ -82,7 +90,14 @@ Here we list and describe the available optional dependencies (a.k.a. "extras") 
 
     uv pip install hopwise[hyper]
 
-  This will install `optuna`, `hyperopt`, `ray` as well, which are required for the `tune` interface.
+  This will install `optuna`, `hyperopt`, `ray`, and `pyplot` as well, which are required for the `tune` interface.
+- `tsne`: to visualize KG embeddings with t-SNE, you can install it with the following command:
+
+  .. code:: bash
+
+    uv pip install hopwise[tsne]
+
+  This will install `plotly` and `opentsne` as well, which are required for the t-SNE visualization.
 - `all-models`: shortcut to install optional dependencies for all models. You can install it with the following command:
 
   .. code:: bash

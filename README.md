@@ -121,7 +121,13 @@ uv pip install hopwise
 ```
 
 Some models require extra dependencies.
-For example, to install NNCF:
+In particular, language models for KG path reasoning require extra dependencies to be installed.
+You can install them by specifying the extra `pathlm` in the command line as follows:
+```sh
+uv pip install hopwise[pathlm]
+```
+
+Other models can be installed with a similar process. For instance, to install NNCF:
 ```sh
 uv pip install hopwise[nncf]
 ```

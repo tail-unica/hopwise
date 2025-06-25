@@ -34,10 +34,6 @@ class TPRec(KnowledgeRecommender, ExplainableRecommender):
 
     input_type = InputType.USERWISE
 
-    import warnings
-
-    warnings.filterwarnings("ignore")
-
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
         self.config = config

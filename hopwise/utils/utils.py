@@ -16,6 +16,7 @@
 ################################
 """
 
+import copy
 import datetime
 import importlib
 import os
@@ -275,8 +276,6 @@ def get_flops(model, dataset, device, logger, transform, verbose=False):
         return 1
     if model.__class__.__name__ == "Pop":
         return 1
-
-    import copy
 
     model = copy.deepcopy(model)
 
