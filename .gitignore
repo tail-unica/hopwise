@@ -1,45 +1,118 @@
-# Saved models
-/saved*
-*.pth
-.tox
-build/
-.vscode/
-.idea/
-*.pyc
-*.log
-log_tensorboard
-saved*/
-*.lprof
-*.egg-info/
-docs/build/
-wandb/*
-/ray_log*
+# =============================================================================
+# Python
+# =============================================================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
 
-!hopwise/config/
-!tests/config/
-.venv/
-venv/
-testModules.py
-tempCodeRunnerFile.py
-.aider*
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Unit test / coverage reports
+*.html
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+coverage.xml
+*.cover
+.pytest_cache/
+cover/
+
+# Environments
 .env
+.venv
+env/
+venv/
+ENV/
+
+# =============================================================================
+# Machine Learning & Data Science
+# =============================================================================
+# Model files
+*.pth
+*.pt
+*.pkl
+*.pickle
+
+# Data files
+*.csv
+*.tsv
+*.json
+*.jsonl
+*.parquet
+*.feather
+data/
 dataset/
+!hopwise/data/
 !hopwise/data/dataset
 !hopwise/properties/dataset
-hyper/
-# model/
-
+!tests/test_data/  # Keep test data
 *.*emb
 !tests/test_data/test/*.*emb
-test.py
-plot_results.ipynb
-logwatcher.py
 
-ucpr.py
-pearlmgat*.py
-PEARLMGAT*.yaml
-UCPR.yaml
-hopwise/properties/quick_start_config
-
+# Checkpoints and logs
+checkpoints/
+log/
+logs/
+runs/
+wandb/
+tensorboard/
+log_tensorboard/
+saved/
+/saved*
+output/
+results/
 latex/
+hyper/
+/ray-log*
+
+# =============================================================================
+# Development
+# =============================================================================
+# IDEs
+.vscode/
+.idea/
+
+# Cache directories
+.cache/
+.ruff_cache/
+
+# General temporary files
+*.tmp
 tmp/
+
+# Tools
+.aider*
+
+# Deployment
+deploy/
+.deployment/
+
+# Act GitHub Actions
+bin/act
+
+# =============================================================================
+# Documentation
+# =============================================================================
+# Sphinx documentation
+docs/_build/
+docs/build/

@@ -837,6 +837,8 @@ def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_fiel
                 )
                 if not valid_path:
                     iid_tries -= 1
+                else:
+                    break
 
             if valid_path:
                 if item_candidates is not None:

@@ -4,8 +4,11 @@
 
 """PGPR
 ##################################################
-Reference: Reinforcement Knowledge Graph Reasoning for Explainable Recommendation (https://dl.acm.org/doi/10.1145/3331184.3331203)
+Reference:
+    Xian et al. "Reinforcement Knowledge Graph Reasoning for Explainable Recommendation." in SIGIR 2019.
 
+Reference code:
+    https://github.com/orcax/PGPR
 """
 
 from collections import defaultdict, namedtuple
@@ -24,10 +27,6 @@ from hopwise.utils import InputType, PathLanguageModelingTokenType
 
 class PGPR(KnowledgeRecommender, ExplainableRecommender):
     input_type = InputType.USERWISE
-
-    import warnings
-
-    warnings.filterwarnings("ignore")
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)

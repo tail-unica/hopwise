@@ -26,21 +26,19 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ inputs.python-version }}
+          enable-cache: true
 
       # Sync pipeline
       - name: Install the project
         run: |
-          uv sync --extra ${{ inputs.env }}
+          uv sync
 
-      - if: ${{ inputs.env == 'cu124' }}
+      - if: ${{ inputs.env == 'cuda' }}
         run: |
-          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
-      - if: ${{ inputs.env == 'cu121' }}
-        run: |
-          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.3.1+cu121.html
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
       - if: ${{ inputs.env == 'cpu' }}
         run: |
-          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.0+cpu.html
+          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.7.0+cpu.html
 
       # Testing pipeline
       - name: Test Overall
@@ -62,7 +60,7 @@ jobs:
       - name: Test model
         if: ${{ inputs.experimental_or_skip_heavy_tests == false && inputs.os == 'ubuntu-latest' }}
         run: |
-          uv run -m pytest -v -n auto tests/model/test_model_auto.py
+          uv run -m pytest -v tests/model/test_model_auto.py
       - name: Test hyper_tuning
         run: |
           uv run -m pytest -v tests/hyper_tuning/test_hyper_tuning.py

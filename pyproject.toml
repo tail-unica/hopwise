@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "/hopwise/properties/**/*",
+  "/hopwise",
   "/tests",
   "/run_example",
   "/significance_test.py",
@@ -12,10 +12,6 @@ include = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["hopwise"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"hopwise/properties" = "hopwise/properties"
-"hopwise/dataset_example/ml-100k" = "hopwise/dataset_example/ml-100k"
 
 [tool.hatch.version]
 path = "hopwise/__init__.py"
@@ -30,13 +26,13 @@ _hopwise_ is an advanced extension of the Recbole library, designed to enhance r
 By integrating knowledge embedding models, path-based reasoning methods, and path language modeling apporaches, hopwise supports both recommendation and link prediction tasks with a focus on interpretability and self-explanation.
 """
 authors = [
+    { name = "Giacomo Medda", email = "jackm.medda@gmail.com" },
     { name = "Ludovico Boratto", email = "ludovico.boratto@acm.org" },
     { name = "Mirko Marras", email = "mirko.marras@acm.org" },
     { name = "Alessandro Soccol", email = "alessandrosoccol@gmail.com" },
-    { name = "Giacomo Medda", email = "jackm.medda@gmail.com" },
 ]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9,<3.13"
 license = { file = "LICENSE" }
 dynamic = ["version"]
 keywords = [
@@ -48,6 +44,7 @@ keywords = [
 ]
 classifiers = [
   "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3.9",
@@ -58,38 +55,42 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "numpy<=1.24.4 ; python_version < '3.12'",
-    "numpy>=2.0.0 ; python_version == '3.12'",
-    "pandas>=1.3.0, <2.0.3 ; python_version < '3.12'",
-    "pandas>2.0.0 ; python_version == '3.12'",
-    "transformers",
-    "accelerate>=0.34.2",
-    "datasets",
-    "tqdm",
-    "wandb",
-    "igraph",
-    "colorama>=0.4.4",
-    "scipy>=1.12.0",
-    "thop",
-    "tabulate",
-    "tensorboard>=2.5.0",
-    "psutil",
-    "texttable",
-    "colorlog>=4.7.2",
-    "protobuf==3.19.0",
-    "joblib",
-    "numba",
-    "scikit-learn",
-    "rich"
+  "numpy>=2.0.0; python_version >= '3.10'",
+  "numpy<=1.24.4; python_version < '3.10'",
+  "pandas>2.0.0; python_version >= '3.10'",
+  "pandas>1.3.0, <2.0.3; python_version < '3.10'",
+  "torch>=2.5.0",
+  "tqdm",
+  "wandb",
+  "colorama>=0.4.4",
+  "scipy>=1.12.0",
+  "thop",
+  "tabulate",
+  "tensorboard>=2.5.0",
+  "psutil",
+  "texttable",
+  "colorlog>=4.7.2",
+  "protobuf==3.20.*",
+  "scikit-learn",
+  "rich",
+  "cachetools",
 ]
 
 [project.optional-dependencies]
-nncf = [
-  "community",
-  "python-louvain"
+pathlm = [
+  "transformers",
+  "accelerate>=0.26.0",
+  "datasets",
+  "igraph",
+  "joblib",
+  "numba",
 ]
-xgboost = [
-  "xgboost"
+ldiffrec = [
+  "kmeans-pytorch"
+]
+nncf = [
+  "networkx",
+  "python-louvain"
 ]
 ncl = [
   "faiss-cpu"
@@ -97,45 +98,43 @@ ncl = [
 lightgbm = [
   "lightgbm"
 ]
-ldiffrec = [
-  "kmeans-pytorch"
+xgboost = [
+  "xgboost"
 ]
-# kgin = [
+kgat = [
+  "dgl>=2.4.0"
+]
+# scatter = [
 #   "torch-scatter",
 # ]
 hyper = [
   "hyperopt==0.2.5",
   "optuna",
-  "ray[tune]"
+  "ray[tune]",
+  "plotly"
+]
+tsne = [
+  "plotly",
+  "opentsne",
 ]
 all-models = [
-  "hopwise[nncf]",
-  "hopwise[xgboost]",
-  "hopwise[ncl]",
-  "hopwise[lightgbm]",
+  "hopwise[pathlm]",
   "hopwise[ldiffrec]",
-  # "hopwise[kgin]",
-]
-cpu = [
-  "torch==2.4.0 ; sys_platform == 'win32'",
-  "dgl",
-]
-cu121 = [
-  "torch==2.3.*",
-  "dgl",
-]
-cu124 = [
-  "torch==2.4.*",
-  "dgl",
+  "hopwise[ncl]",
+  "hopwise[nncf]",
+  "hopwise[lightgbm]",
+  "hopwise[xgboost]",
+  "hopwise[kgat]",
+  # "hopwise[scatter]",
 ]
 cli = [
   "click>=8.0.0",
-  "rich>=12.0.0",
 ]
 
 [dependency-groups]
 docs = [
   "sphinx",
+  "sphinx-autoapi",
   "furo",
   "sphinx-copybutton"
 ]
@@ -147,10 +146,7 @@ lint = [
   "pre-commit"
 ]
 dev = [
-  "hopwise[all-models,hyper,cli]",
-  "plotly",
-  "opentsne",
-  "nbformat",
+  "hopwise[all-models,hyper,cli,tsne]",
   {include-group = "docs"},
   {include-group = "test"},
   {include-group = "lint"},
@@ -163,68 +159,31 @@ env_list = ["3.12", "3.11", "3.10", "3.9"]
 [tool.tox.env_run_base]
 description = "uv_sync run base"
 dependency_groups = ["dev", "test"]
-extras = ["cu121"]
+extras = ["cuda"]
 commands = [
-  ["uv", "run", "--active", "run_hopwise.py", "--epochs=2"],
-  ["uv", "run", "--active", "run_hopwise.py", "--model", "LightGCN", "--epochs=2"],
-  ["uv", "run", "--active", "run_hopwise.py", "--model", "KGAT", "--epochs=2"]
+  ["uv", "run", "--active", "hopwise", "train", "--epochs=2"],
+  ["uv", "run", "--active", "hopwise", "train", "--model", "LightGCN", "--epochs=2"],
+  ["uv", "run", "--active", "hopwise", "train", "--model", "KGAT", "--epochs=2"]
 ]
 
 [tool.uv]
 find-links = [
   "https://data.pyg.org/whl/torch-2.4.0+cu124.html",
-  "https://data.pyg.org/whl/torch-2.3.0+cu121.html"
+  "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html",
+  "https://data.dgl.ai/wheels/torch-2.4/repo.html",
+  "https://data.dgl.ai/wheels/cu121/repo.html",
+  "https://data.dgl.ai/wheels/repo.html"
 ]
-conflicts = [
-  [
-    { extra = "cpu" },
-    { extra = "cu118" },
-    { extra = "cu121" },
-    { extra = "cu124" },
-  ],
+dependency-metadata = [
+    { name = "dgl", requires-dist = [], requires-python = ">=3.9,<=3.12" },
 ]
-
-
 
 no-build-isolation-package = ["torch-scatter"]
 
-[tool.uv.sources]
-dgl = [
-  { index = "dgl-win-cu121", marker = "sys_platform == 'win32' and extra == 'cu121'" },
-  { index = "dgl-win-cpu", marker = "sys_platform == 'win32' and extra == 'cpu' and extra != 'cu121' and extra != 'cu124'" },
-  { index = "dgl-cu124", marker = "sys_platform != 'win32' and extra == 'cu124'" },
-  { index = "dgl-cu121", marker = "sys_platform != 'win32' and extra == 'cu121' and extra != 'cu124'" },
-  { index = "dgl-cpu", marker = "sys_platform != 'win32' and extra == 'cpu' and extra != 'cu121' and extra != 'cu124'" },
-]
-
 [[tool.uv.index]]
-name = "dgl-win-cu121"
-url = "https://data.dgl.ai/wheels/cu121/repo.html"
-format = "flat"
-explicit = true
-
-[[tool.uv.index]]
-name = "dgl-win-cpu"
-url = "https://data.dgl.ai/wheels/repo.html"
-format = "flat"
-explicit = true
-
-[[tool.uv.index]]
-name = "dgl-cu124"
-url = "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html"
-format = "flat"
-explicit = true
-
-[[tool.uv.index]]
-name = "dgl-cu121"
-url = "https://data.dgl.ai/wheels/torch-2.3/cu121/repo.html"
-format = "flat"
-explicit = true
-
-[[tool.uv.index]]
-name = "dgl-cpu"
-url = "https://data.dgl.ai/wheels/torch-2.3/repo.html"
-format = "flat"
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
 explicit = true
 
 [tool.ruff]
@@ -252,6 +211,7 @@ ignore = [
     "UP031", # TEMPORARY: Use format specifiers instead of percent format
     "PLR0915", # TEMPORARY: Too many statements
     "PLR0912", # TEMPORARY: Too many branches
+    "PLC0415", # import should be at the top-level of a file
 ]
 fixable = ["ALL"]
 

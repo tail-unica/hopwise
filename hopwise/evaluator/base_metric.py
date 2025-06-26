@@ -12,6 +12,7 @@
 """
 
 import numpy as np
+import pandas as pd
 import torch
 
 from hopwise.utils import EvaluatorType
@@ -243,8 +244,6 @@ class PathQualityMetric(TopkMetric):
         return paths
 
     def normalized_ema(self, values):
-        import pandas as pd
-
         if max(values) == min(values):
             values = np.array([i for i in range(len(values))])
         else:

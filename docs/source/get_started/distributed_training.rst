@@ -1,5 +1,8 @@
 Distributed Training
 =======================
+
+**hopwise provides the same functionality as RecBole, but with a more user-friendly interface.**
+
 Now we support distributed training and evaluation. Here is a distributed training example for using RecBole.
 We will show you how to train and test **BPR** model on the **ml-100k** dataset in the distributed environment.
 
@@ -46,10 +49,9 @@ For more details of data config, please refer to :doc:`../user_guide/config/data
 2. Choose a model:
 >>>>>>>>>>>>>>>>>>>>>>>>>
 In RecBole, we implement more than 100 recommendation models covering general recommendation, sequential recommendation,
-context-aware recommendation and knowledge-based recommendation. You can choose a model from our :doc:`../user_guide/model_intro`.
-Here we choose BPR model to train and test.
+context-aware recommendation and knowledge-based recommendation. Here we choose BPR model to train and test.
 
-Then, you need to set the parameter for BPR model. You can check the :doc:`../user_guide/model/general/bpr` and add the model settings into the `test.yaml`, like:
+Then, you need to set the parameter for BPR model. You can check the :doc:`/user_guide/tasks_models/model/general/bpr` and add the model settings into the `test.yaml`, like:
 
 .. code:: yaml
 
@@ -109,7 +111,7 @@ In above example, you can create a new python file (e.g., `run_a.py`) on node A,
 
 .. code:: python
 
-    from recbole.quick_start import run_recboles
+    from hopwise.quick_start import run_hopwises
     import torch.multiprocessing as mp
     args = dict(
         model = 'BPR',
@@ -139,7 +141,7 @@ In above example, you can create a new python file (e.g., `run_a.py`) on node A,
     }
 
     mp.spawn(
-        run_recboles,
+        run_hopwises,
         args=(args.model, args.dataset, args.config_file_list, kwargs),
         nprocs=nproc,
         join=True,
@@ -159,7 +161,7 @@ Similarly, you can create a new python file (e.g., `run_b.py`) on node B, and wr
 
 .. code:: python
 
-    from recbole.quick_start import run_recboles
+    from hopwise.quick_start import run_hopwises
     import torch.multiprocessing as mp
     args = dict(
         model = 'BPR',
@@ -189,7 +191,7 @@ Similarly, you can create a new python file (e.g., `run_b.py`) on node B, and wr
     }
 
     mp.spawn(
-        run_recboles,
+        run_hopwises,
         args=(args.model, args.dataset, args.config_file_list, kwargs),
         nprocs=nproc,
         join=True,
@@ -214,7 +216,7 @@ The above is the whole process of running a model in RecBole, and you can read o
 
 Quick-start From Source
 --------------------------
-Besides using API, you can also directly run the source code of `RecBole <https://github.com/RUCAIBox/RecBole>`_.
+Besides using API, you can also directly run the source code of `hopwise <https://github.com/tail-unica/hopwise>`_.
 The whole process is similar to Quick-start From API.
 You can create a `yaml` file called `test.yaml` and set all the config as following:
 
@@ -257,7 +259,7 @@ In above example, you should run the following command:
 
 .. code:: bash
 
-    python run_recbole.py --model=BPR --dataset=ml-100k --config_files=test.yaml --nproc=4
+    python hopwise --model=BPR --dataset=ml-100k --config_files=test.yaml --nproc=4
 
 And you will get the output of running the BPR model on the ml-100k dataset.
 
@@ -270,11 +272,11 @@ In above example, you should run the following command on node A:
 
 .. code:: bash
 
-    python run_recbole.py --model=BPR --dataset=ml-100k --config_files=test.yaml --ip='183.174.228.81' --port='5678' --nproc=4 --world_size=8 --group_offset=0
+    python hopwise --model=BPR --dataset=ml-100k --config_files=test.yaml --ip='183.174.228.81' --port='5678' --nproc=4 --world_size=8 --group_offset=0
 
 And run the following command on node B:
 
 .. code:: bash
 
-    python run_recbole.py --model=BPR --dataset=ml-100k --config_files=test.yaml --ip='183.174.228.81' --port='5678' --nproc=4 --world_size=8 --group_offset=4
+    python hopwise --model=BPR --dataset=ml-100k --config_files=test.yaml --ip='183.174.228.81' --port='5678' --nproc=4 --world_size=8 --group_offset=4
 

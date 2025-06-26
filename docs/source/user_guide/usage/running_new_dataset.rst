@@ -8,12 +8,12 @@ Prepare atomic files
 -------------------------
 
 In order to characterize most forms of the input data required by different recommendation tasks,
-hopwise designs an input data format called :doc:`../data/atomic_files` and
+hopwise designs an input data format called :doc:`../datasets/atomic_files` and
 you need to convert your raw data into Atomic Files format before data loading.
 
 For the convenience of users, we have collected more than
 28 commonly used datasets (detailed as `Dataset List </dataset_list.html>`_.) and released their Atomic Files format
-for users to download them freely. More information of downloading our prepared datasets can be found in :doc:`../data/dataset_download`.
+for users to download them freely. More information of downloading our prepared datasets can be found in :doc:`../datasets/dataset_download`.
 
 However, if you use other datasets, you should convert your data into the Atomic Files by yourself.
 

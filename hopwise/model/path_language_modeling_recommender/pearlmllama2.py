@@ -2,6 +2,16 @@
 # @Author : Alessandro Soccol
 # @Email  : alessandro.soccol@unica.it
 
+r"""PEARLMLlama2
+##################################################
+Reference:
+    Balloccu et al. "Faithful Path Language Modeling for Explainable Recommendation over Knowledge Graph." - preprint.
+
+Reference code:
+    https://github.com/Chris1nexus/pearlm
+    https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/07_gpt_to_llama/converting-gpt-to-llama2.ipynb
+"""
+
 import math
 from enum import IntEnum
 
@@ -9,8 +19,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.utils import InputType, ModelType
+from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
 
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("USER", 1), ("ENTITY", 2), ("RELATION", 3)])
 
@@ -122,22 +131,18 @@ class Block(nn.Module):
         return x
 
 
-class PEARLMllama2(KnowledgeRecommender):
+class PEARLMLlama2(PathLanguageModelingRecommender):
     """
-    Reference:
-    https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/07_gpt_to_llama/converting-gpt-to-llama2.ipynb
+    Low-level implementation of PEARLM model based on Llama2 architecture.
 
     Novelties:
     - LayerNorm is replaced with RMSNorm
     - GeLU is replaced with SiLU
-    - Feedforward is replaced
+    - Feedforward is replaced with a simple linear head
     """
 
-    input_type = InputType.PATHWISE
-    type = ModelType.PATH_LANGUAGE_MODELING
-
     def __init__(self, config, dataset):
-        super().__init__(config, dataset)
+        super().__init__(config, dataset, _skip_nn_module_init=False)
         config["context_length"] = dataset.context_length
 
         self.config = config

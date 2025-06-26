@@ -2,6 +2,15 @@
 # @Author : Giacomo Medda
 # @Email  : giacomo.medda@unica.it
 
+r"""PEARLM
+##################################################
+Reference:
+    Balloccu et al. "Faithful Path Language Modeling for Explainable Recommendation over Knowledge Graph." - preprint.
+
+Reference code:
+    https://github.com/Chris1nexus/pearlm
+"""
+
 from enum import IntEnum
 from typing import Optional, Union
 
@@ -20,7 +29,10 @@ TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("ENTITY", 1), ("RELATION", 2)
 
 class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecommender):
     """PEARLM is a path-language-modeling recommender. It learns the sequence of entity-relation triplets
-    from a knowledge graph as a next-token prediction task.
+    as paths extracted from a knowledge graph. It is trained to predict the next token in a sequence of tokens
+    representing a path. The model extends PLM by adding a constrained graph decoding mechanism to ensure that
+    the generated paths are valid according to the knowledge graph structure. The model can be used for
+    explainable recommendation by generating paths that explain the recommendations made by the model.
     """
 
     def __init__(self, config, dataset):

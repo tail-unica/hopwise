@@ -65,7 +65,7 @@ inter atomic file.
 
 In general, context-aware recommendation models are mainly used in explicit feedback scenes,
 so your data should have explicit feedback information and you need to set label for them. For more information about label setting,
-please read the :doc:`../data/label_of_data`.
+please read the :doc:`../datasets/label_of_data`.
 
 **evaluation settings**
 

@@ -4,9 +4,12 @@
 
 """ConvKB
 ##################################################
-Reference: Nguyen, Dai Quoc  and Nguyen, Tu Dinh  and Nguyen, Dat Quoc  and Phung, Dinh. A Novel Embedding Model for
-Knowledge Base Completion Based on Convolutional Neural Network. NAACL (2018).
+Reference:
+    Nguyen et al. "A Novel Embedding Model for Knowledge Base Completion Based on
+    Convolutional Neural Network." in NAACL 2018.
 
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import torch

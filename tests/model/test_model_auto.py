@@ -952,7 +952,7 @@ class TestKnowledgeRecommender(unittest.TestCase):
     def test_cafe(self):
         config_dict = {
             "model": "CAFE",
-            "train_neg_sample_args": {"sample_size": "none"},
+            # "train_neg_sample_args": {"sample_size": "none"},
             "user_inter_num_interval": [1, 10],
         }
         quick_test(config_dict)
@@ -1045,15 +1045,15 @@ class TestPathLanguageModelingRecommender(unittest.TestCase):
         quick_test(config_dict)
 
     def test_pearlmgpt2(self):
-        config_dict = {"model": "PEARLMgpt2", **self.scratch_lm_base_config}
+        config_dict = {"model": "PEARLMGPT2", **self.scratch_lm_base_config}
         quick_test(config_dict)
 
     def test_pearlmllama2(self):
-        config_dict = {"model": "PEARLMllama2", **self.scratch_lm_base_config}
+        config_dict = {"model": "PEARLMLlama2", **self.scratch_lm_base_config}
         quick_test(config_dict)
 
     def test_pearlmllama3(self):
-        config_dict = {"model": "PEARLMllama3", **self.scratch_lm_base_config}
+        config_dict = {"model": "PEARLMLlama3", **self.scratch_lm_base_config}
         quick_test(config_dict)
 
     def test_plm(self):

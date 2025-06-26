@@ -28,6 +28,7 @@ from time import time
 
 import numpy as np
 import torch
+from scipy import sparse
 from torch import optim
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
@@ -231,7 +232,6 @@ class Trainer(AbstractTrainer):
                 total=len(train_data),
                 ncols=100,
                 desc=set_color(f"Train {epoch_idx:>5}", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else train_data
@@ -570,7 +570,6 @@ class Trainer(AbstractTrainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color("Evaluate   ", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -844,7 +843,6 @@ class KGTrainer(Trainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color(f"Evaluate {task}", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -1269,7 +1267,6 @@ class TPRecTrainer(PretrainTrainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color("Evaluate   ", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -1447,16 +1444,13 @@ class DecisionTreeTrainer(AbstractTrainer):
                     cur_data = np.hstack((cur_data, value))
 
         if self.convert_token_to_onehot:
-            from scipy import sparse
-            from scipy.sparse import dok_matrix
-
             convert_col_list = dataloader._dataset.convert_col_list
             hash_count = dataloader._dataset.hash_count
 
             new_col = cur_data.shape[1] - len(convert_col_list)
             for key, values in hash_count.items():
                 new_col = new_col + values
-            onehot_data = dok_matrix((cur_data.shape[0], new_col))
+            onehot_data = sparse.dok_matrix((cur_data.shape[0], new_col))
 
             cur_j = 0
             new_j = 0
@@ -1905,7 +1899,6 @@ class NCLTrainer(Trainer):
                 total=len(train_data),
                 ncols=100,
                 desc=set_color(f"Train {epoch_idx:>5}", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else train_data
@@ -2018,7 +2011,6 @@ class PEARLMfromscratchTrainer(Trainer):
                 total=len(train_data),
                 ncols=100,
                 desc=set_color(f"Train {epoch_idx:>5}", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else train_data
@@ -2103,7 +2095,6 @@ class PEARLMfromscratchTrainer(Trainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color("Evaluate   ", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -2207,7 +2198,6 @@ class HFPathLanguageModelingTrainer(Trainer):
             greater_is_better=self.valid_metric_bigger,
             seed=self.config["seed"],
             report_to="none",
-            disable_tqdm=True,
         )
         train_args.update(kwargs)
         return TrainingArguments(**train_args)
@@ -2375,7 +2365,6 @@ class HFPathLanguageModelingTrainer(Trainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color("Evaluate   ", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data

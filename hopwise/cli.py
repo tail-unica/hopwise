@@ -1,6 +1,8 @@
 import importlib
 import os
 import sys
+import traceback
+from datetime import datetime
 
 import click
 from rich import box
@@ -69,8 +71,8 @@ def cli(ctx, debug, rich_traceback):
 @click.option("--model", "-m", default="BPR", help="Model name to train")
 @click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
 @click.option("--config-files", help="Space-separated config files")
-@click.option("--nproc", default=1, help="Number of processes")
 @click.option("--checkpoint", help="Checkpoint (.pth) file path")
+@click.option("--nproc", default=1, help="Number of processes")
 @click.option("--ip", default="localhost", help="Master node IP")
 @click.option("--port", default="5678", help="Master node port")
 @click.option("--world-size", default=-1, help="Total number of jobs")
@@ -109,8 +111,6 @@ def train(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_
                 # Rich will handle this automatically with enhanced formatting
                 raise
             else:
-                import traceback
-
                 console.print(f"[bold red]✗ Training failed:[/bold red] {type(e).__name__}: {str(e)}")
                 console.print("\n[dim]Traceback:[/dim]")
                 traceback.print_exc()
@@ -130,8 +130,8 @@ def train(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_
 @click.option("--model", "-m", default="BPR", help="Model name to train")
 @click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
 @click.option("--config-files", help="Space-separated config files")
-@click.option("--nproc", default=1, help="Number of processes")
 @click.option("--checkpoint", help="Checkpoint (.pth) file path")
+@click.option("--nproc", default=1, help="Number of processes")
 @click.option("--ip", default="localhost", help="Master node IP")
 @click.option("--port", default="5678", help="Master node port")
 @click.option("--world-size", default=-1, help="Total number of jobs")
@@ -170,8 +170,6 @@ def evaluate(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, wor
                 # Rich will handle this automatically with enhanced formatting
                 raise
             else:
-                import traceback
-
                 console.print(f"[bold red]✗ Evaluation failed:[/bold red] {type(e).__name__}: {str(e)}")
                 console.print("\n[dim]Traceback:[/dim]")
                 traceback.print_exc()
@@ -308,7 +306,6 @@ def tune(
     ctx, params_file, config_files, output_path, display_file, max_evals, tool, study_name, algo, resume, proc_title
 ):
     """Run hyperparameter tuning."""
-    from datetime import datetime
 
     if proc_title is None:
         proc_title = f"[hopwise - hyper] {study_name}"
@@ -363,8 +360,6 @@ def tune(
             if ctx.obj.get("rich_traceback", False):
                 raise
             else:
-                import traceback
-
                 console.print(f"[bold red]✗ Tuning failed:[/bold red] {type(e).__name__}: {str(e)}")
                 console.print("\n[dim]Traceback:[/dim]")
                 traceback.print_exc()

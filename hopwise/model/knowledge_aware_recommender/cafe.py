@@ -4,10 +4,11 @@
 
 """CAFE
 ##################################################
-Reference: CAFE: Coarse-to-Fine Neural Symbolic Reasoning for Explainable Recommendation (https://dl.acm.org/doi/10.1145/3340531.3412038)
+Reference:
+    Xian et al. "CAFE: Coarse-to-Fine Neural Symbolic Reasoning for Explainable Recommendation." in CIKM 2020.
 
-Notes:
-- Assumes that each relation corresponds to a unique pair of entity types. e.g. ui-relation -> (user, item)
+Reference code:
+    https://github.com/orcax/CAFE
 """
 
 import random
@@ -27,6 +28,9 @@ class CAFE(KnowledgeRecommender):
     """
     CAFE is a knowledge-aware recommender system that uses symbolic reasoning
     over a knowledge graph to explain recommendations.
+
+    Note:
+        Assumes that each relation corresponds to a unique pair of entity types. e.g. ui-relation -> (user, item)
     """
 
     input_type = InputType.USERWISE
@@ -47,7 +51,7 @@ class CAFE(KnowledgeRecommender):
         self.topk_candidates = config["topk_candidates"]
         self.sample_size = config["sample_size"]
         self.topk_paths = config["topk_paths"]
-        self.path_max_user_trials = float(config["max_user_trials"])
+        self.path_max_user_trials = config["max_user_trials"]
 
         # user-item relation
         self.ui_relation = dataset.ui_relation

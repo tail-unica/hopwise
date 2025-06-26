@@ -452,8 +452,6 @@ class KnowledgeBasedDataset(Dataset):
             return product_degrees.mean() if not product_degrees.empty else 0.0
         else:
             # fallback if not using pandas
-            from collections import Counter
-
             head = self.kg_feat[self.head_entity_field].numpy()
             tail = self.kg_feat[self.tail_entity_field].numpy()
             counter = Counter(head) + Counter(tail)

@@ -5,9 +5,10 @@
 """ComplEx
 ##################################################
 Reference:
-    Théo Trouillon, Johannes Welbl, Sebastian Riedel, Éric Gaussier, and Guillaume Bouchard. 2016.
-    Complex embeddings for simple link prediction.
-    In Proceedings of the 33rd International Conference on International Conference on Machine Learning (ICML'16)
+    Trouillon et al. "Complex embeddings for simple link prediction." in ICML'16.
+
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import torch

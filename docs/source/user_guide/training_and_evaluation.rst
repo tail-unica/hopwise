@@ -79,7 +79,7 @@ common ranking-aware metrics, such as ``Recall``, ``Precision``, ``Hit``,
 generated recommendation lists by an algorithm. Besides, several ranking-based
 non-accuracy metrics are supported to evaluate in different views, such as
 ``ItemCoverage``, ``AveragePopularity``, ``GiniIndex``, ``ShannonEntropy`` and ``TailPercentage``.
-More details about metrics can refer to :doc:`/recbole/recbole.evaluator.metrics`.
+More details about metrics can refer to :mod:`hopwise.evaluator.metrics`.
 
 The parameters used to control the evaluation metrics are as follows:
 

@@ -16,6 +16,7 @@
 ################################
 """
 
+import copy
 import datetime
 import importlib
 import os
@@ -59,6 +60,16 @@ def ensure_dir(dir_path):
 
     """
     os.makedirs(dir_path, exist_ok=True)
+
+
+def deep_dict_update(updated_dict, updating_dict):
+    overwrite_keys = ["split"]
+    if isinstance(updated_dict, dict) and isinstance(updating_dict, dict):
+        for key, value in updating_dict.items():
+            if isinstance(value, dict) and isinstance(updated_dict.get(key), dict) and key not in overwrite_keys:
+                deep_dict_update(updated_dict[key], value)
+            else:
+                updated_dict[key] = value
 
 
 def get_model(model_name):
@@ -105,9 +116,9 @@ def get_trainer(model_type, model_name):
         Trainer: trainer class
     """
     register_table = {
-        "PEARLMgpt2": "PEARLMfromscratchTrainer",
-        "PEARLMllama2": "PEARLMfromscratchTrainer",
-        "PEARLMllama3": "PEARLMfromscratchTrainer",
+        "PEARLMGPT2": "PEARLMfromscratchTrainer",
+        "PEARLMLlama2": "PEARLMfromscratchTrainer",
+        "PEARLMLlama3": "PEARLMfromscratchTrainer",
     }
 
     try:
@@ -275,8 +286,6 @@ def get_flops(model, dataset, device, logger, transform, verbose=False):
         return 1
     if model.__class__.__name__ == "Pop":
         return 1
-
-    import copy
 
     model = copy.deepcopy(model)
 
