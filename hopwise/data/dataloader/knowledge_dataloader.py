@@ -20,8 +20,6 @@
 from logging import getLogger
 
 import numpy as np
-from datasets import Dataset as HuggingFaceDataset
-from datasets import DatasetDict
 
 from hopwise.data.dataloader.abstract_dataloader import AbstractDataLoader
 from hopwise.data.dataloader.general_dataloader import FullSortRecEvalDataLoader, TrainDataLoader
@@ -222,6 +220,8 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         """
 
         if self._tokenized_dataset is None:
+            from datasets import Dataset as HuggingFaceDataset
+            from datasets import DatasetDict
 
             def remove_incorrect_paths(tokenized_dataset):
                 # remove paths that contain special tokens. The token in position 0 and -1 are [BOS] and [EOS]

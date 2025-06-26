@@ -29,7 +29,6 @@ import torch
 from texttable import Texttable
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-from transformers import LogitsProcessorList
 
 from hopwise.model.logits_processor import ConstrainedLogitsProcessorWordLevel
 from hopwise.model.ranker import (
@@ -498,6 +497,8 @@ def get_ranker(config, params):
 
 
 def get_logits_processor(config, params):
+    from transformers import LogitsProcessorList
+
     try:
         logits_processor_class = getattr(
             importlib.import_module("hopwise.model.logits_processor"), config["model"] + "LogitsProcessorWordLevel"
