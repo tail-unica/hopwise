@@ -9,12 +9,7 @@ from itertools import chain, zip_longest
 import joblib
 import numba
 import numpy as np
-from tokenizers import Tokenizer, pre_tokenizers
-from tokenizers import models as token_models
-from tokenizers import processors as token_processors
-from tokenizers import trainers as token_trainers
 from tqdm import rich
-from transformers import PreTrainedTokenizerFast
 
 from hopwise.data import Interaction
 from hopwise.data.dataset import KnowledgeBasedDataset
@@ -110,6 +105,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
     def _init_tokenizer(self):
         """Initialize tokenizer. The tokenizer is created in the dataset to be shared across dataloaders."""
+        from tokenizers import Tokenizer, pre_tokenizers
+        from tokenizers import models as token_models
+        from tokenizers import processors as token_processors
+        from tokenizers import trainers as token_trainers
+        from transformers import PreTrainedTokenizerFast
+
         tokenizer_model_class = getattr(token_models, self.tokenizer_model)
 
         tokenizer_object = Tokenizer(tokenizer_model_class(unk_token=self.unk_token))

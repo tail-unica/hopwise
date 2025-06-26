@@ -181,13 +181,9 @@ def run_hopwise(
             trainer.init_hf_trainer(train_data, valid_data, show_progress=config["show_progress"])
             trainer.resume_checkpoint(checkpoint)
 
-            best_valid_result = trainer.evaluate(
-                valid_data, load_best_model=False, model_file=checkpoint, show_progress=config["show_progress"]
-            )
-        else:
-            best_valid_result = trainer.evaluate(
-                valid_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
-            )
+        best_valid_result = trainer.evaluate(
+            valid_data, load_best_model=False, model_file=checkpoint, show_progress=config["show_progress"]
+        )
 
         best_valid_score = calculate_valid_score(best_valid_result, trainer.valid_metric)
     else:
@@ -203,7 +199,7 @@ def run_hopwise(
     # model evaluation
     test_result = trainer.evaluate(
         test_data,
-        load_best_model=True,
+        load_best_model=saved,
         model_file=checkpoint,
         show_progress=config["show_progress"],
     )

@@ -9,12 +9,19 @@ Common logits processor in recommender system
 
 import numpy as np
 import torch
-
-# TODO: do we need LFUCache? Can't we use bultin LRU from functools?
 from cachetools import LFUCache
-from transformers import LogitsProcessor
 
 from hopwise.utils import KnowledgeEvaluationType
+
+try:
+    from transformers import LogitsProcessor
+except (ImportError, ModuleNotFoundError):
+
+    class LogitsProcessor:
+        """Fallback LogitsProcessor if transformers is not available."""
+
+        def __call__(self, input_ids, scores):
+            return scores
 
 
 class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):

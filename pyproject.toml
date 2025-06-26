@@ -60,6 +60,7 @@ dependencies = [
   "pandas>2.0.0; python_version >= '3.10'",
   "pandas>1.3.0, <2.0.3; python_version < '3.10'",
   "torch>=2.5.0",
+  "numba>=0.59.0",
   "tqdm",
   "wandb",
   "colorama>=0.4.4",
@@ -83,7 +84,6 @@ pathlm = [
   "datasets",
   "igraph",
   "joblib",
-  "numba",
 ]
 ldiffrec = [
   "kmeans-pytorch"
