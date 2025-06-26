@@ -231,6 +231,7 @@ class Trainer(AbstractTrainer):
                 total=len(train_data),
                 ncols=100,
                 desc=set_color(f"Train {epoch_idx:>5}", "pink"),
+                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else train_data
@@ -546,7 +547,11 @@ class Trainer(AbstractTrainer):
         if load_best_model:
             checkpoint_file = model_file or self.saved_model_file
             checkpoint = torch.load(checkpoint_file, weights_only=False, map_location=self.device)
-            self.model.load_state_dict(checkpoint["state_dict"])
+            missing_keys, unexpected_keys = self.model.load_state_dict(checkpoint["state_dict"], strict=False)
+            if missing_keys:
+                self.logger.info(set_color(f"Missing loaded keys: {missing_keys}", "red"))
+            if unexpected_keys:
+                self.logger.info(set_color(f"Unexpected loaded keys: {unexpected_keys}", "red"))
             self.model.load_other_parameter(checkpoint.get("other_parameter"))
             message_output = f"Loading model structure and parameters from {checkpoint_file}"
             self.logger.info(message_output)
@@ -565,6 +570,7 @@ class Trainer(AbstractTrainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color("Evaluate   ", "pink"),
+                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -838,6 +844,7 @@ class KGTrainer(Trainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color(f"Evaluate {task}", "pink"),
+                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -1262,6 +1269,7 @@ class TPRecTrainer(PretrainTrainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color("Evaluate   ", "pink"),
+                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -1897,6 +1905,7 @@ class NCLTrainer(Trainer):
                 total=len(train_data),
                 ncols=100,
                 desc=set_color(f"Train {epoch_idx:>5}", "pink"),
+                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else train_data
@@ -2009,6 +2018,7 @@ class PEARLMfromscratchTrainer(Trainer):
                 total=len(train_data),
                 ncols=100,
                 desc=set_color(f"Train {epoch_idx:>5}", "pink"),
+                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else train_data
@@ -2088,7 +2098,13 @@ class PEARLMfromscratchTrainer(Trainer):
         # batched_eval_data = DataLoader(eval_paths, batch_size=self.config["eval_batch_size"], shuffle=False)
 
         iter_data = (
-            rich.tqdm(eval_data, total=len(eval_data), ncols=100, desc=set_color("Evaluate   ", "pink"))
+            rich.tqdm(
+                eval_data,
+                total=len(eval_data),
+                ncols=100,
+                desc=set_color("Evaluate   ", "pink"),
+                disable=os.environ.get("DISABLE_TQDM", False),
+            )
             if show_progress
             else eval_data
         )
@@ -2354,7 +2370,13 @@ class HFPathLanguageModelingTrainer(Trainer):
             self.tot_item_num = eval_data._dataset.item_num
 
         iter_data = (
-            rich.tqdm(eval_data, total=len(eval_data), ncols=100, desc=set_color("Evaluate   ", "pink"))
+            rich.tqdm(
+                eval_data,
+                total=len(eval_data),
+                ncols=100,
+                desc=set_color("Evaluate   ", "pink"),
+                disable=os.environ.get("DISABLE_TQDM", False),
+            )
             if show_progress
             else eval_data
         )

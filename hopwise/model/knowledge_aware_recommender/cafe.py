@@ -47,6 +47,7 @@ class CAFE(KnowledgeRecommender):
         self.topk_candidates = config["topk_candidates"]
         self.sample_size = config["sample_size"]
         self.topk_paths = config["topk_paths"]
+        self.path_max_user_trials = float(config["max_user_trials"])
 
         # user-item relation
         self.ui_relation = dataset.ui_relation
@@ -140,13 +141,20 @@ class CAFE(KnowledgeRecommender):
     def _get_batch_by_user(self, users):
         pos_path_batch, neg_pid_batch = [], []
         top_pids = np.arange(self.topk_candidates)
-
+        user_trials = {u.item(): 0 for u in users}  # Track trials per user
+        skipped_users = []
         # it select the it user, if a path is not found, another metapath and product is used.
         it = 0
-        while len(pos_path_batch) < len(users):
+        while len(pos_path_batch) < len(users) and it < len(users):
             # Take the user
             user = users[it].item()
 
+            # Skip if max trials exceeded
+            if user_trials[user] >= self.path_max_user_trials:
+                if user not in skipped_users:
+                    skipped_users.append(user)
+                it += 1
+                continue
             # Sample a metapath
             mpid = self.rng.choice(self.mpath_ids)
 
@@ -168,6 +176,7 @@ class CAFE(KnowledgeRecommender):
                 paths = self.fast_sample_path_with_target(mpid, user, item, 1)
                 # if a path is not found, try again
                 if not paths:
+                    user_trials[user] += 1
                     continue
                 pos_path_batch.append(paths[0])
                 self.replay_memory[mpid].add(paths)
