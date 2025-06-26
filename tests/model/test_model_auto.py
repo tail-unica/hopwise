@@ -952,7 +952,7 @@ class TestKnowledgeRecommender(unittest.TestCase):
     def test_cafe(self):
         config_dict = {
             "model": "CAFE",
-            "train_neg_sample_args": {"sample_size": "none"},
+            # "train_neg_sample_args": {"sample_size": "none"},
             "user_inter_num_interval": [1, 10],
         }
         quick_test(config_dict)

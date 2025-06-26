@@ -79,6 +79,7 @@ dependencies = [
 [project.optional-dependencies]
 pathlm = [
   "transformers",
+  "accelerate>=0.26.0",
   "datasets",
   "igraph",
   "joblib",

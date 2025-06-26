@@ -60,7 +60,7 @@ jobs:
       - name: Test model
         if: ${{ inputs.experimental_or_skip_heavy_tests == false && inputs.os == 'ubuntu-latest' }}
         run: |
-          uv run -m pytest -v -n auto tests/model/test_model_auto.py
+          uv run -m pytest -v tests/model/test_model_auto.py
       - name: Test hyper_tuning
         run: |
           uv run -m pytest -v tests/hyper_tuning/test_hyper_tuning.py

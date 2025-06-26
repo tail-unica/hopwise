@@ -51,7 +51,7 @@ class CAFE(KnowledgeRecommender):
         self.topk_candidates = config["topk_candidates"]
         self.sample_size = config["sample_size"]
         self.topk_paths = config["topk_paths"]
-        self.path_max_user_trials = float(config["max_user_trials"])
+        self.path_max_user_trials = config["max_user_trials"]
 
         # user-item relation
         self.ui_relation = dataset.ui_relation

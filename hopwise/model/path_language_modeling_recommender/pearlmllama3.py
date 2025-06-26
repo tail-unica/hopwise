@@ -19,8 +19,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.utils import InputType, ModelType
+from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
 
 TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("USER", 1), ("ENTITY", 2), ("RELATION", 3)])
 
@@ -153,7 +152,7 @@ class Block(nn.Module):
         return x
 
 
-class PEARLMLlama3(KnowledgeRecommender):
+class PEARLMLlama3(PathLanguageModelingRecommender):
     """
     Low-level implementation of PEARLM model based on LLaMA 3 architecture.
 
@@ -164,11 +163,8 @@ class PEARLMLlama3(KnowledgeRecommender):
     you can set the number of query groups equal to the number of heads.
     """
 
-    input_type = InputType.PATHWISE
-    type = ModelType.PATH_LANGUAGE_MODELING
-
     def __init__(self, config, dataset):
-        super().__init__(config, dataset)
+        super().__init__(config, dataset, _skip_nn_module_init=False)
         config["context_length"] = dataset.context_length
 
         self.config = config

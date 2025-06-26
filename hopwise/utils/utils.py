@@ -62,6 +62,16 @@ def ensure_dir(dir_path):
     os.makedirs(dir_path, exist_ok=True)
 
 
+def deep_dict_update(updated_dict, updating_dict):
+    overwrite_keys = ["split"]
+    if isinstance(updated_dict, dict) and isinstance(updating_dict, dict):
+        for key, value in updating_dict.items():
+            if isinstance(value, dict) and isinstance(updated_dict.get(key), dict) and key not in overwrite_keys:
+                deep_dict_update(updated_dict[key], value)
+            else:
+                updated_dict[key] = value
+
+
 def get_model(model_name):
     r"""Automatically select model class based on model name
 
