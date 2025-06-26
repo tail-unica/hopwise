@@ -232,7 +232,6 @@ class Trainer(AbstractTrainer):
                 total=len(train_data),
                 ncols=100,
                 desc=set_color(f"Train {epoch_idx:>5}", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else train_data
@@ -571,7 +570,6 @@ class Trainer(AbstractTrainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color("Evaluate   ", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -845,7 +843,6 @@ class KGTrainer(Trainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color(f"Evaluate {task}", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -1270,7 +1267,6 @@ class TPRecTrainer(PretrainTrainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color("Evaluate   ", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -1903,7 +1899,6 @@ class NCLTrainer(Trainer):
                 total=len(train_data),
                 ncols=100,
                 desc=set_color(f"Train {epoch_idx:>5}", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else train_data
@@ -2016,7 +2011,6 @@ class PEARLMfromscratchTrainer(Trainer):
                 total=len(train_data),
                 ncols=100,
                 desc=set_color(f"Train {epoch_idx:>5}", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else train_data
@@ -2101,7 +2095,6 @@ class PEARLMfromscratchTrainer(Trainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color("Evaluate   ", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data
@@ -2205,7 +2198,6 @@ class HFPathLanguageModelingTrainer(Trainer):
             greater_is_better=self.valid_metric_bigger,
             seed=self.config["seed"],
             report_to="none",
-            disable_tqdm=True,
         )
         train_args.update(kwargs)
         return TrainingArguments(**train_args)
@@ -2373,7 +2365,6 @@ class HFPathLanguageModelingTrainer(Trainer):
                 total=len(eval_data),
                 ncols=100,
                 desc=set_color("Evaluate   ", "pink"),
-                disable=os.environ.get("DISABLE_TQDM", False),
             )
             if show_progress
             else eval_data

@@ -20,10 +20,12 @@ import os
 import re
 import sys
 import warnings
+from functools import partial
 from logging import getLogger
 from typing import Literal
 
 import yaml
+from tqdm import rich
 
 from hopwise.evaluator import metric_types, smaller_metrics
 from hopwise.utils import (
@@ -96,6 +98,7 @@ class Config:
         self.final_config_dict = self._get_final_config_dict()
         self._set_default_parameters()
         self._init_device()
+        self._set_env_behavior()
         self._set_torch_dtype()
         self._set_train_neg_sample_args()
         self._set_eval_neg_sample_args("valid")
@@ -631,6 +634,12 @@ class Config:
             raise ValueError(f"Unsupported weight_precision: {weight_precision}")
 
         self.final_config_dict["weight_precision"] = weight_precision
+
+    def _set_env_behavior(self):
+        """
+        Set behavior of utilities or similar libraries based on environment variables.
+        """
+        rich.tqdm = partial(rich.tqdm, disable=os.environ.get("DISABLE_TQDM", False))  # noqa: PLW1508
 
     def __setitem__(self, key, value):
         if not isinstance(key, str):
