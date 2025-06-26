@@ -165,9 +165,13 @@ def run_hopwise(
     # trainer loading and initialization
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
     if run == "train":
+        if checkpoint:
+            trainer.resume_checkpoint(checkpoint)
+
         best_valid_score, best_valid_result = trainer.fit(
             train_data, valid_data, saved=saved, show_progress=config["show_progress"]
         )
+
     elif run == "evaluate":
         if checkpoint is None:
             raise ValueError("Checkpoint is needed for evaluation")
