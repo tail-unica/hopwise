@@ -24,6 +24,11 @@ from hopwise.utils import InputType, PathLanguageModelingTokenType
 
 
 class CAFE(KnowledgeRecommender):
+    """
+    CAFE is a knowledge-aware recommender system that uses symbolic reasoning
+    over a knowledge graph to explain recommendations.
+    """
+
     input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
