@@ -24,8 +24,6 @@ from hopwise.data import Interaction
 from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
 from hopwise.utils import PathLanguageModelingTokenType
 
-TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("ENTITY", 1), ("RELATION", 2)])
-
 
 class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
     """PLM is a path-language-modeling recommender. It learns the sequence of entity-relation triplets
@@ -39,7 +37,7 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
         transformers_config = AutoConfig.from_pretrained(
             "distilgpt2",
             **{
-                "vocab_size": len(dataset.tokenizer),
+                "vocab_size": self.n_tokens,
                 "n_ctx": config["context_length"],
                 "n_positions": config["context_length"],
                 "pad_token_id": dataset.tokenizer.pad_token_id,
@@ -54,40 +52,46 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
         GPT2LMHeadModel.__init__(self, transformers_config)
 
         # Add type ids template
-        prev_vocab_size = len(dataset.tokenizer)
-        token_types = [f"<{token_type.name}>" for token_type in TokenType]
+        prev_vocab_size = self.n_tokens
+        spec_type, spec_type_id = PathLanguageModelingTokenType.SPECIAL.value
+        ent_type, ent_type_id = PathLanguageModelingTokenType.ENTITY.value
+        rel_type, rel_type_id = PathLanguageModelingTokenType.RELATION.value
+
+        token_types = [f"<Token-Type.{token_type}>" for token_type in [spec_type, ent_type, rel_type]]
         for token_type in token_types:
             dataset.tokenizer.add_tokens(token_type)
+        self.n_tokens = len(dataset.tokenizer)  # Update the vocabulary size after adding new tokens
 
-        spec_type, ent_type, rel_type = TokenType.SPECIAL.value, TokenType.ENTITY.value, TokenType.RELATION.value
-        spec_type, ent_type, rel_type = (
-            spec_type + prev_vocab_size,
-            ent_type + prev_vocab_size,
-            rel_type + prev_vocab_size,
+        spec_type_id, ent_type_id, rel_type_id = (
+            spec_type_id + prev_vocab_size,
+            ent_type_id + prev_vocab_size,
+            rel_type_id + prev_vocab_size,
         )
         self.token_type_ids = torch.LongTensor(
             # BOS + ENT + REL + ENT + REL + ... + ENT + REL + EOS
-            [spec_type, ent_type] + [rel_type, ent_type] * dataset.path_hop_length + [spec_type]
+            [spec_type_id, ent_type_id] + [rel_type_id, ent_type_id] * dataset.path_hop_length + [spec_type_id]
         )
-        self.token_entity_type_id = ent_type
-        self.token_relation_type_id = rel_type
+        self.token_entity_type_id = ent_type_id
+        self.token_relation_type_id = rel_type_id
         self.token_type_ids = self.token_type_ids.to(config["device"])
 
-        self.transformer.resize_token_embeddings(len(dataset.tokenizer))
+        self.transformer.resize_token_embeddings(self.n_tokens)
 
         vocab_inv = {v: k for k, v in dataset.tokenizer.get_vocab().items()}
         relation_mask = torch.tensor(
             [
-                vocab_inv[i].startswith(PathLanguageModelingTokenType.RELATION.value)
+                vocab_inv[i].startswith(rel_type)
                 for i in range(self.config.vocab_size)
             ],
             dtype=torch.float32,
         )
+        user_type = PathLanguageModelingTokenType.USER.token
+        item_type = PathLanguageModelingTokenType.ITEM.token
         entity_mask = torch.tensor(
             [
-                vocab_inv[i].startswith(PathLanguageModelingTokenType.USER.value)
-                or vocab_inv[i].startswith(PathLanguageModelingTokenType.ITEM.value)
-                or vocab_inv[i].startswith(PathLanguageModelingTokenType.ENTITY.value)
+                vocab_inv[i].startswith(user_type)
+                or vocab_inv[i].startswith(item_type)
+                or vocab_inv[i].startswith(ent_type)
                 for i in range(self.config.vocab_size)
             ],
             dtype=torch.float32,
@@ -118,6 +122,7 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        **kwargs,
     ) -> Union[tuple, CausalLMOutputWithCrossAttentions]:
         if isinstance(input_ids, Interaction):
             token_type_ids = input_ids["token_type_ids"]
@@ -141,6 +146,7 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict or self.config.use_return_dict,
+            **kwargs,
         )
 
         sequence_output = transformer_outputs[0]
@@ -215,13 +221,13 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
         _, user_topk_sequences = ranker.get_sequences(interaction["input_ids"].size(0), outputs)
         paths = [[user, item, score, sequence] for user, item, score, sequence in user_topk_sequences]
         # # make explanations as pandas dataframe, then return the results
-        df = pd.DataFrame(paths, columns=["user", "product", "score", "path"])
+        df = pd.DataFrame(paths, columns=["user", "item", "score", "path"])
         return df
 
     def decode_path(self, paths):
         """Standardise path format"""
         new_paths = list()
-        for user, product, score, path in paths:
+        for user, item, score, path in paths:
             new_path = []
             # Process the path
             # U R I R I R I
@@ -237,5 +243,5 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
                     # Is an entity
                     new_node = (int(path[node_idx - 1][1:]), "entity", int(path[node_idx][1:]))
                 new_path.append(new_node)
-            new_paths.append([user, product, score, new_path])
+            new_paths.append([user, item, score, new_path])
         return new_paths

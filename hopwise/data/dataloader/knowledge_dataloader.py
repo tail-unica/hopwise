@@ -254,8 +254,8 @@ class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
         Returns:
             dict: A dictionary where keys are tokenized user ids and values are lists of tokenized item ids.
         """
-        user_token_type = PathLanguageModelingTokenType.USER.value
-        item_token_type = PathLanguageModelingTokenType.ITEM.value
+        user_token_type = PathLanguageModelingTokenType.USER.token
+        item_token_type = PathLanguageModelingTokenType.ITEM.token
 
         used_ids = self.general_dataloader._sampler.used_ids
         tokenizer = self._dataset.tokenizer
@@ -282,8 +282,8 @@ class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):
                 dataset.path_token_separator.join(
                     [
                         dataset.tokenizer.bos_token,
-                        PathLanguageModelingTokenType.USER.value + str(uid.item()),
-                        PathLanguageModelingTokenType.RELATION.value + str(ui_relation),
+                        PathLanguageModelingTokenType.USER.token + str(uid.item()),
+                        PathLanguageModelingTokenType.RELATION.token + str(ui_relation),
                     ]
                 )
                 for uid in user_df

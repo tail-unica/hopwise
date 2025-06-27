@@ -912,9 +912,9 @@ class Novelty(AbstractMetric):
 
         for i in range(item_matrix.shape[0]):
             row = item_matrix[i, :]
-            for j, product in enumerate(row):
-                if product not in normalized_item_count:
-                    normalized_item_count[product] = (pop_matrix[i, j] - min_pop) / (max_pop - min_pop)
+            for j, item in enumerate(row):
+                if item not in normalized_item_count:
+                    normalized_item_count[item] = (pop_matrix[i, j] - min_pop) / (max_pop - min_pop)
         return normalized_item_count
 
     def calculate_metric(self, dataobject):
@@ -938,9 +938,9 @@ class LIR(PathQualityMetric):
     r"""Linking Interaction Recency (LIR)
 
     This property serves to quantify the time since the linking interaction in the explanation path occurred.
-    Given a user :math:`u \in U` and the set :math:`P_u` of products this user interacted with,
+    Given a user :math:`u \in U` and the set :math:`P_u` of items this user interacted with,
     we denote the list of their interactions, sorted chronologically, by :math:`T_u = [(p^i, t^i)]`,
-    where :math:`p^i \in P_u` is a product experienced by the user, :math:`t^i \in \mathbb N`
+    where :math:`p^i \in P_u` is a item experienced by the user, :math:`t^i \in \mathbb N`
     is the timestamp that interaction occurred, and :math:`t^i \leq t^{i+1}` :math:`\forall i = 1, \dots, |P_u|`.
 
     They applied an exponentially weighed moving average to the timestamps included in :math:`T_u`,
@@ -958,7 +958,7 @@ class LIR(PathQualityMetric):
     with values close to 0 (1)
     meaning that the linking interaction is far away (recent) in time.
     The overall LIR for explanations in a recommended list was obtained
-    by averaging the LIR of the linking interactions for the selected explanation path of each recommended product.
+    by averaging the LIR of the linking interactions for the selected explanation path of each recommended item.
 
     For further details, please refer to the `paper <https://dl.acm.org/doi/pdf/10.1145/3477495.3532041>`.
     """
@@ -1002,9 +1002,9 @@ class LIR(PathQualityMetric):
             try:
                 lirs_topk.append(lir_matrix[user][linked_interaction_id])
             except KeyError:
-                lirs_topk.append(0.0)
+                lirs_topk.append(0.)
         if len(lirs_topk) == 0:
-            return 0.0
+            lirs_topk = [0.]
         return np.array(lirs_topk)
 
     def topk_result(self, metric, value):
@@ -1095,7 +1095,7 @@ class SEP(PathQualityMetric):
 
     The overall SEP for explanations in a recommended list was obtained by averaging the SEP
     values of the shared entity # noqa: E501
-    in the selected path for each recommended product.
+    in the selected path for each recommended item.
 
     For further details, please refer to the `paper <https://dl.acm.org/doi/pdf/10.1145/3477495.3532041>`.
     """

@@ -121,10 +121,10 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         entity_range = np.arange(self.item_num, self.entity_num)  # only entities that are not items are considered
         token_vocab = np.concatenate(
             [
-                np.char.add(PathLanguageModelingTokenType.USER.value, np.arange(self.user_num).astype(str)),
-                np.char.add(PathLanguageModelingTokenType.ITEM.value, np.arange(self.item_num).astype(str)),
-                np.char.add(PathLanguageModelingTokenType.ENTITY.value, entity_range.astype(str)),
-                np.char.add(PathLanguageModelingTokenType.RELATION.value, np.arange(self.relation_num).astype(str)),
+                np.char.add(PathLanguageModelingTokenType.USER.token, np.arange(self.user_num).astype(str)),
+                np.char.add(PathLanguageModelingTokenType.ITEM.token, np.arange(self.item_num).astype(str)),
+                np.char.add(PathLanguageModelingTokenType.ENTITY.token, entity_range.astype(str)),
+                np.char.add(PathLanguageModelingTokenType.RELATION.token, np.arange(self.relation_num).astype(str)),
             ]
         )
 
@@ -172,12 +172,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 term_id = term
                 if term_type == "node":
                     if vertex_metadata[term_id]["type"] == self.uid_field:
-                        prefix = PathLanguageModelingTokenType.USER.value
+                        prefix = PathLanguageModelingTokenType.USER.token
                     elif vertex_metadata[term_id]["type"] == self.iid_field:
                         term_id -= self.user_num
-                        prefix = PathLanguageModelingTokenType.ITEM.value
+                        prefix = PathLanguageModelingTokenType.ITEM.token
                     elif vertex_metadata[term_id]["type"] == self.entity_field:
-                        prefix = PathLanguageModelingTokenType.ENTITY.value
+                        prefix = PathLanguageModelingTokenType.ENTITY.token
                         term_id -= self.user_num
                     else:
                         raise ValueError(
@@ -185,7 +185,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                             "in igraph during tokenized_kg generation."
                         )
                 else:
-                    prefix = PathLanguageModelingTokenType.RELATION.value
+                    prefix = PathLanguageModelingTokenType.RELATION.token
 
                 token_id = token_vocab[prefix + str(term_id)]
                 ret.append(token_id)
@@ -604,13 +604,13 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         graph_max_iid = self.item_num - 1 + self.user_num
         for node in path_nodes:
             if graph_min_iid <= node <= graph_max_iid:
-                remapped_path_nodes.append(PathLanguageModelingTokenType.ITEM.value + str(node - self.user_num))
+                remapped_path_nodes.append(PathLanguageModelingTokenType.ITEM.token + str(node - self.user_num))
             elif node < graph_min_iid:
-                remapped_path_nodes.append(PathLanguageModelingTokenType.USER.value + str(node))
+                remapped_path_nodes.append(PathLanguageModelingTokenType.USER.token + str(node))
             else:
-                remapped_path_nodes.append(PathLanguageModelingTokenType.ENTITY.value + str(node - self.user_num))
+                remapped_path_nodes.append(PathLanguageModelingTokenType.ENTITY.token + str(node - self.user_num))
 
-        relation_mapped_list = [PathLanguageModelingTokenType.RELATION.value + str(r) for r in path_relations]
+        relation_mapped_list = [PathLanguageModelingTokenType.RELATION.token + str(r) for r in path_relations]
 
         interleaved_entities_relations = zip_longest(remapped_path_nodes, relation_mapped_list)
         path_string = self.path_token_separator.join(list(chain(*interleaved_entities_relations))[:-1])
@@ -652,8 +652,7 @@ def _user_parallel_sampling(sampling_func_factory):
 
     def wrapper(*args, **kwargs):
         user_num = kwargs.get("user_num", None)
-        iter_users = rich.tqdm(
-            range(1, user_num),
+        tqdm_kws = dict(
             total=user_num - 1,
             ncols=100,
             desc=set_color("KG Path Sampling", "red"),
@@ -662,12 +661,21 @@ def _user_parallel_sampling(sampling_func_factory):
         sampling_func = sampling_func_factory(*args, **kwargs)
 
         parallel_max_workers = kwargs.pop("parallel_max_workers", "")
-        if not parallel_max_workers:
-            return [sampling_func(u) for u in iter_users]
-        else:
-            return joblib.Parallel(n_jobs=parallel_max_workers, prefer="processes")(
-                joblib.delayed(sampling_func)(u) for u in iter_users
-            )
+        try:
+            if not parallel_max_workers:
+                iter_users = rich.tqdm(range(1, user_num), **tqdm_kws)
+                return [sampling_func(u) for u in iter_users]
+            else:
+                iter_users = rich.tqdm(
+                    joblib.Parallel(n_jobs=parallel_max_workers, prefer="processes")(
+                        joblib.delayed(sampling_func)(u) for u in range(1, user_num)
+                    ),
+                    **tqdm_kws,
+                )
+                return [p for p in iter_users]
+        except Exception:
+            iter_users.close()
+            raise
 
     return wrapper
 

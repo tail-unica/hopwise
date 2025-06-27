@@ -43,7 +43,7 @@ class BaseSequenceScoreRanker:
             uid, recommended_item, decoded_seq = parsed_seq
 
             scores[batch_uidx, recommended_item] = sequence_score
-            user_topk_sequences.append((uid, recommended_item, sequence_score.item(), decoded_seq))
+            user_topk_sequences.append([uid, recommended_item, sequence_score.item(), decoded_seq])
 
         return scores, user_topk_sequences
 
@@ -55,8 +55,8 @@ class BaseSequenceScoreRanker:
 
         if (
             not (
-                uid_token.startswith(PathLanguageModelingTokenType.USER.value)
-                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.value)
+                uid_token.startswith(PathLanguageModelingTokenType.USER.token)
+                and recommended_token.startswith(PathLanguageModelingTokenType.ITEM.token)
             )
             or recommended_token == self.tokenizer.pad_token
         ):

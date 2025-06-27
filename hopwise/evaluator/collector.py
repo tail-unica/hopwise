@@ -143,13 +143,13 @@ class Collector:
         user_pid2timestamp = dict()
 
         users = train_data.dataset.inter_feat[train_data.dataset.uid_field]
-        products = train_data.dataset.inter_feat[train_data.dataset.iid_field]
+        items = train_data.dataset.inter_feat[train_data.dataset.iid_field]
         timestamps = train_data.dataset.inter_feat[train_data.dataset.time_field]
 
-        for user, product, timestamp in zip(users, products, timestamps):
+        for user, item, timestamp in zip(users, items, timestamps):
             if user.item() not in user_pid2timestamp:
                 user_pid2timestamp[user.item()] = list()
-            user_pid2timestamp[user.item()].append((product.item(), timestamp.item()))
+            user_pid2timestamp[user.item()].append((item.item(), timestamp.item()))
 
         return user_pid2timestamp
 

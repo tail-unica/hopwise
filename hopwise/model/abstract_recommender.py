@@ -259,6 +259,7 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
     input_type = InputType.PATHWISE
 
     def __init__(self, config, dataset, _skip_nn_module_init=True):
+        self.n_tokens = len(dataset.tokenizer)
         super().__init__(config, dataset, _skip_nn_module_init=_skip_nn_module_init)
 
 

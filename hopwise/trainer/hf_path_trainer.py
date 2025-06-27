@@ -14,7 +14,6 @@ from tqdm import rich
 from transformers import DataCollatorForLanguageModeling, IntervalStrategy, Trainer, TrainerCallback
 
 from hopwise.utils import (
-    KnowledgeEvaluationType,
     dict2str,
     early_stopping,
     get_gpu_usage,
@@ -31,12 +30,7 @@ class HFPathTrainer(Trainer):
         callbacks,
         model=None,
         args=None,
-        path_hop_length=3,
-        paths_per_user=10,
-        path_generation_args=None,
-        eval_device="cpu",
-        tokenizer=None,
-        logits_processor_list=None,
+        tokenizer=None
     ):
         hopwise_dataset = hopwise_train_data.dataset
         tokenizer = tokenizer or hopwise_dataset.tokenizer
@@ -53,12 +47,7 @@ class HFPathTrainer(Trainer):
         # Overwrite the callbacks to only use the HopwiseCallback
         self.callback_handler.callbacks = callbacks
 
-        self.paths_per_user = paths_per_user
-        self.path_generation_args = path_generation_args
-
-        self.path_hop_length = path_hop_length
         self.token_sequence_length = hopwise_train_data.token_sequence_length - 1
-        self.eval_device = eval_device
 
         ranker_params = dict(
             processing_class=self.processing_class,
@@ -67,38 +56,6 @@ class HFPathTrainer(Trainer):
         )
 
         self.ranker_rec = get_ranker(hopwise_config, ranker_params)
-        self.logits_processor_rec = logits_processor_list
-
-    def _full_sort_batch_eval(self, inputs, task=KnowledgeEvaluationType.REC):
-        if isinstance(self.model, torch.nn.DataParallel):
-            model = self.model.module
-        else:
-            model = self.model
-
-        if task == KnowledgeEvaluationType.REC:
-            sequence_len = self.token_sequence_length
-            num_return_sequences = self.paths_per_user
-            logits_processor = self.logits_processor_rec
-            ranker = self.ranker_rec
-        else:
-            sequence_len = self.SEQUENCE_LEN_LP
-            num_return_sequences = self.N_RET_SEQ_LP
-            logits_processor = self.logits_processor_lp
-            ranker = self.ranker_lp
-        outputs = model.generate(
-            **inputs,
-            max_length=sequence_len,
-            min_length=sequence_len,
-            num_return_sequences=num_return_sequences,
-            logits_processor=logits_processor,
-            return_dict_in_generate=True,
-            output_scores=True,
-            **self.path_generation_args,
-        )
-
-        scores, user_topk_sequences = ranker.get_sequences(outputs, self.token_sequence_length - 3)
-
-        return scores, user_topk_sequences
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)

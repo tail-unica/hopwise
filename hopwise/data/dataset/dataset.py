@@ -1995,7 +1995,7 @@ class Dataset(torch.utils.data.Dataset):
     def history_user_matrix(self, value_field=None, max_history_len=None):
         """Get dense matrix describe item's history interaction records.
 
-        ``history_matrix[i]`` represents item ``i``'s history interacted item_id.
+        ``history_matrix[i]`` represents item ``i``'s history interacted user_id.
 
         ``history_value[i]`` represents item ``i``'s history interaction records' values,
         ``0`` if ``value_field = None``.

@@ -1292,27 +1292,6 @@ class TPRecTrainer(PretrainTrainer):
         self.wandblogger.log_eval_metrics(result, head="eval")
         return result
 
-    def pretrain(self, train_data, verbose=True, show_progress=False):
-        for epoch_idx in range(self.start_epoch, self.pretrain_epochs):
-            # train
-            training_start_time = time()
-            train_loss = self._train_epoch(train_data, epoch_idx, show_progress=show_progress)
-            self.train_loss_dict[epoch_idx] = sum(train_loss) if isinstance(train_loss, tuple) else train_loss
-            training_end_time = time()
-            train_loss_output = self._generate_train_loss_output(
-                epoch_idx, training_start_time, training_end_time, train_loss
-            )
-            if verbose:
-                self.logger.info(train_loss_output)
-            self._add_train_loss_to_tensorboard(epoch_idx, train_loss)
-
-        saved_model_file = self._get_pretrained_model_path()
-        self.save_pretrained_model(epoch_idx, saved_model_file)
-        update_output = set_color("Saving pretrained weights", "blue") + ": %s" % saved_model_file
-        if verbose:
-            self.logger.info(update_output)
-        return self.best_valid_score, self.best_valid_result
-
     def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
         if self.model.train_stage == "pretrain":
             return super()._full_sort_batch_eval(batched_data, tot_item_num, item_tensor)
@@ -1941,10 +1920,11 @@ class NCLTrainer(Trainer):
 
 
 class PEARLMfromscratchTrainer(Trainer):
+
     def __init__(self, config, model):
         super().__init__(config, model)
         self.tokenizer = None
-        self.logit_processor = None
+        self.logits_processor_list = None
         self.ranker = None
         self.path_gen_args = config["path_generation_args"]
         path_hop_length = config["path_hop_length"]
@@ -1960,23 +1940,23 @@ class PEARLMfromscratchTrainer(Trainer):
         show_progress=False,
         callback_fn=None,
     ):
+        from transformers import LogitsProcessorList
+
         self.tokenizer = train_data.dataset.tokenizer
-        logits_processor_params = dict(
+
+        kgcd_logit_processor = get_logits_processor(self.config)(
             tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
             tokenized_used_ids=train_data.get_tokenized_used_ids(),
             max_sequence_length=train_data.token_sequence_length,
             tokenizer=self.tokenizer,
             task=KnowledgeEvaluationType.REC,
         )
-
-        ranker_params = dict(
-            processing_class=self.tokenizer,
-            used_ids=train_data.general_dataloader._sampler.used_ids,
-            item_num=train_data.dataset.item_num,
+        self.logits_processor_list = LogitsProcessorList([kgcd_logit_processor])
+        self.ranker = get_ranker(self.config)(
+            self.tokenizer,
+            train_data.general_dataloader._sampler.used_ids,
+            train_data.dataset.item_num,
         )
-
-        self.logit_processor = get_logits_processor(self.config, logits_processor_params)
-        self.ranker = get_ranker(self.config, ranker_params)
 
         from torch.utils.data import DataLoader
 
@@ -2131,7 +2111,7 @@ class PEARLMfromscratchTrainer(Trainer):
 
         predictions, probs = self.model.generate(
             inputs=inputs,
-            logit_processor=self.logit_processor,
+            logits_processor_list=self.logits_processor_list,
             max_new_tokens=self.ranker_max_new_tokens,
             top_k=self.path_gen_args["top_k"],
             paths_per_user=self.path_gen_args["paths_per_user"],
@@ -2161,11 +2141,8 @@ class HFPathLanguageModelingTrainer(Trainer):
 
     def __init__(self, config, model):
         super().__init__(config, model)
-        self.config = config
-        self.eval_device = config["device"]
-        self.path_hop_length = self.config["path_hop_length"]
+    
         self.path_gen_args = self.config["path_generation_args"].copy()
-        self.paths_per_user = self.path_gen_args.pop("paths_per_user")
 
         self.HOPWISE_SAVE_PATH_SUFFIX += f"{config['base_model']}-"
         self.HUGGINGFACE_SAVE_PATH_SUFFIX += f"{config['base_model']}-"
@@ -2241,10 +2218,6 @@ class HFPathLanguageModelingTrainer(Trainer):
             callbacks,
             model=self.model,
             args=training_arguments,
-            path_hop_length=self.path_hop_length,
-            paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_args,
-            eval_device=self.eval_device,
         )
 
     @property
@@ -2340,6 +2313,21 @@ class HFPathLanguageModelingTrainer(Trainer):
         )
         valid_score = calculate_valid_score(valid_result, self.valid_metric)
         return valid_score, valid_result
+    
+    def _full_sort_batch_eval(self, inputs, task=KnowledgeEvaluationType.REC, token_sequence_length=None):
+        outputs = self.model.generate(
+            **inputs,
+            max_length=token_sequence_length,
+            min_length=token_sequence_length,
+            logits_processor=logits_processor,
+            return_dict_in_generate=True,
+            output_scores=True,
+            **self.path_generation_args,
+        )
+
+        scores, user_topk_sequences = ranker.get_sequences(outputs, self.token_sequence_length - 3)
+
+        return scores, user_topk_sequences
 
     @torch.no_grad()
     def evaluate(
@@ -2370,13 +2358,15 @@ class HFPathLanguageModelingTrainer(Trainer):
             else eval_data
         )
 
+        token_sequence_length = eval_data.token_sequence_length - 1  # EOS token is not included
+
         num_sample = 0
         for batch_idx, batched_data in enumerate(iter_data):
             num_sample += len(batched_data)
             interaction, history_index, positive_u, positive_i = batched_data
 
             inputs = self.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(self.device)
-            scores, paths = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
+            scores, paths = self._full_sort_batch_eval(inputs, task=task)
 
             if hasattr(self.model, "decode_path"):
                 paths = self.model.decode_path(paths)
@@ -2421,6 +2411,8 @@ class PLMTrainer(HFPathLanguageModelingTrainer):
         callback_fn=None,
         training_args=None,
     ):
+        from transformers import LogitsProcessorList
+
         from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
 
         training_args = training_args or {}
@@ -2441,26 +2433,21 @@ class PLMTrainer(HFPathLanguageModelingTrainer):
             *hf_callbacks,
         ]
 
-        logits_processor_params = dict(
+        plm_logits_processor = get_logits_processor(self.config)(
             tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
             tokenized_used_ids=train_data.get_tokenized_used_ids(),
             max_sequence_length=train_data.token_sequence_length,
             tokenizer=train_data.dataset.tokenizer,
             task=KnowledgeEvaluationType.REC,
         )
-        self.logits_processor_list = get_logits_processor(self.config, logits_processor_params)
+        self.logits_processor_list = LogitsProcessorList([plm_logits_processor])
 
         self.hf_trainer = HFPathTrainer(
             train_data,
             self.config,
             callbacks,
             model=self.model,
-            args=training_arguments,
-            path_hop_length=self.path_hop_length,
-            paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_args,
-            eval_device=self.device,
-            logits_processor_list=self.logits_processor_list,
+            args=training_arguments
         )
 
 
@@ -2500,7 +2487,7 @@ class PEARLMTrainer(HFPathLanguageModelingTrainer):
             *hf_callbacks,
         ]
 
-        logits_processor_params = dict(
+        self.logits_processor_list = get_logits_processor(self.config)(
             tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
             tokenized_used_ids=train_data.get_tokenized_used_ids(),
             max_sequence_length=train_data.token_sequence_length,
@@ -2508,19 +2495,12 @@ class PEARLMTrainer(HFPathLanguageModelingTrainer):
             task=KnowledgeEvaluationType.REC,
         )
 
-        self.logits_processor_list = get_logits_processor(self.config, logits_processor_params)
-
         self.hf_trainer = HFPathTrainer(
             train_data,
             self.config,
             callbacks,
             model=self.model,
-            args=training_arguments,
-            path_hop_length=self.path_hop_length,
-            paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_args,
-            eval_device=self.device,
-            logits_processor_list=self.logits_processor_list,
+            args=training_arguments
         )
 
 

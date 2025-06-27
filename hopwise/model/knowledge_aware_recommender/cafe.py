@@ -63,7 +63,7 @@ class CAFE(KnowledgeRecommender):
         self.relation_embedding = dataset.get_preload_weight("relation_embedding_id")
 
         # Topk Candidates
-        self.topk_user_products = self._compute_top_items()
+        self.topk_user_items = self._compute_top_items()
         # Turn into torch, so that the weight is updated.
         self.user_embedding = torch.from_numpy(self.user_embedding).to(device=self.device, dtype=torch.float32)
         self.entity_embedding = torch.from_numpy(self.entity_embedding).to(self.device, dtype=torch.float32)
@@ -86,7 +86,6 @@ class CAFE(KnowledgeRecommender):
 
         # Load Full Knowledge Graph in dict form
         self.graph_dict = dataset.ckg_dict_graph(ui_bidirectional=False)
-        self.num_products = self.n_items
         self.memory_size = 10000  # number of paths to save for each metapath
         self.replay_memory = {}
 
@@ -139,15 +138,15 @@ class CAFE(KnowledgeRecommender):
         )
         ui_scores = np.argsort(u_p_scores, axis=1)  # From worst to best
         top100_ui_scores = ui_scores[:, -100:][:, ::-1]
-        topk_user_products = top100_ui_scores[:, : self.topk_candidates]
-        return topk_user_products
+        topk_user_items = top100_ui_scores[:, : self.topk_candidates]
+        return topk_user_items
 
     def _get_batch_by_user(self, users):
         pos_path_batch, neg_pid_batch = [], []
         top_pids = np.arange(self.topk_candidates)
         user_trials = {u.item(): 0 for u in users}  # Track trials per user
         skipped_users = []
-        # it select the it user, if a path is not found, another metapath and product is used.
+        # it select the it user, if a path is not found, another metapath and item is used.
         it = 0
         while len(pos_path_batch) < len(users) and it < len(users):
             # Take the user
@@ -166,7 +165,7 @@ class CAFE(KnowledgeRecommender):
             pidx = self.rng.choice(top_pids)
 
             # Take the corresponding score
-            item = self.topk_user_products[user][pidx]
+            item = self.topk_user_items[user][pidx]
 
             # Compute the probability to sample path from memory, P \in [0, 0.5].
             use_memory_prob = 0.5 * len(self.replay_memory[mpid]) / self.memory_size
@@ -185,12 +184,12 @@ class CAFE(KnowledgeRecommender):
                 pos_path_batch.append(paths[0])
                 self.replay_memory[mpid].add(paths)
 
-            # Sample a negative product.
+            # Sample a negative item.
             if pidx < self.topk_candidates - 1:
                 neg_pidx = self.rng.choice(np.arange(pidx + 1, self.topk_candidates))
-                neg_pid = self.topk_user_products[user][neg_pidx]
+                neg_pid = self.topk_user_items[user][neg_pidx]
             else:
-                neg_pid = self.rng.choice(self.num_products)
+                neg_pid = self.rng.choice(self.n_items)
 
             neg_pid_batch.append(neg_pid)
             it += 1
@@ -369,20 +368,20 @@ class CAFE(KnowledgeRecommender):
             interaction : test interaction data
 
         Returns:
-            pd.Dataframe: explanation results with columns: "user", "product", "score", "path"
+            pd.Dataframe: explanation results with columns: "user", "item", "score", "path"
         """
         users = interaction[self.USER_ID]
 
         kg_mask = KGMask(self.graph_dict, self.ui_relation_id)
         predicted_paths = self._infer_paths(users, kg_mask)
         path_counts = self._estimate_path_count(users)
-        _, explanations = self.run_program(users, path_counts, predicted_paths)
 
-        # make explanations as pandas dataframe, then return the results
-        df = pd.DataFrame(explanations, columns=["user", "product", "score", "path"])
-        df["path"] = df["path"].apply(self.decode_path)
+        scores, explanations = self.run_program(users, path_counts, predicted_paths)
 
-        return df
+        for exp in explanations:
+            exp[-1] = self.decode_path(exp[-1])
+
+        return scores, explanations
 
     def decode_path(self, path):
         decoded_path = []
@@ -390,7 +389,7 @@ class CAFE(KnowledgeRecommender):
             # append relations
             if node[0] != "self_loop":
                 relation = self.dataset.token2id(self.dataset.relation_field, node[0])
-                decoded_path.append(f"{PathLanguageModelingTokenType.RELATION.value}{relation}")
+                decoded_path.append(f"{PathLanguageModelingTokenType.RELATION.token}{relation}")
 
             # append everything else
 
@@ -398,11 +397,11 @@ class CAFE(KnowledgeRecommender):
             eid = node[2]
 
             if e_type == "user":
-                e_type = PathLanguageModelingTokenType.USER.value
+                e_type = PathLanguageModelingTokenType.USER.token
             elif eid in range(self.n_items):
-                e_type = PathLanguageModelingTokenType.ITEM.value
+                e_type = PathLanguageModelingTokenType.ITEM.token
             else:
-                e_type = PathLanguageModelingTokenType.ENTITY.value
+                e_type = PathLanguageModelingTokenType.ENTITY.token
 
             # node[1] is the node type, node[2] is the node id
             decoded_path.append(f"{e_type}{eid}")
@@ -465,11 +464,11 @@ class CAFE(KnowledgeRecommender):
                         continue
                 pred_paths_instances[r[0][0]][r[0][-1]] = (reduce(lambda x, y: x * y, r[1]), np.mean(r[1][-1]), path)
 
-            top_products_scores = sorted(tmp, key=lambda x: x[1], reverse=True)
-            for product, score in top_products_scores:
-                if product < self.n_items and results[i, product] < score:  # if it's an item
-                    results[i, product] = score.tolist()
-                    collect_results.append([user, product, score, pred_paths_instances[user][product][2]])
+            top_items_scores = sorted(tmp, key=lambda x: x[1], reverse=True)
+            for item, score in top_items_scores:
+                if item < self.n_items and results[i, item] < score:  # if it's an item
+                    results[i, item] = score.tolist()
+                    collect_results.append([user, item, score, pred_paths_instances[user][item][2]])
 
         return results, collect_results
 
@@ -580,8 +579,8 @@ class SymbolicNetwork(nn.Module):
         outputs = self._forward(modules, uids)
 
         # Path regularization loss
-        products = self.embedding["entity"].weight[: self.n_items]  # [bs, d]
-        scores = torch.matmul(outputs[-1], products.t())  # [bs, vocab_size]
+        items = self.embedding["entity"].weight[: self.n_items]  # [bs, d]
+        scores = torch.matmul(outputs[-1], items.t())  # [bs, vocab_size]
         logprobs = F.log_softmax(scores, dim=1)  # [bs, vocab_size]
         pid_logprobs = logprobs.gather(1, pids.view(-1, 1)).view(-1)
         return pid_logprobs
@@ -596,8 +595,8 @@ class SymbolicNetwork(nn.Module):
 
         # Path regularization loss
         pids_tensor = torch.LongTensor(pids).to(self.device)
-        products = self.embedding["entity"].weight[: self.n_items]  # [bs, d]
-        scores = torch.matmul(outputs[-1], products.t())  # [1, vocab_size]
+        items = self.embedding["entity"].weight[: self.n_items]  # [bs, d]
+        scores = torch.matmul(outputs[-1], items.t())  # [1, vocab_size]
         logprobs = F.log_softmax(scores, dim=1)  # [1, vocab_size]
         pid_logprobs = logprobs[0][pids_tensor]
         x = pid_logprobs.detach().cpu().numpy().tolist()
@@ -813,7 +812,7 @@ class MetaProgramExecutor:
         Args:
             program: an instance of MetaProgram.
             uid: user ID (integer).
-            excluded_pids: list of product IDs (list).
+            excluded_pids: list of item IDs (list).
         """
         uid_tensor = torch.LongTensor([uid]).to(self.device)
         user_vec = self.symbolic_model.embedding["user"][uid_tensor]  # tensor [1, d]

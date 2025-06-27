@@ -75,6 +75,11 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         else:
             unique_input_ids = input_ids
             if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
+                # Determine whether the next token to generate is a relation or an entity:
+                # - relation: only the last entity is needed (1 token) → for [user123] last_n_tokens = 1
+                # - entity: the last 2 tokens are needed (entity, relation) → for [user123, watched] last_n_tokens = 2
+                # Apply deduplication: select unique sequences based only on the relevant last tokens (1 or 2)
+                # This avoids recomputing the same mask for sequences that share the same context
                 last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
                 _, input_ids_indices, input_ids_inv = np.unique(
                     input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True

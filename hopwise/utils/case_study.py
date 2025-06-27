@@ -17,6 +17,7 @@
 """
 
 import numpy as np
+import pandas as pd
 import torch
 
 from hopwise.data.interaction import Interaction
@@ -105,7 +106,10 @@ def full_sort_explanations(uid_series, model, test_data, device=None):
     # Get scores of all items
     input_interaction = input_interaction.to(device)
 
-    return model.explain(input_interaction)
+    _, explanations = model.explain(input_interaction)
+
+    # return explanations as pandas dataframe
+    return pd.DataFrame(explanations, columns=["user", "item", "score", "path"])
 
 
 def full_sort_topk(uid_series, model, test_data, k, device=None):

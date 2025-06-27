@@ -15,4 +15,3 @@ maxhis: 10
 sim_scale: 10
 
 max_entities_per_user: 10
-explain: False

@@ -20,8 +20,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
-
-TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("USER", 1), ("ENTITY", 2), ("RELATION", 3)])
+from hopwise.utils import PathLanguageModelingTokenType
 
 
 class AutoregressiveGroupQuerySelfAttention(nn.Module):
@@ -165,20 +164,24 @@ class PEARLMLlama3(PathLanguageModelingRecommender):
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset, _skip_nn_module_init=False)
-        config["context_length"] = dataset.context_length
-
-        self.config = config
-        self.dataset = dataset
-        self.tokenizer = dataset.tokenizer
 
         self.temperature = config["temperature"]
 
-        self.wte = nn.Embedding(len(self.tokenizer), config["embedding_size"]).to(dtype=config["weight_precision"])
-        self.wpe = nn.Embedding(len(TokenType), config["embedding_size"]).to(dtype=config["weight_precision"])
+        spec_type = PathLanguageModelingTokenType.SPECIAL.token_id
+        ent_type = PathLanguageModelingTokenType.ENTITY.token_id
+        rel_type = PathLanguageModelingTokenType.RELATION.token_id
+        self.type_emb_pos = torch.LongTensor(
+            # BOS + ENT + REL + ENT + REL + ... + ENT + REL + EOS
+            [spec_type, ent_type] + [rel_type, ent_type] * dataset.path_hop_length + [spec_type],
+            device=config["device"],
+        )
+
+        self.wte = nn.Embedding(self.n_tokens, config["embedding_size"]).to(dtype=config["weight_precision"])
+        self.wpe = nn.Embedding(self.type_emb_pos.shape[0], config["embedding_size"]).to(dtype=config["weight_precision"])
         self.blocks = nn.ModuleList([Block(config) for _ in range(config["num_layers"])])
         self.rmsnorm = nn.RMSNorm(config["embedding_size"], eps=1e-5)
 
-        self.lm_head = nn.Linear(config["embedding_size"], len(self.tokenizer), bias=False).to(
+        self.lm_head = nn.Linear(config["embedding_size"], self.n_tokens, bias=False).to(
             dtype=config["weight_precision"]
         )
 
@@ -260,7 +263,7 @@ class PEARLMLlama3(PathLanguageModelingRecommender):
 
         # How many paths to return?
         inputs["input_ids"] = inputs["input_ids"].repeat_interleave(paths_per_user, dim=0)
-        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, len(self.tokenizer)), -torch.inf).to(
+        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, self.n_tokens), -torch.inf).to(
             self.device
         )
         for i in range(max_new_tokens):

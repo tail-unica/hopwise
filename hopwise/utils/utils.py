@@ -459,46 +459,23 @@ def get_environment(config):
     return table
 
 
-def get_ranker(config, params):
-    processing_class = params.get("processing_class", None)
-    used_ids = params.get("used_ids", None)
-    item_num = params.get("item_num", None)
-
-    if config["ranker"] == "CumulativeSequenceScoreRanker":
-        ranker = CumulativeSequenceScoreRanker(
-            processing_class,
-            used_ids,
-            item_num,
-            topk=10,
+def get_ranker(config):
+    try:
+        ranker_class = getattr(
+            importlib.import_module("hopwise.model.ranker"), config["ranker"]
         )
-    elif config["ranker"] == "BeamSearchSequenceScoreRanker":
-        ranker = BeamSearchSequenceScoreRanker(
-            processing_class,
-            used_ids,
-            item_num,
-            topk=10,
-        )
-    elif config["ranker"] == "SampleSearchSequenceScoreRanker":
-        ranker = SampleSearchSequenceScoreRanker(
-            processing_class,
-            used_ids,
-            item_num,
-            topk=10,
-        )
-    else:
-        raise ValueError(
+    except AttributeError as e:
+        raise e(
             f"Ranker {config['ranker']} not supported. "
             "Supported rankers are: CumulativeSequenceScoreRanker, "
             "                       BeamSearchSequenceScoreRanker, "
             "                       SampleSearchSequenceScoreRanker."
         )
 
-    return ranker
+    return ranker_class
 
 
-def get_logits_processor(config, params):
-    from transformers import LogitsProcessorList
-
+def get_logits_processor(config):
     try:
         logits_processor_class = getattr(
             importlib.import_module("hopwise.model.logits_processor"), config["model"] + "LogitsProcessorWordLevel"
@@ -506,7 +483,7 @@ def get_logits_processor(config, params):
     except AttributeError:
         logits_processor_class = ConstrainedLogitsProcessorWordLevel
 
-    return LogitsProcessorList([logits_processor_class(**params)])
+    return logits_processor_class
 
 
 class GenerationOutputs(SimpleNamespace):

@@ -21,8 +21,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
-
-TokenType = IntEnum("TokenType", [("SPECIAL", 0), ("USER", 1), ("ENTITY", 2), ("RELATION", 3)])
+from hopwise.utils import PathLanguageModelingTokenType
 
 
 class LayerNorm(nn.Module):
@@ -149,22 +148,26 @@ class PEARLMGPT2(PathLanguageModelingRecommender):
         super().__init__(config, dataset, _skip_nn_module_init=False)
         config["context_length"] = dataset.context_length
 
-        self.config = config
-        self.dataset = dataset
-        self.tokenizer = dataset.tokenizer
-
         self.temperature = config["temperature"]
-        self.path_gen_args = config["path_generation_args"]
 
-        self.wte = nn.Embedding(len(self.tokenizer), config["embedding_size"])
+        spec_type = PathLanguageModelingTokenType.SPECIAL.token_id
+        ent_type = PathLanguageModelingTokenType.ENTITY.token_id
+        rel_type = PathLanguageModelingTokenType.RELATION.token_id
+        self.type_emb_pos = torch.LongTensor(
+            # BOS + ENT + REL + ENT + REL + ... + ENT + REL + EOS
+            [spec_type, ent_type] + [rel_type, ent_type] * dataset.path_hop_length + [spec_type],
+            device=config["device"],
+        )
+
+        self.wte = nn.Embedding(self.n_tokens, config["embedding_size"])
         self.wpe = nn.Embedding(dataset.context_length, config["embedding_size"])
-        self.wp_type_e = nn.Embedding(len(TokenType), config["embedding_size"])
+        self.wp_type_e = nn.Embedding(self.type_emb_pos.shape[0], config["embedding_size"])
 
         self.blocks = nn.ModuleList([Block(config) for _ in range(config["num_layers"])])
         self.layernorm = nn.LayerNorm(config["embedding_size"], bias=config["bias"])
         self.dropout = nn.Dropout(config["dropout"])
 
-        self.lm_head = nn.Linear(config["embedding_size"], len(self.tokenizer), bias=False)
+        self.lm_head = nn.Linear(config["embedding_size"], self.n_tokens, bias=False)
 
         # weight tying
         self.wte.weight = self.lm_head.weight
@@ -187,23 +190,13 @@ class PEARLMGPT2(PathLanguageModelingRecommender):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, idx):
-        bs, t = idx.size()
-
-        pos = torch.arange(0, t, dtype=torch.long, device=self.device)  # shape (t)
-
-        # position embeddings of shape (t, n_embd)
-        type_emb_pos = torch.tensor(
-            # BOS + USER + REL + ENT + REL + ... + ENT + REL + EOS
-            [TokenType.SPECIAL.value, TokenType.USER.value]
-            + [TokenType.RELATION.value, TokenType.ENTITY.value] * self.config["path_hop_length"]
-            + [TokenType.SPECIAL.value]
-        ).to(self.device)
+        pos = torch.arange(0, idx.size(1), dtype=torch.long, device=self.device)  # shape (t)
 
         # forward the GPT model itself
         # token embeddings of shape (b, t, n_embd)
         tok_emb = self.wte(idx)
         pos_emb = self.wpe(pos)[: tok_emb.size(1)]
-        type_emb = self.wp_type_e(type_emb_pos)[: tok_emb.size(1)]
+        type_emb = self.wp_type_e(self.type_emb_pos)[: tok_emb.size(1)]
 
         # think about get_flops, it restrict the max length of the input
         x = tok_emb + pos_emb + type_emb
@@ -240,13 +233,13 @@ class PEARLMGPT2(PathLanguageModelingRecommender):
         """
         inputs = kwargs.get("inputs")
         topk = kwargs.get("top_k")
-        logit_processor = kwargs.get("logit_processor")
+        logits_processor_list = kwargs.get("logits_processor_list")
         max_new_tokens = kwargs.get("max_new_tokens")
         paths_per_user = kwargs.get("paths_per_user")
 
         # How many paths to return?
         inputs["input_ids"] = inputs["input_ids"].repeat_interleave(paths_per_user, dim=0)
-        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, len(self.tokenizer)), -torch.inf).to(
+        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, self.n_tokens), -torch.inf).to(
             self.device
         )
         for i in range(max_new_tokens):
@@ -256,7 +249,7 @@ class PEARLMGPT2(PathLanguageModelingRecommender):
             logits = logits[:, -1, :] / self.temperature
 
             # KGCD
-            logits = logit_processor(inputs["input_ids"], logits)
+            logits = logits_processor_list(inputs["input_ids"], logits)
 
             # optionally crop the logits to only the top k options
             if topk is not None:
