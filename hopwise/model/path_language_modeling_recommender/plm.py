@@ -11,7 +11,6 @@ Reference code:
     https://github.com/mirkomarras/kgglm
 """
 
-from enum import IntEnum
 from typing import Optional, Union
 
 import pandas as pd
@@ -79,10 +78,7 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
 
         vocab_inv = {v: k for k, v in dataset.tokenizer.get_vocab().items()}
         relation_mask = torch.tensor(
-            [
-                vocab_inv[i].startswith(rel_type)
-                for i in range(self.config.vocab_size)
-            ],
+            [vocab_inv[i].startswith(rel_type) for i in range(self.config.vocab_size)],
             dtype=torch.float32,
         )
         user_type = PathLanguageModelingTokenType.USER.token
@@ -198,7 +194,7 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
     def predict(self, input_ids, **kwargs):
         return self.forward(input_ids, **kwargs)
 
-    def explain(self, interaction, ranker, logits_processor, **kwargs):
+    def explain(self, interaction, ranker, **kwargs):
         # update paths per user from the newest config, otherwise, use the saved config
         paths_per_user = kwargs.get("paths_per_user", self.model_config["path_generation_args"]["paths_per_user"])
         token_sequence_length = kwargs.get(
@@ -213,7 +209,7 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
             max_length=token_sequence_length,
             min_length=token_sequence_length,
             num_return_sequences=paths_per_user,
-            logits_processor=logits_processor,
+            logits_processor=self.logits_processor_list,
             return_dict_in_generate=True,
             output_scores=True,
             **paths_gen_args,

@@ -18,7 +18,17 @@ import torch
 from torch import nn
 
 from hopwise.model.layers import FLEmbedding, FMEmbedding, FMFirstOrderLinear
-from hopwise.utils import FeatureSource, FeatureType, InputType, ModelType, set_color
+from hopwise.model.logits_processor import LogitsProcessorList
+from hopwise.utils import (
+    FeatureSource,
+    FeatureType,
+    InputType,
+    KnowledgeEvaluationType,
+    ModelType,
+    get_logits_processor,
+    get_sequence_postprocessor,
+    set_color,
+)
 
 
 class AbstractRecommender(nn.Module):
@@ -259,8 +269,82 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
     input_type = InputType.PATHWISE
 
     def __init__(self, config, dataset, _skip_nn_module_init=True):
-        self.n_tokens = len(dataset.tokenizer)
         super().__init__(config, dataset, _skip_nn_module_init=_skip_nn_module_init)
+
+        self.n_tokens = len(dataset.tokenizer)
+
+        logits_processor = get_logits_processor(config["model"])(
+            tokenized_ckg=dataset.get_tokenized_ckg(),
+            tokenized_used_ids=dataset.get_tokenized_used_ids(),
+            max_sequence_length=dataset.token_sequence_length,
+            tokenizer=dataset.tokenizer,
+            task=KnowledgeEvaluationType.REC,
+        )
+        self.logits_processor_list = LogitsProcessorList([logits_processor])
+
+        self.sequence_postprocessor = get_sequence_postprocessor(self.config["sequence_postprocessor"])(
+            dataset.tokenizer,
+            dataset.get_user_used_ids(),
+            dataset.item_num,
+        )
+
+    @torch.no_grad()
+    def generate(self, inputs, top_k=None, max_length=None, paths_per_user=1, **kwargs):
+        """
+        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
+        the sequence max_new_tokens times, feeding the predictions back into the model each time.
+        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+
+        Args:
+            inputs (dict): A dictionary containing the input_ids tensor with shape (b, t).
+            top_k (int, optional): If specified, only the top k logits will be considered
+                for sampling at each step. Defaults to None.
+            max_length (int, optional): The maximum length of the generated sequence.
+            paths_per_user (int, optional): How many paths to return for each user.
+            **kwargs: Additional keyword arguments for the model. In future, it can be used to pass
+                other generation parameters such as temperature, repetition penalty, etc.
+        """
+        if max_length is None:
+            max_length = inputs["input_ids"].size(1) + 1
+
+        max_new_tokens = max_length - inputs["input_ids"].size(1)
+
+        # How many paths to return?
+        inputs["input_ids"] = inputs["input_ids"].repeat_interleave(paths_per_user, dim=0)
+        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, self.n_tokens), -torch.inf).to(self.device)
+        for i in range(max_new_tokens):
+            # forward the model to get the logits for the index in the sequence
+            logits = self.predict(inputs)
+            # pluck the logits at the final step and scale by desired temperature
+            logits = logits[:, -1, :] / self.temperature
+
+            # KGCD
+            logits = self.logits_processor_list(inputs["input_ids"], logits)
+
+            # optionally crop the logits to only the top k options
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -torch.inf
+            # apply softmax to convert logits to (normalized) probabilities
+            probs = torch.nn.functional.softmax(logits, dim=-1)
+            scores[:, i] = probs
+            # sample from the distribution
+            path_next = torch.multinomial(probs, num_samples=1)
+            # append sampled index to the running sequence and continue
+            inputs["input_ids"] = torch.cat((inputs["input_ids"], path_next), dim=1)
+
+        return inputs["input_ids"], torch.unbind(scores, dim=1)
+
+    def explain(self, inputs, max_length=None, **kwargs):
+        outputs = self.generate(inputs, **kwargs)
+        scores, user_topk_sequences = self.sequence_postprocessor.get_sequences(
+            outputs, max_new_tokens=max_length - inputs["input_ids"].size(1)
+        )
+
+        for seq in user_topk_sequences:
+            seq[-1] = self.decode_path(seq[-1])
+
+        return scores, user_topk_sequences
 
 
 class ContextRecommender(AbstractRecommender):

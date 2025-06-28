@@ -2019,6 +2019,43 @@ class Dataset(torch.utils.data.Dataset):
         """
         return self._history_matrix(row="item", value_field=value_field, max_history_len=max_history_len)
 
+    def _get_used_ids(self, source_field, target_field):
+        """Get used ids from the interaction features.
+
+        Args:
+            source_field (str, optional): Source field name.
+            target_field (str, optional): Target field name.
+
+        Returns:
+            numpy.ndarray: A numpy array of sets, where each set contains the item ids
+            that a user has interacted with.
+        """
+        cur = np.array([set() for _ in range(self.user_num)])
+        for source, target in zip(
+            self.inter_feat[source_field].numpy(),
+            self.inter_feat[target_field].numpy(),
+        ):
+            cur[source].add(target)
+        return cur
+
+    def get_user_used_ids(self):
+        """Get used item ids of each user from the interaction features.
+
+        Returns:
+            numpy.ndarray: A numpy array of sets, where each set contains the item ids
+            that a user has interacted with.
+        """
+        return self._get_used_ids(self.uid_field, self.iid_field)
+
+    def get_item_used_ids(self):
+        """Get used user ids of each item from the interaction features.
+
+        Returns:
+            numpy.ndarray: A numpy array of sets, where each set contains the user ids
+            that have interacted with an item.
+        """
+        return self._get_used_ids(self.iid_field, self.uid_field)
+
     def get_preload_weight(self, field):
         """Get preloaded weight matrix, whose rows are sorted by token ids.
 

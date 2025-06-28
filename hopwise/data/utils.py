@@ -393,8 +393,6 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
         # Return Dataloader based on the modeltype
         if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
-        elif model_type == ModelType.PATH_LANGUAGE_MODELING:
-            return KnowledgePathDataLoader
         else:
             return TrainDataLoader
     else:

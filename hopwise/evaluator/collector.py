@@ -15,7 +15,6 @@ import copy
 
 import torch
 
-from hopwise.data.dataloader import KnowledgePathDataLoader
 from hopwise.evaluator.register import Register, Register_KG
 from hopwise.evaluator.utils import train_tsne
 
@@ -104,17 +103,16 @@ class Collector:
             col = train_data.dataset.inter_feat[train_data.dataset.iid_field]
             self.data_struct.set("data.history_index", torch.vstack([row, col]))
         if self.register.need("data.timestamp"):
-            # timestamp don't match in .inter file.
-            # this data should belong to the train set
-            self.data_struct.set("data.timestamp", self.timestamp_dict(train_data))
+            temporal_matrix = train_data.dataset.inter_matrix(value_field=self.time_field).toarray()
+            self.data_struct.set("data.timestamp", temporal_matrix)
         if self.register.need("data.max_path_type"):
             self.data_struct.set("data.max_path_type", torch.arange(train_data.dataset.relation_num))
         if self.register.need("data.node_degree"):
             self.data_struct.set("data.node_degree", self.node_degree_dict(train_data))
         if self.register.need("data.max_path_length"):
-            if isinstance(train_data, KnowledgePathDataLoader):
+            if hasattr(train_data.dataset, "token_sequence_length"):
                 # PEARLM or KGGLM
-                sampled_path_len = len(train_data.tokenized_dataset["train"]["input_ids"][0]) - 2
+                sampled_path_len = train_data.dataset.token_sequence_length - 2
                 self.data_struct.set("data.max_path_length", sampled_path_len)
             else:
                 # PGPR or CAFE
@@ -127,7 +125,7 @@ class Collector:
 
     def node_degree_dict(self, train_data):
         # from pgpr knowledge graph
-        # https: // github.com/giacoballoccu/rep-path-reasoning-recsys/blob/main/models/PGPR/knowledge_graph.py
+        # https://github.com/giacoballoccu/rep-path-reasoning-recsys/blob/main/models/PGPR/knowledge_graph.py
         aug_kg = train_data.dataset.ckg_dict_graph()
         degrees = {}
         for etype in aug_kg:
@@ -138,20 +136,6 @@ class Collector:
                     count += len(aug_kg[etype][eid][r])
                 degrees[etype][eid] = count
         return degrees
-
-    def timestamp_dict(self, train_data):
-        user_pid2timestamp = dict()
-
-        users = train_data.dataset.inter_feat[train_data.dataset.uid_field]
-        items = train_data.dataset.inter_feat[train_data.dataset.iid_field]
-        timestamps = train_data.dataset.inter_feat[train_data.dataset.time_field]
-
-        for user, item, timestamp in zip(users, items, timestamps):
-            if user.item() not in user_pid2timestamp:
-                user_pid2timestamp[user.item()] = list()
-            user_pid2timestamp[user.item()].append((item.item(), timestamp.item()))
-
-        return user_pid2timestamp
 
     def eval_data_collect(self, eval_data):
         """Collect the evaluation resource from evaluation data, such as user and item features.

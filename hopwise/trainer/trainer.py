@@ -48,8 +48,6 @@ from hopwise.utils import (
     ensure_dir,
     get_gpu_usage,
     get_local_time,
-    get_logits_processor,
-    get_ranker,
     get_tensorboard,
     set_color,
 )
@@ -1017,23 +1015,15 @@ class KGTrainer(Trainer):
 
 
 class ExplainableTrainer(Trainer):
-    """ExplainableTrainer is designed for explainable recommendation methods,
-    in particular those that generate explanations using Reinforcement Learning methods
-    such as PGPR and CAFE"""
+    """ExplainableTrainer is designed for explainable recommendation methods."""
 
     def __init__(self, config, model):
         super().__init__(config, model)
 
     def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
-        paths = None
-
         interaction, history_index, positive_u, positive_i = batched_data
 
-        # Note: interaction without item ids
-        scores = self.model.full_sort_predict(interaction.to(self.device))
-        if isinstance(scores, tuple):
-            # then the first is the score, the second are paths
-            scores, paths = scores
+        scores, paths = self.model.explain(interaction.to(self.device))
 
         scores = scores.view(-1, tot_item_num)
         scores[:, 0] = -np.inf
@@ -1920,16 +1910,14 @@ class NCLTrainer(Trainer):
 
 
 class PEARLMfromscratchTrainer(Trainer):
-
     def __init__(self, config, model):
         super().__init__(config, model)
+
         self.tokenizer = None
-        self.logits_processor_list = None
-        self.ranker = None
-        self.path_gen_args = config["path_generation_args"]
+        self.path_generation_args = config["path_generation_args"]
         path_hop_length = config["path_hop_length"]
         token_sequence_length = 1 + path_hop_length + path_hop_length + 1
-        self.ranker_max_new_tokens = token_sequence_length - 3
+        self.max_new_tokens = token_sequence_length - 3
 
     def fit(
         self,
@@ -1940,27 +1928,11 @@ class PEARLMfromscratchTrainer(Trainer):
         show_progress=False,
         callback_fn=None,
     ):
-        from transformers import LogitsProcessorList
-
         self.tokenizer = train_data.dataset.tokenizer
-
-        kgcd_logit_processor = get_logits_processor(self.config)(
-            tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
-            tokenized_used_ids=train_data.get_tokenized_used_ids(),
-            max_sequence_length=train_data.token_sequence_length,
-            tokenizer=self.tokenizer,
-            task=KnowledgeEvaluationType.REC,
-        )
-        self.logits_processor_list = LogitsProcessorList([kgcd_logit_processor])
-        self.ranker = get_ranker(self.config)(
-            self.tokenizer,
-            train_data.general_dataloader._sampler.used_ids,
-            train_data.dataset.item_num,
-        )
 
         from torch.utils.data import DataLoader
 
-        train_data = train_data.tokenized_dataset["train"]
+        train_data = train_data.dataset.tokenized_dataset["train"]
         train_data.set_format(type="torch")
         train_data = DataLoader(train_data, batch_size=self.config["train_batch_size"], shuffle=True)
 
@@ -2086,7 +2058,7 @@ class PEARLMfromscratchTrainer(Trainer):
             num_sample += len(batched_data)
 
             interaction, results, positive_u, positive_i = self._full_sort_batch_eval(
-                batched_data, tot_item_num, item_tensor
+                batched_data, tot_item_num, item_tensor, **self.path_generation_args
             )
 
             scores, paths = results
@@ -2111,8 +2083,7 @@ class PEARLMfromscratchTrainer(Trainer):
 
         predictions, probs = self.model.generate(
             inputs=inputs,
-            logits_processor_list=self.logits_processor_list,
-            max_new_tokens=self.ranker_max_new_tokens,
+            max_new_tokens=self.max_new_tokens,
             top_k=self.path_gen_args["top_k"],
             paths_per_user=self.path_gen_args["paths_per_user"],
         )
@@ -2130,7 +2101,7 @@ class PEARLMfromscratchTrainer(Trainer):
         return interaction, (scores, paths), positive_u, positive_i
 
 
-class HFPathLanguageModelingTrainer(Trainer):
+class HFPathLanguageModelingTrainer(ExplainableTrainer):
     r"""HFPathLanguageModelingTrainer is designed for path-based knowledge-aware recommendation methods.
     It is specifically designed to communicate with the Hugging Face Trainer to use language models and functionalities
     as tokenizers and beam search.
@@ -2141,8 +2112,8 @@ class HFPathLanguageModelingTrainer(Trainer):
 
     def __init__(self, config, model):
         super().__init__(config, model)
-    
-        self.path_gen_args = self.config["path_generation_args"].copy()
+
+        self.path_generation_args = self.config["path_generation_args"]
 
         self.HOPWISE_SAVE_PATH_SUFFIX += f"{config['base_model']}-"
         self.HUGGINGFACE_SAVE_PATH_SUFFIX += f"{config['base_model']}-"
@@ -2150,12 +2121,12 @@ class HFPathLanguageModelingTrainer(Trainer):
         dirname, basename = os.path.split(self.saved_model_file)
         self.saved_model_file = os.path.join(dirname, self.HOPWISE_SAVE_PATH_SUFFIX + basename)
 
-    def prepare_training_arguments(self, **kwargs):
+    def prepare_hf_args(self, **kwargs):
         from transformers import TrainingArguments
 
         output_dir = self.saved_model_file.replace(self.HOPWISE_SAVE_PATH_SUFFIX, self.HUGGINGFACE_SAVE_PATH_SUFFIX)
 
-        train_args = dict(
+        hf_args = dict(
             output_dir=output_dir,
             eval_strategy="epoch",
             save_strategy="epoch",
@@ -2176,8 +2147,8 @@ class HFPathLanguageModelingTrainer(Trainer):
             seed=self.config["seed"],
             report_to="none",
         )
-        train_args.update(kwargs)
-        return TrainingArguments(**train_args)
+        hf_args.update(kwargs)
+        return TrainingArguments(**hf_args)
 
     def init_hf_trainer(
         self,
@@ -2195,7 +2166,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         training_args = training_args or {}
 
         hf_callbacks = hf_callbacks or []
-        training_arguments = self.prepare_training_arguments(**training_args)
+        hf_args = self.prepare_hf_args(**training_args)
 
         callbacks = [
             HopwiseCallback(
@@ -2212,13 +2183,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             *hf_callbacks,
         ]
 
-        self.hf_trainer = HFPathTrainer(
-            train_data,
-            self.config,
-            callbacks,
-            model=self.model,
-            args=training_arguments,
-        )
+        self.hf_trainer = HFPathTrainer(self.model, callbacks, train_data=train_data, args=hf_args)
 
     @property
     def processing_class(self):
@@ -2308,31 +2273,12 @@ class HFPathLanguageModelingTrainer(Trainer):
         return self.best_valid_score, self.best_valid_result
 
     def _valid_epoch(self, valid_data, show_progress=False):
-        valid_result = self.evaluate(
-            valid_data, load_best_model=False, show_progress=show_progress, task=KnowledgeEvaluationType.REC
-        )
+        valid_result = self.evaluate(valid_data, load_best_model=False, show_progress=show_progress)
         valid_score = calculate_valid_score(valid_result, self.valid_metric)
         return valid_score, valid_result
-    
-    def _full_sort_batch_eval(self, inputs, task=KnowledgeEvaluationType.REC, token_sequence_length=None):
-        outputs = self.model.generate(
-            **inputs,
-            max_length=token_sequence_length,
-            min_length=token_sequence_length,
-            logits_processor=logits_processor,
-            return_dict_in_generate=True,
-            output_scores=True,
-            **self.path_generation_args,
-        )
-
-        scores, user_topk_sequences = ranker.get_sequences(outputs, self.token_sequence_length - 3)
-
-        return scores, user_topk_sequences
 
     @torch.no_grad()
-    def evaluate(
-        self, eval_data, load_best_model=True, model_file=None, show_progress=False, task=KnowledgeEvaluationType.REC
-    ):
+    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
         if not eval_data:
             return
 
@@ -2358,23 +2304,19 @@ class HFPathLanguageModelingTrainer(Trainer):
             else eval_data
         )
 
-        token_sequence_length = eval_data.token_sequence_length - 1  # EOS token is not included
+        token_sequence_length = eval_data.dataset.token_sequence_length - 1  # EOS token is not included
 
         num_sample = 0
         for batch_idx, batched_data in enumerate(iter_data):
             num_sample += len(batched_data)
             interaction, history_index, positive_u, positive_i = batched_data
 
-            inputs = self.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(self.device)
-            scores, paths = self._full_sort_batch_eval(inputs, task=task)
-
-            if hasattr(self.model, "decode_path"):
-                paths = self.model.decode_path(paths)
-
-            scores = scores.view(-1, self.tot_item_num)
-            scores[:, 0] = -np.inf
-            if history_index is not None:
-                scores[history_index] = -np.inf
+            inputs = self.processing_class(interaction, return_tensors="pt", add_special_tokens=False)
+            scores, paths = self._full_sort_batch_eval(
+                (inputs, history_index, positive_u, positive_i),
+                max_length=token_sequence_length,
+                **self.path_generation_args,
+            )
 
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
@@ -2395,117 +2337,8 @@ class HFPathLanguageModelingTrainer(Trainer):
         return result
 
 
-class PLMTrainer(HFPathLanguageModelingTrainer):
-    """PLMTrainer is designed for PLM, which is a path-based language model for knowledge-aware recommendation.
-    It includes a logits processor to alternatively generate entity and relation tokens during evaluation.
-    """
-
-    def init_hf_trainer(
-        self,
-        train_data,
-        valid_data=None,
-        verbose=True,
-        saved=True,
-        show_progress=False,
-        hf_callbacks=None,
-        callback_fn=None,
-        training_args=None,
-    ):
-        from transformers import LogitsProcessorList
-
-        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
-
-        training_args = training_args or {}
-
-        hf_callbacks = hf_callbacks or []
-        training_arguments = self.prepare_training_arguments(**training_args)
-
-        callbacks = [
-            HopwiseCallback(
-                self,
-                train_data,
-                valid_data=valid_data,
-                verbose=verbose,
-                saved=saved,
-                show_progress=show_progress,
-                callback_fn=callback_fn,
-            ),
-            *hf_callbacks,
-        ]
-
-        plm_logits_processor = get_logits_processor(self.config)(
-            tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
-            tokenized_used_ids=train_data.get_tokenized_used_ids(),
-            max_sequence_length=train_data.token_sequence_length,
-            tokenizer=train_data.dataset.tokenizer,
-            task=KnowledgeEvaluationType.REC,
-        )
-        self.logits_processor_list = LogitsProcessorList([plm_logits_processor])
-
-        self.hf_trainer = HFPathTrainer(
-            train_data,
-            self.config,
-            callbacks,
-            model=self.model,
-            args=training_arguments
-        )
-
-
-class PEARLMTrainer(HFPathLanguageModelingTrainer):
-    """PEARLMTrainer is designed for PEARLM, which is a path-based language model for knowledge-aware recommendation.
-    It includes the knowledge graph constrained decoding (KGCD) logits processor.
-    """
-
-    def init_hf_trainer(
-        self,
-        train_data,
-        valid_data=None,
-        verbose=True,
-        saved=True,
-        show_progress=False,
-        hf_callbacks=None,
-        callback_fn=None,
-        training_args=None,
-    ):
-        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
-
-        training_args = training_args or {}
-
-        hf_callbacks = hf_callbacks or []
-        training_arguments = self.prepare_training_arguments(**training_args)
-
-        callbacks = [
-            HopwiseCallback(
-                self,
-                train_data,
-                valid_data=valid_data,
-                verbose=verbose,
-                saved=saved,
-                show_progress=show_progress,
-                callback_fn=callback_fn,
-            ),
-            *hf_callbacks,
-        ]
-
-        self.logits_processor_list = get_logits_processor(self.config)(
-            tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
-            tokenized_used_ids=train_data.get_tokenized_used_ids(),
-            max_sequence_length=train_data.token_sequence_length,
-            tokenizer=train_data.dataset.tokenizer,
-            task=KnowledgeEvaluationType.REC,
-        )
-
-        self.hf_trainer = HFPathTrainer(
-            train_data,
-            self.config,
-            callbacks,
-            model=self.model,
-            args=training_arguments
-        )
-
-
-class KGGLMTrainer(PEARLMTrainer, PretrainTrainer):
-    r"""KGGLM is designed for KGGLM, which is a path-based language model for knowledge-aware recommendation.
+class KGGLMTrainer(HFPathLanguageModelingTrainer, PretrainTrainer):
+    r"""KGGLMTrainer is designed for KGGLM, which is a path-based language model for knowledge-aware recommendation.
     It includes two training stages: link prediction pre-training and recommendation path generation fine-tuning.
     """
 

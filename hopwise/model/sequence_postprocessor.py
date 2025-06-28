@@ -2,9 +2,9 @@
 # @Author : Giacomo Medda, Alessandro Soccol
 # @Email  : giacomo.medda@unica.it, alessandro.soccol@unica.it
 
-"""hopwise.model.ranker
+"""hopwise.model.postprocessor
 #######################
-Common ranker in recommender system
+Common post-processors for path sequences in path language modeling recommender systems.
 """
 
 from collections import defaultdict
@@ -14,9 +14,9 @@ import torch
 from hopwise.utils import PathLanguageModelingTokenType
 
 
-class BaseSequenceScoreRanker:
+class BaseSequencePostProcessor:
     """
-    Base class for sequence score rankers.
+    Base class for sequence score post-processors.
     """
 
     def __init__(self, tokenizer, used_ids, item_num, topk=10):
@@ -28,10 +28,28 @@ class BaseSequenceScoreRanker:
     def get_sequences(self, generation_outputs, max_new_tokens=24):
         """
         This method should be implemented by subclasses to extract sequences and their scores.
+
+        Args:
+            generation_outputs: A mapping containing the generated sequences and their scores.
+            max_new_tokens: The maximum number of new tokens to consider for scoring.
+
         """
         raise NotImplementedError("Subclasses must implement this method.")
 
     def parse_sequences(self, user_index, sequences, sequences_scores):
+        """
+        Parses the sequences and scores to extract user IDs, recommended items, and their scores.
+
+        Args:
+            user_index (torch.Tensor): A tensor containing user indices.
+            sequences (torch.Tensor): A tensor containing the generated sequences.
+            sequences_scores (torch.Tensor): A tensor containing the scores for each sequence.
+
+        Returns:
+            scores (torch.Tensor): A tensor of shape (user_num, item_num) containing the scores for each user and item.
+            user_topk_sequences (list): A list of lists, where each inner list contains:
+                [user_id, recommended_item, sequence_score, decoded_sequence].
+        """
         user_num = user_index.unique().numel()
         scores = torch.full((user_num, self.item_num), -torch.inf)
         user_topk_sequences = list()
@@ -48,6 +66,7 @@ class BaseSequenceScoreRanker:
         return scores, user_topk_sequences
 
     def _parse_single_sequence(self, scores, batch_uidx, sequence):
+        """Parses a single sequence to extract user ID, recommended item, and the decoded sequence."""
         seq = self.tokenizer.decode(sequence).split(" ")
 
         uid_token = seq[1]
@@ -71,7 +90,7 @@ class BaseSequenceScoreRanker:
         return uid, recommended_item, seq
 
 
-class RankerLP:
+class SequencePostProcessorLP:
     def __init__(self, tokenizer, kg_positives, K=10, max_new_tokens=24):
         self.tokenizer = tokenizer
         self.kg_positives = kg_positives
@@ -106,9 +125,10 @@ class RankerLP:
         self.topk_sequences = defaultdict(list)
 
 
-class CumulativeSequenceScoreRanker(BaseSequenceScoreRanker):
+class CumulativeSequenceScorePostProcessor(BaseSequencePostProcessor):
     """
-    Ranker that uses the cumulative sequence score of the final `max_new_tokens` predicted tokens to rank sequences.
+    Post-processor that uses the cumulative sequence score of the final
+    `max_new_tokens` predicted tokens to rank sequences.
     """
 
     def calculate_sequence_scores(self, normalized_tuple, sequences, max_new_tokens=24):
@@ -131,14 +151,14 @@ class CumulativeSequenceScoreRanker(BaseSequenceScoreRanker):
         return normalized_tuple
 
     def get_sequences(self, generation_outputs, max_new_tokens=24):
-        user_num = generation_outputs.sequences[:, 1].unique().numel()
+        user_num = generation_outputs["sequences"][:, 1].unique().numel()
 
-        normalized_scores = self.normalize_tuple(generation_outputs.scores)
+        normalized_scores = self.normalize_tuple(generation_outputs["scores"])
         normalized_sequences_scores = self.calculate_sequence_scores(
-            normalized_scores, generation_outputs.sequences, max_new_tokens=max_new_tokens
+            normalized_scores, generation_outputs["sequences"], max_new_tokens=max_new_tokens
         )
 
-        sequences = generation_outputs.sequences
+        sequences = generation_outputs["sequences"]
         num_return_sequences = sequences.shape[0] // user_num
         batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
 
@@ -153,9 +173,9 @@ class CumulativeSequenceScoreRanker(BaseSequenceScoreRanker):
         return self.parse_sequences(sorted_batch_user_index, sorted_sequences, sorted_sequences_scores)
 
 
-class SampleSearchSequenceScoreRanker(BaseSequenceScoreRanker):
+class SampleSearchSequenceScorePostProcessor(BaseSequencePostProcessor):
     """
-    Ranker that uses the sequence score of the beam search to rank sequences.
+    Post-processor that uses the sequence score of the beam search to rank sequences.
 
     To use only if do_sample = True and if topk and topp are set.
     """
@@ -174,38 +194,31 @@ class SampleSearchSequenceScoreRanker(BaseSequenceScoreRanker):
         return sequences_scores
 
     def get_sequences(self, generation_outputs, max_new_tokens=24):
-        """
-        generation_outputs is a dataclass with 3 fields: 'sequences', 'scores' and 'past_key_values'
-        sequences is a tensor of shape (num_return_sequences, sequence_length)
-        scores is a tuple of len (|generated tokens|) where each element is a tensor
-            that says the logits at each timestep before applying topk and topp
+        user_num = generation_outputs["sequences"][:, 1].unique().numel()
 
-        """
-        user_num = generation_outputs.sequences[:, 1].unique().numel()
-
-        sequences = generation_outputs.sequences
+        sequences = generation_outputs["sequences"]
         num_return_sequences = sequences.shape[0] // user_num
         batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
 
-        sequences_score = self.get_scores(sequences[:, -max_new_tokens:], generation_outputs.scores)
+        sequences_score = self.get_scores(sequences[:, -max_new_tokens:], generation_outputs["scores"])
         return self.parse_sequences(batch_user_index, sequences, sequences_score)
 
 
-class BeamSearchSequenceScoreRanker(BaseSequenceScoreRanker):
+class BeamSearchSequenceScorePostProcessor(BaseSequencePostProcessor):
     """
-    Ranker that uses the sequence score of the beam search to rank sequences.
+    Post-processor that uses the sequence score of the beam search to rank sequences.
     """
 
     def get_sequences(self, generation_outputs, max_new_tokens=24):
-        user_num = generation_outputs.sequences[:, 1].unique().numel()
+        user_num = generation_outputs["sequences"][:, 1].unique().numel()
 
-        sequences = generation_outputs.sequences
+        sequences = generation_outputs["sequences"]
         num_return_sequences = sequences.shape[0] // user_num
         batch_user_index = torch.arange(user_num, device=sequences.device).repeat_interleave(num_return_sequences)
 
-        sorted_indices = generation_outputs.sequences_scores.argsort(descending=True)
+        sorted_indices = generation_outputs["sequences_scores"].argsort(descending=True)
         sorted_sequences = sequences[sorted_indices]
         sorted_batch_user_index = batch_user_index[sorted_indices]
-        sorted_sequences_scores = generation_outputs.sequences_scores[sorted_indices]
+        sorted_sequences_scores = generation_outputs["sequences_scores"][sorted_indices]
 
         return self.parse_sequences(sorted_batch_user_index, sorted_sequences, sorted_sequences_scores)

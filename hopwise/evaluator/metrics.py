@@ -886,7 +886,7 @@ class Novelty(AbstractMetric):
         item_matrix = dataobject.get("rec.items")
         count_items = dataobject.get("data.count_items")
         num_items = dataobject.get("data.num_items")
-        return item_matrix.cpu().numpy(), dict(count_items), int(num_items)
+        return item_matrix.numpy(), dict(count_items), int(num_items)
 
     def get_pop(self, item_matrix, item_count):
         """Convert the matrix of item id to the matrix of item popularity using a dict:{id,count}.
@@ -925,7 +925,7 @@ class Novelty(AbstractMetric):
         for k in self.topk:
             novelty_score = []
             for topk_user in item_matrix:
-                novelty_items_topk = [1 - normalized_item_count[pid] for pid in topk_user]
+                novelty_items_topk = [1 - normalized_item_count[iid] for iid in topk_user]
                 novelty_score.append(np.mean(novelty_items_topk))
             metric_dict[f"novelty@{k}"] = round(np.mean(novelty_score), self.decimal_place)
         return metric_dict
@@ -955,57 +955,53 @@ class LIR(PathQualityMetric):
     where :math:`\beta_{LIR} \in [0, 1]` is a decay associated to the interaction time,
     and :math:`LIR(p^1, t^1) = t^1`.
     The LIR values were min-max normalized for each user to lay in the range :math:`[0, 1]`,
-    with values close to 0 (1)
-    meaning that the linking interaction is far away (recent) in time.
+    with values close to 0 (1) meaning that the linking interaction is far away (recent) in time.
+    In the case of a recommended item not being present in the user's interaction history,
+    the LIR of the linking interaction was set to 0, meaning that the linking interaction
+    is very recent (i.e., the user has just interacted with the item).
     The overall LIR for explanations in a recommended list was obtained
     by averaging the LIR of the linking interactions for the selected explanation path of each recommended item.
 
     For further details, please refer to the `paper <https://dl.acm.org/doi/pdf/10.1145/3477495.3532041>`.
     """
 
+    metric_need = ["data.timestamp"]
+
     def __init__(self, config):
         super().__init__(config)
+        self.li_idx = 2  # The linking interaction is the third element in the path tuple
 
     def calculate_metric(self, dataobject):
         paths = self.used_info(dataobject)
-        timestamp = dataobject.get("data.timestamp")
+        timestamp_matrix = dataobject.get("data.timestamp")
 
-        lir_matrix = self.lir_matrix(timestamp)
+        lir_matrix = self.get_lir_matrix(timestamp_matrix)
         result = self.metric_info(lir_matrix, paths)
         metric_dict = self.topk_result("lir", result)
         return metric_dict
 
-    def lir_matrix(self, uid_timestamp):
-        matrix = dict()
-        for uid in uid_timestamp.keys():
-            interactions = [type_id_time for type_id_time in uid_timestamp[uid]]
-            interactions.sort(key=lambda x: x[1])
-            # Skips users with only one review in train (can happen with lastfm)
-            if len(uid_timestamp[uid]) <= 1:
+    def get_lir_matrix(self, timestamp_matrix):
+        lir_matrix = np.zeros_like(timestamp_matrix, dtype=np.float32)
+        for user_inter_timestamp in timestamp_matrix:
+            inter_mask = user_inter_timestamp > 0
+            if not inter_mask.any():
                 continue
-            ema_timestamps = self.normalized_ema([x[1] for x in interactions])
-            pid_lir = {}
-            for i in range(len(interactions)):
-                pid = interactions[i][0]
-                lir = ema_timestamps[i]
-                pid_lir[pid] = lir
-            matrix[uid] = pid_lir
-        return matrix
+
+            sort_idxs = np.argsort(user_inter_timestamp[inter_mask])
+            sorted_timestamps = user_inter_timestamp[inter_mask][sort_idxs]
+            ema_timestamps = self.normalized_ema(sorted_timestamps)
+
+            lir_matrix[inter_mask][sort_idxs] = ema_timestamps
+
+        return lir_matrix
 
     def metric_info(self, lir_matrix, paths):
-        lirs_topk = []
+        users, li_items = [], []
         for user, _, _, path in paths:
-            linked_interaction_id = path[1][-1]
-            # there can be times where the final item predicted, is not seen during training.
-            # this depends on how the paths are generated, if the path inference prediction
-            # is constrained on the training interactions or not.
-            try:
-                lirs_topk.append(lir_matrix[user][linked_interaction_id])
-            except KeyError:
-                lirs_topk.append(0.)
-        if len(lirs_topk) == 0:
-            lirs_topk = [0.]
-        return np.array(lirs_topk)
+            users.append(user)
+            li_items.append(int(path[self.li_idx][1:]))
+
+        return lir_matrix[users, li_items]
 
     def topk_result(self, metric, value):
         """Match the metric value to the `k` and put them in `dictionary` form.
@@ -1100,6 +1096,8 @@ class SEP(PathQualityMetric):
     For further details, please refer to the `paper <https://dl.acm.org/doi/pdf/10.1145/3477495.3532041>`.
     """
 
+    metric_need = ["data.node_degree"]
+
     def __init__(self, config):
         super().__init__(config)
 
@@ -1107,26 +1105,26 @@ class SEP(PathQualityMetric):
         paths = self.used_info(dataobject)
         node_degree = dataobject.get("data.node_degree")
 
-        sep_matrix = self.sep_matrix(node_degree)
+        sep_matrix = self.get_sep_matrix(node_degree)
         result = self.metric_info(paths, sep_matrix)
         metric_dict = self.topk_result("SEP", result)
         return metric_dict
 
-    def sep_matrix(self, node_degree):
+    def get_sep_matrix(self, node_degree):
         # Precompute entity distribution
-        SEP_matrix = {}
+        sep_matrix = {}
 
         for node_type, eid_degree in node_degree.items():
             eid_degree_tuples = list(zip(eid_degree.keys(), eid_degree.values()))
             eid_degree_tuples.sort(key=lambda x: x[1])
             ema_es = self.normalized_ema([x[1] for x in eid_degree_tuples])
-            pid_weight = {}
+            iid_weight = {}
             for idx in range(len(ema_es)):
-                pid = eid_degree_tuples[idx][0]
-                pid_weight[pid] = ema_es[idx]
+                iid = eid_degree_tuples[idx][0]
+                iid_weight[iid] = ema_es[idx]
 
-            SEP_matrix[node_type] = pid_weight
-        return SEP_matrix
+            sep_matrix[node_type] = iid_weight
+        return sep_matrix
 
     def metric_info(self, paths, sep_matrix):
         seps_topk = []
@@ -1268,9 +1266,9 @@ class SED(PathQualityMetric):
 class PTD(PathQualityMetric):
     """
     Path Type Diversity
-
-
     """
+
+    metric_need = ["data.max_path_type"]
 
     def __init__(self, config):
         super().__init__(config)
@@ -1330,6 +1328,8 @@ class PTC(PathQualityMetric):
     """
     Path Type Concentration (PTC)
     """
+
+    metric_need = ["data.max_path_type"]
 
     def __init__(self, config):
         super().__init__(config)
@@ -1396,6 +1396,8 @@ class PPT(PathQualityMetric):
     """
     Path Pattern Type
     """
+
+    metric_need = ["data.max_path_length", "data.rid2relation"]
 
     def __init__(self, config):
         super().__init__(config)

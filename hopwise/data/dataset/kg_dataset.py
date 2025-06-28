@@ -223,32 +223,24 @@ class KnowledgeBasedDataset(Dataset):
                 raise ValueError(
                     f'The value of "RS" in knowledge_split_args [{knowledge_split_args}] should be a list.'
                 )
-            if knowledge_group_by is None:
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
-                    group_by=None,
-                )
-            elif knowledge_group_by == "head":
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": "kg"},
-                    group_by=self.head_entity_field,
-                )
-            elif knowledge_group_by == "tail":
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
-                    group_by=self.tail_entity_field,
-                )
-            elif knowledge_group_by == "relation":
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
-                    group_by=self.relation_field,
-                )
-            else:
-                raise NotImplementedError(f"The knowledge grouping method [{group_by}] has not been implemented.")
+
+            if knowledge_group_by is not None:
+                if knowledge_group_by.lower() == "head":
+                    knowledge_group_by = self.head_entity_field
+                elif knowledge_group_by.lower() == "tail":
+                    knowledge_group_by = self.tail_entity_field
+                elif knowledge_group_by.lower() == "relation":
+                    knowledge_group_by = self.relation_field
+                else:
+                    raise NotImplementedError(
+                        f"The knowledge grouping method [{knowledge_group_by}] has not been implemented."
+                    )
+
+            datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
+                knowledge_split_args["RS"],
+                data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
+                group_by=knowledge_group_by,
+            )
 
         if split_mode == "RS":
             # Manage interaction split

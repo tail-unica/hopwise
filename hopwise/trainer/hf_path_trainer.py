@@ -17,28 +17,20 @@ from hopwise.utils import (
     dict2str,
     early_stopping,
     get_gpu_usage,
-    get_ranker,
     set_color,
 )
 
 
 class HFPathTrainer(Trainer):
-    def __init__(
-        self,
-        hopwise_train_data,
-        hopwise_config,
-        callbacks,
-        model=None,
-        args=None,
-        tokenizer=None
-    ):
-        hopwise_dataset = hopwise_train_data.dataset
-        tokenizer = tokenizer or hopwise_dataset.tokenizer
+    """A HuggingFace Trainer that integrates with Hopwise for training and evaluation."""
+
+    def __init__(self, model, callbacks, train_data=None, args=None, tokenizer=None):
+        tokenizer = tokenizer or train_data.dataset.tokenizer
         super().__init__(
             model=model,
             args=args,
             callbacks=None,
-            train_dataset=hopwise_train_data.tokenized_dataset["train"],
+            train_dataset=train_data.dataset.tokenized_dataset["train"],
             eval_dataset="none",
             processing_class=tokenizer,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
@@ -46,16 +38,6 @@ class HFPathTrainer(Trainer):
 
         # Overwrite the callbacks to only use the HopwiseCallback
         self.callback_handler.callbacks = callbacks
-
-        self.token_sequence_length = hopwise_train_data.token_sequence_length - 1
-
-        ranker_params = dict(
-            processing_class=self.processing_class,
-            used_ids=hopwise_train_data.general_dataloader._sampler.used_ids,
-            item_num=hopwise_dataset.item_num,
-        )
-
-        self.ranker_rec = get_ranker(hopwise_config, ranker_params)
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)
@@ -69,13 +51,12 @@ class HopwiseCallback(TrainerCallback):
     def __init__(
         self,
         hopwise_trainer,
-        train_data,
+        train_data=None,
         valid_data=None,
         verbose=True,
         saved=True,
         show_progress=False,
         callback_fn=None,
-        train_phase="finetune",
         model=None,
         model_name=None,
     ):
@@ -88,7 +69,6 @@ class HopwiseCallback(TrainerCallback):
         self.saved = saved
         self.show_progress = show_progress
         self.callback_fn = callback_fn
-        self.train_phase = train_phase
 
     def on_train_begin(self, args, state, control, **kwargs):
         self.hopwise_trainer.eval_collector.train_data_collect(self.train_data)

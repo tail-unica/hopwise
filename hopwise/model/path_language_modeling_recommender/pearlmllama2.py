@@ -13,10 +13,8 @@ Reference code:
 """
 
 import math
-from enum import IntEnum
 
 import torch
-import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
@@ -83,7 +81,7 @@ class AutoregressiveSelfAttention(nn.Module):
         causal_mask = self.causal_mask.bool()[:seq_length, :seq_length]
         attn_scores = attn_scores.masked_fill(causal_mask, -torch.inf)
 
-        attn_scores = F.softmax(attn_scores, dim=-1)
+        attn_scores = torch.nn.functional.softmax(attn_scores, dim=-1)
 
         context_vec = (attn_scores @ v).transpose(1, 2)
 
@@ -149,6 +147,7 @@ class PEARLMLlama2(PathLanguageModelingRecommender):
         spec_type = PathLanguageModelingTokenType.SPECIAL.token_id
         ent_type = PathLanguageModelingTokenType.ENTITY.token_id
         rel_type = PathLanguageModelingTokenType.RELATION.token_id
+        type_tokens = [spec_type, ent_type, rel_type]
         self.type_emb_pos = torch.LongTensor(
             # BOS + ENT + REL + ENT + REL + ... + ENT + REL + EOS
             [spec_type, ent_type] + [rel_type, ent_type] * dataset.path_hop_length + [spec_type],
@@ -156,7 +155,7 @@ class PEARLMLlama2(PathLanguageModelingRecommender):
         )
 
         self.wte = nn.Embedding(self.n_tokens, config["embedding_size"])
-        self.wpe = nn.Embedding(self.type_emb_pos.shape[0], config["embedding_size"])
+        self.wpe = nn.Embedding(len(type_tokens), config["embedding_size"])
         self.blocks = nn.ModuleList([Block(config) for _ in range(config["num_layers"])])
         self.rmsnorm = nn.RMSNorm(config["embedding_size"])
 
@@ -212,47 +211,6 @@ class PEARLMLlama2(PathLanguageModelingRecommender):
         logits = self.lm_head(lm_output[:, [-1], :])
 
         return logits
-
-    @torch.no_grad()
-    def generate(self, **kwargs):
-        """
-        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
-        the sequence max_new_tokens times, feeding the predictions back into the model each time.
-        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
-        """
-        inputs = kwargs.get("inputs")
-        topk = kwargs.get("top_k")
-        logits_processor_list = kwargs.get("logits_processor_list")
-        max_new_tokens = kwargs.get("max_new_tokens")
-        paths_per_user = kwargs.get("paths_per_user")
-
-        # How many paths to return?
-        inputs["input_ids"] = inputs["input_ids"].repeat_interleave(paths_per_user, dim=0)
-        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, self.n_tokens), -torch.inf).to(
-            self.device
-        )
-        for i in range(max_new_tokens):
-            # forward the model to get the logits for the index in the sequence
-            logits = self.predict(inputs)
-            # pluck the logits at the final step and scale by desired temperature
-            logits = logits[:, -1, :] / self.temperature
-
-            # KGCD
-            logits = logits_processor_list(inputs["input_ids"], logits)
-
-            # optionally crop the logits to only the top k options
-            if topk is not None:
-                v, _ = torch.topk(logits, min(topk, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -torch.inf
-            # apply softmax to convert logits to (normalized) probabilities
-            probs = F.softmax(logits, dim=-1)
-            scores[:, i] = probs
-            # sample from the distribution
-            path_next = torch.multinomial(probs, num_samples=1)
-            # append sampled index to the running sequence and continue
-            inputs["input_ids"] = torch.cat((inputs["input_ids"], path_next), dim=1)
-
-        return inputs["input_ids"], torch.unbind(scores, dim=1)
 
 
 # RoPE

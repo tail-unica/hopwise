@@ -14,7 +14,7 @@ from hopwise.utils.utils import (
     get_local_time,
     get_logits_processor,
     get_model,
-    get_ranker,
+    get_sequence_postprocessor,
     get_tensorboard,
     get_trainer,
     init_seed,
@@ -53,6 +53,6 @@ __all__ = [
     "list_to_latex",
     "WandbLogger",
     "get_logits_processor",
-    "get_ranker",
+    "get_sequence_postprocessor",
     "GenerationOutputs",
 ]

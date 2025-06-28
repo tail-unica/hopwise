@@ -11,7 +11,6 @@ Reference code:
     https://github.com/Chris1nexus/pearlm
 """
 
-from enum import IntEnum
 from typing import Optional, Union
 
 import torch
@@ -153,25 +152,23 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
     def predict(self, input_ids, **kwargs):
         return self.forward(input_ids, **kwargs)
 
-    def explain(self, inputs, ranker=None, **kwargs):
-        outputs = self.generate(
-            **inputs,
-            max_length=self.token_sequence_length,
-            min_length=self.token_sequence_length,
-            logits_processor=logits_processor,
-            return_dict_in_generate=True,
-            output_scores=True,
-            **kwargs,
-        )
-        scores, user_topk_sequences = ranker.get_sequences(inputs["input_ids"].size(0), outputs)
+    def generate(self, inputs, **kwargs):
+        return super(GPT2LMHeadModel, self).generate(**inputs, **kwargs)
 
-        for seq in user_topk_sequences:
-            seq[-1] = self.decode_path(seq[-1])
+    def explain(self, inputs, max_length=None, **kwargs):
+        generation_output = self.generate(**inputs, **kwargs)
 
-        return scores, user_topk_sequences
+        max_new_tokens = max_length - inputs["input_ids"].size(1)
+
+        scores, user_topk_sequences = self.sequence_postprocessor.get_sequences(generation_output, max_new_tokens)
+
+        # Decode the generated paths
+        decoded_paths = [self.decode_path(path) for path in user_topk_sequences]
+
+        return decoded_paths
 
     def decode_path(self, path):
-        """Standardise path format"""
+        """Standardize path format"""
         new_path = []
         # Process the path
         # U R I R I R I

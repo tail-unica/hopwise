@@ -36,3 +36,6 @@ path_generation_args:
     top_k: 100                  # (int) The number of highest probability vocabulary tokens to keep for top-k-filtering.
     top_p: ~                    # (float) The cumulative probability for top-p-filtering.
     do_sample: False            # (bool) Whether to use sampling ; use greedy decoding otherwise.
+
+# one of ['SampleSearchSequenceScoreRanker', 'BeamSearchSequenceScoreRanker', 'CumulativeSequenceScoreRanker']
+sequence_postprocessor: BeamSearchSequenceScoreRanker # (str) Process generated sequences into scores and structured paths

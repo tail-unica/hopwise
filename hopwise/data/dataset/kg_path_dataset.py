@@ -49,6 +49,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self._tokenizer = None
         self.used_ids = None
 
+        self._init_tokenizer()
+
     def _get_field_from_config(self):
         super()._get_field_from_config()
 
@@ -58,6 +60,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self.path_hop_length = self.config["path_hop_length"]
         assert self.path_hop_length % 2 == 1, "Path hop length must be odd"
         self.max_paths_per_user = self.config["MAX_PATHS_PER_USER"]
+
+        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
+        self.token_sequence_length = (1 + self.path_hop_length) + self.path_hop_length + 2
 
         path_sample_args = self.config["path_sample_args"]
         self.temporal_causality = path_sample_args["temporal_causality"]
@@ -84,18 +89,20 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     @property
     def path_dataset(self):
         if self._path_dataset is None:
-            self.logger.warning(
-                "Path dataset has not been generated yet, please call generate_user_path_dataset() first."
-            )
-            return None
-        else:
-            return self._path_dataset
+            raise ValueError("Path dataset has not been generated yet, build the dataset first.")
+
+        return self._path_dataset
 
     @property
     def tokenizer(self):
-        if self._tokenizer is None:
-            self._init_tokenizer()
         return self._tokenizer
+
+    @property
+    def tokenized_dataset(self):
+        if self._tokenized_dataset is None:
+            raise ValueError("Tokenized path dataset has not been generated yet, build the dataset first.")
+
+        return self._tokenized_dataset
 
     def __getitem__(self, index):
         """Probably to be removed. It avoids issues with hopwise flops calculation."""
@@ -222,7 +229,68 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         return tokenized_kg
 
-    def generate_user_path_dataset(self, used_ids):
+    def tokenize_path_dataset(self):
+        """Tokenize the path dataset."""
+
+        if self._tokenized_dataset is None:
+            from datasets import Dataset as HuggingFaceDataset
+
+            def remove_incorrect_paths(tokenized_dataset):
+                # remove paths that contain special tokens. The token in position 0 and -1 are [BOS] and [EOS]
+                return not any(
+                    path in self._dataset.tokenizer.all_special_ids
+                    for path in tokenized_dataset["input_ids"][1:-1]  # noqa: E501
+                )
+
+            def tokenization(example):
+                return self._dataset.tokenizer(
+                    example["path"],
+                    truncation=True,
+                    padding=True,
+                    max_length=self._dataset.context_length,
+                    add_special_tokens=True,
+                )
+
+            hf_path_dataset = HuggingFaceDataset.from_dict({"path": self._dataset.path_dataset.split("\n")})
+            tokenized_dataset = hf_path_dataset.map(tokenization, batched=True, remove_columns=["path"])
+            tokenized_dataset = tokenized_dataset.filter(remove_incorrect_paths)
+            breakpoint()
+            # TODO: use torch Dataset instead of HuggingFaceDataset
+            # tokenized_dataset = DatasetDict({phase: tokenized_dataset})
+            self._tokenized_dataset = tokenized_dataset
+
+    def build(self):
+        """Extends the build method to generate user path dataset and tokenize it."""
+        datasets = super().build()
+        datasets[0].generate_user_path_dataset()
+        datasets[0].tokenize_path_dataset()
+
+        return datasets
+
+    def get_tokenized_used_ids(self):
+        """Convert the used ids to tokenized ids.
+
+        Args:
+            used_ids (dict): A dictionary where keys are user ids and values are lists of item ids.
+            tokenizer: The tokenizer to convert ids to tokenized ids.
+        Returns:
+            np.ndarray: An array of sets where each set contains tokenized item ids for each user.
+        """
+        user_token_type = PathLanguageModelingTokenType.USER.token
+        item_token_type = PathLanguageModelingTokenType.ITEM.token
+
+        used_ids = self.get_user_used_ids()
+        tokenizer = self._dataset.tokenizer
+
+        tokenized_used_ids = np.array([set() for _ in range(self.user_num)])
+        for uid in range(used_ids.shape[0]):
+            uid_token = tokenizer.convert_tokens_to_ids(user_token_type + str(uid))
+            tokenized_used_ids[uid_token].update(
+                [tokenizer.convert_tokens_to_ids(item_token_type + str(item)) for item in used_ids[uid]]
+            )
+        return tokenized_used_ids
+
+    def generate_user_path_dataset(self):
         """Generate path dataset by sampling paths from the knowledge graph.
 
         Paths represent walks in the graph that connect :attr:`hop_length` + 1 entities through
@@ -231,22 +299,19 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         for the user and the second item is a recommendation candidate.
 
         Refer to :meth:`generate_user_paths` for more details about path generation strategies.
-
-        Args:
-            used_ids (numpy.ndarray): The used ids.
         """
         if not isinstance(self.inter_feat, Interaction):
             raise ValueError("The data should be prepared before generating the path dataset.")
 
         if self._path_dataset is None:
-            generated_paths = self.generate_user_paths(used_ids)
+            generated_paths = self.generate_user_paths()
 
             path_string = ""
             for path in generated_paths:
                 path_string += self._format_path(path) + "\n"
             self._path_dataset = path_string
 
-    def generate_user_paths(self, used_ids):
+    def generate_user_paths(self):
         """Generate paths from the knowledge graph.
 
         It currently supports four sampling strategies:
@@ -259,11 +324,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         - simple: randomly sample a positive item for each user and extract all simple paths to other positive items.
 
-        - metapath: random walk constrained by pre-defined metapaths.
+        - simple-ui: randomly sample a positive item for each user and extract all simple paths to all positive items.
 
-        Args:
-            used_ids (numpy.ndarray): Positive item ids for each user.
-            strategy (str, optional): The strategy for path generation. Defaults to "constrained-rw".
+        - metapath: random walk constrained by pre-defined metapaths.
 
         Returns:
             list: List of paths with relations.
@@ -284,6 +347,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                     "time_field has not been loaded or set,"
                     "thus temporal causality will not be used for path generation."
                 )
+
+        used_ids = self.get_user_used_ids()
 
         if self.strategy == "weighted-rw":
             if not self.collaborative_path:

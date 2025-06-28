@@ -15,7 +15,6 @@ from collections import defaultdict, namedtuple
 from functools import reduce
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -430,10 +429,12 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
         scores, explanations = self.collect_scores(users, paths, probs)
 
+        # TODO: check paths before decoding and fix SEP metric accordingly
+        breakpoint()
         for exp in explanations:
             exp[-1] = self.decode_path(exp[-1])
 
-        return scores, explanations 
+        return scores, explanations
 
     def decode_path(self, path):
         decoded_path = []

@@ -56,22 +56,13 @@ class LINE(GeneralRecommender):
 
         self.loss_fct = NegSamplingLoss()
 
-        self.used_ids = self.get_used_ids()
+        self.used_ids = dataset.get_item_used_ids()
         self.random_list = self.get_user_id_list()
         np.random.shuffle(self.random_list)
         self.random_pr = 0
         self.random_list_length = len(self.random_list)
 
         self.apply(xavier_normal_initialization)
-
-    def get_used_ids(self):
-        cur = np.array([set() for _ in range(self.n_items)])
-        for uid, iid in zip(
-            self.interaction_feat[self.USER_ID].numpy(),
-            self.interaction_feat[self.ITEM_ID].numpy(),
-        ):
-            cur[iid].add(uid)
-        return cur
 
     def sampler(self, key_ids):
         key_ids = np.array(key_ids.cpu())
