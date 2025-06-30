@@ -13,18 +13,17 @@ Reference code:
 
 from typing import Optional, Union
 
-import pandas as pd
 import torch
 from torch import nn
 from transformers import AutoConfig, GPT2LMHeadModel
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from hopwise.data import Interaction
-from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
+from hopwise.model.abstract_recommender import ExplainablePathLanguageModelingRecommender
 from hopwise.utils import PathLanguageModelingTokenType
 
 
-class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
+class PLM(ExplainablePathLanguageModelingRecommender, GPT2LMHeadModel):
     """PLM is a path-language-modeling recommender. It learns the sequence of entity-relation triplets
     from a knowledge graph as a next-token prediction task and employs two feature transformations separately
     for entities and relations. Its decoding process is unbounded, meaning that it can generate paths that are
@@ -47,7 +46,7 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
                 "n_layer": config["num_layers"],
             },
         )
-        PathLanguageModelingRecommender.__init__(self, config, dataset)
+        ExplainablePathLanguageModelingRecommender.__init__(self, config, dataset)
         GPT2LMHeadModel.__init__(self, transformers_config)
 
         # Add type ids template
@@ -118,7 +117,7 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        **kwargs,
+        **kwargs,  # Additional arguments for compatibility with HuggingFace Trainer
     ) -> Union[tuple, CausalLMOutputWithCrossAttentions]:
         if isinstance(input_ids, Interaction):
             token_type_ids = input_ids["token_type_ids"]
@@ -142,7 +141,6 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict or self.config.use_return_dict,
-            **kwargs,
         )
 
         sequence_output = transformer_outputs[0]
@@ -194,50 +192,6 @@ class PLM(PathLanguageModelingRecommender, GPT2LMHeadModel):
     def predict(self, input_ids, **kwargs):
         return self.forward(input_ids, **kwargs)
 
-    def explain(self, interaction, ranker, **kwargs):
-        # update paths per user from the newest config, otherwise, use the saved config
-        paths_per_user = kwargs.get("paths_per_user", self.model_config["path_generation_args"]["paths_per_user"])
-        token_sequence_length = kwargs.get(
-            "token_sequence_length",
-            (1 + self.model_config["path_hop_length"]) + self.model_config["path_hop_length"] + 1,
-        )
-        paths_gen_args = kwargs.get("path_gen_args", self.model_config["path_generation_args"])
-
-        paths_gen_args.pop("paths_per_user")
-        outputs = self.generate(
-            **interaction,
-            max_length=token_sequence_length,
-            min_length=token_sequence_length,
-            num_return_sequences=paths_per_user,
-            logits_processor=self.logits_processor_list,
-            return_dict_in_generate=True,
-            output_scores=True,
-            **paths_gen_args,
-        )
-        _, user_topk_sequences = ranker.get_sequences(interaction["input_ids"].size(0), outputs)
-        paths = [[user, item, score, sequence] for user, item, score, sequence in user_topk_sequences]
-        # # make explanations as pandas dataframe, then return the results
-        df = pd.DataFrame(paths, columns=["user", "item", "score", "path"])
-        return df
-
-    def decode_path(self, paths):
-        """Standardise path format"""
-        new_paths = list()
-        for user, item, score, path in paths:
-            new_path = []
-            # Process the path
-            # U R I R I R I
-            for node_idx in range(1, len(path) + 1, 2):
-                if path[node_idx].startswith(PathLanguageModelingTokenType.USER.value):
-                    if not node_idx - 1:
-                        new_node = ("self_loop", "user", int(path[node_idx][1:]))
-                    else:
-                        new_node = (int(path[node_idx - 1][1:]), "user", int(path[node_idx][1:]))
-                elif path[node_idx].startswith(PathLanguageModelingTokenType.ITEM.value):
-                    new_node = (int(path[node_idx - 1][1:]), "item", int(path[node_idx][1:]))
-                else:
-                    # Is an entity
-                    new_node = (int(path[node_idx - 1][1:]), "entity", int(path[node_idx][1:]))
-                new_path.append(new_node)
-            new_paths.append([user, item, score, new_path])
-        return new_paths
+    def generate(self, inputs, **kwargs):
+        kwargs["logits_processor"] = self.logits_processor_list
+        return super(GPT2LMHeadModel, self).generate(**inputs, **kwargs)

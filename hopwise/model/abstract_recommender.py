@@ -25,6 +25,7 @@ from hopwise.utils import (
     InputType,
     KnowledgeEvaluationType,
     ModelType,
+    PathLanguageModelingTokenType,
     get_logits_processor,
     get_sequence_postprocessor,
     set_color,
@@ -282,7 +283,7 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
         )
         self.logits_processor_list = LogitsProcessorList([logits_processor])
 
-        self.sequence_postprocessor = get_sequence_postprocessor(self.config["sequence_postprocessor"])(
+        self.sequence_postprocessor = get_sequence_postprocessor(config["sequence_postprocessor"])(
             dataset.tokenizer,
             dataset.get_user_used_ids(),
             dataset.item_num,
@@ -335,16 +336,56 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
 
         return inputs["input_ids"], torch.unbind(scores, dim=1)
 
-    def explain(self, inputs, max_length=None, **kwargs):
-        outputs = self.generate(inputs, **kwargs)
-        scores, user_topk_sequences = self.sequence_postprocessor.get_sequences(
-            outputs, max_new_tokens=max_length - inputs["input_ids"].size(1)
-        )
 
-        for seq in user_topk_sequences:
+class ExplainablePathLanguageModelingRecommender(PathLanguageModelingRecommender, ExplainableRecommender):
+    """This is an abstract explainable path-language-modeling recommender.
+    All the explainable path-language-modeling model should implement this class.
+    The base explainable path-language-modeling recommender class inherits the path-language-modeling recommender class
+    to learn from knowledge graph paths defined by a chain of entity-relation triplets.
+    """
+
+    def __init__(self, config, dataset):
+        super().__init__(config, dataset)
+
+    def explain(self, inputs, max_length=None, **kwargs):
+        kwargs["max_length"] = max_length
+        kwargs["min_length"] = max_length
+        outputs = self.generate(inputs, **kwargs)
+
+        max_new_tokens = max_length - inputs["input_ids"].size(1)
+
+        scores, sequences = self.sequence_postprocessor.get_sequences(outputs, max_new_tokens=max_new_tokens)
+
+        for seq in sequences:
             seq[-1] = self.decode_path(seq[-1])
 
-        return scores, user_topk_sequences
+        return scores, sequences
+
+    def decode_path(self, path):
+        """Standardize path format"""
+        new_path = []
+        # Process the path
+        # U R I R I R I
+        for node_idx in range(1, len(path) + 1, 2):
+            if path[node_idx].startswith(PathLanguageModelingTokenType.USER.token):
+                user_id = int(path[node_idx][1:])
+                if node_idx - 1 == 0:
+                    relation = "self_loop"
+                else:
+                    relation = int(path[node_idx - 1][1:])
+
+                new_node = (relation, "user", user_id)
+            elif path[node_idx].startswith(PathLanguageModelingTokenType.ITEM.token):
+                relation = int(path[node_idx - 1][1:])
+                item_id = int(path[node_idx][1:])
+                new_node = (relation, "item", item_id)
+            else:
+                # Is an entity
+                relation = int(path[node_idx - 1][1:])
+                entity_id = int(path[node_idx][1:])
+                new_node = (relation, "entity", entity_id)
+            new_path.append(new_node)
+        return new_path
 
 
 class ContextRecommender(AbstractRecommender):

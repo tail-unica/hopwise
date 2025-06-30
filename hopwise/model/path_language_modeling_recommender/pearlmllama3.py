@@ -17,7 +17,7 @@ import math
 import torch
 from torch import nn
 
-from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
+from hopwise.model.abstract_recommender import ExplainablePathLanguageModelingRecommender
 from hopwise.utils import PathLanguageModelingTokenType
 
 
@@ -149,7 +149,7 @@ class Block(nn.Module):
         return x
 
 
-class PEARLMLlama3(PathLanguageModelingRecommender):
+class PEARLMLlama3(ExplainablePathLanguageModelingRecommender):
     """
     Low-level implementation of PEARLM model based on LLaMA 3 architecture.
 

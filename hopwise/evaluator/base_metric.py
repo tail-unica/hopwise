@@ -27,6 +27,7 @@ class AbstractMetric:
     """
 
     smaller = False
+    metric_need = []
 
     def __init__(self, config):
         self.decimal_place = config["metric_decimal_place"]
@@ -253,4 +254,5 @@ class PathQualityMetric(TopkMetric):
 
         values = pd.Series(values)
         ema_vals = values.ewm(span=len(values)).mean()
-        return (ema_vals - ema_vals.min()) / (ema_vals.max() - ema_vals.min()).to_numpy()
+        normalized_ema_vals = (ema_vals - ema_vals.min()) / (ema_vals.max() - ema_vals.min())
+        return normalized_ema_vals.to_numpy()

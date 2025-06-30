@@ -969,7 +969,7 @@ class LIR(PathQualityMetric):
 
     def __init__(self, config):
         super().__init__(config)
-        self.li_idx = 2  # The linking interaction is the third element in the path tuple
+        self.li_idx = 1  # The linking interaction is the second element in the path tuple
 
     def calculate_metric(self, dataobject):
         paths = self.used_info(dataobject)
@@ -982,7 +982,7 @@ class LIR(PathQualityMetric):
 
     def get_lir_matrix(self, timestamp_matrix):
         lir_matrix = np.zeros_like(timestamp_matrix, dtype=np.float32)
-        for user_inter_timestamp in timestamp_matrix:
+        for uid, user_inter_timestamp in enumerate(timestamp_matrix):
             inter_mask = user_inter_timestamp > 0
             if not inter_mask.any():
                 continue
@@ -990,16 +990,19 @@ class LIR(PathQualityMetric):
             sort_idxs = np.argsort(user_inter_timestamp[inter_mask])
             sorted_timestamps = user_inter_timestamp[inter_mask][sort_idxs]
             ema_timestamps = self.normalized_ema(sorted_timestamps)
-
-            lir_matrix[inter_mask][sort_idxs] = ema_timestamps
+            if not np.isnan(ema_timestamps).any():
+                inter_indices = np.where(inter_mask)[0][sort_idxs]
+                lir_matrix[uid, inter_indices] = ema_timestamps
 
         return lir_matrix
 
     def metric_info(self, lir_matrix, paths):
         users, li_items = [], []
         for user, _, _, path in paths:
-            users.append(user)
-            li_items.append(int(path[self.li_idx][1:]))
+            if path[self.li_idx][1] == "item":
+                # Only consider the linking interaction that is an item
+                users.append(user)
+                li_items.append(int(path[self.li_idx][-1]))
 
         return lir_matrix[users, li_items]
 

@@ -19,11 +19,11 @@ from transformers import AutoConfig, GPT2LMHeadModel
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from hopwise.data import Interaction
-from hopwise.model.abstract_recommender import ExplainableRecommender, PathLanguageModelingRecommender
+from hopwise.model.abstract_recommender import ExplainablePathLanguageModelingRecommender
 from hopwise.utils import PathLanguageModelingTokenType
 
 
-class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecommender):
+class PEARLM(ExplainablePathLanguageModelingRecommender, GPT2LMHeadModel):
     """PEARLM is a path-language-modeling recommender. It learns the sequence of entity-relation triplets
     as paths extracted from a knowledge graph. It is trained to predict the next token in a sequence of tokens
     representing a path. The model extends PLM by adding a constrained graph decoding mechanism to ensure that
@@ -32,7 +32,10 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
     """
 
     def __init__(self, config, dataset):
+        ExplainablePathLanguageModelingRecommender.__init__(self, config, dataset)
+
         self.use_kg_token_types = config["use_kg_token_types"]
+
         transformers_config = AutoConfig.from_pretrained(
             "distilgpt2",
             **{
@@ -47,7 +50,6 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
                 "n_layer": config["num_layers"],
             },
         )
-        PathLanguageModelingRecommender.__init__(self, config, dataset)
         GPT2LMHeadModel.__init__(self, transformers_config)
         self.to(config["device"])
 
@@ -97,7 +99,7 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        **kwargs,
+        **kwargs,  # Additional arguments for compatibility with HuggingFace Trainer
     ) -> Union[tuple, CausalLMOutputWithCrossAttentions]:
         if isinstance(input_ids, Interaction):
             token_type_ids = input_ids["token_type_ids"]
@@ -123,7 +125,6 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict or self.config.use_return_dict,
-            **kwargs,
         )
 
         sequence_output = transformer_outputs[0]
@@ -153,35 +154,5 @@ class PEARLM(PathLanguageModelingRecommender, GPT2LMHeadModel, ExplainableRecomm
         return self.forward(input_ids, **kwargs)
 
     def generate(self, inputs, **kwargs):
+        kwargs["logits_processor"] = self.logits_processor_list
         return super(GPT2LMHeadModel, self).generate(**inputs, **kwargs)
-
-    def explain(self, inputs, max_length=None, **kwargs):
-        generation_output = self.generate(**inputs, **kwargs)
-
-        max_new_tokens = max_length - inputs["input_ids"].size(1)
-
-        scores, user_topk_sequences = self.sequence_postprocessor.get_sequences(generation_output, max_new_tokens)
-
-        # Decode the generated paths
-        decoded_paths = [self.decode_path(path) for path in user_topk_sequences]
-
-        return decoded_paths
-
-    def decode_path(self, path):
-        """Standardize path format"""
-        new_path = []
-        # Process the path
-        # U R I R I R I
-        for node_idx in range(1, len(path) + 1, 2):
-            if path[node_idx].startswith(PathLanguageModelingTokenType.USER.token):
-                if not node_idx - 1:
-                    new_node = ("self_loop", "user", int(path[node_idx][1:]))
-                else:
-                    new_node = (int(path[node_idx - 1][1:]), "user", int(path[node_idx][1:]))
-            elif path[node_idx].startswith(PathLanguageModelingTokenType.ITEM.token):
-                new_node = (int(path[node_idx - 1][1:]), "item", int(path[node_idx][1:]))
-            else:
-                # Is an entity
-                new_node = (int(path[node_idx - 1][1:]), "entity", int(path[node_idx][1:]))
-            new_path.append(new_node)
-        return new_path

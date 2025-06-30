@@ -30,7 +30,7 @@ class HFPathTrainer(Trainer):
             model=model,
             args=args,
             callbacks=None,
-            train_dataset=train_data.dataset.tokenized_dataset["train"],
+            train_dataset=train_data.dataset,
             eval_dataset="none",
             processing_class=tokenizer,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
@@ -83,7 +83,7 @@ class HopwiseCallback(TrainerCallback):
     def on_epoch_begin(self, args, state, control, **kwargs):
         self.training_start_time = time()
 
-        len_hf_dataloader = len(self.train_data.tokenized_dataset["train"])
+        len_hf_dataloader = len(self.train_data.dataset)
         steps_in_epoch = len_hf_dataloader // self.hopwise_trainer.config["train_batch_size"]
         steps_in_epoch += int(len_hf_dataloader % self.hopwise_trainer.config["train_batch_size"] > 0)
         self.progress_bar = (

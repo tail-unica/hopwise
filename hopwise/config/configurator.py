@@ -314,6 +314,9 @@ class Config:
             if dataset == "ml-100k":
                 self._update_internal_config_dict(knowledge_base_on_ml_100k_init)
 
+            # avoids parallelism issues with HuggingFace Tokenizers
+            os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
         for file in [
             dataset_init_file,
             model_init_file,

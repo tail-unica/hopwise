@@ -7,7 +7,7 @@ num_layers: 6                   # (int) Number of layers in the transformer.
 use_kg_token_types: True        # (bool) Whether to use token types for the knowledge graph.
 
 base_model: distilgpt2
-sequence_postprocessor: CumulativeSequenceScoreRanker
+sequence_postprocessor: CumulativeSequenceScorePostProcessor
 
 MAX_PATHS_PER_USER: 1
 path_sample_args:

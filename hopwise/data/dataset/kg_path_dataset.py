@@ -46,6 +46,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def __init__(self, config):
         super().__init__(config)
         self._path_dataset = None  # path dataset is generated with generate_user_path_dataset
+        self._tokenized_dataset = None  # tokenized path dataset is generated with tokenize_path_dataset
         self._tokenizer = None
         self.used_ids = None
 
@@ -104,14 +105,21 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         return self._tokenized_dataset
 
-    def __getitem__(self, index):
-        """Probably to be removed. It avoids issues with hopwise flops calculation."""
-        dummy_data = self.tokenizer(["U1"], truncation=True, padding=True, max_length=self.context_length)
-        df = Interaction(dummy_data.data)
-        return df
+    def __len__(self):
+        """Return the length of the tokenized dataset."""
+        return len(self.tokenized_dataset)
+
+    def __getitem__(self, idx):
+        """Return the item at index `idx` from the tokenized dataset."""
+        if self._tokenized_dataset is None:
+            # It avoids issues with hopwise flops calculation.
+            dummy_data = self.tokenizer(["U1"], truncation=True, padding=True, max_length=self.context_length)
+            return Interaction(dummy_data.data)
+
+        return self.tokenized_dataset[idx]
 
     def _init_tokenizer(self):
-        """Initialize tokenizer. The tokenizer is created in the dataset to be shared across dataloaders."""
+        """Initialize the HuggingFace tokenizer."""
         from tokenizers import Tokenizer, pre_tokenizers
         from tokenizers import models as token_models
         from tokenizers import processors as token_processors
@@ -233,30 +241,19 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         """Tokenize the path dataset."""
 
         if self._tokenized_dataset is None:
-            from datasets import Dataset as HuggingFaceDataset
-
-            def remove_incorrect_paths(tokenized_dataset):
-                # remove paths that contain special tokens. The token in position 0 and -1 are [BOS] and [EOS]
-                return not any(
-                    path in self._dataset.tokenizer.all_special_ids
-                    for path in tokenized_dataset["input_ids"][1:-1]  # noqa: E501
-                )
-
-            def tokenization(example):
-                return self._dataset.tokenizer(
-                    example["path"],
-                    truncation=True,
-                    padding=True,
-                    max_length=self._dataset.context_length,
-                    add_special_tokens=True,
-                )
-
-            hf_path_dataset = HuggingFaceDataset.from_dict({"path": self._dataset.path_dataset.split("\n")})
-            tokenized_dataset = hf_path_dataset.map(tokenization, batched=True, remove_columns=["path"])
-            tokenized_dataset = tokenized_dataset.filter(remove_incorrect_paths)
-            breakpoint()
-            # TODO: use torch Dataset instead of HuggingFaceDataset
-            # tokenized_dataset = DatasetDict({phase: tokenized_dataset})
+            tokenized_dataset = self.tokenizer(
+                self.path_dataset.split("\n"),
+                truncation=True,
+                padding=True,
+                max_length=self.context_length,
+                add_special_tokens=True,
+            )
+            tokenized_dataset = Interaction(tokenized_dataset.data)
+            correct_path_mask = [
+                all(spec_token not in path[1:-1] for spec_token in self.tokenizer.all_special_ids)
+                for path in tokenized_dataset["input_ids"]
+            ]
+            tokenized_dataset = tokenized_dataset[correct_path_mask]
             self._tokenized_dataset = tokenized_dataset
 
     def build(self):
@@ -271,22 +268,22 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         """Convert the used ids to tokenized ids.
 
         Args:
-            used_ids (dict): A dictionary where keys are user ids and values are lists of item ids.
+            used_ids: A numpy array of sets, where each set contains the item ids
+            that a user has interacted with.
             tokenizer: The tokenizer to convert ids to tokenized ids.
         Returns:
-            np.ndarray: An array of sets where each set contains tokenized item ids for each user.
+            dict: A dictionary where keys are tokenized user ids and values are sets of tokenized item ids.
+                A numpy array of sets cannot be used as user tokens are not in the range [0, user_num].
         """
         user_token_type = PathLanguageModelingTokenType.USER.token
         item_token_type = PathLanguageModelingTokenType.ITEM.token
 
         used_ids = self.get_user_used_ids()
-        tokenizer = self._dataset.tokenizer
-
-        tokenized_used_ids = np.array([set() for _ in range(self.user_num)])
+        tokenized_used_ids = {}
         for uid in range(used_ids.shape[0]):
-            uid_token = tokenizer.convert_tokens_to_ids(user_token_type + str(uid))
-            tokenized_used_ids[uid_token].update(
-                [tokenizer.convert_tokens_to_ids(item_token_type + str(item)) for item in used_ids[uid]]
+            uid_token = self.tokenizer.convert_tokens_to_ids(user_token_type + str(uid))
+            tokenized_used_ids[uid_token] = set(
+                [self.tokenizer.convert_tokens_to_ids(item_token_type + str(item)) for item in used_ids[uid]]
             )
         return tokenized_used_ids
 

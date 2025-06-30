@@ -103,7 +103,7 @@ class Collector:
             col = train_data.dataset.inter_feat[train_data.dataset.iid_field]
             self.data_struct.set("data.history_index", torch.vstack([row, col]))
         if self.register.need("data.timestamp"):
-            temporal_matrix = train_data.dataset.inter_matrix(value_field=self.time_field).toarray()
+            temporal_matrix = train_data.dataset.inter_matrix(value_field=train_data.dataset.time_field).toarray()
             self.data_struct.set("data.timestamp", temporal_matrix)
         if self.register.need("data.max_path_type"):
             self.data_struct.set("data.max_path_type", torch.arange(train_data.dataset.relation_num))

@@ -1020,10 +1020,10 @@ class ExplainableTrainer(Trainer):
     def __init__(self, config, model):
         super().__init__(config, model)
 
-    def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
+    def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor, **kwargs):
         interaction, history_index, positive_u, positive_i = batched_data
 
-        scores, paths = self.model.explain(interaction.to(self.device))
+        scores, paths = self.model.explain(interaction.to(self.device), **kwargs)
 
         scores = scores.view(-1, tot_item_num)
         scores[:, 0] = -np.inf
@@ -2312,9 +2312,13 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
             interaction, history_index, positive_u, positive_i = batched_data
 
             inputs = self.processing_class(interaction, return_tensors="pt", add_special_tokens=False)
-            scores, paths = self._full_sort_batch_eval(
+            interaction, (scores, paths), positive_u, positive_i = self._full_sort_batch_eval(
                 (inputs, history_index, positive_u, positive_i),
+                self.tot_item_num,
+                None,
                 max_length=token_sequence_length,
+                return_dict_in_generate=True,
+                output_scores=True,
                 **self.path_generation_args,
             )
 

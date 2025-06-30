@@ -19,7 +19,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from hopwise.model.abstract_recommender import PathLanguageModelingRecommender
+from hopwise.model.abstract_recommender import ExplainablePathLanguageModelingRecommender
 from hopwise.utils import PathLanguageModelingTokenType
 
 
@@ -138,7 +138,7 @@ class Block(nn.Module):
         return x
 
 
-class PEARLMGPT2(PathLanguageModelingRecommender):
+class PEARLMGPT2(ExplainablePathLanguageModelingRecommender):
     """
     Low-level implementation of PEARLM model based on GPT-2 architecture that does not rely on HuggingFace tools.
     """

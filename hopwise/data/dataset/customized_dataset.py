@@ -667,9 +667,4 @@ class TPRecDataset(KnowledgeBasedDataset):
             self.config, test_set.inter_feat, "test", gmm=train_set.temporal_weights.gmm_model
         )
 
-        # update train set
-        datasets[0] = train_set
-        datasets[1] = valid_set
-        datasets[2] = test_set
-
         return datasets
