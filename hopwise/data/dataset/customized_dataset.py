@@ -16,7 +16,9 @@ Customized datasets named ``[Model Name]Dataset`` can be automatically called.
 """
 
 import datetime
+import math
 
+import faiss
 import joblib
 import numpy as np
 import pandas as pd
@@ -673,3 +675,134 @@ class TPRecDataset(KnowledgeBasedDataset):
         datasets[2] = test_set
 
         return datasets
+
+
+class RPGDataset(SequentialDataset):
+    """
+    An example when "codebook_size == 256, n_codebooks == 32":
+        0: padding
+        1-256: digit 1
+        257-512: digit 2
+        ...
+        7937-8192: digit 32
+        8193: eos
+
+    Args:
+        config (dict): The configuration dictionary.
+        dataset (AbstractDataset): The dataset object.
+
+    Attributes:
+        n_codebook_bits (int): The number of bits for the codebook.
+        index_factory (str): The index factory name for the OPQ algorithm.
+        item2tokens (dict): A dictionary mapping items to their semantic IDs.
+        base_user_id (int): The base user ID.
+        n_user_tokens (int): The number of user tokens.
+        eos_token (int): The end-of-sequence token.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.n_codebook_bits = self._get_codebook_bits(config["codebook_size"])
+        # This string define they way the indexing is done using the OPQ algorithm.
+        self.index_factory = f'OPQ{config["n_codebook"]},IVF1,PQ{config["n_codebook"]}x{self.n_codebook_bits}'
+
+        self.item2sem_ids = self.OPQ()
+        self.item2shifted_sem_id = self.shift_semantic_ids()
+
+        self.eos_token = self.n_digit * self.codebook_size + 1
+
+    @property
+    def n_digit(self):
+        """
+        Returns the number of digits for the tokenizer.
+
+        The number of digits is determined by the value of `rq_n_codebooks` in the configuration.
+        """
+        return self.config["n_codebook"]
+
+    @property
+    def codebook_size(self):
+        """
+        Returns an integer representing the number of codebooks for the tokenizer.
+        """
+        return self.config["codebook_size"]
+
+    @property
+    def vocab_size(self) -> int:
+        """
+        Returns the vocabulary size for the TIGER tokenizer.
+        """
+        return self.eos_token + 1
+
+    def _get_codebook_bits(self, n_codebook):
+        x = math.log2(n_codebook)
+        assert x.is_integer() and x >= 0, "Invalid value for n_codebook"
+        return int(x)
+
+    def OPQ(self):
+        """
+        Generates semantic IDs using the OPQ algorithm.
+
+        OPQ32,IVF1,PQ32x8 means:
+        - OPQ32: Learn a rotation and split vector into 32 subspaces for quantization.
+        - IVF1: Single inverted list (no real partitioning).
+        - PQ32x8: Encode each of the 32 subspaces with 8 bits (256 centroids each).
+        """
+        #  Load sentence transformer embeddings
+        sentence_embeddings = np.vstack(self.itememb_feat["item_embedding"].to_numpy())
+
+        # which items are used during training?
+        training_mask = np.zeros(len(self.field2token_id[self.iid_field]) - 1, dtype=bool)
+
+        # there can be items not in the training set, so we use the item ids to mask them
+        training_mask[self.inter_feat[self.iid_field].to_numpy() - 1] = True
+
+        faiss.omp_set_num_threads(self.config["faiss_omp_num_threads"])
+        index = faiss.index_factory(sentence_embeddings.shape[1], self.index_factory, faiss.METRIC_INNER_PRODUCT)
+
+        self.logger.info(set_color("Training OPQ index...", "green"))
+        index.train(sentence_embeddings[training_mask])
+        index.add(sentence_embeddings)
+
+        ivf_index = faiss.downcast_index(index.index)
+        invlists = faiss.extract_index_ivf(ivf_index).invlists
+        ls = invlists.list_size(0)
+        pq_codes = faiss.rev_swig_ptr(invlists.get_codes(0), ls * invlists.code_size)
+        pq_codes = pq_codes.reshape(-1, invlists.code_size)
+
+        faiss_sem_ids = []
+        n_bytes = pq_codes.shape[1]
+        for u8code in pq_codes:
+            bs = faiss.BitstringReader(faiss.swig_ptr(u8code), n_bytes)
+            code = []
+            for i in range(self.n_digit):
+                code.append(bs.read(self.n_codebook_bits))
+            faiss_sem_ids.append(code)
+        pq_codes = np.array(faiss_sem_ids)
+
+        item2sem_ids = {}
+        for item in range(pq_codes.shape[0]):
+            item2sem_ids[item + 1] = tuple(pq_codes[i].tolist())
+        return item2sem_ids
+
+    def shift_semantic_ids(self):
+        """
+        Converts semantic IDs to tokens.
+
+        This method updates the `item2sem_ids` dictionary by converting
+        each semantic ID into a corresponding token. The conversion is done by adding
+        to each number in the tuple, an offset of self.codebook_size * digit + 1.
+        This is used when doing MTP (Multi Token Prediction) through multiple heads.
+
+        Args:
+
+        Returns:
+            dict: A dictionary mapping items to their corresponding tokens.
+        """
+        item2shifted_sem_id = torch.zeros((len(self.field2id_token[self.iid_field]), self.n_digit), dtype=torch.long)
+        for item, semantic_id_tuple in self.item2sem_ids.items():
+            item2shifted_sem_id[int(item)] = torch.LongTensor(semantic_id_tuple)
+            for digit in range(self.n_digit):
+                # "+ 1" as 0 is reserved for padding
+                item2shifted_sem_id[int(item), digit] += self.codebook_size * digit + 1
+        return item2shifted_sem_id

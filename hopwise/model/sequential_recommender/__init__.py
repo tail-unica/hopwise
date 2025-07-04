@@ -20,6 +20,7 @@ from hopwise.model.sequential_recommender.narm import NARM
 from hopwise.model.sequential_recommender.nextitnet import NextItNet
 from hopwise.model.sequential_recommender.npe import NPE
 from hopwise.model.sequential_recommender.repeatnet import RepeatNet
+from hopwise.model.sequential_recommender.rpg import RPG
 from hopwise.model.sequential_recommender.s3rec import S3Rec
 from hopwise.model.sequential_recommender.sasrec import SASRec
 from hopwise.model.sequential_recommender.sasreccpr import SASRecCPR

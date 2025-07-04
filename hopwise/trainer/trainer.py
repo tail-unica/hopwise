@@ -22,6 +22,7 @@
 """
 
 import os
+import warnings
 from collections import defaultdict
 from logging import getLogger
 from time import time
@@ -32,7 +33,7 @@ from scipy import sparse
 from torch import optim
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from tqdm import rich
+from tqdm import TqdmExperimentalWarning, rich
 
 from hopwise.data.dataloader import FullSortLPEvalDataLoader, NegSampleDataLoader
 from hopwise.data.interaction import Interaction
@@ -55,22 +56,7 @@ from hopwise.utils import (
 )
 from hopwise.utils.enum_type import KnowledgeEvaluationType
 
-try:
-    grad_scaler = torch.GradScaler
-    autocast = torch.autocast
-except AttributeError:
-
-    def grad_scaler(device, **kwargs):
-        if torch.cuda.is_available():
-            return torch.cuda.amp.GradScaler(**kwargs)
-        else:
-            return torch.cuda.amp.GradScaler(**kwargs)
-
-    def autocast(device_type=None, **kwargs):
-        if torch.cuda.is_available():
-            return torch.cuda.amp.autocast(**kwargs)
-        else:
-            return torch.cpu.amp.autocast(**kwargs)
+warnings.filterwarnings("ignore", category=TqdmExperimentalWarning)
 
 
 class AbstractTrainer:
@@ -240,7 +226,7 @@ class Trainer(AbstractTrainer):
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
 
-        scaler = grad_scaler(self.device, enabled=self.enable_scaler)
+        scaler = torch.GradScaler(self.device, enabled=self.enable_scaler)
         for batch_idx, batch_interaction in enumerate(iter_data):
             interaction = batch_interaction.to(self.device)
             self.optimizer.zero_grad()
@@ -249,7 +235,7 @@ class Trainer(AbstractTrainer):
                 self.set_reduce_hook()
                 sync_loss = self.sync_grad_loss()
 
-            with autocast(device_type=self.device.type, enabled=self.enable_amp):
+            with torch.autocast(device_type=self.device.type, enabled=self.enable_amp):
                 losses = loss_func(interaction)
 
             if isinstance(losses, tuple):
@@ -500,7 +486,6 @@ class Trainer(AbstractTrainer):
                 scores = self.model.predict(new_inter)
             else:
                 scores = self._split_predict(new_inter, batch_size)
-
         scores = scores.view(-1, tot_item_num)
         scores[:, 0] = -np.inf
         if history_index is not None:
@@ -805,7 +790,6 @@ class KGTrainer(Trainer):
             results[task] = self.evaluate_data_loop(
                 rec_eval_data, task, tot_item_num, item_tensor, show_progress=show_progress
             )
-
         # LP task
         if KnowledgeEvaluationType.LP in task_eval_data:
             task = KnowledgeEvaluationType.LP
@@ -1903,7 +1887,7 @@ class NCLTrainer(Trainer):
             if show_progress
             else train_data
         )
-        scaler = grad_scaler(enabled=self.enable_scaler)
+        scaler = torch.GradScaler(enabled=self.enable_scaler)
 
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
@@ -1916,7 +1900,7 @@ class NCLTrainer(Trainer):
                 self.set_reduce_hook()
                 sync_loss = self.sync_grad_loss()
 
-            with autocast(device_type=self.device.type, enabled=self.enable_amp):
+            with torch.autocast(device_type=self.device.type, enabled=self.enable_amp):
                 losses = loss_func(interaction)
 
             if isinstance(losses, tuple):
@@ -2019,7 +2003,7 @@ class PEARLMfromscratchTrainer(Trainer):
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
 
-        scaler = grad_scaler(self.device, enabled=self.enable_scaler)
+        scaler = torch.GradScaler(self.device, enabled=self.enable_scaler)
         for batch_idx, batch_interaction in enumerate(iter_data):
             self.optimizer.zero_grad()
             sync_loss = 0
@@ -2027,7 +2011,7 @@ class PEARLMfromscratchTrainer(Trainer):
                 self.set_reduce_hook()
                 sync_loss = self.sync_grad_loss()
 
-            with autocast(device_type=self.device.type, enabled=self.enable_amp):
+            with torch.autocast(device_type=self.device.type, enabled=self.enable_amp):
                 batch_interaction = torch.tensor(batch_interaction["input_ids"]).to(self.device)  # noqa: PLW2901
                 losses = loss_func(batch_interaction)
 
@@ -2074,7 +2058,7 @@ class PEARLMfromscratchTrainer(Trainer):
             checkpoint = torch.load(checkpoint_file, weights_only=False, map_location=self.device)
             self.model.load_state_dict(checkpoint["state_dict"])
             self.model.load_other_parameter(checkpoint.get("other_parameter"))
-            message_output = f"Loading model structure and parameters from {checkpoint_file}"
+            message_output = f"Loading model structure and paracomemeters from {checkpoint_file}"
             self.logger.info(message_output)
 
         self.model.eval()
