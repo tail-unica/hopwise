@@ -81,8 +81,6 @@ class PEARLM(ExplainablePathLanguageModelingRecommender, GPT2LMHeadModel):
         self.loss = nn.CrossEntropyLoss()
         self.post_init()
 
-        self.token_sequence_length = dataset.token_sequence_length
-
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -155,4 +153,5 @@ class PEARLM(ExplainablePathLanguageModelingRecommender, GPT2LMHeadModel):
 
     def generate(self, inputs, **kwargs):
         kwargs["logits_processor"] = self.logits_processor_list
+        kwargs["num_return_sequences"] = kwargs.pop("paths_per_user")
         return super(GPT2LMHeadModel, self).generate(**inputs, **kwargs)

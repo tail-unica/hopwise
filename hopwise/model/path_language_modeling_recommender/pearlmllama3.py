@@ -164,6 +164,7 @@ class PEARLMLlama3(ExplainablePathLanguageModelingRecommender):
         super().__init__(config, dataset, _skip_nn_module_init=False)
 
         self.temperature = config["temperature"]
+        self.weight_precision = config["weight_precision"]
 
         spec_type = PathLanguageModelingTokenType.SPECIAL.token_id
         ent_type = PathLanguageModelingTokenType.ENTITY.token_id
@@ -172,8 +173,8 @@ class PEARLMLlama3(ExplainablePathLanguageModelingRecommender):
         self.type_emb_pos = torch.LongTensor(
             # BOS + ENT + REL + ENT + REL + ... + ENT + REL + EOS
             [spec_type, ent_type] + [rel_type, ent_type] * dataset.path_hop_length + [spec_type],
-            device=config["device"],
         )
+        self.type_emb_pos = self.type_emb_pos.to(config["device"])
 
         self.wte = nn.Embedding(self.n_tokens, config["embedding_size"]).to(dtype=config["weight_precision"])
         self.wpe = nn.Embedding(len(type_tokens), config["embedding_size"]).to(dtype=config["weight_precision"])
@@ -213,14 +214,15 @@ class PEARLMLlama3(ExplainablePathLanguageModelingRecommender):
         pos_emb = self.wpe(self.type_emb_pos)[: tok_emb.size(1)]
         x = tok_emb + pos_emb
         for block in self.blocks:
-            x = block(x.to(self.config["weight_precision"]))
+            x = block(x.to(self.weight_precision))
         x = self.rmsnorm(x)
 
         return x
 
     def calculate_loss(self, interaction):
-        labels = interaction[:, 1:].contiguous()
-        input_ids = interaction
+        input_ids = interaction["input_ids"]
+        labels = input_ids[:, 1:].contiguous()
+
         lm_output = self.forward(input_ids)
 
         logits = self.lm_head(lm_output)
@@ -229,8 +231,8 @@ class PEARLMLlama3(ExplainablePathLanguageModelingRecommender):
         return self.loss(logits.view(-1, logits.size(-1)), labels.view(-1))
 
     def predict(self, interaction):
-        interaction = interaction["input_ids"]
-        lm_output = self.forward(interaction)
+        input_ids = interaction["input_ids"]
+        lm_output = self.forward(input_ids)
         logits = self.lm_head(lm_output[:, [-1], :])
 
         return logits

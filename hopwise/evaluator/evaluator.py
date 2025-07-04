@@ -42,7 +42,7 @@ class Evaluator:
 
 
 class Evaluator_KG(Evaluator):
-    """Evaluator KG is used to check parameter correctness, and summarize the results of all metrics."""
+    """Evaluator KG extends the Evaluator class for link prediction tasks."""
 
     def __init__(self, config):
         super().__init__(config)

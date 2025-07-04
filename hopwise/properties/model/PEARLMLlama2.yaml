@@ -4,7 +4,7 @@ embedding_size: 100
 temperature: 1.0
 
 base_model: llama2
-sequence_postprocessor: SampleSearchSequenceScorePostProcessor
+sequence_postprocessor: SampleSearch
 
 ### PATH SAMPLING PROCESS ###
 MAX_PATHS_PER_USER: 1

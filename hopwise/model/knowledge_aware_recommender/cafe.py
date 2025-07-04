@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
-from hopwise.utils import InputType, PathLanguageModelingTokenType
+from hopwise.utils import InputType
 
 
 class CAFE(KnowledgeRecommender):
@@ -383,29 +383,7 @@ class CAFE(KnowledgeRecommender):
         return scores, explanations
 
     def decode_path(self, path):
-        decoded_path = []
-        for node in path:
-            # append relations
-            if node[0] != "self_loop":
-                relation = self.dataset.token2id(self.dataset.relation_field, node[0])
-                decoded_path.append(f"{PathLanguageModelingTokenType.RELATION.token}{relation}")
-
-            # append everything else
-
-            e_type = node[1]
-            eid = node[2]
-
-            if e_type == "user":
-                e_type = PathLanguageModelingTokenType.USER.token
-            elif eid in range(self.n_items):
-                e_type = PathLanguageModelingTokenType.ITEM.token
-            else:
-                e_type = PathLanguageModelingTokenType.ENTITY.token
-
-            # node[1] is the node type, node[2] is the node id
-            decoded_path.append(f"{e_type}{eid}")
-
-        return decoded_path
+        return path
 
     def _infer_paths(self, users, kg_mask):
         predictions = dict()

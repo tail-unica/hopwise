@@ -7,7 +7,7 @@ rope_config: ~
 num_kv_groups: 8
 
 base_model: llama3
-sequence_postprocessor: SampleSearchSequenceScorePostProcessor
+sequence_postprocessor: SampleSearch
 
 ### PATH SAMPLING PROCESS ###
 MAX_PATHS_PER_USER: 1

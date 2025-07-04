@@ -28,7 +28,7 @@ tokenizer:                                  # (dict) Tokenizer parameters.
     model: WordLevel                        # (str) Tokenizer model.
 
 path_generation_args:
-    num_return_sequences: 10    # (int) Number of paths generated per user.
+    paths_per_user: 10          # (int) Number of paths generated per user.
     num_beams: 20               # (int) Number of beams for beam search.
     num_beam_groups: 5          # (int) Number of groups for diverse beam search.
     diversity_penalty: 0.3      # (float) Diversity penalty for beam search.
@@ -37,5 +37,5 @@ path_generation_args:
     top_p: ~                    # (float) The cumulative probability for top-p-filtering.
     do_sample: False            # (bool) Whether to use sampling ; use greedy decoding otherwise.
 
-# one of ['SampleSearchSequenceScorePostProcessor', 'BeamSearchSequenceScorePostProcessor', 'CumulativeSequenceScorePostProcessor']
-sequence_postprocessor: BeamSearchSequenceScorePostProcessor # (str) Process generated sequences into scores and structured paths
+# one of ['SampleSearch', 'BeamSearch', 'Cumulative']
+sequence_postprocessor: BeamSearch # (str) Process generated sequences into scores and structured paths

@@ -49,8 +49,6 @@ class DataStruct:
                 self._data_dict[name] = value.clone().detach()
             else:
                 self._data_dict[name] = value
-        # if not isinstance(self._data_dict[name], torch.Tensor):
-        #     raise ValueError(f"{name} is not a tensor.")
         elif isinstance(self._data_dict[name], torch.Tensor):
             self._data_dict[name] = torch.cat((self._data_dict[name], value.clone().detach()), dim=0)
         else:
@@ -105,37 +103,6 @@ class Collector:
         if self.register.need("data.timestamp"):
             temporal_matrix = train_data.dataset.inter_matrix(value_field=train_data.dataset.time_field).toarray()
             self.data_struct.set("data.timestamp", temporal_matrix)
-        if self.register.need("data.max_path_type"):
-            self.data_struct.set("data.max_path_type", torch.arange(train_data.dataset.relation_num))
-        if self.register.need("data.node_degree"):
-            self.data_struct.set("data.node_degree", self.node_degree_dict(train_data))
-        if self.register.need("data.max_path_length"):
-            if hasattr(train_data.dataset, "token_sequence_length"):
-                # PEARLM or KGGLM
-                sampled_path_len = train_data.dataset.token_sequence_length - 2
-                self.data_struct.set("data.max_path_length", sampled_path_len)
-            else:
-                # PGPR or CAFE
-                self.data_struct.set(
-                    "data.max_path_length", max([len(path) for path in self.config["path_constraint"]]) * 2 - 1
-                )
-
-        if self.register.need("data.rid2relation"):
-            self.data_struct.set("data.rid2relation", train_data.dataset.field2id_token["relation_id"])
-
-    def node_degree_dict(self, train_data):
-        # from pgpr knowledge graph
-        # https://github.com/giacoballoccu/rep-path-reasoning-recsys/blob/main/models/PGPR/knowledge_graph.py
-        aug_kg = train_data.dataset.ckg_dict_graph()
-        degrees = {}
-        for etype in aug_kg:
-            degrees[etype] = {}
-            for eid in aug_kg[etype]:
-                count = 0
-                for r in aug_kg[etype][eid]:
-                    count += len(aug_kg[etype][eid][r])
-                degrees[etype][eid] = count
-        return degrees
 
     def eval_data_collect(self, eval_data):
         """Collect the evaluation resource from evaluation data, such as user and item features.
@@ -184,7 +151,7 @@ class Collector:
 
     def eval_batch_collect(
         self,
-        scores_tensor,
+        scores,
         interaction,
         positive_u: torch.Tensor,
         positive_i: torch.Tensor,
@@ -192,27 +159,23 @@ class Collector:
         """Collect the evaluation resource from batched eval data and batched model output.
 
         Args:
-            scores_tensor (Torch.Tensor): the output tensor of model with the shape of `(N, )`
-            interaction(Interaction): batched eval data.
-            positive_u(Torch.Tensor): the row index of positive items for each user.
-            positive_i(Torch.Tensor): the positive item id for each user.
+            scores (Torch.Tensor): the output tensor of model with the shape of `(N, )`
+            interaction (Interaction): batched eval data.
+            positive_u (Torch.Tensor): the row index of positive items for each user.
+            positive_i (Torch.Tensor): the positive item id for each user.
         """
-        paths = None
-        if isinstance(scores_tensor, tuple):
-            scores_tensor, paths = scores_tensor
-
         if self.register.need("rec.users"):
             uid_field = self.config["USER_ID_FIELD"]
             self.data_struct.update_tensor("rec.users", interaction[uid_field])
 
         if self.register.need("rec.items"):
             # get topk
-            _, topk_idx = torch.topk(scores_tensor, max(self.topk), dim=-1)  # n_users x k
+            _, topk_idx = torch.topk(scores, max(self.topk), dim=-1)  # n_users x k
             self.data_struct.update_tensor("rec.items", topk_idx)
 
         if self.register.need("rec.topk"):
-            _, topk_idx = torch.topk(scores_tensor, max(self.topk), dim=-1)  # n_users x k
-            pos_matrix = torch.zeros_like(scores_tensor, dtype=torch.int)
+            _, topk_idx = torch.topk(scores, max(self.topk), dim=-1)  # n_users x k
+            pos_matrix = torch.zeros_like(scores, dtype=torch.int)
             pos_matrix[positive_u, positive_i] = 1
             pos_len_list = pos_matrix.sum(dim=1, keepdim=True)
             pos_idx = torch.gather(pos_matrix, dim=1, index=topk_idx)
@@ -220,10 +183,10 @@ class Collector:
             self.data_struct.update_tensor("rec.topk", result)
 
         if self.register.need("rec.meanrank"):
-            desc_scores, desc_index = torch.sort(scores_tensor, dim=-1, descending=True)
+            desc_scores, desc_index = torch.sort(scores, dim=-1, descending=True)
 
             # get the index of positive items in the ranking list
-            pos_matrix = torch.zeros_like(scores_tensor)
+            pos_matrix = torch.zeros_like(scores)
             pos_matrix[positive_u, positive_i] = 1
             pos_index = torch.gather(pos_matrix, dim=1, index=desc_index)
 
@@ -236,14 +199,11 @@ class Collector:
             self.data_struct.update_tensor("rec.meanrank", result)
 
         if self.register.need("rec.score"):
-            self.data_struct.update_tensor("rec.score", scores_tensor)
+            self.data_struct.update_tensor("rec.score", scores)
 
         if self.register.need("data.label"):
             self.label_field = self.config["LABEL_FIELD"]
             self.data_struct.update_tensor("data.label", interaction[self.label_field].to(self.device))
-
-        if self.register.need("rec.paths"):
-            self.data_struct.update_tensor("rec.paths", paths)
 
     def model_collect(self, model: torch.nn.Module, load_best_model=False):
         """Collect the evaluation resource from model and do something with the model.
@@ -278,21 +238,20 @@ class Collector:
         for key in self.data_struct._data_dict:
             if isinstance(self.data_struct._data_dict[key], torch.Tensor):
                 self.data_struct._data_dict[key] = self.data_struct._data_dict[key].cpu()
+
         returned_struct = copy.deepcopy(self.data_struct)
         for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label", "rec.paths"]:
             if key in self.data_struct:
                 del self.data_struct[key]
+
         returned_struct.set("topk", self.topk)
+
         return returned_struct
 
 
 class Collector_KG(Collector):
-    """The collector is used to collect the resource for evaluator.
-    As the evaluation metrics are various, the needed resource not only contain the recommended result
-    but also other resource from data and model. They all can be collected by the collector during the training
-    and evaluation process.
-
-    This class is only used in Trainer.
+    """This collector is used to collect the resource for evaluator in knowledge graph embedding models.
+    Specifically, it collects the predictions for the link prediction task, extending Collector from recommendation.
 
     """
 
@@ -300,3 +259,73 @@ class Collector_KG(Collector):
         super().__init__(config)
         self.register = Register_KG(config)
         self.topk = self.config["topk_kg"]
+
+
+class ExplainableCollector(Collector):
+    """This collector is used to collect the resource for evaluator in explainable recommendation models.
+    It collects the KG paths and explanations for the recommendations made by the model and enables
+    path quality evaluation.
+
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.register = Register(config)
+
+    def train_data_collect(self, train_data):
+        super().train_data_collect(train_data)
+
+        if self.register.need("data.max_path_type"):
+            self.data_struct.set("data.max_path_type", torch.arange(train_data.dataset.relation_num))
+        if self.register.need("data.node_degree"):
+            self.data_struct.set("data.node_degree", self.node_degree_dict(train_data))
+        if self.register.need("data.max_path_length"):
+            if hasattr(train_data.dataset, "token_sequence_length"):
+                # PEARLM or KGGLM
+                sampled_path_len = train_data.dataset.token_sequence_length - 2
+                self.data_struct.set("data.max_path_length", sampled_path_len)
+            else:
+                # PGPR or CAFE
+                self.data_struct.set(
+                    "data.max_path_length", max([len(path) for path in self.config["path_constraint"]]) * 2 - 1
+                )
+
+        if self.register.need("data.rid2relation"):
+            self.data_struct.set("data.rid2relation", train_data.dataset.field2id_token["relation_id"])
+
+    def node_degree_dict(self, train_data):
+        # from pgpr knowledge graph
+        # https://github.com/giacoballoccu/rep-path-reasoning-recsys/blob/main/models/PGPR/knowledge_graph.py
+        aug_kg = train_data.dataset.ckg_dict_graph()
+        degrees = {}
+        for etype in aug_kg:
+            degrees[etype] = {}
+            for eid in aug_kg[etype]:
+                count = 0
+                for r in aug_kg[etype][eid]:
+                    count += len(aug_kg[etype][eid][r])
+                degrees[etype][eid] = count
+        return degrees
+
+    def eval_batch_collect(
+        self,
+        explanations,
+        interaction,
+        positive_u: torch.Tensor,
+        positive_i: torch.Tensor,
+    ):
+        """Collect the evaluation resource from batched eval data and batched model output.
+
+        Args:
+            explanations (tuple): a tuple containing the scores and paths, where:
+                - scores (Torch.Tensor): the output tensor of model with the shape of `(N, )`
+                - paths (list): a list of quadruples representing the paths for each user.
+            interaction (Interaction): batched eval data.
+            positive_u (Torch.Tensor): the row index of positive items for each user.
+            positive_i (Torch.Tensor): the positive item id for each user.
+        """
+        scores, paths = explanations
+        super().eval_batch_collect(scores, interaction, positive_u, positive_i)
+
+        if self.register.need("rec.paths"):
+            self.data_struct.update_tensor("rec.paths", paths)

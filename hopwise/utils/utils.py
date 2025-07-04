@@ -455,9 +455,8 @@ def get_environment(config):
 
 def get_sequence_postprocessor(postprocessor_name):
     try:
-        return getattr(
-            importlib.import_module("hopwise.model.sequence_postprocessor"), postprocessor_name + "ScorePostProcessor"
-        )
+        postprocessor_name = postprocessor_name + "SequenceScorePostProcessor"
+        return getattr(importlib.import_module("hopwise.model.sequence_postprocessor"), postprocessor_name)
     except AttributeError:
         return getattr(
             importlib.import_module("hopwise.model.sequence_postprocessor"), "BeamSearchSequenceScorePostProcessor"
@@ -476,7 +475,7 @@ def get_logits_processor(model_name):
 
 
 @dataclass
-class GenerationOutputs:
+class GenerationOutputs(dict):
     r"""Dataclass to hold the outputs of the generation process.
 
     Attributes:
@@ -486,3 +485,6 @@ class GenerationOutputs:
 
     sequences: torch.Tensor
     scores: torch.Tensor
+
+    def __post_init__(self):
+        self.update({"sequences": self.sequences, "scores": self.scores})

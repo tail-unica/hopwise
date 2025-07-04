@@ -151,8 +151,8 @@ class PEARLMLlama2(ExplainablePathLanguageModelingRecommender):
         self.type_emb_pos = torch.LongTensor(
             # BOS + ENT + REL + ENT + REL + ... + ENT + REL + EOS
             [spec_type, ent_type] + [rel_type, ent_type] * dataset.path_hop_length + [spec_type],
-            device=config["device"],
         )
+        self.type_emb_pos = self.type_emb_pos.to(config["device"])
 
         self.wte = nn.Embedding(self.n_tokens, config["embedding_size"])
         self.wpe = nn.Embedding(len(type_tokens), config["embedding_size"])
@@ -196,8 +196,9 @@ class PEARLMLlama2(ExplainablePathLanguageModelingRecommender):
         return x
 
     def calculate_loss(self, interaction):
-        labels = interaction[:, 1:].contiguous()
-        input_ids = interaction
+        input_ids = interaction["input_ids"]
+        labels = input_ids[:, 1:].contiguous()
+
         lm_output = self.forward(input_ids)
 
         logits = self.lm_head(lm_output)
@@ -206,8 +207,8 @@ class PEARLMLlama2(ExplainablePathLanguageModelingRecommender):
         return self.loss(logits.view(-1, logits.size(-1)), labels.view(-1))
 
     def predict(self, interaction):
-        interaction = interaction["input_ids"]
-        lm_output = self.forward(interaction)
+        input_ids = interaction["input_ids"]
+        lm_output = self.forward(input_ids)
         logits = self.lm_head(lm_output[:, [-1], :])
 
         return logits

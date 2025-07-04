@@ -31,6 +31,8 @@ class PLM(ExplainablePathLanguageModelingRecommender, GPT2LMHeadModel):
     """
 
     def __init__(self, config, dataset):
+        ExplainablePathLanguageModelingRecommender.__init__(self, config, dataset)
+
         self.use_kg_token_types = config["use_kg_token_types"]
         transformers_config = AutoConfig.from_pretrained(
             "distilgpt2",
@@ -46,7 +48,6 @@ class PLM(ExplainablePathLanguageModelingRecommender, GPT2LMHeadModel):
                 "n_layer": config["num_layers"],
             },
         )
-        ExplainablePathLanguageModelingRecommender.__init__(self, config, dataset)
         GPT2LMHeadModel.__init__(self, transformers_config)
 
         # Add type ids template
@@ -194,4 +195,5 @@ class PLM(ExplainablePathLanguageModelingRecommender, GPT2LMHeadModel):
 
     def generate(self, inputs, **kwargs):
         kwargs["logits_processor"] = self.logits_processor_list
+        kwargs["num_return_sequences"] = kwargs.pop("paths_per_user")
         return super(GPT2LMHeadModel, self).generate(**inputs, **kwargs)

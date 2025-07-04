@@ -111,42 +111,37 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         current_len = input_ids.shape[-1]
         has_bos_token = self.is_bos_token_in_input(input_ids)
 
-        if has_bos_token and current_len == self.max_sequence_length - 1:
-            pass
-            # TODO: confirm that handling EOS is not needed here
-            # self.mask_non_eos_tokens(scores)
+        unique_input_ids = input_ids
+        if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
+            # Determine whether the next token to generate is a relation or an entity:
+            # - relation: only the last entity is needed (1 token) → for [user123] last_n_tokens = 1
+            # - entity: the last 2 tokens are needed (entity, relation) → for [user123, watched] last_n_tokens = 2
+            # Apply deduplication: select unique sequences based only on the relevant last tokens (1 or 2)
+            # This avoids recomputing the same mask for sequences that share the same context
+            last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
+            _, input_ids_indices, input_ids_inv = np.unique(
+                input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True
+            )
+            unique_input_ids = input_ids[input_ids_indices]
+
+        full_mask = np.zeros((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
+        for idx in range(unique_input_ids.shape[0]):
+            if self.task == KnowledgeEvaluationType.REC:
+                key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
+            elif self.task == KnowledgeEvaluationType.LP:
+                key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
+
+            banned_mask = self.get_banned_mask(key, candidate_tokens)
+
+            if banned_mask.all():
+                banned_mask[self.tokenizer.pad_token_id] = False
+
+            full_mask[idx] = banned_mask
+
+        if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
+            scores[full_mask[input_ids_inv]] = -torch.inf
         else:
-            unique_input_ids = input_ids
-            if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
-                # Determine whether the next token to generate is a relation or an entity:
-                # - relation: only the last entity is needed (1 token) → for [user123] last_n_tokens = 1
-                # - entity: the last 2 tokens are needed (entity, relation) → for [user123, watched] last_n_tokens = 2
-                # Apply deduplication: select unique sequences based only on the relevant last tokens (1 or 2)
-                # This avoids recomputing the same mask for sequences that share the same context
-                last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
-                _, input_ids_indices, input_ids_inv = np.unique(
-                    input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True
-                )
-                unique_input_ids = input_ids[input_ids_indices]
-
-            full_mask = np.zeros((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
-            for idx in range(unique_input_ids.shape[0]):
-                if self.task == KnowledgeEvaluationType.REC:
-                    key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
-                elif self.task == KnowledgeEvaluationType.LP:
-                    key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
-
-                banned_mask = self.get_banned_mask(key, candidate_tokens)
-
-                if banned_mask.all():
-                    banned_mask[self.tokenizer.pad_token_id] = False
-
-                full_mask[idx] = banned_mask
-
-            if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
-                scores[full_mask[input_ids_inv]] = -torch.inf
-            else:
-                scores[full_mask] = -torch.inf
+            scores[full_mask] = -torch.inf
 
         return scores
 

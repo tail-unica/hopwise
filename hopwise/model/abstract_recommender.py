@@ -22,6 +22,7 @@ from hopwise.model.logits_processor import LogitsProcessorList
 from hopwise.utils import (
     FeatureSource,
     FeatureType,
+    GenerationOutputs,
     InputType,
     KnowledgeEvaluationType,
     ModelType,
@@ -273,11 +274,12 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
         super().__init__(config, dataset, _skip_nn_module_init=_skip_nn_module_init)
 
         self.n_tokens = len(dataset.tokenizer)
+        self.token_sequence_length = dataset.token_sequence_length - 1  # EOS token is not included
 
         logits_processor = get_logits_processor(config["model"])(
             tokenized_ckg=dataset.get_tokenized_ckg(),
             tokenized_used_ids=dataset.get_tokenized_used_ids(),
-            max_sequence_length=dataset.token_sequence_length,
+            max_sequence_length=self.token_sequence_length,
             tokenizer=dataset.tokenizer,
             task=KnowledgeEvaluationType.REC,
         )
@@ -290,7 +292,7 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
         )
 
     @torch.no_grad()
-    def generate(self, inputs, top_k=None, max_length=None, paths_per_user=1, **kwargs):
+    def generate(self, inputs, top_k=None, paths_per_user=1, **kwargs):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
@@ -300,15 +302,11 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
             inputs (dict): A dictionary containing the input_ids tensor with shape (b, t).
             top_k (int, optional): If specified, only the top k logits will be considered
                 for sampling at each step. Defaults to None.
-            max_length (int, optional): The maximum length of the generated sequence.
             paths_per_user (int, optional): How many paths to return for each user.
             **kwargs: Additional keyword arguments for the model. In future, it can be used to pass
                 other generation parameters such as temperature, repetition penalty, etc.
         """
-        if max_length is None:
-            max_length = inputs["input_ids"].size(1) + 1
-
-        max_new_tokens = max_length - inputs["input_ids"].size(1)
+        max_new_tokens = self.token_sequence_length - inputs["input_ids"].size(1)
 
         # How many paths to return?
         inputs["input_ids"] = inputs["input_ids"].repeat_interleave(paths_per_user, dim=0)
@@ -334,7 +332,7 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
             # append sampled index to the running sequence and continue
             inputs["input_ids"] = torch.cat((inputs["input_ids"], path_next), dim=1)
 
-        return inputs["input_ids"], torch.unbind(scores, dim=1)
+        return GenerationOutputs(sequences=inputs["input_ids"], scores=torch.unbind(scores, dim=1))
 
 
 class ExplainablePathLanguageModelingRecommender(PathLanguageModelingRecommender, ExplainableRecommender):
@@ -344,15 +342,15 @@ class ExplainablePathLanguageModelingRecommender(PathLanguageModelingRecommender
     to learn from knowledge graph paths defined by a chain of entity-relation triplets.
     """
 
-    def __init__(self, config, dataset):
-        super().__init__(config, dataset)
+    def __init__(self, config, dataset, _skip_nn_module_init=True):
+        super().__init__(config, dataset, _skip_nn_module_init=_skip_nn_module_init)
 
-    def explain(self, inputs, max_length=None, **kwargs):
-        kwargs["max_length"] = max_length
-        kwargs["min_length"] = max_length
+    def explain(self, inputs, **kwargs):
+        kwargs["max_length"] = self.token_sequence_length
+        kwargs["min_length"] = self.token_sequence_length
         outputs = self.generate(inputs, **kwargs)
 
-        max_new_tokens = max_length - inputs["input_ids"].size(1)
+        max_new_tokens = self.token_sequence_length - inputs["input_ids"].size(1)
 
         scores, sequences = self.sequence_postprocessor.get_sequences(outputs, max_new_tokens=max_new_tokens)
 
@@ -365,7 +363,7 @@ class ExplainablePathLanguageModelingRecommender(PathLanguageModelingRecommender
         """Standardize path format"""
         new_path = []
         # Process the path
-        # U R I R I R I
+        # [BOS] U R I R E/I R I
         for node_idx in range(1, len(path) + 1, 2):
             if path[node_idx].startswith(PathLanguageModelingTokenType.USER.token):
                 user_id = int(path[node_idx][1:])

@@ -153,11 +153,11 @@ class KGGLMDataset(KnowledgePathDataset):
         self.pretrain_hop_length = tuple(map(int, self.pretrain_hop_length[1:-1].split(",")))
         self.pretrain_paths = path_sample_args["pretrain_paths"]
 
-    def generate_user_path_dataset(self, used_ids):
+    def generate_user_path_dataset(self):
         if self.train_stage == "pretrain":
             self.generate_pretrain_dataset()
         else:
-            super().generate_user_path_dataset(used_ids)
+            super().generate_user_path_dataset()
 
     def generate_pretrain_dataset(self):
         """Generate pretrain dataset for KGGLM model."""

@@ -965,7 +965,7 @@ class LIR(PathQualityMetric):
     For further details, please refer to the `paper <https://dl.acm.org/doi/pdf/10.1145/3477495.3532041>`.
     """
 
-    metric_need = ["data.timestamp"]
+    metric_need = ["data.timestamp", "data.num_items"]
 
     def __init__(self, config):
         super().__init__(config)
@@ -974,9 +974,10 @@ class LIR(PathQualityMetric):
     def calculate_metric(self, dataobject):
         paths = self.used_info(dataobject)
         timestamp_matrix = dataobject.get("data.timestamp")
+        num_items = dataobject.get("data.num_items")
 
         lir_matrix = self.get_lir_matrix(timestamp_matrix)
-        result = self.metric_info(lir_matrix, paths)
+        result = self.metric_info(lir_matrix, paths, num_items)
         metric_dict = self.topk_result("lir", result)
         return metric_dict
 
@@ -996,11 +997,13 @@ class LIR(PathQualityMetric):
 
         return lir_matrix
 
-    def metric_info(self, lir_matrix, paths):
+    def metric_info(self, lir_matrix, paths, num_items):
         users, li_items = [], []
         for user, _, _, path in paths:
-            if path[self.li_idx][1] == "item":
-                # Only consider the linking interaction that is an item
+            is_item = path[self.li_idx][1] == "item" or (
+                path[self.li_idx][1] == "entity" and path[self.li_idx][-1] < num_items
+            )
+            if is_item:
                 users.append(user)
                 li_items.append(int(path[self.li_idx][-1]))
 

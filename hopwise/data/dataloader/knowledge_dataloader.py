@@ -181,23 +181,22 @@ class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):
     def __init__(self, config, dataset, sampler, shuffle=False):
         super().__init__(config, dataset, sampler, shuffle)
 
-        from datasets import Dataset
-
         user_df = self.user_df[self.uid_field]
         ui_relation = dataset.field2token_id[dataset.relation_field][dataset.ui_relation]
-        inference_path_dataset = {
-            self.uid_field: [
-                dataset.path_token_separator.join(
-                    [
-                        dataset.tokenizer.bos_token,
-                        PathLanguageModelingTokenType.USER.token + str(uid.item()),
-                        PathLanguageModelingTokenType.RELATION.token + str(ui_relation),
-                    ]
-                )
-                for uid in user_df
-            ]
-        }
-        self.inference_path_dataset = Dataset.from_dict(inference_path_dataset)
+        inference_path_dataset = [
+            dataset.path_token_separator.join(
+                [
+                    dataset.tokenizer.bos_token,
+                    PathLanguageModelingTokenType.USER.token + str(uid.item()),
+                    PathLanguageModelingTokenType.RELATION.token + str(ui_relation),
+                ]
+            )
+            for uid in user_df
+        ]
+        inference_tokenized_dataset = dataset.tokenizer(
+            inference_path_dataset, return_tensors="pt", add_special_tokens=False
+        )
+        self.inference_tokenized_dataset = Interaction(inference_tokenized_dataset.data)
 
     def _init_batch_size_and_step(self):
         batch_size = self.config["eval_batch_size"]
@@ -206,4 +205,4 @@ class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):
 
     def collate_fn(self, index):
         _, history_index, positive_u, positive_i = super().collate_fn(index)
-        return self.inference_path_dataset[index][self.uid_field], history_index, positive_u, positive_i
+        return self.inference_tokenized_dataset[index], history_index, positive_u, positive_i

@@ -18,7 +18,7 @@ from torch import nn
 from torch.distributions import Categorical
 
 from hopwise.model.abstract_recommender import ExplainableRecommender, KnowledgeRecommender
-from hopwise.utils import InputType, PathLanguageModelingTokenType
+from hopwise.utils import InputType
 
 
 class TPRec(KnowledgeRecommender, ExplainableRecommender):
@@ -652,28 +652,7 @@ class TPRec(KnowledgeRecommender, ExplainableRecommender):
         return scores, explanations
 
     def decode_path(self, path):
-        decoded_path = []
-        for node in path:
-            # append relations
-            if node[0] != "self_loop":
-                decoded_path.append(f"{PathLanguageModelingTokenType.RELATION.token}{node[0]}")
-
-            # append everything else
-
-            e_type = node[1]
-            eid = node[2]
-
-            if e_type == "user":
-                e_type = PathLanguageModelingTokenType.USER.token
-            elif eid in range(self.n_items):
-                e_type = PathLanguageModelingTokenType.ITEM.token
-            else:
-                e_type = PathLanguageModelingTokenType.ENTITY.token
-
-            # node[1] is the node type, node[2] is the node id
-            decoded_path.append(f"{e_type}{eid}")
-
-        return decoded_path
+        return path
 
     def beam_search(self, users):
         users = [user.item() for user in users]

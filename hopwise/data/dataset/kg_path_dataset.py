@@ -113,7 +113,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         """Return the item at index `idx` from the tokenized dataset."""
         if self._tokenized_dataset is None:
             # It avoids issues with hopwise flops calculation.
-            dummy_data = self.tokenizer(["U1"], truncation=True, padding=True, max_length=self.context_length)
+            dummy_data = self.tokenize(["U1"])
             return Interaction(dummy_data.data)
 
         return self.tokenized_dataset[idx]
@@ -237,17 +237,21 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         return tokenized_kg
 
+    def tokenize(self, data):
+        """Tokenize the input data using the tokenizer."""
+        return self.tokenizer(
+            data,
+            truncation=True,
+            padding=True,
+            max_length=self.context_length,
+            add_special_tokens=True,
+        )
+
     def tokenize_path_dataset(self):
         """Tokenize the path dataset."""
 
         if self._tokenized_dataset is None:
-            tokenized_dataset = self.tokenizer(
-                self.path_dataset.split("\n"),
-                truncation=True,
-                padding=True,
-                max_length=self.context_length,
-                add_special_tokens=True,
-            )
+            tokenized_dataset = self.tokenize(self.path_dataset.split("\n"))
             tokenized_dataset = Interaction(tokenized_dataset.data)
             correct_path_mask = [
                 all(spec_token not in path[1:-1] for spec_token in self.tokenizer.all_special_ids)
