@@ -18,7 +18,19 @@ import torch
 from torch import nn
 
 from hopwise.model.layers import FLEmbedding, FMEmbedding, FMFirstOrderLinear
-from hopwise.utils import FeatureSource, FeatureType, InputType, ModelType, set_color
+from hopwise.model.logits_processor import LogitsProcessorList
+from hopwise.utils import (
+    FeatureSource,
+    FeatureType,
+    GenerationOutputs,
+    InputType,
+    KnowledgeEvaluationType,
+    ModelType,
+    PathLanguageModelingTokenType,
+    get_logits_processor,
+    get_sequence_postprocessor,
+    set_color,
+)
 
 
 class AbstractRecommender(nn.Module):
@@ -260,6 +272,118 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
 
     def __init__(self, config, dataset, _skip_nn_module_init=True):
         super().__init__(config, dataset, _skip_nn_module_init=_skip_nn_module_init)
+
+        self.n_tokens = len(dataset.tokenizer)
+        self.token_sequence_length = dataset.token_sequence_length - 1  # EOS token is not included
+
+        logits_processor = get_logits_processor(config["model"])(
+            tokenized_ckg=dataset.get_tokenized_ckg(),
+            tokenized_used_ids=dataset.get_tokenized_used_ids(),
+            max_sequence_length=self.token_sequence_length,
+            tokenizer=dataset.tokenizer,
+            task=KnowledgeEvaluationType.REC,
+        )
+        self.logits_processor_list = LogitsProcessorList([logits_processor])
+
+        self.sequence_postprocessor = get_sequence_postprocessor(config["sequence_postprocessor"])(
+            dataset.tokenizer,
+            dataset.get_user_used_ids(),
+            dataset.item_num,
+        )
+
+    @torch.no_grad()
+    def generate(self, inputs, top_k=None, paths_per_user=1, **kwargs):
+        """
+        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
+        the sequence max_new_tokens times, feeding the predictions back into the model each time.
+        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+
+        Args:
+            inputs (dict): A dictionary containing the input_ids tensor with shape (b, t).
+            top_k (int, optional): If specified, only the top k logits will be considered
+                for sampling at each step. Defaults to None.
+            paths_per_user (int, optional): How many paths to return for each user.
+            **kwargs: Additional keyword arguments for the model. In future, it can be used to pass
+                other generation parameters such as temperature, repetition penalty, etc.
+        """
+        max_new_tokens = self.token_sequence_length - inputs["input_ids"].size(1)
+
+        # How many paths to return?
+        inputs["input_ids"] = inputs["input_ids"].repeat_interleave(paths_per_user, dim=0)
+        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, self.n_tokens), -torch.inf).to(self.device)
+        for i in range(max_new_tokens):
+            # forward the model to get the logits for the index in the sequence
+            logits = self.predict(inputs)
+            # pluck the logits at the final step and scale by desired temperature
+            logits = logits[:, -1, :] / self.temperature
+
+            # KGCD
+            logits = self.logits_processor_list(inputs["input_ids"], logits)
+
+            # optionally crop the logits to only the top k options
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -torch.inf
+            # apply softmax to convert logits to (normalized) probabilities
+            probs = torch.nn.functional.softmax(logits, dim=-1)
+            scores[:, i] = probs
+            # sample from the distribution
+            path_next = torch.multinomial(probs, num_samples=1)
+            # append sampled index to the running sequence and continue
+            inputs["input_ids"] = torch.cat((inputs["input_ids"], path_next), dim=1)
+
+        return GenerationOutputs(sequences=inputs["input_ids"], scores=torch.unbind(scores, dim=1))
+
+
+class ExplainablePathLanguageModelingRecommender(PathLanguageModelingRecommender, ExplainableRecommender):
+    """This is an abstract explainable path-language-modeling recommender.
+    All the explainable path-language-modeling model should implement this class.
+    The base explainable path-language-modeling recommender class inherits the path-language-modeling recommender class
+    to learn from knowledge graph paths defined by a chain of entity-relation triplets.
+    """
+
+    def __init__(self, config, dataset, _skip_nn_module_init=True):
+        super().__init__(config, dataset, _skip_nn_module_init=_skip_nn_module_init)
+
+    def explain(self, inputs, **kwargs):
+        kwargs["max_length"] = self.token_sequence_length
+        kwargs["min_length"] = self.token_sequence_length
+        outputs = self.generate(inputs, **kwargs)
+
+        max_new_tokens = self.token_sequence_length - inputs["input_ids"].size(1)
+
+        scores, sequences = self.sequence_postprocessor.get_sequences(outputs, max_new_tokens=max_new_tokens)
+
+        for seq in sequences:
+            seq[-1] = self.decode_path(seq[-1])
+
+        return scores, sequences
+
+    def decode_path(self, path):
+        """Standardize path format"""
+        new_path = []
+        # Process the path
+        # [BOS] U R I R E/I R I
+        for node_idx in range(1, len(path) + 1, 2):
+            if path[node_idx].startswith(PathLanguageModelingTokenType.USER.token):
+                user_id = int(path[node_idx][1:])
+                if node_idx - 1 == 0:
+                    relation = "self_loop"
+                else:
+                    relation = int(path[node_idx - 1][1:])
+
+                new_node = (relation, "user", user_id)
+            elif path[node_idx].startswith(PathLanguageModelingTokenType.ITEM.token):
+                relation = int(path[node_idx - 1][1:])
+                item_id = int(path[node_idx][1:])
+                new_node = (relation, "item", item_id)
+            else:
+                # Is an entity
+                relation = int(path[node_idx - 1][1:])
+                entity_id = int(path[node_idx][1:])
+                new_node = (relation, "entity", entity_id)
+            new_path.append(new_node)
+        return new_path
 
 
 class ContextRecommender(AbstractRecommender):

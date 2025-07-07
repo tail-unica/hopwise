@@ -21,7 +21,7 @@ import datetime
 import importlib
 import os
 import random
-from types import SimpleNamespace
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -30,12 +30,6 @@ from texttable import Texttable
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
-from hopwise.model.logits_processor import ConstrainedLogitsProcessorWordLevel
-from hopwise.model.ranker import (
-    BeamSearchSequenceScoreRanker,
-    CumulativeSequenceScoreRanker,
-    SampleSearchSequenceScoreRanker,
-)
 from hopwise.utils.enum_type import ModelType
 
 
@@ -459,56 +453,38 @@ def get_environment(config):
     return table
 
 
-def get_ranker(config, params):
-    processing_class = params.get("processing_class", None)
-    used_ids = params.get("used_ids", None)
-    item_num = params.get("item_num", None)
-
-    if config["ranker"] == "CumulativeSequenceScoreRanker":
-        ranker = CumulativeSequenceScoreRanker(
-            processing_class,
-            used_ids,
-            item_num,
-            topk=10,
-        )
-    elif config["ranker"] == "BeamSearchSequenceScoreRanker":
-        ranker = BeamSearchSequenceScoreRanker(
-            processing_class,
-            used_ids,
-            item_num,
-            topk=10,
-        )
-    elif config["ranker"] == "SampleSearchSequenceScoreRanker":
-        ranker = SampleSearchSequenceScoreRanker(
-            processing_class,
-            used_ids,
-            item_num,
-            topk=10,
-        )
-    else:
-        raise ValueError(
-            f"Ranker {config['ranker']} not supported. "
-            "Supported rankers are: CumulativeSequenceScoreRanker, "
-            "                       BeamSearchSequenceScoreRanker, "
-            "                       SampleSearchSequenceScoreRanker."
-        )
-
-    return ranker
-
-
-def get_logits_processor(config, params):
-    from transformers import LogitsProcessorList
-
+def get_sequence_postprocessor(postprocessor_name):
     try:
-        logits_processor_class = getattr(
-            importlib.import_module("hopwise.model.logits_processor"), config["model"] + "LogitsProcessorWordLevel"
+        postprocessor_name = postprocessor_name + "SequenceScorePostProcessor"
+        return getattr(importlib.import_module("hopwise.model.sequence_postprocessor"), postprocessor_name)
+    except AttributeError:
+        return getattr(
+            importlib.import_module("hopwise.model.sequence_postprocessor"), "BeamSearchSequenceScorePostProcessor"
+        )
+
+
+def get_logits_processor(model_name):
+    try:
+        return getattr(
+            importlib.import_module("hopwise.model.logits_processor"), model_name + "LogitsProcessorWordLevel"
         )
     except AttributeError:
-        logits_processor_class = ConstrainedLogitsProcessorWordLevel
+        return getattr(
+            importlib.import_module("hopwise.model.logits_processor"), "ConstrainedLogitsProcessorWordLevel"
+        )
 
-    return LogitsProcessorList([logits_processor_class(**params)])
 
+@dataclass
+class GenerationOutputs(dict):
+    r"""Dataclass to hold the outputs of the generation process.
 
-class GenerationOutputs(SimpleNamespace):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    Attributes:
+        sequences (torch.Tensor): The generated sequences.
+        scores (torch.Tensor): The scores for each generated token.
+    """
+
+    sequences: torch.Tensor
+    scores: torch.Tensor
+
+    def __post_init__(self):
+        self.update({"sequences": self.sequences, "scores": self.scores})

@@ -7,21 +7,64 @@
 Common logits processor in recommender system
 """
 
+import inspect
+
 import numpy as np
 import torch
 from cachetools import LFUCache
 
 from hopwise.utils import KnowledgeEvaluationType
 
-try:
-    from transformers import LogitsProcessor
-except (ImportError, ModuleNotFoundError):
 
-    class LogitsProcessor:
-        """Fallback LogitsProcessor if transformers is not available."""
+class LogitsProcessor:
+    """
+    Abstract base class for all logit processors that can be applied during generation.
+    Copy of HuggingFace's LogitsProcessor.
+    """
 
-        def __call__(self, input_ids, scores):
-            return scores
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
+        raise NotImplementedError(
+            f"{self.__class__} is an abstract class. Only classes inheriting this class can be called."
+        )
+
+
+class LogitsProcessorList(list):
+    """
+    This class can be used to create a list of [`LogitsProcessor`] to subsequently process a `scores` input tensor.
+    This class inherits from list and adds a specific *__call__* method to apply each [`LogitsProcessor`] to the
+    inputs.
+    Copy of HuggingFace's LogitsProcessorList.
+    """
+
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
+        r"""
+        Args:
+            input_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`):
+                Indices of input sequence tokens in the vocabulary. [What are input IDs?](../glossary#input-ids)
+            scores (`torch.FloatTensor` of shape `(batch_size, config.vocab_size)`):
+                Prediction scores of a language modeling head. These can be logits for each vocabulary when not using
+                beam search or log softmax for each vocabulary token when using beam search
+            kwargs (`Dict[str, Any]`, *optional*):
+                Additional kwargs that are specific to a logits processor.
+
+        Return:
+            `torch.FloatTensor` of shape `(batch_size, config.vocab_size)`:
+                The processed prediction scores.
+
+        """
+        for processor in self:
+            function_args = inspect.signature(processor.__call__).parameters
+            if len(function_args) > 2:  # noqa: PLR2004
+                if not all(arg in kwargs for arg in list(function_args.keys())[2:]):
+                    raise ValueError(
+                        f"Make sure that all the required parameters: {list(function_args.keys())} for "
+                        f"{processor.__class__} are passed to the logits processor."
+                    )
+                scores = processor(input_ids, scores, **kwargs)
+            else:
+                scores = processor(input_ids, scores)
+
+        return scores
 
 
 class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
@@ -68,37 +111,37 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         current_len = input_ids.shape[-1]
         has_bos_token = self.is_bos_token_in_input(input_ids)
 
-        if has_bos_token and current_len == self.max_sequence_length - 1:
-            pass
-            # TODO: confirm that handling EOS is not needed here
-            # self.mask_non_eos_tokens(scores)
+        unique_input_ids = input_ids
+        if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
+            # Determine whether the next token to generate is a relation or an entity:
+            # - relation: only the last entity is needed (1 token) → for [user123] last_n_tokens = 1
+            # - entity: the last 2 tokens are needed (entity, relation) → for [user123, watched] last_n_tokens = 2
+            # Apply deduplication: select unique sequences based only on the relevant last tokens (1 or 2)
+            # This avoids recomputing the same mask for sequences that share the same context
+            last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
+            _, input_ids_indices, input_ids_inv = np.unique(
+                input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True
+            )
+            unique_input_ids = input_ids[input_ids_indices]
+
+        full_mask = np.zeros((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
+        for idx in range(unique_input_ids.shape[0]):
+            if self.task == KnowledgeEvaluationType.REC:
+                key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
+            elif self.task == KnowledgeEvaluationType.LP:
+                key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
+
+            banned_mask = self.get_banned_mask(key, candidate_tokens)
+
+            if banned_mask.all():
+                banned_mask[self.tokenizer.pad_token_id] = False
+
+            full_mask[idx] = banned_mask
+
+        if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
+            scores[full_mask[input_ids_inv]] = -torch.inf
         else:
-            unique_input_ids = input_ids
-            if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
-                last_n_tokens = 2 if self.is_next_token_entity(input_ids) else 1
-                _, input_ids_indices, input_ids_inv = np.unique(
-                    input_ids.cpu().numpy()[:, -last_n_tokens:], axis=0, return_index=True, return_inverse=True
-                )
-                unique_input_ids = input_ids[input_ids_indices]
-
-            full_mask = np.zeros((unique_input_ids.shape[0], len(self.tokenizer)), dtype=bool)
-            for idx in range(unique_input_ids.shape[0]):
-                if self.task == KnowledgeEvaluationType.REC:
-                    key, candidate_tokens = self.process_scores_rec(unique_input_ids, idx)
-                elif self.task == KnowledgeEvaluationType.LP:
-                    key, candidate_tokens = self.process_scores_lp(unique_input_ids, idx)
-
-                banned_mask = self.get_banned_mask(key, candidate_tokens)
-
-                if banned_mask.all():
-                    banned_mask[self.tokenizer.pad_token_id] = False
-
-                full_mask[idx] = banned_mask
-
-            if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
-                scores[full_mask[input_ids_inv]] = -torch.inf
-            else:
-                scores[full_mask] = -torch.inf
+            scores[full_mask] = -torch.inf
 
         return scores
 

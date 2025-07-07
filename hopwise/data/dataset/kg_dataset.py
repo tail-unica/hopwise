@@ -223,32 +223,24 @@ class KnowledgeBasedDataset(Dataset):
                 raise ValueError(
                     f'The value of "RS" in knowledge_split_args [{knowledge_split_args}] should be a list.'
                 )
-            if knowledge_group_by is None:
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
-                    group_by=None,
-                )
-            elif knowledge_group_by == "head":
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": "kg"},
-                    group_by=self.head_entity_field,
-                )
-            elif knowledge_group_by == "tail":
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
-                    group_by=self.tail_entity_field,
-                )
-            elif knowledge_group_by == "relation":
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
-                    group_by=self.relation_field,
-                )
-            else:
-                raise NotImplementedError(f"The knowledge grouping method [{group_by}] has not been implemented.")
+
+            if knowledge_group_by is not None:
+                if knowledge_group_by.lower() == "head":
+                    knowledge_group_by = self.head_entity_field
+                elif knowledge_group_by.lower() == "tail":
+                    knowledge_group_by = self.tail_entity_field
+                elif knowledge_group_by.lower() == "relation":
+                    knowledge_group_by = self.relation_field
+                else:
+                    raise NotImplementedError(
+                        f"The knowledge grouping method [{knowledge_group_by}] has not been implemented."
+                    )
+
+            datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
+                knowledge_split_args["RS"],
+                data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
+                group_by=knowledge_group_by,
+            )
 
         if split_mode == "RS":
             # Manage interaction split
@@ -442,21 +434,21 @@ class KnowledgeBasedDataset(Dataset):
         """Get the average degree of items in the knowledge graph.
 
         Returns:
-            float: Average number of KG triples each product is involved in.
+            float: Average number of KG triples each item is involved in.
         """  # assumes a DataFrame or dict with head, relation, tail
         if isinstance(self.kg_feat, pd.DataFrame):
             head_counts = self.kg_feat[self.head_entity_field].value_counts()
             tail_counts = self.kg_feat[self.tail_entity_field].value_counts()
             total_counts = head_counts.add(tail_counts, fill_value=0)
-            product_degrees = total_counts[total_counts.index.astype(str).isin(self.item2entity.keys())]
-            return product_degrees.mean() if not product_degrees.empty else 0.0
+            item_degrees = total_counts[total_counts.index.astype(str).isin(self.item2entity.keys())]
+            return item_degrees.mean() if not item_degrees.empty else 0.0
         else:
             # fallback if not using pandas
             head = self.kg_feat[self.head_entity_field].numpy()
             tail = self.kg_feat[self.tail_entity_field].numpy()
             counter = Counter(head) + Counter(tail)
-            product_degrees = [counter[pid] for pid in self.item2entity.keys()]
-            return np.mean(product_degrees) if product_degrees else 0.0
+            item_degrees = [counter[pid] for pid in self.item2entity.keys()]
+            return np.mean(item_degrees) if item_degrees else 0.0
 
     @property
     def avg_degree_kg(self):
@@ -479,7 +471,7 @@ class KnowledgeBasedDataset(Dataset):
             set_color("The sparsity of the KG","green") + f": {self.sparsity_kg_rel}",
             set_color("The sparsity of the KG (relation-aware)","green") + f": {self.sparsity_kg}",
             set_color("The average degree of entities in the KG:","green") + f": {self.avg_degree_kg}",
-            set_color("The average degree of products in the KG:","green") + f": {self.avg_degree_kg_item}",
+            set_color("The average degree of items in the KG:","green") + f": {self.avg_degree_kg_item}",
         ]  # yapf: disable
         return "\n".join(info)
 
@@ -559,7 +551,7 @@ class KnowledgeBasedDataset(Dataset):
             if ftype == FeatureType.TOKEN:
                 feat[field] = new_idx
             else:
-                split_point = np.cumsum(feat[field].agg(len))[:-1]
+                split_point = np.cumsum(feat[field].transform(len))[:-1]
                 feat[field] = np.split(new_idx, split_point)
 
     def _merge_item_and_entity(self):

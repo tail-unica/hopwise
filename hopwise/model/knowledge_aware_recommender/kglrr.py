@@ -388,11 +388,6 @@ class KGLRR(KnowledgeRecommender):
 
         prediction = torch.stack(prediction).to(self.device)  # [B, item_size]
 
-        if self.is_explain:
-            topk_items = torch.topk(prediction, k=1, dim=1).indices  # shape: [B, 1]
-            topk_embeds = self.encoder.computer()[1][topk_items.squeeze(1)]  # shape: [B, V]
-            explanation = self.explain(users, history, topk_embeds)
-            return prediction, explanation
         return prediction
 
     def explain(self, users, history, items):

@@ -12,7 +12,7 @@ train_stage: 'pretrain'         # (str) The training stage. Range in ['pretrain'
 pre_model_path: ''              # (str) The path of pretrained model.
 
 base_model: distilgpt2
-ranker: BeamSearchSequenceScoreRanker # one of ['SampleSearchSequenceScoreRanker', 'BeamSearchSequenceScoreRanker', 'CumulativeSequenceScoreRanker']
+sequence_postprocessor: Cumulative
 
 path_sample_args:
     restrict_by_phase: False    # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.
