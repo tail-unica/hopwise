@@ -177,6 +177,7 @@ class Dataset(torch.utils.data.Dataset):
         self._filter_by_field_value()
         self._filter_inter_by_user_or_item()
         self._filter_by_inter_num()
+        breakpoint()
         self._reset_index()
 
     def _build_feat_name_list(self):
@@ -533,6 +534,7 @@ class Dataset(torch.utils.data.Dataset):
         or ``[id_token_length, seqlen]``. See :doc:`../user_guide/data/data_args` for detail arg setting.
         """
 
+        breakpoint()
         preload_fields = self.config["preload_weight"]
         if preload_fields is None:
             return
@@ -649,7 +651,7 @@ class Dataset(torch.utils.data.Dataset):
                 if ftype == FeatureType.FLOAT:
                     feat[field] = norm(feat[field].values)
                 elif ftype == FeatureType.FLOAT_SEQ:
-                    split_point = np.cumsum(feat[field].agg(len))[:-1]
+                    split_point = np.cumsum(feat[field].transform(len))[:-1]
                     feat[field] = np.split(norm(feat[field].agg(np.concatenate)), split_point)
 
     def _discretization(self):
@@ -714,7 +716,7 @@ class Dataset(torch.utils.data.Dataset):
                         ret = np.ones_like(res)
                         feat[field] = np.stack([ret, res], axis=-1).tolist()
                     elif ftype == FeatureType.FLOAT_SEQ:
-                        split_point = np.cumsum(feat[field].agg(len))[:-1]
+                        split_point = np.cumsum(feat[field].transform(len))[:-1]
                         res, self.field2bucketnum[field] = disc(feat[field].agg(np.concatenate), method, bucket)
                         ret = np.ones_like(res)
                         res, ret = (
@@ -728,7 +730,7 @@ class Dataset(torch.utils.data.Dataset):
                     if ftype == FeatureType.FLOAT:
                         feat[field] = np.stack([feat[field], np.ones_like(feat[field])], axis=-1).tolist()
                     else:
-                        split_point = np.cumsum(feat[field].agg(len))[:-1]
+                        split_point = np.cumsum(feat[field].transform(len))[:-1]
                         res = ret = feat[field].agg(np.concatenate)
                         res = np.ones_like(ret)
                         res, ret = (
@@ -818,7 +820,6 @@ class Dataset(torch.utils.data.Dataset):
                 inter_num=item_inter_num,
                 inter_interval=item_inter_num_interval,
             )
-
             if len(ban_users) == 0 and len(ban_items) == 0:
                 break
 
@@ -835,7 +836,6 @@ class Dataset(torch.utils.data.Dataset):
             item_inter = self.inter_feat[self.iid_field]
             dropped_inter |= user_inter.isin(ban_users)
             dropped_inter |= item_inter.isin(ban_items)
-
             user_inter_num -= Counter(user_inter[dropped_inter].values)
             item_inter_num -= Counter(item_inter[dropped_inter].values)
 
@@ -895,7 +895,11 @@ class Dataset(torch.utils.data.Dataset):
                 self.logger.warning(f"{endpoint_pair_str} is an illegal interval!")
                 continue
 
-            left_point, right_point = float(endpoint_pair[0]), float(endpoint_pair[1])
+            if isinstance(endpoint_pair[1], str) and eval(endpoint_pair[1]).endswith("inf"):
+                left_point, right_point = float(endpoint_pair[0]), float("inf")
+            else:
+                left_point, right_point = float(endpoint_pair[0]), float(endpoint_pair[1])
+
             if left_point > right_point:
                 self.logger.warning(f"{endpoint_pair_str} is an illegal interval!")
 
@@ -1088,7 +1092,7 @@ class Dataset(torch.utils.data.Dataset):
             if ftype == FeatureType.TOKEN:
                 feat[field] = new_ids
             elif ftype == FeatureType.TOKEN_SEQ:
-                split_point = np.cumsum(feat[field].agg(len))[:-1]
+                split_point = np.cumsum(feat[field].transform(len))[:-1]
                 feat[field] = np.split(new_ids, split_point)
 
     def _change_feat_format(self):
@@ -1995,7 +1999,7 @@ class Dataset(torch.utils.data.Dataset):
     def history_user_matrix(self, value_field=None, max_history_len=None):
         """Get dense matrix describe item's history interaction records.
 
-        ``history_matrix[i]`` represents item ``i``'s history interacted item_id.
+        ``history_matrix[i]`` represents item ``i``'s history interacted user_id.
 
         ``history_value[i]`` represents item ``i``'s history interaction records' values,
         ``0`` if ``value_field = None``.
@@ -2018,6 +2022,51 @@ class Dataset(torch.utils.data.Dataset):
                 - History length matrix (torch.Tensor): ``history_len`` described above.
         """
         return self._history_matrix(row="item", value_field=value_field, max_history_len=max_history_len)
+
+    def _get_used_ids(self, source_field, target_field):
+        """Get used ids from the interaction features.
+
+        Args:
+            source_field (str, optional): Source field name.
+            target_field (str, optional): Target field name.
+
+        Returns:
+            numpy.ndarray: A numpy array of sets, where each set contains the item ids
+            that a user has interacted with.
+        """
+        if isinstance(self.inter_feat, pd.DataFrame):
+            source_values = self.inter_feat[source_field].values
+            target_values = self.inter_feat[target_field].values
+        else:
+            source_values = self.inter_feat[source_field].numpy()
+            target_values = self.inter_feat[target_field].numpy()
+
+        cur = np.array([set() for _ in range(self.user_num)])
+        for source, target in zip(source_values, target_values):
+            cur[source].add(target)
+        return cur
+
+    def get_user_used_ids(self):
+        """Get used item ids of each user from the interaction features.
+
+        Returns:
+            numpy.ndarray: A numpy array of sets, where each set contains the item ids
+            that a user has interacted with.
+        """
+        self._check_field("uid_field", "iid_field")
+
+        return self._get_used_ids(self.uid_field, self.iid_field)
+
+    def get_item_used_ids(self):
+        """Get used user ids of each item from the interaction features.
+
+        Returns:
+            numpy.ndarray: A numpy array of sets, where each set contains the user ids
+            that have interacted with an item.
+        """
+        self._check_field("uid_field", "iid_field")
+
+        return self._get_used_ids(self.iid_field, self.uid_field)
 
     def get_preload_weight(self, field):
         """Get preloaded weight matrix, whose rows are sorted by token ids.

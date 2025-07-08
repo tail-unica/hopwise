@@ -39,7 +39,13 @@ loss_type: 'CE'
 additional_feat_suffix: [itememb]
 load_col:
     inter: ['user_id', 'item_id', 'timestamp']
+#    item: ['item_id']
     itememb: [item_embedding_id, item_embedding]
 alias_of_item_id: [item_embedding_id]
 preload_weight:
   item_embedding_id: item_embedding
+
+gpu_id: 0
+user_inter_num_interval: [5, inf]
+item_inter_num_interval: [5, inf]
+data_path: /home/recsysdatasets

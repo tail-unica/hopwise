@@ -15,7 +15,6 @@ from collections import defaultdict, namedtuple
 from functools import reduce
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -23,7 +22,7 @@ from torch.distributions import Categorical
 
 from hopwise.model.abstract_recommender import ExplainableRecommender, KnowledgeRecommender
 from hopwise.model.layers import KGState
-from hopwise.utils import InputType, PathLanguageModelingTokenType
+from hopwise.utils import InputType
 
 
 class PGPR(KnowledgeRecommender, ExplainableRecommender):
@@ -276,9 +275,9 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
                 src_embed = user_embed + self.relation_embedding[self.ui_relation_id] + self.relation_embedding[r]
 
             score = np.matmul(src_embed, self.node_type2emb[next_node_type][next_node_id])
-            # This trimming may filter out target products!
-            # Manually set the score of target products a very large number.
-            # if next_node_type == PRODUCT and next_node_id in self._target_pids:
+            # This trimming may filter out target items!
+            # Manually set the score of target items a very large number.
+            # if next_node_type == ITEM and next_node_id in self._target_pids:
             #    score = 99999.0
             scores.append(score)
 
@@ -350,7 +349,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         _, curr_node_type, curr_node_id = path[-1]
 
         if curr_node_type == "entity" and curr_node_id < self.n_items:
-            # Give soft reward for other reached products.
+            # Give soft reward for other reached items.
             uid = path[0][-1]
             u_vec = self.user_embedding[uid] + self.relation_embedding[self.ui_relation_id]
             p_vec = self.entity_embedding[curr_node_id]
@@ -412,7 +411,9 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
 
         paths, probs = self.beam_search(users)
 
-        return self.collect_scores(users, paths, probs)
+        scores, _ = self.collect_scores(users, paths, probs)
+
+        return scores
 
     def explain(self, interaction):
         """Support function used for case study.
@@ -421,43 +422,21 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
             interaction : test interaction data
 
         Returns:
-            pd.Dataframe: explanation results with columns: "user", "product", "score", "path"
+            pd.Dataframe: explanation results with columns: "user", "item", "score", "path"
         """
         users = interaction[self.USER_ID]
 
         paths, probs = self.beam_search(users)
 
-        _, explanations = self.collect_scores(users, paths, probs)
+        scores, explanations = self.collect_scores(users, paths, probs)
 
-        # make explanations as pandas dataframe, then return the results
-        df = pd.DataFrame(explanations, columns=["user", "product", "score", "path"])
-        df["path"] = df["path"].apply(self.decode_path)
+        for exp in explanations:
+            exp[-1] = self.decode_path(exp[-1])
 
-        return df
+        return scores, explanations
 
     def decode_path(self, path):
-        decoded_path = []
-        for node in path:
-            # append relations
-            if node[0] != "self_loop":
-                decoded_path.append(f"{PathLanguageModelingTokenType.RELATION.value}{node[0]}")
-
-            # append everything else
-
-            e_type = node[1]
-            eid = node[2]
-
-            if e_type == "user":
-                e_type = PathLanguageModelingTokenType.USER.value
-            elif eid in range(self.n_items):
-                e_type = PathLanguageModelingTokenType.ITEM.value
-            else:
-                e_type = PathLanguageModelingTokenType.ENTITY.value
-
-            # node[1] is the node type, node[2] is the node id
-            decoded_path.append(f"{e_type}{eid}")
-
-        return decoded_path
+        return path
 
     def beam_search(self, users):
         users = [user.item() for user in users]
@@ -525,7 +504,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
                 continue
 
             path_pid = path[-1][2]
-            # check it is a product
+            # check it is an item
             if not (path_pid < self.n_items):
                 continue
 
@@ -536,7 +515,7 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
             path_prob = reduce(lambda x, y: x * y, prob)
             pred_paths[path_uid][path_pid].append((path_score, path_prob, path))
 
-        # 2) Pick best paths for each user-product pair based on the score
+        # 2) Pick best paths for each user-item pair based on the score
         best_pred_paths = defaultdict(list)
         for user, user_pred_paths in pred_paths.items():
             for item in user_pred_paths:
@@ -552,23 +531,23 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
         for i, user in enumerate(best_pred_paths):
             # sort by score
             sorted_path = sorted(best_pred_paths[user], key=lambda x: (x[0], x[1]), reverse=True)
-            top_products = [[p[-1][2], score] for score, _, p in sorted_path][: max(self.topk)]
+            top_items = [[p[-1][2], score] for score, _, p in sorted_path][: max(self.topk)]
             top_paths = [p for _, _, p in sorted_path][: max(self.topk)]
-            if len(top_products) < max(self.topk):
+            if len(top_items) < max(self.topk):
                 cand_pids = np.argsort(path_scores[user])
                 for cand_pids in cand_pids[::-1]:
                     if cand_pids in self.positives[user]:
                         continue
-                    top_products.append([cand_pids, path_scores[user][cand_pids]])
-                    if len(top_products) >= max(self.topk):
+                    top_items.append([cand_pids, path_scores[user][cand_pids]])
+                    if len(top_items) >= max(self.topk):
                         break
             # Change order from smallest to largest
-            top_products = top_products[::-1]
+            top_items = top_items[::-1]
             top_paths = top_paths[::-1]
-            for (product, score), path in zip(top_products, top_paths):
-                results[i, product] = score
+            for (item, score), path in zip(top_items, top_paths):
+                results[i, item] = score
 
-                # collect user, product, score and paths.
-                collect_results.append([user, product, score, path])
+                # collect user, item, score and paths.
+                collect_results.append([user, item, score, path])
 
         return results, collect_results

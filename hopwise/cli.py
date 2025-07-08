@@ -36,6 +36,12 @@ class HopwiseClickCommand(click.Command):
 
 
 console = Console()
+debug_message = """[dim]
+    Use --debug for full traceback or --rich-traceback for enhanced formatting. Please, be careful
+    that it should be placed after hopwise command and before any subcommand, e.g.:
+    hopwise train --debug [model] [dataset] [--config-files config1 config2 ...]
+    hopwise train --rich-traceback [model] [dataset] [--config-files config1 config2 ...]
+    [/dim]"""
 
 
 @click.group()
@@ -117,7 +123,7 @@ def train(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_
                 sys.exit(1)
         else:
             console.print(f"[bold red]✗ Training failed:[/bold red] {type(e).__name__}: {str(e)}")
-            console.print("[dim]Use --debug for full traceback or --rich-traceback for enhanced formatting[/dim]")
+            console.print(debug_message)
             sys.exit(1)
 
 
@@ -176,7 +182,7 @@ def evaluate(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, wor
                 sys.exit(1)
         else:
             console.print(f"[bold red]✗ Evaluation failed:[/bold red] {type(e).__name__}: {str(e)}")
-            console.print("[dim]Use --debug for full traceback or --rich-traceback for enhanced formatting[/dim]")
+            console.print(debug_message)
             sys.exit(1)
 
 
@@ -291,7 +297,7 @@ def benchmark(
         allow_interspersed_args=True,
     ),
 )
-@click.option("--params-file", help="Fixed params files")
+@click.argument("params-file", type=click.Path(exists=True, dir_okay=False, readable=True))
 @click.option("--config-files", help="Fixed config files")
 @click.option("--output-path", default="saved/hyper", help="Output directory")
 @click.option("--display-file", help="Visualization file")
@@ -366,7 +372,7 @@ def tune(
                 sys.exit(1)
         else:
             console.print(f"[bold red]✗[/bold red] Tuning failed: {str(e)}")
-            console.print("[dim]Use --debug for full traceback or --rich-traceback for enhanced formatting[/dim]")
+            console.print(debug_message)
             sys.exit(1)
 
 

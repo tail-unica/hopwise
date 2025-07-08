@@ -8,7 +8,7 @@ kg_reverse_r: True
 topk_paths: 25
 clip_grad_norm:
   max_norm: 5.0
-max_user_trials: 50
+max_user_trials: inf
 epochs: 50
 eval_step: 50
 

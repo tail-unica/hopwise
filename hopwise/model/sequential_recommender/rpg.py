@@ -29,9 +29,9 @@ class RPG(SequentialRecommender):
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
-        self.dataset = dataset
-        self.config = config
+        dataset.item2shifted_sem_id = dataset.item2shifted_sem_id.to(self.device)
 
+        self.topk = config["topk"]
         self.use_gcd = config["use_gcd"]
         self.codebook_size = config["codebook_size"]
         self.embedding_size = config["embedding_size"]
@@ -42,10 +42,12 @@ class RPG(SequentialRecommender):
         self.propagation_steps = config["propagation_steps"]
         self.loss_type = config["loss_type"]  # necessary otherwise hopwise don't recognize seq recommender
 
-        self.dataset.item2shifted_sem_id = self.dataset.item2shifted_sem_id.to(self.device)
+        self.item2shifted_sem_id = dataset.item2shifted_sem_id
+        self.n_digit = dataset.n_digit
+        self.codebook_size = dataset.codebook_size
 
         gpt2config = GPT2Config(
-            vocab_size=self.dataset.vocab_size,
+            vocab_size=dataset.vocab_size,
             n_positions=config["max_seq_length"],
             n_embd=config["embedding_size"],
             n_layer=config["layers"],
@@ -57,12 +59,12 @@ class RPG(SequentialRecommender):
             attn_pdrop=config["attn_pdrop"],
             layer_norm_epsilon=config["layer_norm_epsilon"],
             initializer_range=config["initializer_range"],
-            eos_token_id=self.dataset.eos_token,
+            eos_token_id=dataset.eos_token,
         )
         self.gpt2 = GPT2Model(gpt2config)
 
         # Number of values in a semantic id.
-        self.n_pred_head = self.dataset.n_digit
+        self.n_pred_head = dataset.n_digit
         pred_head_list = []
 
         # Create prediction heads with a Residual Connection
@@ -73,7 +75,7 @@ class RPG(SequentialRecommender):
         self.loss = torch.nn.CrossEntropyLoss()
 
     def forward(self, item_seq):
-        input_tokens = self.dataset.item2shifted_sem_id[item_seq]
+        input_tokens = self.item2shifted_sem_id[item_seq]
         attention_mask = (item_seq != 0).long()
         # aggregate semantic ids embeddings averaging embeddings for each item
         wte = self.gpt2.wte(input_tokens).mean(dim=-2)
@@ -109,7 +111,7 @@ class RPG(SequentialRecommender):
             for i in range(self.n_pred_head)
         ]
         # convert each item to the corresponding semantic id
-        token_labels = self.dataset.item2shifted_sem_id[labels.view(-1)[label_mask]]
+        token_labels = self.item2shifted_sem_id[labels.view(-1)[label_mask]]
 
         # aggregate loss over the prediction heads
         losses = [
@@ -156,7 +158,7 @@ class RPG(SequentialRecommender):
                 input=token_logits.unsqueeze(-2).expand(-1, self.n_items, -1),
                 dim=-1,
                 # (batch_size, n_items, code_dim)
-                index=(self.dataset.item2shifted_sem_id[1:, :] - 1).unsqueeze(0).expand(token_logits.shape[0], -1, -1),
+                index=(self.item2shifted_sem_id[1:, :] - 1).unsqueeze(0).expand(token_logits.shape[0], -1, -1),
             ).mean(dim=-1)
 
             # account for PAD
@@ -194,12 +196,12 @@ class RPG(SequentialRecommender):
                 scores = torch.gather(
                     input=token_logits[batch_id].unsqueeze(0).expand(neighbors_in_batch.shape[0], -1),
                     dim=-1,
-                    index=(self.dataset.item2shifted_sem_id[neighbors_in_batch] - 1),
+                    index=(self.item2shifted_sem_id[neighbors_in_batch] - 1),
                 ).mean(dim=-1)
 
                 # if it's the last propagation step, save the scores
                 if propagation_step == self.propagation_steps - 1:
-                    topk = torch.topk(scores, max(self.config["topk"])).indices
+                    topk = torch.topk(scores, max(self.topk)).indices
                     results[batch_id, topk] = scores[topk]
                 else:
                     # otherwise, select beams and propagate again
@@ -213,14 +215,11 @@ class RPG(SequentialRecommender):
 
     def build_ii_sim_mat(self):
         # Assuming n_digit=32, codebook_size=256
-        n_digit = self.dataset.n_digit
-        codebook_size = self.dataset.codebook_size
-
         # 1) Reshape first 8192 rows of token embeddings into [32, 256, d]
         #    ignoring 2 rows which might be special tokens
         #    shape: (32, 256, d)
 
-        wte = self.gpt2.wte.weight[1:-1].view(n_digit, codebook_size, -1)
+        wte = self.gpt2.wte.weight[1:-1].view(self.n_digit, self.codebook_size, -1)
 
         # 2) Normalize each (256, d) sub-matrix to compute pairwise cosine similarities
         #    We'll do this in a batch for all 32 groups.
@@ -266,11 +265,11 @@ class RPG(SequentialRecommender):
                 # The typical approach is:
                 #   sub = token_sims_01[k].index_select(0, row_inds).index_select(1, col_inds)
                 # Then sum them up across k.
-                for k in range(n_digit):
+                for k in range(self.n_digit):
                     # row_inds shape: (block_size_i,)
-                    row_inds = tokens_i[:, k] - k * codebook_size - 1
+                    row_inds = tokens_i[:, k] - k * self.codebook_size - 1
                     # col_inds shape: (block_size_j,)
-                    col_inds = tokens_j[:, k] - k * codebook_size - 1
+                    col_inds = tokens_j[:, k] - k * self.codebook_size - 1
 
                     # token_sims_01[k] -> shape (256, 256)
                     # row-gather => shape (block_size_i, 256)
@@ -282,7 +281,7 @@ class RPG(SequentialRecommender):
                     sum_block += temp
 
                 # Now take the average across the 32 digits
-                avg_block = sum_block / n_digit
+                avg_block = sum_block / self.n_digit
 
                 # Write back into the final item_item_sim
                 item_item_sim[i_start:i_end, j_start:j_end] = avg_block

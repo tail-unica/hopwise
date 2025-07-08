@@ -2,12 +2,24 @@
 state_history: 1
 max_acts: 250
 gamma: 0.99
-action_dropout: 0.0
-hidden_sizes: [512,256]
+action_dropout: 0.4444884111418854
+hidden_sizes: [256,128]
 max_path_len: 3
 weight_factor: 1e-3
 beam_search_hop: [25,5,1]
 fix_scores_sorting_bug: False
+learning_rate: 0.006524381330201601
+
+
+gpu_id: 0
+topk: [10,20,50]
+data_path: /home/recsysdatasets
+metrics: ['NDCG', 'MRR', 'Hit', 'Precision', 'Recall', 'GiniIndex', 'ShannonEntropy','ItemCoverage','TailPercentage', 'Novelty', 'Serendipity', 'LIR', 'Fidelity', 'SEP', 'LID','SED', 'PTD', 'PTC', 'LITD', 'SETD', 'PPT']
+valid_metric: ndcg@10
+eval_batch_size: 1
+epochs: 1
+eval_step: 1
+
 # The kge embeddings necessary to score paths
 additional_feat_suffix: [useremb, entityemb, relationemb]
 
@@ -25,3 +37,4 @@ preload_weight:
   user_embedding_id: user_embedding
   entity_embedding_id: entity_embedding
   relation_embedding_id: relation_embedding
+

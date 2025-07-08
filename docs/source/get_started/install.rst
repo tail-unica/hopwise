@@ -73,7 +73,7 @@ Here we list and describe the available optional dependencies (a.k.a. "extras") 
 
   .. code:: bash
 
-    uv pip install dgl>=2.4.0 -f https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html
+    uv pip install dgl>=2.4.0 -f https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html --no-deps
 
   Please check out the `DGL installation guide <https://www.dgl.ai/pages/start.html>`__ for more details and for the URLs of other flat indexes for different CUDA/CPU versions.
 - `scatter`: for the `KGIN` and `MCCLK` models, installation with `hopwise[scatter]` is not supported, as `torch-scatter` needs to be installed separately.

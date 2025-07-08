@@ -18,7 +18,6 @@ Customized datasets named ``[Model Name]Dataset`` can be automatically called.
 import datetime
 import math
 
-import faiss
 import joblib
 import numpy as np
 import pandas as pd
@@ -155,11 +154,11 @@ class KGGLMDataset(KnowledgePathDataset):
         self.pretrain_hop_length = tuple(map(int, self.pretrain_hop_length[1:-1].split(",")))
         self.pretrain_paths = path_sample_args["pretrain_paths"]
 
-    def generate_user_path_dataset(self, used_ids):
+    def generate_user_path_dataset(self):
         if self.train_stage == "pretrain":
             self.generate_pretrain_dataset()
         else:
-            super().generate_user_path_dataset(used_ids)
+            super().generate_user_path_dataset()
 
     def generate_pretrain_dataset(self):
         """Generate pretrain dataset for KGGLM model."""
@@ -669,11 +668,6 @@ class TPRecDataset(KnowledgeBasedDataset):
             self.config, test_set.inter_feat, "test", gmm=train_set.temporal_weights.gmm_model
         )
 
-        # update train set
-        datasets[0] = train_set
-        datasets[1] = valid_set
-        datasets[2] = test_set
-
         return datasets
 
 
@@ -748,6 +742,8 @@ class RPGDataset(SequentialDataset):
         - IVF1: Single inverted list (no real partitioning).
         - PQ32x8: Encode each of the 32 subspaces with 8 bits (256 centroids each).
         """
+        import faiss
+
         #  Load sentence transformer embeddings
         sentence_embeddings = np.vstack(self.itememb_feat["item_embedding"].to_numpy())
 
@@ -780,6 +776,7 @@ class RPGDataset(SequentialDataset):
             faiss_sem_ids.append(code)
         pq_codes = np.array(faiss_sem_ids)
 
+        # Create mapping item -> semantic id
         item2sem_ids = {}
         for item in range(pq_codes.shape[0]):
             item2sem_ids[item + 1] = tuple(pq_codes[i].tolist())
@@ -806,3 +803,36 @@ class RPGDataset(SequentialDataset):
                 # "+ 1" as 0 is reserved for padding
                 item2shifted_sem_id[int(item), digit] += self.codebook_size * digit + 1
         return item2shifted_sem_id
+
+    def __str__(self):
+        info = [set_color(self.dataset_name, "pink")]
+        if self.uid_field:
+            info.extend(
+                [
+                    set_color("The number of users", "blue") + f": {self.user_num}",
+                    set_color("Average actions of users", "blue") + f": {self.avg_actions_of_users}",
+                ]
+            )
+        if self.iid_field:
+            info.extend(
+                [
+                    set_color("The number of items", "blue") + f": {self.item_num}",
+                    set_color("Average actions of items", "blue") + f": {self.avg_actions_of_items}",
+                ]
+            )
+        info.append(set_color("The number of inters", "blue") + f": {self.inter_num}")
+        if self.uid_field and self.iid_field:
+            info.append(set_color("The sparsity of the dataset", "blue") + f": {self.sparsity * 100}%")
+        info.append(set_color("Remain Fields", "blue") + f": {list(self.field2type)}")
+
+        # append semantic ids informations
+        info.extend(
+            [
+                set_color("Vocabulary Size", "green") + f": {self.vocab_size}",
+                set_color("Number of digits", "green") + f": {self.n_digit}",
+                set_color("Codebook Size", "green") + f": {self.codebook_size}",
+                set_color("FAISS Configuration", "green") + f": {self.index_factory}",
+            ]
+        )
+
+        return "\n".join(info)

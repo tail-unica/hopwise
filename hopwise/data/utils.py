@@ -250,9 +250,7 @@ def data_preparation(config, dataset):
         # model = config["model"]
         built_datasets = dataset.build()
 
-        if model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING] and model_input_type not in [
-            InputType.USERWISE
-        ]:
+        if model_type in [ModelType.KNOWLEDGE] and model_input_type not in [InputType.USERWISE]:
             if isinstance(built_datasets, dict):
                 # then the kg has been split
                 train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets[KnowledgeEvaluationType.LP]
@@ -393,8 +391,6 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
         # Return Dataloader based on the modeltype
         if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
-        elif model_type == ModelType.PATH_LANGUAGE_MODELING:
-            return KnowledgePathDataLoader
         else:
             return TrainDataLoader
     else:

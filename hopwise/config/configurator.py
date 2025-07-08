@@ -25,7 +25,7 @@ from logging import getLogger
 from typing import Literal
 
 import yaml
-from tqdm import rich
+from tqdm import TqdmExperimentalWarning, rich
 
 from hopwise.evaluator import metric_types, smaller_metrics
 from hopwise.utils import (
@@ -41,6 +41,8 @@ from hopwise.utils import (
     set_color,
     training_arguments,
 )
+
+warnings.filterwarnings("ignore", category=TqdmExperimentalWarning)
 
 
 class Config:
@@ -313,6 +315,9 @@ class Config:
             self._update_internal_config_dict(knowledge_path_base_init)
             if dataset == "ml-100k":
                 self._update_internal_config_dict(knowledge_base_on_ml_100k_init)
+
+            # avoids parallelism issues with HuggingFace Tokenizers
+            os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
         for file in [
             dataset_init_file,

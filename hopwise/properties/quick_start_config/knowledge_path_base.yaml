@@ -33,6 +33,9 @@ path_generation_args:
     num_beam_groups: 5          # (int) Number of groups for diverse beam search.
     diversity_penalty: 0.3      # (float) Diversity penalty for beam search.
     length_penalty: 0.0         # (float) Length penalty for beam search.
-    top_k: 100                  # (int) The number of highest probability vocabulary tokens to keep for top-k-filtering.
+    top_k: ~                    # (int) The number of highest probability vocabulary tokens to keep for top-k-filtering.
     top_p: ~                    # (float) The cumulative probability for top-p-filtering.
     do_sample: False            # (bool) Whether to use sampling ; use greedy decoding otherwise.
+
+# one of ['SampleSearch', 'BeamSearch', 'Cumulative']
+sequence_postprocessor: BeamSearch # (str) Process generated sequences into scores and structured paths

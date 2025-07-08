@@ -22,7 +22,6 @@
 """
 
 import os
-import warnings
 from collections import defaultdict
 from logging import getLogger
 from time import time
@@ -33,14 +32,13 @@ from scipy import sparse
 from torch import optim
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from tqdm import TqdmExperimentalWarning, rich
+from tqdm import rich
 
 from hopwise.data.dataloader import FullSortLPEvalDataLoader, NegSampleDataLoader
 from hopwise.data.interaction import Interaction
-from hopwise.evaluator import Collector, Collector_KG, Evaluator, Evaluator_KG
+from hopwise.evaluator import Collector, Collector_KG, Evaluator, Evaluator_KG, ExplainableCollector
 from hopwise.utils import (
     EvaluatorType,
-    GenerationOutputs,
     KGDataLoaderState,
     WandbLogger,
     calculate_valid_score,
@@ -49,14 +47,10 @@ from hopwise.utils import (
     ensure_dir,
     get_gpu_usage,
     get_local_time,
-    get_logits_processor,
-    get_ranker,
     get_tensorboard,
     set_color,
 )
 from hopwise.utils.enum_type import KnowledgeEvaluationType
-
-warnings.filterwarnings("ignore", category=TqdmExperimentalWarning)
 
 
 class AbstractTrainer:
@@ -1001,33 +995,23 @@ class KGTrainer(Trainer):
 
 
 class ExplainableTrainer(Trainer):
-    """ExplainableTrainer is designed for explainable recommendation methods,
-    in particular those that generate explanations using Reinforcement Learning methods
-    such as PGPR and CAFE"""
+    """ExplainableTrainer is designed for explainable recommendation methods."""
 
     def __init__(self, config, model):
         super().__init__(config, model)
+        self.eval_collector = ExplainableCollector(config)
 
-    def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
-        paths = None
-
+    def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor, **kwargs):
         interaction, history_index, positive_u, positive_i = batched_data
 
-        # Note: interaction without item ids
-        scores = self.model.full_sort_predict(interaction.to(self.device))
-        if isinstance(scores, tuple):
-            # then the first is the score, the second are paths
-            scores, paths = scores
+        scores, paths = self.model.explain(interaction.to(self.device), **kwargs)
 
         scores = scores.view(-1, tot_item_num)
         scores[:, 0] = -np.inf
         if history_index is not None:
             scores[history_index] = -np.inf
 
-        if paths is not None:
-            return interaction, (scores, paths), positive_u, positive_i
-        else:
-            return interaction, scores, positive_u, positive_i
+        return interaction, (scores, paths), positive_u, positive_i
 
 
 class PGPRTrainer(ExplainableTrainer):
@@ -1275,27 +1259,6 @@ class TPRecTrainer(PretrainTrainer):
             result = self._map_reduce(result, num_sample)
         self.wandblogger.log_eval_metrics(result, head="eval")
         return result
-
-    def pretrain(self, train_data, verbose=True, show_progress=False):
-        for epoch_idx in range(self.start_epoch, self.pretrain_epochs):
-            # train
-            training_start_time = time()
-            train_loss = self._train_epoch(train_data, epoch_idx, show_progress=show_progress)
-            self.train_loss_dict[epoch_idx] = sum(train_loss) if isinstance(train_loss, tuple) else train_loss
-            training_end_time = time()
-            train_loss_output = self._generate_train_loss_output(
-                epoch_idx, training_start_time, training_end_time, train_loss
-            )
-            if verbose:
-                self.logger.info(train_loss_output)
-            self._add_train_loss_to_tensorboard(epoch_idx, train_loss)
-
-        saved_model_file = self._get_pretrained_model_path()
-        self.save_pretrained_model(epoch_idx, saved_model_file)
-        update_output = set_color("Saving pretrained weights", "blue") + ": %s" % saved_model_file
-        if verbose:
-            self.logger.info(update_output)
-        return self.best_valid_score, self.best_valid_result
 
     def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
         if self.model.train_stage == "pretrain":
@@ -1924,217 +1887,17 @@ class NCLTrainer(Trainer):
         return total_loss
 
 
-class PEARLMfromscratchTrainer(Trainer):
+class PEARLMfromscratchTrainer(ExplainableTrainer):
     def __init__(self, config, model):
         super().__init__(config, model)
-        self.tokenizer = None
-        self.logit_processor = None
-        self.ranker = None
-        self.path_gen_args = config["path_generation_args"]
-        path_hop_length = config["path_hop_length"]
-        token_sequence_length = 1 + path_hop_length + path_hop_length + 1
-        self.ranker_max_new_tokens = token_sequence_length - 3
 
-    def fit(
-        self,
-        train_data,
-        valid_data=None,
-        verbose=True,
-        saved=True,
-        show_progress=False,
-        callback_fn=None,
-    ):
-        self.tokenizer = train_data.dataset.tokenizer
-        logits_processor_params = dict(
-            tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
-            tokenized_used_ids=train_data.get_tokenized_used_ids(),
-            max_sequence_length=train_data.token_sequence_length,
-            tokenizer=self.tokenizer,
-            task=KnowledgeEvaluationType.REC,
-        )
-
-        ranker_params = dict(
-            processing_class=self.tokenizer,
-            used_ids=train_data.general_dataloader._sampler.used_ids,
-            item_num=train_data.dataset.item_num,
-        )
-
-        self.logit_processor = get_logits_processor(self.config, logits_processor_params)
-        self.ranker = get_ranker(self.config, ranker_params)
-
-        from torch.utils.data import DataLoader
-
-        train_data = train_data.tokenized_dataset["train"]
-        train_data.set_format(type="torch")
-        train_data = DataLoader(train_data, batch_size=self.config["train_batch_size"], shuffle=True)
-
-        return super().fit(train_data, valid_data, verbose, saved, show_progress, callback_fn)
-
-    def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
-        r"""Train the model in an epoch
-
-        Args:
-            train_data (DataLoader): The train data.
-            epoch_idx (int): The current epoch id.
-            loss_func (function): The loss function of :attr:`model`. If it is ``None``, the loss function will be
-                :attr:`self.model.calculate_loss`. Defaults to ``None``.
-            show_progress (bool): Show the progress of training epoch. Defaults to ``False``.
-
-        Returns:
-            float/tuple: The sum of loss returned by all batches in this epoch. If the loss in each batch contains
-            multiple parts and the model return these multiple parts loss instead of the sum of loss, it will return a
-            tuple which includes the sum of loss in each part.
-        """
-        self.model.train()
-        loss_func = loss_func or self.model.calculate_loss
-        total_loss = None
-
-        iter_data = (
-            rich.tqdm(
-                train_data,
-                total=len(train_data),
-                ncols=100,
-                desc=set_color(f"Train {epoch_idx:>5}", "pink"),
-            )
-            if show_progress
-            else train_data
-        )
-
-        if not self.config["single_spec"] and train_data.shuffle:
-            train_data.sampler.set_epoch(epoch_idx)
-
-        scaler = torch.GradScaler(self.device, enabled=self.enable_scaler)
-        for batch_idx, batch_interaction in enumerate(iter_data):
-            self.optimizer.zero_grad()
-            sync_loss = 0
-            if not self.config["single_spec"]:
-                self.set_reduce_hook()
-                sync_loss = self.sync_grad_loss()
-
-            with torch.autocast(device_type=self.device.type, enabled=self.enable_amp):
-                batch_interaction = torch.tensor(batch_interaction["input_ids"]).to(self.device)  # noqa: PLW2901
-                losses = loss_func(batch_interaction)
-
-            if isinstance(losses, tuple):
-                loss = sum(losses)
-                loss_tuple = tuple(per_loss.item() for per_loss in losses)
-                total_loss = loss_tuple if total_loss is None else tuple(map(sum, zip(total_loss, loss_tuple)))
-            else:
-                loss = losses
-                total_loss = losses.item() if total_loss is None else total_loss + losses.item()
-            self._check_nan(loss)
-            scaler.scale(loss + sync_loss).backward()
-            if self.clip_grad_norm:
-                clip_grad_norm_(self.model.parameters(), **self.clip_grad_norm)
-            scaler.step(self.optimizer)
-            scaler.update()
-            if self.gpu_available and show_progress:
-                iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
-
-        return total_loss
-
-    @torch.no_grad()
-    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
-        r"""Evaluate the model based on the eval data.
-
-        Args:
-            eval_data (DataLoader): the eval data
-            load_best_model (bool, optional): whether load the best model in the training process, default: True.
-                                              It should be set True, if users want to test the model after training.
-            model_file (str, optional): the saved model file, default: None. If users want to test the previously
-                                        trained model file, they can set this parameter.
-            show_progress (bool): Show the progress of evaluate epoch. Defaults to ``False``.
-
-        Returns:
-            collections.OrderedDict: eval result, key is the eval metric and value in the corresponding metric value.
-        """
-        if not eval_data:
-            return
-
-        # self.eval_collector.eval_data_collect(eval_data)
-
-        if load_best_model:
-            checkpoint_file = model_file or self.saved_model_file
-            checkpoint = torch.load(checkpoint_file, weights_only=False, map_location=self.device)
-            self.model.load_state_dict(checkpoint["state_dict"])
-            self.model.load_other_parameter(checkpoint.get("other_parameter"))
-            message_output = f"Loading model structure and paracomemeters from {checkpoint_file}"
-            self.logger.info(message_output)
-
-        self.model.eval()
-
-        item_tensor = None
-        tot_item_num = eval_data._dataset.item_num
-        # neg_sampling = isinstance(eval_data, NegSampleDataLoader)
-        # if not neg_sampling:
-        #     item_tensor = eval_data._dataset.get_item_feature().to(self.device)
-
-        # from torch.utils.data import DataLoader
-        # eval_paths = eval_data.inference_path_dataset["user_id"]
-        # batched_eval_data = DataLoader(eval_paths, batch_size=self.config["eval_batch_size"], shuffle=False)
-
-        iter_data = (
-            rich.tqdm(
-                eval_data,
-                total=len(eval_data),
-                ncols=100,
-                desc=set_color("Evaluate   ", "pink"),
-            )
-            if show_progress
-            else eval_data
-        )
-
-        num_sample = 0
-        for batch_idx, batched_data in enumerate(iter_data):
-            # batched_data = eval_data.collate_fn(range(num_sample, num_sample + len(batched_data)))  # noqa: PLW2901
-            num_sample += len(batched_data)
-
-            interaction, results, positive_u, positive_i = self._full_sort_batch_eval(
-                batched_data, tot_item_num, item_tensor
-            )
-
-            scores, paths = results
-
-            if hasattr(self.model, "decode_path"):
-                paths = self.model.decode_path(paths)
-
-            if self.gpu_available and show_progress:
-                iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
-            self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
-        self.eval_collector.model_collect(self.model)
-        struct = self.eval_collector.get_data_struct()
-        result = self.evaluator.evaluate(struct)
-        if not self.config["single_spec"]:
-            result = self._map_reduce(result, num_sample)
-        self.wandblogger.log_eval_metrics(result, head="eval")
-        return result
+        self.path_generation_args = config["path_generation_args"]
 
     def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
-        interaction, history_index, positive_u, positive_i = batched_data
-        inputs = self.tokenizer(interaction, return_tensors="pt", add_special_tokens=False).to(self.device)
-
-        predictions, probs = self.model.generate(
-            inputs=inputs,
-            logit_processor=self.logit_processor,
-            max_new_tokens=self.ranker_max_new_tokens,
-            top_k=self.path_gen_args["top_k"],
-            paths_per_user=self.path_gen_args["paths_per_user"],
-        )
-
-        generation_outputs = GenerationOutputs(sequences=predictions, scores=probs)
-        scores, paths = self.ranker.get_sequences(
-            generation_outputs,
-            self.ranker_max_new_tokens,
-        )
-
-        scores = scores.view(-1, tot_item_num)
-        scores[:, 0] = -np.inf
-        if history_index is not None:
-            scores[history_index] = -np.inf
-        return interaction, (scores, paths), positive_u, positive_i
+        return super()._full_sort_batch_eval(batched_data, tot_item_num, item_tensor, **self.path_generation_args)
 
 
-class HFPathLanguageModelingTrainer(Trainer):
+class HFPathLanguageModelingTrainer(ExplainableTrainer):
     r"""HFPathLanguageModelingTrainer is designed for path-based knowledge-aware recommendation methods.
     It is specifically designed to communicate with the Hugging Face Trainer to use language models and functionalities
     as tokenizers and beam search.
@@ -2145,11 +1908,8 @@ class HFPathLanguageModelingTrainer(Trainer):
 
     def __init__(self, config, model):
         super().__init__(config, model)
-        self.config = config
-        self.eval_device = config["device"]
-        self.path_hop_length = self.config["path_hop_length"]
-        self.path_gen_args = self.config["path_generation_args"].copy()
-        self.paths_per_user = self.path_gen_args.pop("paths_per_user")
+
+        self.path_generation_args = self.config["path_generation_args"]
 
         self.HOPWISE_SAVE_PATH_SUFFIX += f"{config['base_model']}-"
         self.HUGGINGFACE_SAVE_PATH_SUFFIX += f"{config['base_model']}-"
@@ -2157,12 +1917,12 @@ class HFPathLanguageModelingTrainer(Trainer):
         dirname, basename = os.path.split(self.saved_model_file)
         self.saved_model_file = os.path.join(dirname, self.HOPWISE_SAVE_PATH_SUFFIX + basename)
 
-    def prepare_training_arguments(self, **kwargs):
+    def prepare_hf_args(self, **kwargs):
         from transformers import TrainingArguments
 
         output_dir = self.saved_model_file.replace(self.HOPWISE_SAVE_PATH_SUFFIX, self.HUGGINGFACE_SAVE_PATH_SUFFIX)
 
-        train_args = dict(
+        hf_args = dict(
             output_dir=output_dir,
             eval_strategy="epoch",
             save_strategy="epoch",
@@ -2183,8 +1943,8 @@ class HFPathLanguageModelingTrainer(Trainer):
             seed=self.config["seed"],
             report_to="none",
         )
-        train_args.update(kwargs)
-        return TrainingArguments(**train_args)
+        hf_args.update(kwargs)
+        return TrainingArguments(**hf_args)
 
     def init_hf_trainer(
         self,
@@ -2202,7 +1962,7 @@ class HFPathLanguageModelingTrainer(Trainer):
         training_args = training_args or {}
 
         hf_callbacks = hf_callbacks or []
-        training_arguments = self.prepare_training_arguments(**training_args)
+        hf_args = self.prepare_hf_args(**training_args)
 
         callbacks = [
             HopwiseCallback(
@@ -2219,17 +1979,7 @@ class HFPathLanguageModelingTrainer(Trainer):
             *hf_callbacks,
         ]
 
-        self.hf_trainer = HFPathTrainer(
-            train_data,
-            self.config,
-            callbacks,
-            model=self.model,
-            args=training_arguments,
-            path_hop_length=self.path_hop_length,
-            paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_args,
-            eval_device=self.eval_device,
-        )
+        self.hf_trainer = HFPathTrainer(self.model, callbacks, train_data=train_data, args=hf_args)
 
     @property
     def processing_class(self):
@@ -2318,17 +2068,18 @@ class HFPathLanguageModelingTrainer(Trainer):
 
         return self.best_valid_score, self.best_valid_result
 
-    def _valid_epoch(self, valid_data, show_progress=False):
-        valid_result = self.evaluate(
-            valid_data, load_best_model=False, show_progress=show_progress, task=KnowledgeEvaluationType.REC
+    def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
+        return super()._full_sort_batch_eval(
+            batched_data,
+            tot_item_num,
+            item_tensor,
+            return_dict_in_generate=True,
+            output_scores=True,
+            **self.path_generation_args,
         )
-        valid_score = calculate_valid_score(valid_result, self.valid_metric)
-        return valid_score, valid_result
 
     @torch.no_grad()
-    def evaluate(
-        self, eval_data, load_best_model=True, model_file=None, show_progress=False, task=KnowledgeEvaluationType.REC
-    ):
+    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
         if not eval_data:
             return
 
@@ -2338,178 +2089,11 @@ class HFPathLanguageModelingTrainer(Trainer):
             message_output = f"Loading model structure and parameters from {best_model_checkpoint_path}"
             self.logger.info(message_output)
 
-        self.model.eval()
-
-        if self.config["eval_type"] == EvaluatorType.RANKING:
-            self.tot_item_num = eval_data._dataset.item_num
-
-        iter_data = (
-            rich.tqdm(
-                eval_data,
-                total=len(eval_data),
-                ncols=100,
-                desc=set_color("Evaluate   ", "pink"),
-            )
-            if show_progress
-            else eval_data
-        )
-
-        num_sample = 0
-        for batch_idx, batched_data in enumerate(iter_data):
-            num_sample += len(batched_data)
-            interaction, history_index, positive_u, positive_i = batched_data
-
-            inputs = self.processing_class(interaction, return_tensors="pt", add_special_tokens=False).to(self.device)
-            scores, paths = self.hf_trainer._full_sort_batch_eval(inputs, task=task)
-
-            if hasattr(self.model, "decode_path"):
-                paths = self.model.decode_path(paths)
-
-            scores = scores.view(-1, self.tot_item_num)
-            scores[:, 0] = -np.inf
-            if history_index is not None:
-                scores[history_index] = -np.inf
-
-            if self.gpu_available and show_progress:
-                iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
-            self.eval_collector.eval_batch_collect((scores, paths), None, positive_u, positive_i)
-
-        if "rec.paths" in self.eval_collector.data_struct:
-            collected_paths = self.eval_collector.data_struct.get("rec.paths")
-            path_uids = [path_data[-1][0][-1] for path_data in collected_paths]
-            _, topk_sizes = np.unique(path_uids, return_counts=True)
-            self.logger.info(f"{set_color('Average paths per user: ', 'blue')}{np.mean(topk_sizes):.2f}")
-
-        self.eval_collector.model_collect(self.model)
-        struct = self.eval_collector.get_data_struct()
-        result = self.evaluator.evaluate(struct)
-        if not self.config["single_spec"]:
-            result = self._map_reduce(result, num_sample)
-        self.wandblogger.log_eval_metrics(result, head="eval")
-        return result
+        return super().evaluate(eval_data, load_best_model=False, model_file=None, show_progress=show_progress)
 
 
-class PLMTrainer(HFPathLanguageModelingTrainer):
-    """PLMTrainer is designed for PLM, which is a path-based language model for knowledge-aware recommendation.
-    It includes a logits processor to alternatively generate entity and relation tokens during evaluation.
-    """
-
-    def init_hf_trainer(
-        self,
-        train_data,
-        valid_data=None,
-        verbose=True,
-        saved=True,
-        show_progress=False,
-        hf_callbacks=None,
-        callback_fn=None,
-        training_args=None,
-    ):
-        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
-
-        training_args = training_args or {}
-
-        hf_callbacks = hf_callbacks or []
-        training_arguments = self.prepare_training_arguments(**training_args)
-
-        callbacks = [
-            HopwiseCallback(
-                self,
-                train_data,
-                valid_data=valid_data,
-                verbose=verbose,
-                saved=saved,
-                show_progress=show_progress,
-                callback_fn=callback_fn,
-            ),
-            *hf_callbacks,
-        ]
-
-        logits_processor_params = dict(
-            tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
-            tokenized_used_ids=train_data.get_tokenized_used_ids(),
-            max_sequence_length=train_data.token_sequence_length,
-            tokenizer=train_data.dataset.tokenizer,
-            task=KnowledgeEvaluationType.REC,
-        )
-        self.logits_processor_list = get_logits_processor(self.config, logits_processor_params)
-
-        self.hf_trainer = HFPathTrainer(
-            train_data,
-            self.config,
-            callbacks,
-            model=self.model,
-            args=training_arguments,
-            path_hop_length=self.path_hop_length,
-            paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_args,
-            eval_device=self.device,
-            logits_processor_list=self.logits_processor_list,
-        )
-
-
-class PEARLMTrainer(HFPathLanguageModelingTrainer):
-    """PEARLMTrainer is designed for PEARLM, which is a path-based language model for knowledge-aware recommendation.
-    It includes the knowledge graph constrained decoding (KGCD) logits processor.
-    """
-
-    def init_hf_trainer(
-        self,
-        train_data,
-        valid_data=None,
-        verbose=True,
-        saved=True,
-        show_progress=False,
-        hf_callbacks=None,
-        callback_fn=None,
-        training_args=None,
-    ):
-        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
-
-        training_args = training_args or {}
-
-        hf_callbacks = hf_callbacks or []
-        training_arguments = self.prepare_training_arguments(**training_args)
-
-        callbacks = [
-            HopwiseCallback(
-                self,
-                train_data,
-                valid_data=valid_data,
-                verbose=verbose,
-                saved=saved,
-                show_progress=show_progress,
-                callback_fn=callback_fn,
-            ),
-            *hf_callbacks,
-        ]
-
-        logits_processor_params = dict(
-            tokenized_ckg=train_data.dataset.get_tokenized_ckg(),
-            tokenized_used_ids=train_data.get_tokenized_used_ids(),
-            max_sequence_length=train_data.token_sequence_length,
-            tokenizer=train_data.dataset.tokenizer,
-            task=KnowledgeEvaluationType.REC,
-        )
-
-        self.logits_processor_list = get_logits_processor(self.config, logits_processor_params)
-
-        self.hf_trainer = HFPathTrainer(
-            train_data,
-            self.config,
-            callbacks,
-            model=self.model,
-            args=training_arguments,
-            path_hop_length=self.path_hop_length,
-            paths_per_user=self.paths_per_user,
-            path_generation_args=self.path_gen_args,
-            eval_device=self.device,
-            logits_processor_list=self.logits_processor_list,
-        )
-
-
-class KGGLMTrainer(PEARLMTrainer, PretrainTrainer):
-    r"""KGGLM is designed for KGGLM, which is a path-based language model for knowledge-aware recommendation.
+class KGGLMTrainer(HFPathLanguageModelingTrainer, PretrainTrainer):
+    r"""KGGLMTrainer is designed for KGGLM, which is a path-based language model for knowledge-aware recommendation.
     It includes two training stages: link prediction pre-training and recommendation path generation fine-tuning.
     """
 
@@ -2556,9 +2140,7 @@ class KGGLMTrainer(PEARLMTrainer, PretrainTrainer):
 
         return self.best_valid_score, self.best_valid_result
 
-    def evaluate(
-        self, eval_data, load_best_model=True, model_file=None, show_progress=False, task=KnowledgeEvaluationType.REC
-    ):
+    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
         if load_best_model and self.model.train_stage == "pretrain":
             self.hf_trainer.state.best_model_checkpoint = self.hf_trainer.args.output_dir
 
@@ -2567,7 +2149,6 @@ class KGGLMTrainer(PEARLMTrainer, PretrainTrainer):
             load_best_model=load_best_model,
             model_file=model_file,
             show_progress=show_progress,
-            task=task,
         )
 
     def fit(

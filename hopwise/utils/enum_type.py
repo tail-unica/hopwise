@@ -129,14 +129,22 @@ class FeatureSource(Enum):
 class PathLanguageModelingTokenType(Enum):
     """Type of tokens in paths for Path Language Modeling.
 
-    - ``USER``: User tokens.
-    - ``ITEM``: Item tokens.
+    - ``SPECIAL``: Special tokens, like start and end of a path.
     - ``ENTITY``: Entity tokens.
     - ``RELATION``: Relation tokens.
-
+    - ``USER``: User tokens.
+    - ``ITEM``: Item tokens.
     """
 
-    USER = "U"
-    ITEM = "I"
-    ENTITY = "E"
-    RELATION = "R"
+    SPECIAL = ("S", 0)
+    ENTITY = ("E", 1)
+    RELATION = ("R", 2)
+    USER = ("U", 3)
+    ITEM = ("I", 4)
+
+    def __init__(self, token, token_id):
+        self.token = token
+        self.token_id = token_id
+
+    def __str__(self):
+        return self.token
