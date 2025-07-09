@@ -19,6 +19,7 @@ from hopwise.utils.utils import (
     get_trainer,
     init_seed,
     list_to_latex,
+    user_parallel_sampling,
 )
 from hopwise.utils.wandblogger import WandbLogger
 
@@ -51,8 +52,9 @@ __all__ = [
     "get_flops",
     "get_environment",
     "list_to_latex",
-    "WandbLogger",
     "get_logits_processor",
     "get_sequence_postprocessor",
     "GenerationOutputs",
+    "user_parallel_sampling",
+    "WandbLogger",
 ]

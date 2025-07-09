@@ -6,14 +6,13 @@ import random
 import warnings
 from itertools import chain, zip_longest
 
-import joblib
 import numba
 import numpy as np
 from tqdm import rich
 
 from hopwise.data import Interaction
 from hopwise.data.dataset import KnowledgeBasedDataset
-from hopwise.utils import PathLanguageModelingTokenType, set_color
+from hopwise.utils import PathLanguageModelingTokenType, set_color, user_parallel_sampling
 
 
 class KnowledgePathDataset(KnowledgeBasedDataset):
@@ -505,7 +504,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             range(1, self.user_num),
             total=self.user_num - 1,
             ncols=100,
-            desc=set_color("KG Path Sampling", "red"),
+            desc="[red]KG Path Sampling",
         )
 
         if temporal_matrix is not None:
@@ -713,39 +712,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return "\n".join(info)
 
 
-def _user_parallel_sampling(sampling_func_factory):
-    """Decorator to parallelize path sampling functions."""
-
-    def wrapper(*args, **kwargs):
-        user_num = kwargs.get("user_num", None)
-        tqdm_kws = dict(
-            total=user_num - 1,
-            ncols=100,
-            desc=set_color("KG Path Sampling", "red"),
-        )
-
-        sampling_func = sampling_func_factory(*args, **kwargs)
-
-        parallel_max_workers = kwargs.pop("parallel_max_workers", "")
-        try:
-            if not parallel_max_workers:
-                iter_users = rich.tqdm(range(1, user_num), **tqdm_kws)
-                return [sampling_func(u) for u in iter_users]
-            else:
-                iter_users = rich.tqdm(
-                    joblib.Parallel(n_jobs=parallel_max_workers, prefer="processes")(
-                        joblib.delayed(sampling_func)(u) for u in range(1, user_num)
-                    ),
-                    **tqdm_kws,
-                )
-                return [p for p in iter_users]
-        except Exception:
-            iter_users.close()
-            raise
-
-    return wrapper
-
-
 def _check_temporal_causality_feasibility(temporal_matrix, pos_iid):
     """Check if temporal causality is feasible for the given positive item ids."""
     temporal_start = int(temporal_matrix is not None)
@@ -759,7 +725,7 @@ def _check_temporal_causality_feasibility(temporal_matrix, pos_iid):
     return pos_iid.shape[0] - temporal_start
 
 
-@_user_parallel_sampling
+@user_parallel_sampling
 def _generate_user_paths_constrained_random_walk_per_user(graph, used_ids, iid_field, entity_field, **kwargs):
     """Parallel version of the constrained random walk path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
@@ -856,7 +822,7 @@ def _generate_user_paths_constrained_random_walk_per_user(graph, used_ids, iid_f
     return process_user
 
 
-@_user_parallel_sampling
+@user_parallel_sampling
 def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_field, **kwargs):
     """Parallel version of the weighted random walk path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
@@ -953,7 +919,7 @@ def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_fiel
     return process_user
 
 
-@_user_parallel_sampling
+@user_parallel_sampling
 def _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwargs):
     """Parallel version of the simple path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
@@ -998,7 +964,7 @@ def _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwa
     return process_user
 
 
-@_user_parallel_sampling
+@user_parallel_sampling
 def _generate_user_paths_all_simple_per_user(graph, used_ids, **kwargs):
     """Parallel version of the simple path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)

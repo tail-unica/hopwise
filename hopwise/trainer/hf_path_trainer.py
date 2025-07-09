@@ -90,7 +90,7 @@ class HopwiseCallback(TrainerCallback):
             rich.tqdm(
                 total=steps_in_epoch,
                 ncols=100,
-                desc=set_color(f"Train {int(state.epoch):>5}", "pink"),
+                desc=f"[magenta]Train {int(state.epoch):>5}",
             )
             if self.show_progress
             else range(steps_in_epoch)

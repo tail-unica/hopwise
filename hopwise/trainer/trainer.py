@@ -228,7 +228,7 @@ class Trainer(AbstractTrainer):
                 train_data,
                 total=len(train_data),
                 ncols=100,
-                desc=set_color(f"Train {epoch_idx:>5}", "pink"),
+                desc=f"[magenta]Train {epoch_idx:>5}",
             )
             if show_progress
             else train_data
@@ -566,7 +566,7 @@ class Trainer(AbstractTrainer):
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
-                desc=set_color("Evaluate   ", "pink"),
+                desc="[magenta]Evaluate   ",
             )
             if show_progress
             else eval_data
@@ -839,7 +839,7 @@ class KGTrainer(Trainer):
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
-                desc=set_color(f"Evaluate {task}", "pink"),
+                desc=f"[magenta]Evaluate {task}",
             )
             if show_progress
             else eval_data
@@ -1253,7 +1253,7 @@ class TPRecTrainer(PretrainTrainer):
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
-                desc=set_color("Evaluate   ", "pink"),
+                desc="[magenta]Evaluate   ",
             )
             if show_progress
             else eval_data
@@ -1864,7 +1864,7 @@ class NCLTrainer(Trainer):
                 train_data,
                 total=len(train_data),
                 ncols=100,
-                desc=set_color(f"Train {epoch_idx:>5}", "pink"),
+                desc=f"[magenta]Train {epoch_idx:>5}",
             )
             if show_progress
             else train_data

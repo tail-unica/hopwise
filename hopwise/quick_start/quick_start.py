@@ -199,7 +199,7 @@ def run_hopwise(
     # model evaluation
     test_result = trainer.evaluate(
         test_data,
-        load_best_model=saved,
+        load_best_model=saved and run != "evaluate",
         model_file=checkpoint,
         show_progress=config["show_progress"],
     )

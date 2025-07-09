@@ -27,7 +27,7 @@ from tqdm import rich
 from hopwise.data.dataset import KGSeqDataset, KnowledgeBasedDataset, KnowledgePathDataset, SequentialDataset
 from hopwise.data.interaction import Interaction
 from hopwise.sampler import SeqSampler
-from hopwise.utils import FeatureType, set_color
+from hopwise.utils import FeatureType
 
 
 class GRU4RecKGDataset(KGSeqDataset):
@@ -175,7 +175,7 @@ class KGGLMDataset(KnowledgePathDataset):
                 range(graph_min_iid + 1, len(graph.vs)),
                 ncols=100,
                 total=len(graph.vs) - graph_min_iid,
-                desc=set_color("KGGLM Pre-training Path Sampling", "red"),
+                desc="[red]KGGLM Pre-training Path Sampling",
             )
             max_tries_per_entity = self.config["path_sample_args"]["MAX_RW_TRIES_PER_IID"]
 
@@ -192,7 +192,7 @@ class KGGLMDataset(KnowledgePathDataset):
                 for entity in iter_paths:
                     _generate_paths_random_walks(entity)
             else:
-                joblib.Parallel(n_jobs=self.parallel_max_workers, prefer="threads")(
+                joblib.Parallel(n_jobs=self.parallel_max_workers, prefer="threads", return_as="generator")(
                     joblib.delayed(_generate_paths_random_walks)(entity, **kwargs) for entity in iter_paths
                 )
 
