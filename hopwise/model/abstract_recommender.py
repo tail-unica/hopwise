@@ -289,6 +289,7 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
             dataset.tokenizer,
             dataset.get_user_used_ids(),
             dataset.item_num,
+            topk=config["topk"],
         )
 
     @torch.no_grad()

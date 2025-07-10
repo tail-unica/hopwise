@@ -11,7 +11,7 @@ import urllib.request as ur
 import zipfile
 from logging import getLogger
 
-from tqdm import rich
+from hopwise.utils import progress_bar
 
 GBFACTOR = float(1 << 30)
 
@@ -64,7 +64,7 @@ def download_url(url, folder):
 
     try:
         with open(path, "wb") as f:
-            pbar = rich.tqdm(range(num_iter))
+            pbar = progress_bar(range(num_iter))
             for i in pbar:
                 chunk = data.read(chunk_size)
                 downloaded_size += len(chunk)

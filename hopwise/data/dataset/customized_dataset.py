@@ -22,12 +22,11 @@ import numpy as np
 import pandas as pd
 import torch
 from sklearn.mixture import GaussianMixture as GMM
-from tqdm import rich
 
 from hopwise.data.dataset import KGSeqDataset, KnowledgeBasedDataset, KnowledgePathDataset, SequentialDataset
 from hopwise.data.interaction import Interaction
 from hopwise.sampler import SeqSampler
-from hopwise.utils import FeatureType, set_color
+from hopwise.utils import FeatureType, progress_bar, set_color
 
 
 class GRU4RecKGDataset(KGSeqDataset):
@@ -171,11 +170,11 @@ class KGGLMDataset(KnowledgePathDataset):
             min_hop, max_hop = self.pretrain_hop_length
 
             paths = set()
-            iter_paths = rich.tqdm(
+            iter_paths = progress_bar(
                 range(graph_min_iid + 1, len(graph.vs)),
                 ncols=100,
                 total=len(graph.vs) - graph_min_iid,
-                desc=set_color("KGGLM Pre-training Path Sampling", "red"),
+                desc=set_color("KGGLM Pre-training Path Sampling", "red", progress=True),
             )
             max_tries_per_entity = self.config["path_sample_args"]["MAX_RW_TRIES_PER_IID"]
 
@@ -192,7 +191,7 @@ class KGGLMDataset(KnowledgePathDataset):
                 for entity in iter_paths:
                     _generate_paths_random_walks(entity)
             else:
-                joblib.Parallel(n_jobs=self.parallel_max_workers, prefer="threads")(
+                joblib.Parallel(n_jobs=self.parallel_max_workers, prefer="threads", return_as="generator")(
                     joblib.delayed(_generate_paths_random_walks)(entity, **kwargs) for entity in iter_paths
                 )
 
@@ -580,7 +579,7 @@ class TPRecTimestampDataset:
         uid_pid_clu_list = uid_pid_clu.values.tolist()
         ucp_hash = {}
         # depending on the server load this can take a long time
-        for [uid, pid, clu] in rich.tqdm(uid_pid_clu_list, desc=f"generating clusters dict {self.set}"):
+        for [uid, pid, clu] in progress_bar(uid_pid_clu_list, desc=f"generating clusters dict {self.set}"):
             if uid not in ucp_hash:
                 # ucp_hash : {uids{c1: pid, c2:pid, ...}, ...}
                 ucp_hash[uid] = {clu: [pid]}
@@ -594,7 +593,7 @@ class TPRecTimestampDataset:
     def _generate_user_agent_num(self, ucp_hash):
         u_c_weight = ucp_hash
         # depending on the server load this can take a long time
-        for u in rich.tqdm(u_c_weight, desc=f"generating user agent number {self.set}"):
+        for u in progress_bar(u_c_weight, desc=f"generating user agent number {self.set}"):
             tmp_u_tot = 0
             for c in u_c_weight[u]:
                 tmp_u_tot = tmp_u_tot + len(u_c_weight[u][c])

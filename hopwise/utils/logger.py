@@ -20,11 +20,35 @@ import hashlib
 import logging
 import os
 import re
+from functools import partial
 
+import colorama
 import colorlog
-from colorama import init
+import tqdm
+import tqdm.rich
 
 from hopwise.utils.utils import ensure_dir, get_local_time
+
+_progress_bar = None
+
+
+class ProgressBar:
+    def __init__(self, progress_bar_rich=True):
+        """
+        Initialize the progress bar with the configuration settings.
+        """
+        progress_bar = tqdm.rich.tqdm if progress_bar_rich else tqdm.tqdm
+        self.progress_bar = partial(progress_bar, disable=os.environ.get("DISABLE_TQDM", False))  # noqa: PLW1508
+
+    def __call__(self, *args, **kwargs):
+        return self.progress_bar(*args, **kwargs)
+
+
+def progress_bar(*args, **kwargs):
+    if _progress_bar is None:
+        return ProgressBar({"progress_bar_rich": True})(*args, **kwargs)
+    return _progress_bar(*args, **kwargs)
+
 
 log_colors_config = {
     "DEBUG": "cyan",
@@ -42,19 +66,22 @@ class RemoveColorFilter(logging.Filter):
         return True
 
 
-def set_color(log, color, highlight=True):
-    color_set = ["black", "red", "green", "yellow", "blue", "pink", "cyan", "white"]
-    try:
-        index = color_set.index(color)
-    except IndexError:
-        index = len(color_set) - 1
-    prev_log = "\033["
-    if highlight:
-        prev_log += "1;3"
-    else:
-        prev_log += "0;3"
-    prev_log += str(index) + "m"
-    return prev_log + log + "\033[0m"
+def set_color(log, color, highlight=True, progress=False):
+    if not progress or _progress_bar.progress_bar.func is tqdm.tqdm:
+        color_set = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
+        try:
+            index = color_set.index(color)
+        except IndexError:
+            index = len(color_set) - 1
+        prev_log = "\033["
+        if highlight:
+            prev_log += "1;3"
+        else:
+            prev_log += "0;3"
+        prev_log += str(index) + "m"
+        return prev_log + log + "\033[0m"
+    elif _progress_bar.progress_bar.func is tqdm.rich.tqdm:
+        return f"[{color}]{log}[/{color}]"
 
 
 def init_logger(config):
@@ -70,7 +97,7 @@ def init_logger(config):
         >>> logger.debug(train_state)
         >>> logger.info(train_result)
     """
-    init(autoreset=True)
+    colorama.init(autoreset=True)
     LOGROOT = "./log/"
     dir_name = os.path.dirname(LOGROOT)
     ensure_dir(dir_name)

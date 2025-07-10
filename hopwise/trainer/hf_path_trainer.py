@@ -10,13 +10,13 @@
 from time import time
 
 import torch
-from tqdm import rich
 from transformers import DataCollatorForLanguageModeling, IntervalStrategy, Trainer, TrainerCallback
 
 from hopwise.utils import (
     dict2str,
     early_stopping,
     get_gpu_usage,
+    progress_bar,
     set_color,
 )
 
@@ -87,10 +87,10 @@ class HopwiseCallback(TrainerCallback):
         steps_in_epoch = len_hf_dataloader // self.hopwise_trainer.config["train_batch_size"]
         steps_in_epoch += int(len_hf_dataloader % self.hopwise_trainer.config["train_batch_size"] > 0)
         self.progress_bar = (
-            rich.tqdm(
+            progress_bar(
                 total=steps_in_epoch,
                 ncols=100,
-                desc=set_color(f"Train {int(state.epoch):>5}", "pink"),
+                desc=set_color(f"Train {int(state.epoch):>5}", "magenta", progress=True),
             )
             if self.show_progress
             else range(steps_in_epoch)

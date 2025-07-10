@@ -393,7 +393,7 @@ class Dataset(torch.utils.data.Dataset):
         if load_col and unload_col:
             raise ValueError(f"load_col [{load_col}] and unload_col [{unload_col}] can not be set the same time.")
 
-        self.logger.debug(set_color(f"[{source}]: ", "pink"))
+        self.logger.debug(set_color(f"[{source}]: ", "magenta"))
         self.logger.debug(set_color("\t load_col", "blue") + f": [{load_col}]")
         self.logger.debug(set_color("\t unload_col", "blue") + f": [{unload_col}]")
         return load_col, unload_col
@@ -1403,7 +1403,7 @@ class Dataset(torch.utils.data.Dataset):
         return self.__str__()
 
     def __str__(self):
-        info = [set_color(self.dataset_name, "pink")]
+        info = [set_color(self.dataset_name, "magenta")]
         if self.uid_field:
             info.extend(
                 [
@@ -1645,7 +1645,7 @@ class Dataset(torch.utils.data.Dataset):
         save_dir = self.config["checkpoint_dir"]
         ensure_dir(save_dir)
         file = os.path.join(save_dir, f"{self.config['dataset']}-{self.__class__.__name__}.pth")
-        self.logger.info(set_color("Saving filtered dataset into ", "pink") + f"[{file}]")
+        self.logger.info(set_color("Saving filtered dataset into ", "magenta") + f"[{file}]")
         with open(file, "wb") as f:
             pickle.dump(self, f)
 
