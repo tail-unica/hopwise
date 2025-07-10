@@ -95,7 +95,9 @@ class RPG(SequentialRecommender):
         item_seq = torch.cat([item_seq[:, 1:], padding], dim=1)
 
         # Calculate representation
-        hidden_states = self.forward(item_seq)
+        hidden_states = self.forward(
+            item_seq
+        )  # shape: (bs, seq_len, n_pred_head (semantic id size), embedding_size). (2048, 50,4,448)
         label_mask = labels.view(-1) != 0
         selected_states = hidden_states.view(-1, self.n_pred_head, self.embedding_size)[label_mask]
         selected_states = F.normalize(selected_states, dim=-1)
@@ -104,7 +106,9 @@ class RPG(SequentialRecommender):
         token_emb = F.normalize(token_emb, dim=-1)
 
         # split the embedding into n_pred_head parts along dimension 0
-        token_embs = torch.chunk(token_emb, self.n_pred_head, dim=0)
+        token_embs = torch.chunk(
+            token_emb, self.n_pred_head, dim=0
+        )  # tupla di 4 elementi. Ogni elemento è un tensore di size (256, 448)
         # calculate the output of each head
         token_logits = [
             torch.matmul(selected_states[i].squeeze(dim=1), token_embs[i].T) / self.temperature
@@ -240,14 +244,14 @@ class RPG(SequentialRecommender):
 
             # shape: (chunk_i_size, 32)
             # sub-block for items i
-            tokens_i = self.item_id2tokens[i_start:i_end]
+            tokens_i = self.item2shifted_sem_id[i_start:i_end]
 
             for j_start in range(1, self.n_items, self.chunk_size):
                 j_end = min(j_start + self.chunk_size, self.n_items)
 
                 # shape: (chunk_j_size, 32)
                 # sub-block for items j
-                tokens_j = self.item_id2tokens[j_start:j_end]
+                tokens_j = self.item2shifted_sem_id[j_start:j_end]
 
                 # We want to compute a sub-block of shape: (chunk_i_size, chunk_j_size).
                 # For each digit k in [0..31], we look up token_sims_01[k, tokens_i[i, k], tokens_j[j, k]].
