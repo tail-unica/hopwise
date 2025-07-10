@@ -28,8 +28,7 @@ from scipy.sparse import coo_matrix
 
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
-from hopwise.utils import FeatureSource, FeatureType, set_color
-from hopwise.utils.enum_type import KnowledgeEvaluationType
+from hopwise.utils import FeatureSource, FeatureType, KnowledgeEvaluationType, set_color
 from hopwise.utils.url import decide_download, download_url, extract_zip
 
 

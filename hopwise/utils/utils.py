@@ -18,7 +18,6 @@
 
 import copy
 import datetime
-import gc
 import importlib
 import os
 import random
@@ -30,7 +29,6 @@ import torch
 from texttable import Texttable
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-from tqdm import rich
 
 from hopwise.utils.enum_type import ModelType
 
@@ -453,47 +451,6 @@ def get_environment(config):
     )
 
     return table
-
-
-def user_parallel_sampling(sampling_func_factory):
-    """Decorator to parallelize path sampling functions."""
-
-    import joblib
-
-    # https://github.com/DLR-RM/stable-baselines3/issues/1645#issuecomment-2194345304
-    tqdm_objects = [obj for obj in gc.get_objects() if "tqdm" in type(obj).__name__]
-    for tqdm_object in tqdm_objects:
-        if "tqdm_rich" in type(tqdm_object).__name__:
-            tqdm_object.close()
-
-    def wrapper(*args, **kwargs):
-        user_num = kwargs.get("user_num", None)
-        tqdm_kws = dict(
-            total=user_num - 1,
-            ncols=100,
-            desc="[red]KG Path Sampling",
-        )
-
-        sampling_func = sampling_func_factory(*args, **kwargs)
-
-        parallel_max_workers = kwargs.pop("parallel_max_workers", "")
-        if not parallel_max_workers:
-            iter_users = map(sampling_func, range(1, user_num))
-        else:
-            iter_users = joblib.Parallel(n_jobs=parallel_max_workers, prefer="processes", return_as="generator")(
-                joblib.delayed(sampling_func)(u) for u in range(1, user_num)
-            )
-
-        try:
-            iter_users = rich.tqdm(iter_users, **tqdm_kws)
-            return [p for p in iter_users]
-        except Exception:
-            if hasattr(iter_users, "close"):
-                iter_users.close()
-
-            raise
-
-    return wrapper
 
 
 def get_sequence_postprocessor(postprocessor_name):

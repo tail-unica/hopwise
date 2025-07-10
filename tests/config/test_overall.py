@@ -154,6 +154,9 @@ class TestOverallConfig(unittest.TestCase):
     def test_use_grad_scaler(self):
         self.assertTrue(run_params({"enable_scaler": [True, False]}))
 
+    def test_progress_bar_rich(self):
+        self.assertTrue(run_params({"progress_bar_rich": [True, False]}))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

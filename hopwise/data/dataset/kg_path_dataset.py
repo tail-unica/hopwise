@@ -8,11 +8,11 @@ from itertools import chain, zip_longest
 
 import numba
 import numpy as np
-from tqdm import rich
 
 from hopwise.data import Interaction
 from hopwise.data.dataset import KnowledgeBasedDataset
-from hopwise.utils import PathLanguageModelingTokenType, set_color, user_parallel_sampling
+from hopwise.data.utils import user_parallel_sampling
+from hopwise.utils import PathLanguageModelingTokenType, progress_bar, set_color
 
 
 class KnowledgePathDataset(KnowledgeBasedDataset):
@@ -500,11 +500,11 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         final_paths = set()
 
-        iter_users = rich.tqdm(
+        iter_users = progress_bar(
             range(1, self.user_num),
             total=self.user_num - 1,
             ncols=100,
-            desc="[red]KG Path Sampling",
+            desc=set_color("KG Path Sampling", "red", progress=True),
         )
 
         if temporal_matrix is not None:

@@ -1,6 +1,6 @@
 from hopwise.utils.argument_list import *
 from hopwise.utils.enum_type import *
-from hopwise.utils.logger import init_logger, set_color
+from hopwise.utils.logger import init_logger, progress_bar, set_color
 from hopwise.utils.utils import (
     GenerationOutputs,
     calculate_valid_score,
@@ -19,7 +19,6 @@ from hopwise.utils.utils import (
     get_trainer,
     init_seed,
     list_to_latex,
-    user_parallel_sampling,
 )
 from hopwise.utils.wandblogger import WandbLogger
 
@@ -52,9 +51,9 @@ __all__ = [
     "get_flops",
     "get_environment",
     "list_to_latex",
+    "WandbLogger",
     "get_logits_processor",
     "get_sequence_postprocessor",
     "GenerationOutputs",
-    "user_parallel_sampling",
-    "WandbLogger",
+    "progress_bar",
 ]

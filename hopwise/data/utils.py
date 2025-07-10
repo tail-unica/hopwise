@@ -13,6 +13,7 @@
 
 # ruff: noqa: F403, F405
 
+import gc
 import importlib
 import os
 import pickle
@@ -21,9 +22,8 @@ from typing import Literal
 
 from hopwise.data.dataloader import *
 from hopwise.sampler import KGSampler, RepeatableSampler, Sampler
-from hopwise.utils import ModelType, ensure_dir, set_color
+from hopwise.utils import KnowledgeEvaluationType, ModelType, ensure_dir, progress_bar, set_color
 from hopwise.utils.argument_list import dataset_arguments
-from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
 def create_dataset(config):
@@ -66,7 +66,7 @@ def create_dataset(config):
                 break
         if dataset_args_unchanged:
             logger = getLogger()
-            logger.info(set_color("Load filtered dataset from", "pink") + f": [{file}]")
+            logger.info(set_color("Load filtered dataset from", "magenta") + f": [{file}]")
             return dataset
 
     dataset = dataset_class(config)
@@ -124,7 +124,7 @@ def save_split_dataloaders(config, dataloaders):
         )
 
     logger = getLogger()
-    logger.info(set_color("Saving split dataloaders into", "pink") + f": [{file_path}]")
+    logger.info(set_color("Saving split dataloaders into", "magenta") + f": [{file_path}]")
     serialization_dataloaders = []
     for dataloader in dataloaders:
         if isinstance(dataloader, KnowledgeBasedDataLoader):
@@ -220,7 +220,7 @@ def load_split_dataloaders(config):
         valid_data.update_config(config)
         test_data.update_config(config)
     logger = getLogger()
-    logger.info(set_color("Load split dataloaders from", "pink") + f": [{dataloaders_save_path}]")
+    logger.info(set_color("Load split dataloaders from", "magenta") + f": [{dataloaders_save_path}]")
     return train_data, valid_data, test_data
 
 
@@ -329,7 +329,7 @@ def data_preparation(config, dataset):
 
     logger = getLogger()
     logger.info(
-        set_color("[Training]: ", "pink")
+        set_color("[Training]: ", "magenta")
         + set_color("train_batch_size", "cyan")
         + " = "
         + set_color(f"[{config['train_batch_size']}]", "yellow")
@@ -346,7 +346,7 @@ def data_preparation(config, dataset):
         eval_lp_args_info = ""
 
     logger.info(
-        set_color("[Evaluation]: ", "pink")
+        set_color("[Evaluation]: ", "magenta")
         + set_color("eval_batch_size", "cyan")
         + " = "
         + set_color(f"[{config['eval_batch_size']}]", "yellow")
@@ -513,3 +513,44 @@ def create_samplers(config, dataset, built_datasets):
     )
     test_sampler = test_sampler.set_phase("test") if test_sampler else None
     return train_sampler, valid_sampler, test_sampler
+
+
+def user_parallel_sampling(sampling_func_factory):
+    """Decorator to parallelize path sampling functions."""
+
+    import joblib
+
+    # https://github.com/DLR-RM/stable-baselines3/issues/1645#issuecomment-2194345304
+    tqdm_objects = [obj for obj in gc.get_objects() if "tqdm" in type(obj).__name__]
+    for tqdm_object in tqdm_objects:
+        if "tqdm_rich" in type(tqdm_object).__name__:
+            tqdm_object.close()
+
+    def wrapper(*args, **kwargs):
+        user_num = kwargs.get("user_num", None)
+        tqdm_kws = dict(
+            total=user_num - 1,
+            ncols=100,
+            desc="[red]KG Path Sampling",
+        )
+
+        sampling_func = sampling_func_factory(*args, **kwargs)
+
+        parallel_max_workers = kwargs.pop("parallel_max_workers", "")
+        if not parallel_max_workers:
+            iter_users = map(sampling_func, range(1, user_num))
+        else:
+            iter_users = joblib.Parallel(n_jobs=parallel_max_workers, prefer="processes", return_as="generator")(
+                joblib.delayed(sampling_func)(u) for u in range(1, user_num)
+            )
+
+        try:
+            iter_users = progress_bar(iter_users, **tqdm_kws)
+            return [p for p in iter_users]
+        except Exception:
+            if hasattr(iter_users, "close"):
+                iter_users.close()
+
+            raise
+
+    return wrapper

@@ -12,8 +12,7 @@ import numpy as np
 import torch
 
 from hopwise.model.abstract_recommender import GeneralRecommender
-from hopwise.utils import InputType
-from hopwise.utils.enum_type import ModelType
+from hopwise.utils import InputType, ModelType
 
 
 def soft_threshold(x, threshold):
