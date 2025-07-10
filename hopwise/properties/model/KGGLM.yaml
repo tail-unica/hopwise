@@ -21,12 +21,3 @@ path_sample_args:
     temporal_causality: False
     strategy: simple-ui
     MAX_RW_TRIES_PER_IID: 1     # (int) Maximum number of tries per positive item (during pretraining applies per entity).
-
-
-data_path: /home/recsysdatasets
-train_batch_size: 2048
-eval_batch_size: 1
-epochs: 5
-eval_step: 5
-gpu_id: 0
-metrics: ['NDCG', 'MRR', 'Hit', 'Precision', 'Recall', 'LIR', 'Fidelity']

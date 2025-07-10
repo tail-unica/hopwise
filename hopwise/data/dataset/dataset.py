@@ -177,7 +177,6 @@ class Dataset(torch.utils.data.Dataset):
         self._filter_by_field_value()
         self._filter_inter_by_user_or_item()
         self._filter_by_inter_num()
-        breakpoint()
         self._reset_index()
 
     def _build_feat_name_list(self):
@@ -534,7 +533,6 @@ class Dataset(torch.utils.data.Dataset):
         or ``[id_token_length, seqlen]``. See :doc:`../user_guide/data/data_args` for detail arg setting.
         """
 
-        breakpoint()
         preload_fields = self.config["preload_weight"]
         if preload_fields is None:
             return
@@ -895,10 +893,7 @@ class Dataset(torch.utils.data.Dataset):
                 self.logger.warning(f"{endpoint_pair_str} is an illegal interval!")
                 continue
 
-            if isinstance(endpoint_pair[1], str) and eval(endpoint_pair[1]).endswith("inf"):
-                left_point, right_point = float(endpoint_pair[0]), float("inf")
-            else:
-                left_point, right_point = float(endpoint_pair[0]), float(endpoint_pair[1])
+            left_point, right_point = float(endpoint_pair[0]), float(endpoint_pair[1])
 
             if left_point > right_point:
                 self.logger.warning(f"{endpoint_pair_str} is an illegal interval!")

@@ -12,16 +12,12 @@ fix_scores_sorting_bug: False
 epochs: 50
 eval_step: 50
 
-train_stage: policy # one in {'pretrain', 'policy'}
-margin: 1.0 # transe
-pretrain_epochs: 5 # https://github.com/Go0day/TPRec/blob/main/train_transe_model.py
+train_stage: pretrain # one in {'pretrain', 'policy'}
+margin: 1.0
+pretrain_epochs: 5
 cluster_num: 14
 save_step: 1
 cluster_feature: w-stat
-gpu_id: 0
-metrics: ['NDCG', 'MRR', 'Hit', 'Precision', 'Recall', 'Fidelity', 'LIR']
-eval_batch_size: 1
-data_path: /home/recsysdatasets
 
 # The kge embeddings necessary to score paths
 additional_feat_suffix: [useremb, entityemb, relationemb]
