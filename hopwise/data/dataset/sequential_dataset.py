@@ -16,7 +16,7 @@ import torch
 
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
-from hopwise.utils.enum_type import FeatureSource, FeatureType
+from hopwise.utils import FeatureSource, FeatureType
 
 
 class SequentialDataset(Dataset):

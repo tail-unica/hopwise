@@ -20,7 +20,6 @@ import os
 import re
 import sys
 import warnings
-from functools import partial
 from logging import getLogger
 from typing import Literal
 
@@ -351,7 +350,7 @@ class Config:
             if self.final_config_dict["loss_type"] in ["CE"]:
                 if (
                     self.final_config_dict["MODEL_TYPE"] == ModelType.SEQUENTIAL
-                    and self.final_config_dict.get("train_neg_sample_args", None) is not None
+                    and self.final_config_dict.get("train_neg_sample_args") is not None
                 ):
                     raise ValueError(
                         f"train_neg_sample_args [{self.final_config_dict['train_neg_sample_args']}] should be None "
@@ -365,7 +364,7 @@ class Config:
 
         # handle special cases for models that needs pretrain in one way
         if self.final_config_dict["model"] in ["TPRec"]:
-            train_stage = self.final_config_dict.get("train_stage", None)
+            train_stage = self.final_config_dict.get("train_stage")
 
             if train_stage is not None and train_stage in ["pretrain"]:
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
@@ -405,7 +404,7 @@ class Config:
             raise TypeError(f"The topk [{topk}] must be a integer, list")
 
         # Knowledge Graph
-        eval_lp_args = self.final_config_dict.get("eval_lp_args", None)
+        eval_lp_args = self.final_config_dict.get("eval_lp_args")
         if (
             self.final_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE
             and eval_lp_args is not None
@@ -511,13 +510,13 @@ class Config:
             raise NotImplementedError("Full sort evaluation do not match value-based metrics!")
 
         # metapath format check
-        metapaths = self.final_config_dict.get("metapaths", None)
+        metapaths = self.final_config_dict.get("metapaths")
         if metapaths is not None:
             for i in range(len(metapaths)):
                 if isinstance(metapaths[i][0], list):
                     metapaths[i] = list(map(tuple, metapaths[i]))
 
-        if self.final_config_dict.get("context_length", None) is None:
+        if self.final_config_dict.get("context_length") is None:
             # 2 * path_hop_length + 1(U) + BOS + EOS
             self.final_config_dict["context_length"] = (self.final_config_dict["path_hop_length"] * 2) + 3
 
@@ -644,7 +643,11 @@ class Config:
         """
         Set behavior of utilities or similar libraries based on environment variables.
         """
-        rich.tqdm = partial(rich.tqdm, disable=os.environ.get("DISABLE_TQDM", False))  # noqa: PLW1508
+        # Updates global progress bar API based on config
+        import hopwise.utils.logger as logger_module
+
+        progress_bar = logger_module.ProgressBar(self.final_config_dict.get("progress_bar_rich", True))
+        setattr(logger_module, "_progress_bar", progress_bar)
 
     def __setitem__(self, key, value):
         if not isinstance(key, str):
@@ -669,7 +672,7 @@ class Config:
     def __str__(self):
         args_info = "\n"
         for category in self.parameters:
-            args_info += set_color(category + " Hyper Parameters:\n", "pink")
+            args_info += set_color(category + " Hyper Parameters:\n", "magenta")
             args_info += "\n".join(
                 [
                     (set_color("{}", "cyan") + " =" + set_color(" {}", "yellow")).format(arg, value)
@@ -679,7 +682,7 @@ class Config:
             )
             args_info += "\n\n"
 
-        args_info += set_color("Other Hyper Parameters: \n", "pink")
+        args_info += set_color("Other Hyper Parameters: \n", "magenta")
         args_info += "\n".join(
             [
                 (set_color("{}", "cyan") + " = " + set_color("{}", "yellow")).format(arg, value)

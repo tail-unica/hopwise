@@ -32,7 +32,6 @@ from scipy import sparse
 from torch import optim
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from tqdm import rich
 
 from hopwise.data.dataloader import FullSortLPEvalDataLoader, NegSampleDataLoader
 from hopwise.data.interaction import Interaction
@@ -40,6 +39,7 @@ from hopwise.evaluator import Collector, Collector_KG, Evaluator, Evaluator_KG, 
 from hopwise.utils import (
     EvaluatorType,
     KGDataLoaderState,
+    KnowledgeEvaluationType,
     WandbLogger,
     calculate_valid_score,
     dict2str,
@@ -48,9 +48,9 @@ from hopwise.utils import (
     get_gpu_usage,
     get_local_time,
     get_tensorboard,
+    progress_bar,
     set_color,
 )
-from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
 class AbstractTrainer:
@@ -207,11 +207,11 @@ class Trainer(AbstractTrainer):
         loss_func = loss_func or self.model.calculate_loss
         total_loss = None
         iter_data = (
-            rich.tqdm(
+            progress_bar(
                 train_data,
                 total=len(train_data),
                 ncols=100,
-                desc=set_color(f"Train {epoch_idx:>5}", "pink"),
+                desc=set_color(f"Train {epoch_idx:>5}", "magenta", progress=True),
             )
             if show_progress
             else train_data
@@ -544,11 +544,11 @@ class Trainer(AbstractTrainer):
             item_tensor = eval_data._dataset.get_item_feature().to(self.device)
 
         iter_data = (
-            rich.tqdm(
+            progress_bar(
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
-                desc=set_color("Evaluate   ", "pink"),
+                desc=set_color("Evaluate   ", "magenta", progress=True),
             )
             if show_progress
             else eval_data
@@ -816,11 +816,11 @@ class KGTrainer(Trainer):
             evaluator = self.evaluator_kg
 
         iter_data = (
-            rich.tqdm(
+            progress_bar(
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
-                desc=set_color(f"Evaluate {task}", "pink"),
+                desc=set_color(f"Evaluate {task}", "magenta", progress=True),
             )
             if show_progress
             else eval_data
@@ -1230,11 +1230,11 @@ class TPRecTrainer(PretrainTrainer):
             item_tensor = eval_data._dataset.get_item_feature().to(self.device)
 
         iter_data = (
-            rich.tqdm(
+            progress_bar(
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
-                desc=set_color("Evaluate   ", "pink"),
+                desc=set_color("Evaluate   ", "magenta", progress=True),
             )
             if show_progress
             else eval_data
@@ -1841,11 +1841,11 @@ class NCLTrainer(Trainer):
         loss_func = loss_func or self.model.calculate_loss
         total_loss = None
         iter_data = (
-            rich.tqdm(
+            progress_bar(
                 train_data,
                 total=len(train_data),
                 ncols=100,
-                desc=set_color(f"Train {epoch_idx:>5}", "pink"),
+                desc=set_color(f"Train {epoch_idx:>5}", "magenta", progress=True),
             )
             if show_progress
             else train_data

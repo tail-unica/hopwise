@@ -1,6 +1,6 @@
 from hopwise.utils.argument_list import *
 from hopwise.utils.enum_type import *
-from hopwise.utils.logger import init_logger, set_color
+from hopwise.utils.logger import init_logger, progress_bar, set_color
 from hopwise.utils.utils import (
     GenerationOutputs,
     calculate_valid_score,
@@ -55,4 +55,5 @@ __all__ = [
     "get_logits_processor",
     "get_sequence_postprocessor",
     "GenerationOutputs",
+    "progress_bar",
 ]

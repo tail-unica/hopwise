@@ -24,10 +24,11 @@ import torch
 import torch.distributed as dist
 
 from hopwise.config import Config
-from hopwise.data import create_dataset, data_preparation
-from hopwise.data.transform import construct_transform
+from hopwise.data import construct_transform, create_dataset, data_preparation
 from hopwise.trainer import HFPathLanguageModelingTrainer
 from hopwise.utils import (
+    KnowledgeEvaluationType,
+    ModelType,
     calculate_valid_score,
     deep_dict_update,
     get_environment,
@@ -38,7 +39,6 @@ from hopwise.utils import (
     init_seed,
     set_color,
 )
-from hopwise.utils.enum_type import KnowledgeEvaluationType, ModelType
 
 
 def run(
@@ -199,7 +199,7 @@ def run_hopwise(
     # model evaluation
     test_result = trainer.evaluate(
         test_data,
-        load_best_model=saved,
+        load_best_model=saved and run != "evaluate",
         model_file=checkpoint,
         show_progress=config["show_progress"],
     )
