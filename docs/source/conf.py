@@ -42,5 +42,8 @@ exclude_patterns = []
 autoapi_dirs = ["../../hopwise"]
 autoapi_type = "python"
 
+html_favicon = "static/favicon.ico"
 html_theme = "furo"
 html_static_path = ["_static"]
+
+html_css_files = ["custom.css"]

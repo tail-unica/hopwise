@@ -11,5 +11,5 @@ relation_kg_num_interval: "[0,inf)"     # (str) Relation interval for filtering 
 
 # Knowledge Graph split args
 eval_lp_args:                           # (dict) 4 keys: group_by, order, split, and mode
-  knowledge_split:                      # (dict) The splitting strategy ranging in ['RS','LS'].
-  knowledge_group_by:                   # (str) The grouping strategy ranging in ['head', 'relation', 'tail', 'none'].
+  knowledge_split: ~                    # (dict) The splitting strategy ranging in ['RS','LS'].
+  knowledge_group_by: ~                 # (str) The grouping strategy ranging in ['head', 'relation', 'tail', 'none'].

@@ -8,7 +8,7 @@ collaborative filter models, non-gradient training is naturally applied. For
 main-stream neural-based models, automatic gradient descent is well equipped
 and set as default training strategy. Also two-stage training strategy is prepared
 for pretraining-based models. In addition, users who need an unusual training strategy
-can customize the ``Trainer`` and please refer to :doc:`../developer_guide/customize_trainers`
+can customize the ``Trainer`` and please refer to :doc:`/developer_guide/create_trainers`
 for more details.
 
 Apart from flexible training strategies, an automatic hyper-parameter searching is
@@ -79,7 +79,7 @@ common ranking-aware metrics, such as ``Recall``, ``Precision``, ``Hit``,
 generated recommendation lists by an algorithm. Besides, several ranking-based
 non-accuracy metrics are supported to evaluate in different views, such as
 ``ItemCoverage``, ``AveragePopularity``, ``GiniIndex``, ``ShannonEntropy`` and ``TailPercentage``.
-More details about metrics can refer to :doc:`/recbole/recbole.evaluator.metrics`.
+More details about metrics can refer to :mod:`hopwise.evaluator.metrics`.
 
 The parameters used to control the evaluation metrics are as follows:
 

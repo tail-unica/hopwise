@@ -1,9 +1,10 @@
 from hopwise.utils.argument_list import *
 from hopwise.utils.enum_type import *
-from hopwise.utils.logger import init_logger, set_color
+from hopwise.utils.logger import init_logger, progress_bar, set_color
 from hopwise.utils.utils import (
     GenerationOutputs,
     calculate_valid_score,
+    deep_dict_update,
     dict2str,
     early_stopping,
     ensure_dir,
@@ -13,7 +14,7 @@ from hopwise.utils.utils import (
     get_local_time,
     get_logits_processor,
     get_model,
-    get_ranker,
+    get_sequence_postprocessor,
     get_tensorboard,
     get_trainer,
     init_seed,
@@ -29,6 +30,7 @@ __all__ = [
     "get_trainer",
     "early_stopping",
     "calculate_valid_score",
+    "deep_dict_update",
     "dict2str",
     "Enum",
     "ModelType",
@@ -51,6 +53,7 @@ __all__ = [
     "list_to_latex",
     "WandbLogger",
     "get_logits_processor",
-    "get_ranker",
+    "get_sequence_postprocessor",
     "GenerationOutputs",
+    "progress_bar",
 ]

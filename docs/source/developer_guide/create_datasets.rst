@@ -12,7 +12,7 @@ In this project, there are two abstract dataloaders:
 
 In general, the new dataloader should inherit from the above two abstract classes.
 If one only needs to modify existing DataLoader, you can also inherit from it.
-The documentation of dataloader: :doc:`../../hopwise/hopwise.data.dataloader`
+The documentation of dataloader: :mod:`hopwise.data.dataloader`
 
 
 AbstractDataLoader

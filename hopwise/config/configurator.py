@@ -32,6 +32,7 @@ from hopwise.utils import (
     InputType,
     ModelType,
     dataset_arguments,
+    deep_dict_update,
     evaluation_arguments,
     general_arguments,
     get_model,
@@ -95,6 +96,7 @@ class Config:
         self.final_config_dict = self._get_final_config_dict()
         self._set_default_parameters()
         self._init_device()
+        self._set_env_behavior()
         self._set_torch_dtype()
         self._set_train_neg_sample_args()
         self._set_eval_neg_sample_args("valid")
@@ -158,7 +160,7 @@ class Config:
                 nested_cmd_dict = param
                 for nested_key in reversed(key.split(self.NESTED_KEY_SEPARATOR)):
                     nested_cmd_dict = {nested_key: nested_cmd_dict}
-                self.deep_dict_update(config_dict, nested_cmd_dict)
+                deep_dict_update(config_dict, nested_cmd_dict)
                 del config_dict[key]
             else:
                 config_dict[key] = value
@@ -169,7 +171,7 @@ class Config:
         if file_list:
             for file in file_list:
                 with open(file, encoding="utf-8") as f:
-                    self.deep_dict_update(file_config_dict, yaml.load(f.read(), Loader=self.yaml_loader))
+                    deep_dict_update(file_config_dict, yaml.load(f.read(), Loader=self.yaml_loader))
         return file_config_dict
 
     def _load_variable_config_dict(self, config_dict):
@@ -192,7 +194,7 @@ class Config:
                     raise SyntaxError("There are duplicate command arg '%s' with different value." % arg)
                 elif self.NESTED_KEY_SEPARATOR in cmd_arg_name:
                     nested_cmd_dict = self._convert_config_dict({cmd_arg_name: cmd_arg_value})
-                    self.deep_dict_update(cmd_config_dict, nested_cmd_dict)
+                    deep_dict_update(cmd_config_dict, nested_cmd_dict)
                 else:
                     cmd_config_dict[cmd_arg_name] = cmd_arg_value
         cmd_config_dict = self._convert_config_dict(cmd_config_dict)
@@ -200,9 +202,9 @@ class Config:
 
     def _merge_external_config_dict(self):
         external_config_dict = dict()
-        self.deep_dict_update(external_config_dict, self.file_config_dict)
-        self.deep_dict_update(external_config_dict, self.variable_config_dict)
-        self.deep_dict_update(external_config_dict, self.cmd_config_dict)
+        deep_dict_update(external_config_dict, self.file_config_dict)
+        deep_dict_update(external_config_dict, self.variable_config_dict)
+        deep_dict_update(external_config_dict, self.cmd_config_dict)
         self.external_config_dict = external_config_dict
 
     def _get_model_and_dataset(self, model, dataset):
@@ -234,20 +236,11 @@ class Config:
 
         return final_model, final_model_class, final_dataset
 
-    def deep_dict_update(self, updated_dict, updating_dict):
-        overwrite_keys = ["split"]
-        if isinstance(updated_dict, dict) and isinstance(updating_dict, dict):
-            for key, value in updating_dict.items():
-                if isinstance(value, dict) and isinstance(updated_dict.get(key), dict) and key not in overwrite_keys:
-                    self.deep_dict_update(updated_dict[key], value)
-                else:
-                    updated_dict[key] = value
-
     def _update_internal_config_dict(self, file):
         with open(file, encoding="utf-8") as f:
             config_dict = yaml.load(f.read(), Loader=self.yaml_loader)
             if config_dict is not None:
-                self.deep_dict_update(self.internal_config_dict, config_dict)
+                deep_dict_update(self.internal_config_dict, config_dict)
         return config_dict
 
     def _load_internal_config_dict(self, model, model_class, dataset):
@@ -319,6 +312,9 @@ class Config:
             if dataset == "ml-100k":
                 self._update_internal_config_dict(knowledge_base_on_ml_100k_init)
 
+            # avoids parallelism issues with HuggingFace Tokenizers
+            os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
         for file in [
             dataset_init_file,
             model_init_file,
@@ -332,8 +328,8 @@ class Config:
 
     def _get_final_config_dict(self):
         final_config_dict = dict()
-        self.deep_dict_update(final_config_dict, self.internal_config_dict)
-        self.deep_dict_update(final_config_dict, self.external_config_dict)
+        deep_dict_update(final_config_dict, self.internal_config_dict)
+        deep_dict_update(final_config_dict, self.external_config_dict)
         return final_config_dict
 
     def _set_default_parameters(self):
@@ -351,7 +347,7 @@ class Config:
             if self.final_config_dict["loss_type"] in ["CE"]:
                 if (
                     self.final_config_dict["MODEL_TYPE"] == ModelType.SEQUENTIAL
-                    and self.final_config_dict.get("train_neg_sample_args", None) is not None
+                    and self.final_config_dict.get("train_neg_sample_args") is not None
                 ):
                     raise ValueError(
                         f"train_neg_sample_args [{self.final_config_dict['train_neg_sample_args']}] should be None "
@@ -365,7 +361,7 @@ class Config:
 
         # handle special cases for models that needs pretrain in one way
         if self.final_config_dict["model"] in ["TPRec"]:
-            train_stage = self.final_config_dict.get("train_stage", None)
+            train_stage = self.final_config_dict.get("train_stage")
 
             if train_stage is not None and train_stage in ["pretrain"]:
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE
@@ -405,7 +401,7 @@ class Config:
             raise TypeError(f"The topk [{topk}] must be a integer, list")
 
         # Knowledge Graph
-        eval_lp_args = self.final_config_dict.get("eval_lp_args", None)
+        eval_lp_args = self.final_config_dict.get("eval_lp_args")
         if (
             self.final_config_dict["MODEL_TYPE"] == ModelType.KNOWLEDGE
             and eval_lp_args is not None
@@ -488,7 +484,7 @@ class Config:
         if not isinstance(self.final_config_dict["eval_args"], dict):
             raise ValueError(f"eval_args:[{self.final_config_dict['eval_args']}] should be a dict.")
 
-        self.deep_dict_update(default_eval_args, self.final_config_dict["eval_args"])
+        deep_dict_update(default_eval_args, self.final_config_dict["eval_args"])
 
         mode = default_eval_args["mode"]
         # backward compatible
@@ -511,13 +507,13 @@ class Config:
             raise NotImplementedError("Full sort evaluation do not match value-based metrics!")
 
         # metapath format check
-        metapaths = self.final_config_dict.get("metapaths", None)
+        metapaths = self.final_config_dict.get("metapaths")
         if metapaths is not None:
             for i in range(len(metapaths)):
                 if isinstance(metapaths[i][0], list):
                     metapaths[i] = list(map(tuple, metapaths[i]))
 
-        if self.final_config_dict.get("context_length", None) is None:
+        if self.final_config_dict.get("context_length") is None:
             # 2 * path_hop_length + 1(U) + BOS + EOS
             self.final_config_dict["context_length"] = (self.final_config_dict["path_hop_length"] * 2) + 3
 
@@ -534,7 +530,7 @@ class Config:
         if not isinstance(self.final_config_dict["path_sample_args"], dict):
             raise ValueError(f"path_sample_args:[{self.final_config_dict['path_sample_args']}] should be a dict.")
 
-        self.deep_dict_update(default_path_sample_args, self.final_config_dict["path_sample_args"])
+        deep_dict_update(default_path_sample_args, self.final_config_dict["path_sample_args"])
         if default_path_sample_args["temporal_causality"] and not default_path_sample_args["restrict_by_phase"]:
             default_path_sample_args["restrict_by_phase"] = True
             logger.warning("temporal_causality is set to True, restrict_by_phase is automatically set to True.")
@@ -640,6 +636,16 @@ class Config:
 
         self.final_config_dict["weight_precision"] = weight_precision
 
+    def _set_env_behavior(self):
+        """
+        Set behavior of utilities or similar libraries based on environment variables.
+        """
+        # Updates global progress bar API based on config
+        import hopwise.utils.logger as logger_module
+
+        progress_bar = logger_module.ProgressBar(self.final_config_dict.get("progress_bar_rich", True))
+        setattr(logger_module, "_progress_bar", progress_bar)
+
     def __setitem__(self, key, value):
         if not isinstance(key, str):
             raise TypeError("index must be a str.")
@@ -663,7 +669,7 @@ class Config:
     def __str__(self):
         args_info = "\n"
         for category in self.parameters:
-            args_info += set_color(category + " Hyper Parameters:\n", "pink")
+            args_info += set_color(category + " Hyper Parameters:\n", "magenta")
             args_info += "\n".join(
                 [
                     (set_color("{}", "cyan") + " =" + set_color(" {}", "yellow")).format(arg, value)
@@ -673,7 +679,7 @@ class Config:
             )
             args_info += "\n\n"
 
-        args_info += set_color("Other Hyper Parameters: \n", "pink")
+        args_info += set_color("Other Hyper Parameters: \n", "magenta")
         args_info += "\n".join(
             [
                 (set_color("{}", "cyan") + " = " + set_color("{}", "yellow")).format(arg, value)

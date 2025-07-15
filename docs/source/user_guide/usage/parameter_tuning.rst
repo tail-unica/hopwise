@@ -100,7 +100,7 @@ then the inner list should be quoted, e.g., :attr:`mlp_hidden_size` in `model.hy
 .. _hyperopt: https://github.com/hyperopt/hyperopt
 
 :attr:`fixed_config_file_list` is the fixed parameters, e.g., dataset related parameters and evaluation parameters.
-These parameters should be aligned with the format in :attr:`config_file_list`. See details as :doc:`../config_settings`.
+These parameters should be aligned with the format in :attr:`config_file_list`. See details as :doc:`../configuration`.
 
 Calling method of HyperTuning like:
 

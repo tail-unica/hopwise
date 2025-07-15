@@ -10,41 +10,27 @@
 from time import time
 
 import torch
-from tqdm import rich
 from transformers import DataCollatorForLanguageModeling, IntervalStrategy, Trainer, TrainerCallback
 
 from hopwise.utils import (
-    KnowledgeEvaluationType,
     dict2str,
     early_stopping,
     get_gpu_usage,
-    get_ranker,
+    progress_bar,
     set_color,
 )
 
 
 class HFPathTrainer(Trainer):
-    def __init__(
-        self,
-        hopwise_train_data,
-        hopwise_config,
-        callbacks,
-        model=None,
-        args=None,
-        path_hop_length=3,
-        paths_per_user=10,
-        path_generation_args=None,
-        eval_device="cpu",
-        tokenizer=None,
-        logits_processor_list=None,
-    ):
-        hopwise_dataset = hopwise_train_data.dataset
-        tokenizer = tokenizer or hopwise_dataset.tokenizer
+    """A HuggingFace Trainer that integrates with Hopwise for training and evaluation."""
+
+    def __init__(self, model, callbacks, train_data=None, args=None, tokenizer=None):
+        tokenizer = tokenizer or train_data.dataset.tokenizer
         super().__init__(
             model=model,
             args=args,
             callbacks=None,
-            train_dataset=hopwise_train_data.tokenized_dataset["train"],
+            train_dataset=train_data.dataset,
             eval_dataset="none",
             processing_class=tokenizer,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
@@ -52,53 +38,6 @@ class HFPathTrainer(Trainer):
 
         # Overwrite the callbacks to only use the HopwiseCallback
         self.callback_handler.callbacks = callbacks
-
-        self.paths_per_user = paths_per_user
-        self.path_generation_args = path_generation_args
-
-        self.path_hop_length = path_hop_length
-        self.token_sequence_length = hopwise_train_data.token_sequence_length - 1
-        self.eval_device = eval_device
-
-        ranker_params = dict(
-            processing_class=self.processing_class,
-            used_ids=hopwise_train_data.general_dataloader._sampler.used_ids,
-            item_num=hopwise_dataset.item_num,
-        )
-
-        self.ranker_rec = get_ranker(hopwise_config, ranker_params)
-        self.logits_processor_rec = logits_processor_list
-
-    def _full_sort_batch_eval(self, inputs, task=KnowledgeEvaluationType.REC):
-        if isinstance(self.model, torch.nn.DataParallel):
-            model = self.model.module
-        else:
-            model = self.model
-
-        if task == KnowledgeEvaluationType.REC:
-            sequence_len = self.token_sequence_length
-            num_return_sequences = self.paths_per_user
-            logits_processor = self.logits_processor_rec
-            ranker = self.ranker_rec
-        else:
-            sequence_len = self.SEQUENCE_LEN_LP
-            num_return_sequences = self.N_RET_SEQ_LP
-            logits_processor = self.logits_processor_lp
-            ranker = self.ranker_lp
-        outputs = model.generate(
-            **inputs,
-            max_length=sequence_len,
-            min_length=sequence_len,
-            num_return_sequences=num_return_sequences,
-            logits_processor=logits_processor,
-            return_dict_in_generate=True,
-            output_scores=True,
-            **self.path_generation_args,
-        )
-
-        scores, user_topk_sequences = ranker.get_sequences(outputs, self.token_sequence_length - 3)
-
-        return scores, user_topk_sequences
 
     def evaluate(self, **kwargs):
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics=None)
@@ -112,13 +51,12 @@ class HopwiseCallback(TrainerCallback):
     def __init__(
         self,
         hopwise_trainer,
-        train_data,
+        train_data=None,
         valid_data=None,
         verbose=True,
         saved=True,
         show_progress=False,
         callback_fn=None,
-        train_phase="finetune",
         model=None,
         model_name=None,
     ):
@@ -131,7 +69,6 @@ class HopwiseCallback(TrainerCallback):
         self.saved = saved
         self.show_progress = show_progress
         self.callback_fn = callback_fn
-        self.train_phase = train_phase
 
     def on_train_begin(self, args, state, control, **kwargs):
         self.hopwise_trainer.eval_collector.train_data_collect(self.train_data)
@@ -146,14 +83,14 @@ class HopwiseCallback(TrainerCallback):
     def on_epoch_begin(self, args, state, control, **kwargs):
         self.training_start_time = time()
 
-        len_hf_dataloader = len(self.train_data.tokenized_dataset["train"])
+        len_hf_dataloader = len(self.train_data.dataset)
         steps_in_epoch = len_hf_dataloader // self.hopwise_trainer.config["train_batch_size"]
         steps_in_epoch += int(len_hf_dataloader % self.hopwise_trainer.config["train_batch_size"] > 0)
         self.progress_bar = (
-            rich.tqdm(
+            progress_bar(
                 total=steps_in_epoch,
                 ncols=100,
-                desc=set_color(f"Train {int(state.epoch):>5}", "pink"),
+                desc=set_color(f"Train {int(state.epoch):>5}", "magenta", progress=True),
             )
             if self.show_progress
             else range(steps_in_epoch)

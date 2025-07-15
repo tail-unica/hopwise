@@ -20,14 +20,17 @@ import sys
 from collections.abc import MutableMapping
 from logging import getLogger
 
+import torch
 import torch.distributed as dist
 
 from hopwise.config import Config
-from hopwise.data import create_dataset, data_preparation
-from hopwise.data.transform import construct_transform
+from hopwise.data import construct_transform, create_dataset, data_preparation
 from hopwise.trainer import HFPathLanguageModelingTrainer
 from hopwise.utils import (
+    KnowledgeEvaluationType,
+    ModelType,
     calculate_valid_score,
+    deep_dict_update,
     get_environment,
     get_flops,
     get_model,
@@ -36,7 +39,6 @@ from hopwise.utils import (
     init_seed,
     set_color,
 )
-from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
 def run(
@@ -132,11 +134,9 @@ def run_hopwise(
     )
 
     if checkpoint is not None:
-        loaded_config, model, dataset, train_data, valid_data, test_data = load_data_and_model(model_file=checkpoint)
-        # Update loaded configuration with new arguments
-        # the first argument is updated_dict, the second updating_dict
-        config.deep_dict_update(loaded_config.final_config_dict, config.final_config_dict)
-        config = loaded_config
+        config, model, dataset, train_data, valid_data, test_data = load_data_and_model(
+            model_file=checkpoint, updating_config=config
+        )
 
         logger = get_logger(config)
         logger.info(set_color(f"A checkpoint is provided from which to resume training {checkpoint}", "red"))
@@ -151,9 +151,9 @@ def run_hopwise(
 
         # model loading and initialization
         init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
-        model = get_model(config["model"])(config, train_data.dataset).to(
-            device=config["device"], dtype=config["weight_precision"]
-        )
+        model = get_model(config["model"])(config, train_data.dataset)
+        if isinstance(model, torch.nn.Module):
+            model = model.to(device=config["device"], dtype=config["weight_precision"])
 
     logger.info(model)
 
@@ -165,9 +165,13 @@ def run_hopwise(
     # trainer loading and initialization
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
     if run == "train":
+        if checkpoint is not None:
+            trainer.resume_checkpoint(checkpoint)
+
         best_valid_score, best_valid_result = trainer.fit(
             train_data, valid_data, saved=saved, show_progress=config["show_progress"]
         )
+
     elif run == "evaluate":
         if checkpoint is None:
             raise ValueError("Checkpoint is needed for evaluation")
@@ -177,13 +181,9 @@ def run_hopwise(
             trainer.init_hf_trainer(train_data, valid_data, show_progress=config["show_progress"])
             trainer.resume_checkpoint(checkpoint)
 
-            best_valid_result = trainer.evaluate(
-                valid_data, load_best_model=False, model_file=checkpoint, show_progress=config["show_progress"]
-            )
-        else:
-            best_valid_result = trainer.evaluate(
-                valid_data, load_best_model=True, model_file=checkpoint, show_progress=config["show_progress"]
-            )
+        best_valid_result = trainer.evaluate(
+            valid_data, load_best_model=False, model_file=checkpoint, show_progress=config["show_progress"]
+        )
 
         best_valid_score = calculate_valid_score(best_valid_result, trainer.valid_metric)
     else:
@@ -199,7 +199,7 @@ def run_hopwise(
     # model evaluation
     test_result = trainer.evaluate(
         test_data,
-        load_best_model=True,
+        load_best_model=saved and run != "evaluate",
         model_file=checkpoint,
         show_progress=config["show_progress"],
     )
@@ -307,11 +307,15 @@ def objective_function(config_dict=None, config_file_list=None, saved=True, show
     }
 
 
-def load_data_and_model(model_file, load_only_data=False):
+def load_data_and_model(model_file, load_only_data=False, updating_config=None):
     r"""Load filtered dataset, split dataloaders and saved model.
 
     Args:
         model_file (str): The path of saved model file.
+        load_only_data (bool, optional): Whether to load only the dataset and dataloaders without the model.
+            Defaults to ``False``.
+        updating_config (Config, optional): A Config object to update the config parameters loaded from checkpoint.
+            Defaults to ``None``.
 
     Returns:
         tuple:
@@ -322,10 +326,12 @@ def load_data_and_model(model_file, load_only_data=False):
             - valid_data (AbstractDataLoader): The dataloader for validation.
             - test_data (AbstractDataLoader): The dataloader for testing.
     """
-    import torch
-
     checkpoint = torch.load(model_file, weights_only=False)
     config = checkpoint["config"]
+
+    if updating_config is not None:
+        deep_dict_update(config.final_config_dict, updating_config.final_config_dict)
+
     init_seed(config["seed"], config["reproducibility"])
     init_logger(config)
     logger = getLogger()
@@ -338,7 +344,15 @@ def load_data_and_model(model_file, load_only_data=False):
     init_seed(config["seed"], config["reproducibility"])
     model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
 
-    if not load_only_data and not config["model"].startswith(("PEARLM", "KGGLM")):
-        model.load_state_dict(checkpoint["state_dict"])
-        model.load_other_parameter(checkpoint.get("other_parameter"))
+    if not load_only_data:
+        if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
+            from transformers.modeling_utils import PreTrainedModel
+
+            model_class = get_model(config["model"])
+            if not issubclass(model_class, PreTrainedModel):
+                model.load_state_dict(checkpoint["state_dict"])
+                model.load_other_parameter(checkpoint.get("other_parameter"))
+        else:
+            model.load_state_dict(checkpoint["state_dict"])
+            model.load_other_parameter(checkpoint.get("other_parameter"))
     return config, model, dataset, train_data, valid_data, test_data

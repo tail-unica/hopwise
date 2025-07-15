@@ -6,19 +6,13 @@ import random
 import warnings
 from itertools import chain, zip_longest
 
-import joblib
 import numba
 import numpy as np
-from tokenizers import Tokenizer, pre_tokenizers
-from tokenizers import models as token_models
-from tokenizers import processors as token_processors
-from tokenizers import trainers as token_trainers
-from tqdm import rich
-from transformers import PreTrainedTokenizerFast
 
 from hopwise.data import Interaction
 from hopwise.data.dataset import KnowledgeBasedDataset
-from hopwise.utils import PathLanguageModelingTokenType, set_color
+from hopwise.data.utils import user_parallel_sampling
+from hopwise.utils import PathLanguageModelingTokenType, progress_bar, set_color
 
 
 class KnowledgePathDataset(KnowledgeBasedDataset):
@@ -51,8 +45,11 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def __init__(self, config):
         super().__init__(config)
         self._path_dataset = None  # path dataset is generated with generate_user_path_dataset
+        self._tokenized_dataset = None  # tokenized path dataset is generated with tokenize_path_dataset
         self._tokenizer = None
         self.used_ids = None
+
+        self._init_tokenizer()
 
     def _get_field_from_config(self):
         super()._get_field_from_config()
@@ -63,6 +60,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self.path_hop_length = self.config["path_hop_length"]
         assert self.path_hop_length % 2 == 1, "Path hop length must be odd"
         self.max_paths_per_user = self.config["MAX_PATHS_PER_USER"]
+
+        # path_hop_length = n_relations => (n_relations + user_starting_node) + n_relations + 2 (BOS, EOS)
+        self.token_sequence_length = (1 + self.path_hop_length) + self.path_hop_length + 2
 
         path_sample_args = self.config["path_sample_args"]
         self.temporal_causality = path_sample_args["temporal_causality"]
@@ -89,27 +89,42 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     @property
     def path_dataset(self):
         if self._path_dataset is None:
-            self.logger.warning(
-                "Path dataset has not been generated yet, please call generate_user_path_dataset() first."
-            )
-            return None
-        else:
-            return self._path_dataset
+            raise ValueError("Path dataset has not been generated yet, build the dataset first.")
+
+        return self._path_dataset
 
     @property
     def tokenizer(self):
-        if self._tokenizer is None:
-            self._init_tokenizer()
         return self._tokenizer
 
-    def __getitem__(self, index):
-        """Probably to be removed. It avoids issues with hopwise flops calculation."""
-        dummy_data = self.tokenizer(["U1"], truncation=True, padding=True, max_length=self.context_length)
-        df = Interaction(dummy_data.data)
-        return df
+    @property
+    def tokenized_dataset(self):
+        if self._tokenized_dataset is None:
+            raise ValueError("Tokenized path dataset has not been generated yet, build the dataset first.")
+
+        return self._tokenized_dataset
+
+    def __len__(self):
+        """Return the length of the tokenized dataset."""
+        return len(self.tokenized_dataset)
+
+    def __getitem__(self, idx):
+        """Return the item at index `idx` from the tokenized dataset."""
+        if self._tokenized_dataset is None:
+            # It avoids issues with hopwise flops calculation.
+            dummy_data = self.tokenize(["U1"])
+            return Interaction(dummy_data.data)
+
+        return self.tokenized_dataset[idx]
 
     def _init_tokenizer(self):
-        """Initialize tokenizer. The tokenizer is created in the dataset to be shared across dataloaders."""
+        """Initialize the HuggingFace tokenizer."""
+        from tokenizers import Tokenizer, pre_tokenizers
+        from tokenizers import models as token_models
+        from tokenizers import processors as token_processors
+        from tokenizers import trainers as token_trainers
+        from transformers import PreTrainedTokenizerFast
+
         tokenizer_model_class = getattr(token_models, self.tokenizer_model)
 
         tokenizer_object = Tokenizer(tokenizer_model_class(unk_token=self.unk_token))
@@ -120,10 +135,10 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         entity_range = np.arange(self.item_num, self.entity_num)  # only entities that are not items are considered
         token_vocab = np.concatenate(
             [
-                np.char.add(PathLanguageModelingTokenType.USER.value, np.arange(self.user_num).astype(str)),
-                np.char.add(PathLanguageModelingTokenType.ITEM.value, np.arange(self.item_num).astype(str)),
-                np.char.add(PathLanguageModelingTokenType.ENTITY.value, entity_range.astype(str)),
-                np.char.add(PathLanguageModelingTokenType.RELATION.value, np.arange(self.relation_num).astype(str)),
+                np.char.add(PathLanguageModelingTokenType.USER.token, np.arange(self.user_num).astype(str)),
+                np.char.add(PathLanguageModelingTokenType.ITEM.token, np.arange(self.item_num).astype(str)),
+                np.char.add(PathLanguageModelingTokenType.ENTITY.token, entity_range.astype(str)),
+                np.char.add(PathLanguageModelingTokenType.RELATION.token, np.arange(self.relation_num).astype(str)),
             ]
         )
 
@@ -171,12 +186,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 term_id = term
                 if term_type == "node":
                     if vertex_metadata[term_id]["type"] == self.uid_field:
-                        prefix = PathLanguageModelingTokenType.USER.value
+                        prefix = PathLanguageModelingTokenType.USER.token
                     elif vertex_metadata[term_id]["type"] == self.iid_field:
                         term_id -= self.user_num
-                        prefix = PathLanguageModelingTokenType.ITEM.value
+                        prefix = PathLanguageModelingTokenType.ITEM.token
                     elif vertex_metadata[term_id]["type"] == self.entity_field:
-                        prefix = PathLanguageModelingTokenType.ENTITY.value
+                        prefix = PathLanguageModelingTokenType.ENTITY.token
                         term_id -= self.user_num
                     else:
                         raise ValueError(
@@ -184,7 +199,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                             "in igraph during tokenized_kg generation."
                         )
                 else:
-                    prefix = PathLanguageModelingTokenType.RELATION.value
+                    prefix = PathLanguageModelingTokenType.RELATION.token
 
                 token_id = token_vocab[prefix + str(term_id)]
                 ret.append(token_id)
@@ -221,7 +236,61 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         return tokenized_kg
 
-    def generate_user_path_dataset(self, used_ids):
+    def tokenize(self, data):
+        """Tokenize the input data using the tokenizer."""
+        return self.tokenizer(
+            data,
+            truncation=True,
+            padding=True,
+            max_length=self.context_length,
+            add_special_tokens=True,
+        )
+
+    def tokenize_path_dataset(self):
+        """Tokenize the path dataset."""
+
+        if self._tokenized_dataset is None:
+            tokenized_dataset = self.tokenize(self.path_dataset.split("\n"))
+            tokenized_dataset = Interaction(tokenized_dataset.data)
+            correct_path_mask = [
+                all(spec_token not in path[1:-1] for spec_token in self.tokenizer.all_special_ids)
+                for path in tokenized_dataset["input_ids"]
+            ]
+            tokenized_dataset = tokenized_dataset[correct_path_mask]
+            self._tokenized_dataset = tokenized_dataset
+
+    def build(self):
+        """Extends the build method to generate user path dataset and tokenize it."""
+        datasets = super().build()
+        datasets[0].generate_user_path_dataset()
+        datasets[0].tokenize_path_dataset()
+
+        return datasets
+
+    def get_tokenized_used_ids(self):
+        """Convert the used ids to tokenized ids.
+
+        Args:
+            used_ids: A numpy array of sets, where each set contains the item ids
+            that a user has interacted with.
+            tokenizer: The tokenizer to convert ids to tokenized ids.
+        Returns:
+            dict: A dictionary where keys are tokenized user ids and values are sets of tokenized item ids.
+                A numpy array of sets cannot be used as user tokens are not in the range [0, user_num].
+        """
+        user_token_type = PathLanguageModelingTokenType.USER.token
+        item_token_type = PathLanguageModelingTokenType.ITEM.token
+
+        used_ids = self.get_user_used_ids()
+        tokenized_used_ids = {}
+        for uid in range(used_ids.shape[0]):
+            uid_token = self.tokenizer.convert_tokens_to_ids(user_token_type + str(uid))
+            tokenized_used_ids[uid_token] = set(
+                [self.tokenizer.convert_tokens_to_ids(item_token_type + str(item)) for item in used_ids[uid]]
+            )
+        return tokenized_used_ids
+
+    def generate_user_path_dataset(self):
         """Generate path dataset by sampling paths from the knowledge graph.
 
         Paths represent walks in the graph that connect :attr:`hop_length` + 1 entities through
@@ -230,22 +299,19 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         for the user and the second item is a recommendation candidate.
 
         Refer to :meth:`generate_user_paths` for more details about path generation strategies.
-
-        Args:
-            used_ids (numpy.ndarray): The used ids.
         """
         if not isinstance(self.inter_feat, Interaction):
             raise ValueError("The data should be prepared before generating the path dataset.")
 
         if self._path_dataset is None:
-            generated_paths = self.generate_user_paths(used_ids)
+            generated_paths = self.generate_user_paths()
 
             path_string = ""
             for path in generated_paths:
                 path_string += self._format_path(path) + "\n"
             self._path_dataset = path_string
 
-    def generate_user_paths(self, used_ids):
+    def generate_user_paths(self):
         """Generate paths from the knowledge graph.
 
         It currently supports four sampling strategies:
@@ -258,11 +324,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         - simple: randomly sample a positive item for each user and extract all simple paths to other positive items.
 
-        - metapath: random walk constrained by pre-defined metapaths.
+        - simple-ui: randomly sample a positive item for each user and extract all simple paths to all positive items.
 
-        Args:
-            used_ids (numpy.ndarray): Positive item ids for each user.
-            strategy (str, optional): The strategy for path generation. Defaults to "constrained-rw".
+        - metapath: random walk constrained by pre-defined metapaths.
 
         Returns:
             list: List of paths with relations.
@@ -283,6 +347,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                     "time_field has not been loaded or set,"
                     "thus temporal causality will not be used for path generation."
                 )
+
+        used_ids = self.get_user_used_ids()
 
         if self.strategy == "weighted-rw":
             if not self.collaborative_path:
@@ -434,11 +500,11 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         final_paths = set()
 
-        iter_users = rich.tqdm(
+        iter_users = progress_bar(
             range(1, self.user_num),
             total=self.user_num - 1,
             ncols=100,
-            desc=set_color("KG Path Sampling", "red"),
+            desc=set_color("KG Path Sampling", "red", progress=True),
         )
 
         if temporal_matrix is not None:
@@ -603,13 +669,13 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         graph_max_iid = self.item_num - 1 + self.user_num
         for node in path_nodes:
             if graph_min_iid <= node <= graph_max_iid:
-                remapped_path_nodes.append(PathLanguageModelingTokenType.ITEM.value + str(node - self.user_num))
+                remapped_path_nodes.append(PathLanguageModelingTokenType.ITEM.token + str(node - self.user_num))
             elif node < graph_min_iid:
-                remapped_path_nodes.append(PathLanguageModelingTokenType.USER.value + str(node))
+                remapped_path_nodes.append(PathLanguageModelingTokenType.USER.token + str(node))
             else:
-                remapped_path_nodes.append(PathLanguageModelingTokenType.ENTITY.value + str(node - self.user_num))
+                remapped_path_nodes.append(PathLanguageModelingTokenType.ENTITY.token + str(node - self.user_num))
 
-        relation_mapped_list = [PathLanguageModelingTokenType.RELATION.value + str(r) for r in path_relations]
+        relation_mapped_list = [PathLanguageModelingTokenType.RELATION.token + str(r) for r in path_relations]
 
         interleaved_entities_relations = zip_longest(remapped_path_nodes, relation_mapped_list)
         path_string = self.path_token_separator.join(list(chain(*interleaved_entities_relations))[:-1])
@@ -646,31 +712,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return "\n".join(info)
 
 
-def _user_parallel_sampling(sampling_func_factory):
-    """Decorator to parallelize path sampling functions."""
-
-    def wrapper(*args, **kwargs):
-        user_num = kwargs.get("user_num", None)
-        iter_users = rich.tqdm(
-            range(1, user_num),
-            total=user_num - 1,
-            ncols=100,
-            desc=set_color("KG Path Sampling", "red"),
-        )
-
-        sampling_func = sampling_func_factory(*args, **kwargs)
-
-        parallel_max_workers = kwargs.pop("parallel_max_workers", "")
-        if not parallel_max_workers:
-            return [sampling_func(u) for u in iter_users]
-        else:
-            return joblib.Parallel(n_jobs=parallel_max_workers, prefer="processes")(
-                joblib.delayed(sampling_func)(u) for u in iter_users
-            )
-
-    return wrapper
-
-
 def _check_temporal_causality_feasibility(temporal_matrix, pos_iid):
     """Check if temporal causality is feasible for the given positive item ids."""
     temporal_start = int(temporal_matrix is not None)
@@ -684,7 +725,7 @@ def _check_temporal_causality_feasibility(temporal_matrix, pos_iid):
     return pos_iid.shape[0] - temporal_start
 
 
-@_user_parallel_sampling
+@user_parallel_sampling
 def _generate_user_paths_constrained_random_walk_per_user(graph, used_ids, iid_field, entity_field, **kwargs):
     """Parallel version of the constrained random walk path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
@@ -781,7 +822,7 @@ def _generate_user_paths_constrained_random_walk_per_user(graph, used_ids, iid_f
     return process_user
 
 
-@_user_parallel_sampling
+@user_parallel_sampling
 def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_field, **kwargs):
     """Parallel version of the weighted random walk path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
@@ -837,6 +878,8 @@ def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_fiel
                 )
                 if not valid_path:
                     iid_tries -= 1
+                else:
+                    break
 
             if valid_path:
                 if item_candidates is not None:
@@ -876,7 +919,7 @@ def _generate_user_paths_weighted_random_walk_per_user(graph, used_ids, iid_fiel
     return process_user
 
 
-@_user_parallel_sampling
+@user_parallel_sampling
 def _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwargs):
     """Parallel version of the simple path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)
@@ -921,7 +964,7 @@ def _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwa
     return process_user
 
 
-@_user_parallel_sampling
+@user_parallel_sampling
 def _generate_user_paths_all_simple_per_user(graph, used_ids, **kwargs):
     """Parallel version of the simple path generation."""
     temporal_matrix = kwargs.pop("temporal_matrix", None)

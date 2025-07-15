@@ -1,0 +1,15 @@
+num_layers: 1
+num_heads: 1
+embedding_size: 100
+temperature: 1.0
+dropout: 0.1
+bias: True
+
+base_model: gpt2
+sequence_postprocessor: SampleSearch
+
+### PATH SAMPLING PROCESS ###
+MAX_PATHS_PER_USER: 1
+path_sample_args:
+    temporal_causality: False
+    strategy: simple-ui

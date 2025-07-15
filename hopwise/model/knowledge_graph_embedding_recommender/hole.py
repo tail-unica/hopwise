@@ -4,8 +4,11 @@
 
 """HolE
 ##################################################
-Reference: Maximilian Nickel, Lorenzo Rosasco, and Tomaso Poggio. 2016. Holographic embeddings of knowledge graphs.
-In Proceedings of the Thirtieth AAAI Conference on Artificial Intelligence (AAAI'16).  AAAI Press, 1955-1961.
+Reference:
+    Nickel et al. "Holographic embeddings of knowledge graphs." in AAAI 2016.
+
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import torch

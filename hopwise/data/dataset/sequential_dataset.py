@@ -16,7 +16,7 @@ import torch
 
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
-from hopwise.utils.enum_type import FeatureSource, FeatureType
+from hopwise.utils import FeatureSource, FeatureType
 
 
 class SequentialDataset(Dataset):
@@ -145,7 +145,7 @@ class SequentialDataset(Dataset):
                 list_field = field + list_suffix
                 setattr(self, f"{field}_list_field", list_field)
         self.set_field_property(self.item_list_length_field, FeatureType.TOKEN, FeatureSource.INTERACTION, 1)
-        self.inter_feat[self.item_list_length_field] = self.inter_feat[self.item_id_list_field].agg(len)
+        self.inter_feat[self.item_list_length_field] = self.inter_feat[self.item_id_list_field].transform(len)
 
     def inter_matrix(self, form="coo", value_field=None):
         """Get sparse matrix that describe interactions between user_id and item_id.

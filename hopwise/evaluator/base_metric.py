@@ -12,6 +12,7 @@
 """
 
 import numpy as np
+import pandas as pd
 import torch
 
 from hopwise.utils import EvaluatorType
@@ -26,9 +27,23 @@ class AbstractMetric:
     """
 
     smaller = False
+    metric_need = []
 
     def __init__(self, config):
         self.decimal_place = config["metric_decimal_place"]
+
+    def __init_subclass__(cls, **kwargs):
+        """Automatically extend parent's metric_need if subclass defines metric_need."""
+        super().__init_subclass__(**kwargs)
+
+        if hasattr(cls, "metric_need") and cls.metric_need is not cls.__bases__[0].metric_need:
+            # Get parents' metric_need
+            parent_metric_need = []
+            for base in cls.__bases__:
+                if hasattr(base, "metric_need"):
+                    parent_metric_need.extend(base.metric_need)
+
+            cls.metric_need = list(set(parent_metric_need + cls.metric_need))
 
     def calculate_metric(self, dataobject):
         """Get the dictionary of a metric.
@@ -224,16 +239,7 @@ class PathQualityMetric(TopkMetric):
     """
 
     metric_type = EvaluatorType.RANKING
-    metric_need = [
-        "data.timestamp",
-        "rec.paths",
-        "data.max_path_type",
-        "data.max_path_length",
-        "data.node_degree",
-        "eval_data.user_feat",
-        "data.test_batch_users",
-        "data.rid2relation",
-    ]
+    metric_need = ["rec.paths"]
 
     def __init__(self, config):
         super().__init__(config)
@@ -243,15 +249,10 @@ class PathQualityMetric(TopkMetric):
         return paths
 
     def normalized_ema(self, values):
-        import pandas as pd
-
         if max(values) == min(values):
-            values = np.array([i for i in range(len(values))])
-        else:
-            values = np.array([i for i in values])
+            values = list(range(len(values)))
 
         values = pd.Series(values)
-        ema_vals = values.ewm(span=len(values)).mean().tolist()
-        min_res = min(ema_vals)
-        max_res = max(ema_vals)
-        return [(x - min_res) / (max_res - min_res) for x in ema_vals]
+        ema_vals = values.ewm(span=len(values)).mean()
+        normalized_ema_vals = (ema_vals - ema_vals.min()) / (ema_vals.max() - ema_vals.min())
+        return normalized_ema_vals.to_numpy()

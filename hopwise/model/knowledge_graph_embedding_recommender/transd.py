@@ -5,10 +5,10 @@
 """TransD
 ##################################################
 Reference:
-    Guoliang Ji, Shizhu He, Liheng Xu, Kang Liu, and Jun Zhao. Knowledge Graph Embedding via Dynamic Mapping Matrix.
-    In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics
-    and the 7th International Joint Conference on Natural Language Processing (Volume 1: Long Papers) pages 687-696,
-    Beijing, China, July 2015. Association for Computational Linguistics.
+    Ji et al. "Knowledge Graph Embedding via Dynamic Mapping Matrix." in ACL/IJCNLP 2015.
+
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import torch

@@ -11,6 +11,8 @@
 ############################
 """
 
+from collections.abc import Mapping
+
 import numpy as np
 import pandas as pd
 import torch
@@ -39,7 +41,7 @@ def _convert_to_tensor(data):
     return new_data
 
 
-class Interaction:
+class Interaction(Mapping):
     """The basic class representing a batch of interaction records.
 
     Note:
@@ -170,6 +172,20 @@ class Interaction:
         list of str: The columns of interaction.
         """
         return list(self.interaction.keys())
+
+    def size(self, dim=0):
+        """Get the size of the interaction along a specific dimension.
+
+        Args:
+            dim (int): The dimension to get the size of. Default is 0 (batch dimension).
+
+        Returns:
+            int: The size of the interaction along the specified dimension.
+        """
+        size = 0
+        for k in self.interaction:
+            size = max(size, self.interaction[k].size(dim))
+        return size
 
     def to(self, device, selected_field=None):
         """Transfer Tensors in this Interaction object to the specified device.
