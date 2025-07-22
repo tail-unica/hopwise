@@ -52,6 +52,23 @@ from hopwise.utils import (
     set_color,
 )
 
+try:
+    grad_scaler = torch.GradScaler
+    autocast = torch.autocast
+except AttributeError:
+
+    def grad_scaler(device, **kwargs):
+        if torch.cuda.is_available():
+            return torch.cuda.amp.GradScaler(**kwargs)
+        else:
+            return torch.cuda.amp.GradScaler(**kwargs)
+
+    def autocast(device_type=None, **kwargs):
+        if torch.cuda.is_available():
+            return torch.cuda.amp.autocast(**kwargs)
+        else:
+            return torch.cpu.amp.autocast(**kwargs)
+
 
 class AbstractTrainer:
     r"""Trainer Class is used to manage the training and evaluation processes of recommender system models.
@@ -211,16 +228,14 @@ class Trainer(AbstractTrainer):
                 train_data,
                 total=len(train_data),
                 ncols=100,
-                desc=set_color(f"Train {epoch_idx:>5}", "magenta", progress=True),
+                desc=set_color(f"Train {epoch_idx:>5}", "magenta"),
             )
             if show_progress
             else train_data
         )
-
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
-
-        scaler = torch.GradScaler(self.device, enabled=self.enable_scaler)
+        scaler = grad_scaler(self.device, enabled=self.enable_scaler)
         for batch_idx, batch_interaction in enumerate(iter_data):
             interaction = batch_interaction.to(self.device)
             self.optimizer.zero_grad()
@@ -229,7 +244,7 @@ class Trainer(AbstractTrainer):
                 self.set_reduce_hook()
                 sync_loss = self.sync_grad_loss()
 
-            with torch.autocast(device_type=self.device.type, enabled=self.enable_amp):
+            with autocast(device_type=self.device.type, enabled=self.enable_amp):
                 losses = loss_func(interaction)
 
             if isinstance(losses, tuple):
@@ -384,7 +399,6 @@ class Trainer(AbstractTrainer):
         if self.config["train_neg_sample_args"].get("dynamic", False):
             train_data.get_model(self.model)
         valid_step = 0
-
         for epoch_idx in range(self.start_epoch, self.epochs):
             # train
             training_start_time = time()
@@ -548,7 +562,7 @@ class Trainer(AbstractTrainer):
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
-                desc=set_color("Evaluate   ", "magenta", progress=True),
+                desc=set_color("Evaluate   ", "magenta"),
             )
             if show_progress
             else eval_data
@@ -820,7 +834,7 @@ class KGTrainer(Trainer):
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
-                desc=set_color(f"Evaluate {task}", "magenta", progress=True),
+                desc=set_color(f"Evaluate {task}", "magenta"),
             )
             if show_progress
             else eval_data
@@ -1234,7 +1248,7 @@ class TPRecTrainer(PretrainTrainer):
                 eval_data,
                 total=len(eval_data),
                 ncols=100,
-                desc=set_color("Evaluate   ", "magenta", progress=True),
+                desc=set_color("Evaluate   ", "magenta"),
             )
             if show_progress
             else eval_data
@@ -1845,12 +1859,12 @@ class NCLTrainer(Trainer):
                 train_data,
                 total=len(train_data),
                 ncols=100,
-                desc=set_color(f"Train {epoch_idx:>5}", "magenta", progress=True),
+                desc=set_color(f"Train {epoch_idx:>5}", "magenta"),
             )
             if show_progress
             else train_data
         )
-        scaler = torch.GradScaler(enabled=self.enable_scaler)
+        scaler = grad_scaler(enabled=self.enable_scaler)
 
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
@@ -1863,7 +1877,7 @@ class NCLTrainer(Trainer):
                 self.set_reduce_hook()
                 sync_loss = self.sync_grad_loss()
 
-            with torch.autocast(device_type=self.device.type, enabled=self.enable_amp):
+            with autocast(device_type=self.device.type, enabled=self.enable_amp):
                 losses = loss_func(interaction)
 
             if isinstance(losses, tuple):

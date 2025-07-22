@@ -48,7 +48,7 @@ class RPG(SequentialRecommender):
 
         gpt2config = GPT2Config(
             vocab_size=dataset.vocab_size,
-            n_positions=config["max_seq_length"],
+            n_positions=config["MAX_ITEM_LIST_LENGTH"],
             n_embd=config["embedding_size"],
             n_layer=config["layers"],
             n_head=config["heads"],
@@ -62,7 +62,6 @@ class RPG(SequentialRecommender):
             eos_token_id=dataset.eos_token,
         )
         self.gpt2 = GPT2Model(gpt2config)
-
         # Number of values in a semantic id.
         self.n_pred_head = dataset.n_digit
         pred_head_list = []
@@ -72,7 +71,7 @@ class RPG(SequentialRecommender):
             pred_head_list.append(ResidualBlock(config["embedding_size"]))
         self.pred_heads = nn.Sequential(*pred_head_list)
 
-        self.loss = torch.nn.CrossEntropyLoss()
+        self.loss = torch.nn.CrossEntropyLoss(ignore_index=0)
 
     def forward(self, item_seq):
         input_tokens = self.item2shifted_sem_id[item_seq]
@@ -80,32 +79,33 @@ class RPG(SequentialRecommender):
         # aggregate semantic ids embeddings averaging embeddings for each item
         wte = self.gpt2.wte(input_tokens).mean(dim=-2)
         outputs = self.gpt2(inputs_embeds=wte, attention_mask=attention_mask)
+        # outputs.last_hidden_state: shape (bs, seq_len(50), embedding_size)
         heads_final_states = [
             self.pred_heads[i](outputs.last_hidden_state).unsqueeze(-2) for i in range(self.n_pred_head)
-        ]
-        heads_final_states = torch.cat(heads_final_states, dim=-2)
-
+        ]  # bs, 50, 1, 448
+        heads_final_states = torch.cat(heads_final_states, dim=-2)  # bs,50,32,448
         return heads_final_states
 
     def calculate_loss(self, interaction):
         item_seq = interaction[self.ITEM_SEQ]
         padding = torch.zeros((item_seq.size(0), 1), dtype=item_seq.dtype, device=item_seq.device)
-
         labels = torch.cat([item_seq[:, :-1], padding], dim=1)
         item_seq = torch.cat([item_seq[:, 1:], padding], dim=1)
 
         # Calculate representation
         hidden_states = self.forward(
             item_seq
-        )  # shape: (bs, seq_len, n_pred_head (semantic id size), embedding_size). (2048, 50,4,448)
-        label_mask = labels.view(-1) != 0
+        )  # shape: (bs, seq_len, n_pred_head (semantic id size), embedding_size). (2048, 50, 4,448)
+        label_mask = labels.view(-1) != 0  # shape (bs * seq_len,)
         selected_states = hidden_states.view(-1, self.n_pred_head, self.embedding_size)[label_mask]
         selected_states = F.normalize(selected_states, dim=-1)
-        selected_states = torch.chunk(selected_states, self.n_pred_head, dim=1)
-        token_emb = self.gpt2.wte.weight[1:-1]
+        selected_states = torch.chunk(
+            selected_states, self.n_pred_head, dim=1
+        )  # separa in tuple le predizioni per ogni head
+        token_emb = self.gpt2.wte.weight[1:-1]  # vocab_size, emb_size -> 8192, 448
         token_emb = F.normalize(token_emb, dim=-1)
 
-        # split the embedding into n_pred_head parts along dimension 0
+        # splitta gli embeddings (8192 (vocab_size)) in 32 parti, quindi una distribuzione su 256 tokens
         token_embs = torch.chunk(
             token_emb, self.n_pred_head, dim=0
         )  # tupla di 4 elementi. Ogni elemento è un tensore di size (256, 448)
@@ -134,7 +134,6 @@ class RPG(SequentialRecommender):
     def full_sort_predict(self, interaction):
         item_seq = interaction[self.ITEM_SEQ]
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
-
         hidden_states = self.forward(item_seq)
         hidden_states = hidden_states.gather(
             dim=1, index=(item_seq_len - 1).view(-1, 1, 1, 1).expand(-1, 1, self.n_pred_head, self.embedding_size)
@@ -164,7 +163,6 @@ class RPG(SequentialRecommender):
                 # (batch_size, n_items, code_dim)
                 index=(self.item2shifted_sem_id[1:, :] - 1).unsqueeze(0).expand(token_logits.shape[0], -1, -1),
             ).mean(dim=-1)
-
             # account for PAD
             padding = torch.full((item_seq.size(0), 1), -torch.inf, device=item_seq.device)
             scores = torch.cat([padding, scores], dim=1)

@@ -29,8 +29,6 @@ import tqdm.rich
 
 from hopwise.utils.utils import ensure_dir, get_local_time
 
-_progress_bar = None
-
 
 class ProgressBar:
     def __init__(self, progress_bar_rich=True):
@@ -45,9 +43,7 @@ class ProgressBar:
 
 
 def progress_bar(*args, **kwargs):
-    if _progress_bar is None:
-        return ProgressBar({"progress_bar_rich": True})(*args, **kwargs)
-    return _progress_bar(*args, **kwargs)
+    return ProgressBar(progress_bar_rich=not os.environ.get("DISABLE_RICH", False))(*args, **kwargs)
 
 
 log_colors_config = {
@@ -67,7 +63,7 @@ class RemoveColorFilter(logging.Filter):
 
 
 def set_color(log, color, highlight=True, progress=False):
-    if not progress or _progress_bar.progress_bar.func is tqdm.tqdm:
+    if not progress or progress_bar().progress_bar.func is tqdm.tqdm:
         color_set = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
         try:
             index = color_set.index(color)
@@ -80,7 +76,7 @@ def set_color(log, color, highlight=True, progress=False):
             prev_log += "0;3"
         prev_log += str(index) + "m"
         return prev_log + log + "\033[0m"
-    elif _progress_bar.progress_bar.func is tqdm.rich.tqdm:
+    elif progress_bar().progress_bar.func is tqdm.rich.tqdm:
         return f"[{color}]{log}[/{color}]"
 
 

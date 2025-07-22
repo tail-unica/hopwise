@@ -24,7 +24,7 @@ from logging import getLogger
 from typing import Literal
 
 import yaml
-from tqdm import TqdmExperimentalWarning, rich
+from tqdm import TqdmExperimentalWarning
 
 from hopwise.evaluator import metric_types, smaller_metrics
 from hopwise.utils import (
@@ -348,14 +348,16 @@ class Config:
             self.final_config_dict["MODEL_INPUT_TYPE"] = self.model_class.input_type
         elif "loss_type" in self.final_config_dict:
             if self.final_config_dict["loss_type"] in ["CE"]:
-                if (
-                    self.final_config_dict["MODEL_TYPE"] == ModelType.SEQUENTIAL
-                    and self.final_config_dict.get("train_neg_sample_args") is not None
-                ):
-                    raise ValueError(
-                        f"train_neg_sample_args [{self.final_config_dict['train_neg_sample_args']}] should be None "
-                        f"when the loss_type is CE."
-                    )
+                if self.final_config_dict["MODEL_TYPE"] == ModelType.SEQUENTIAL:
+                    if self.final_config_dict.get("train_neg_sample_args") is not None:
+                        raise ValueError(
+                            f"train_neg_sample_args [{self.final_config_dict['train_neg_sample_args']}] should be None "  # noqa: E501
+                            f"when the loss_type is CE."
+                        )
+                    if self.final_config_dict.get("AUGMENT_ITEM_SEQ") is None:
+                        raise ValueError(
+                            "AUGMENT_ITEM_SEQ should be set when the loss_type is CE for sequential models."
+                        )
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.POINTWISE
             elif self.final_config_dict["loss_type"] in ["BPR"]:
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE

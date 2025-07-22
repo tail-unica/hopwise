@@ -695,10 +695,9 @@ class RPGDataset(SequentialDataset):
 
     def __init__(self, config):
         super().__init__(config)
-        self.n_codebook_bits = self._get_codebook_bits(config["codebook_size"])
-        # This string define they way the indexing is done using the OPQ algorithm.
-        self.index_factory = f'OPQ{config["n_codebook"]},IVF1,PQ{config["n_codebook"]}x{self.n_codebook_bits}'
-
+        self.n_codebook = config["n_codebook"]
+        self.codebook_size = config["codebook_size"]
+        self.index_factory = f"OPQ{self.n_codebook},IVF1,PQ{self.n_codebook}x{int(math.log2(self.codebook_size))}"
         self.item2sem_ids = self.OPQ()
         self.item2shifted_sem_id = self.shift_semantic_ids()
 
@@ -709,16 +708,9 @@ class RPGDataset(SequentialDataset):
         """
         Returns the number of digits for the tokenizer.
 
-        The number of digits is determined by the value of `rq_n_codebooks` in the configuration.
+        The number of digits is determined by the value of `n_codebooks` in the configuration.
         """
-        return self.config["n_codebook"]
-
-    @property
-    def codebook_size(self):
-        """
-        Returns an integer representing the number of codebooks for the tokenizer.
-        """
-        return self.config["codebook_size"]
+        return self.n_codebook
 
     @property
     def vocab_size(self) -> int:
@@ -726,11 +718,6 @@ class RPGDataset(SequentialDataset):
         Returns the vocabulary size for the TIGER tokenizer.
         """
         return self.eos_token + 1
-
-    def _get_codebook_bits(self, n_codebook):
-        x = math.log2(n_codebook)
-        assert x.is_integer() and x >= 0, "Invalid value for n_codebook"
-        return int(x)
 
     def OPQ(self):
         """
@@ -744,7 +731,7 @@ class RPGDataset(SequentialDataset):
         import faiss
 
         #  Load sentence transformer embeddings
-        sentence_embeddings = np.vstack(self.itememb_feat["item_embedding"].to_numpy())
+        embeddings = np.vstack(self.itememb_feat["item_embedding"].to_numpy())
 
         # which items are used during training?
         training_mask = np.zeros(len(self.field2token_id[self.iid_field]) - 1, dtype=bool)
@@ -753,16 +740,29 @@ class RPGDataset(SequentialDataset):
         training_mask[self.inter_feat[self.iid_field].to_numpy() - 1] = True
 
         faiss.omp_set_num_threads(self.config["faiss_omp_num_threads"])
-        index = faiss.index_factory(sentence_embeddings.shape[1], self.index_factory, faiss.METRIC_INNER_PRODUCT)
+
+        # generate ANN from self.index_factory string using inner product to calculate distances
+        index = faiss.index_factory(embeddings.shape[1], self.index_factory, faiss.METRIC_INNER_PRODUCT)
+
+        # get the OPQMatrix from the pipeline
+        opq = faiss.downcast_VectorTransform(index.chain.at(0))
+
+        # Step 3: Create custom ProductQuantizer with desired nbits (e.g., 4 bits)
+        # Note: must match d_out and M of the OPQMatrix
+        assert isinstance(opq, faiss.OPQMatrix)
+        custom_pq = faiss.ProductQuantizer(opq.d_out, opq.M, int(math.log2(self.codebook_size)))
+        opq.pq = custom_pq
 
         self.logger.info(set_color("Training OPQ index...", "green"))
-        index.train(sentence_embeddings[training_mask])
-        index.add(sentence_embeddings)
+        index.train(embeddings[training_mask])
+        index.add(embeddings)
 
         ivf_index = faiss.downcast_index(index.index)
         invlists = faiss.extract_index_ivf(ivf_index).invlists
         ls = invlists.list_size(0)
+        # extract semantic id
         pq_codes = faiss.rev_swig_ptr(invlists.get_codes(0), ls * invlists.code_size)
+        # reshape to obtain |items| x |code_size|
         pq_codes = pq_codes.reshape(-1, invlists.code_size)
 
         faiss_sem_ids = []
@@ -771,14 +771,15 @@ class RPGDataset(SequentialDataset):
             bs = faiss.BitstringReader(faiss.swig_ptr(u8code), n_bytes)
             code = []
             for i in range(self.n_digit):
-                code.append(bs.read(self.n_codebook_bits))
+                code.append(bs.read(int(math.log2(self.codebook_size))))
             faiss_sem_ids.append(code)
         pq_codes = np.array(faiss_sem_ids)
 
         # Create mapping item -> semantic id
         item2sem_ids = {}
         for item in range(pq_codes.shape[0]):
-            item2sem_ids[item + 1] = tuple(pq_codes[i].tolist())
+            item2sem_ids[item + 1] = tuple(pq_codes[item].tolist())
+
         return item2sem_ids
 
     def shift_semantic_ids(self):
@@ -804,34 +805,14 @@ class RPGDataset(SequentialDataset):
         return item2shifted_sem_id
 
     def __str__(self):
-        info = [set_color(self.dataset_name, "pink")]
-        if self.uid_field:
-            info.extend(
-                [
-                    set_color("The number of users", "blue") + f": {self.user_num}",
-                    set_color("Average actions of users", "blue") + f": {self.avg_actions_of_users}",
-                ]
-            )
-        if self.iid_field:
-            info.extend(
-                [
-                    set_color("The number of items", "blue") + f": {self.item_num}",
-                    set_color("Average actions of items", "blue") + f": {self.avg_actions_of_items}",
-                ]
-            )
-        info.append(set_color("The number of inters", "blue") + f": {self.inter_num}")
-        if self.uid_field and self.iid_field:
-            info.append(set_color("The sparsity of the dataset", "blue") + f": {self.sparsity * 100}%")
-        info.append(set_color("Remain Fields", "blue") + f": {list(self.field2type)}")
-
-        # append semantic ids informations
-        info.extend(
-            [
-                set_color("Vocabulary Size", "green") + f": {self.vocab_size}",
-                set_color("Number of digits", "green") + f": {self.n_digit}",
-                set_color("Codebook Size", "green") + f": {self.codebook_size}",
-                set_color("FAISS Configuration", "green") + f": {self.index_factory}",
-            ]
-        )
+        info = [
+            super().__str__(),
+            set_color("Vocabulary Size", "green") + f": {self.vocab_size}",
+            set_color("Number of digits", "green") + f": {self.n_digit}",
+            set_color("Codebook Size and number of PQ centroids", "green") + f": {self.codebook_size}",
+            set_color("FAISS Configuration", "green") + f": {self.index_factory}",
+            set_color("Percentage of unique Semantic IDs", "green")
+            + f": {len(set(self.item2sem_ids.values())) / len(self.item2sem_ids)}",
+        ]
 
         return "\n".join(info)

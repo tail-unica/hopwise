@@ -247,7 +247,6 @@ def data_preparation(config, dataset):
     else:
         model_type = config["MODEL_TYPE"]
         model_input_type = config["MODEL_INPUT_TYPE"]
-        # model = config["model"]
         built_datasets = dataset.build()
 
         if model_type in [ModelType.KNOWLEDGE] and model_input_type not in [InputType.USERWISE]:
@@ -379,20 +378,40 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
             DeprecationWarning,
         )
 
-    if config["MODEL_INPUT_TYPE"] == InputType.USERWISE:
-        if config["model"] in ["TPRec"]:
-            if config["train_stage"] in ["policy"]:
-                return _get_user_dataloader(config, phase)
+    # Return Dataloader by InputType and Model name
+    input_type = config["MODEL_INPUT_TYPE"]
+    model = config["model"]
+    if input_type == InputType.USERWISE:
+        if phase == "train":
+            if model in ["TPRec"]:
+                if config["train_stage"] in ["policy"]:
+                    return UserDataLoader
+            else:
+                return UserDataLoader
         else:
-            return _get_user_dataloader(config, phase)
+            eval_mode = config["eval_args"]["mode"][phase]
 
+            if eval_mode == "full":
+                return FullSortRecEvalDataLoader
+            else:
+                return NegSampleEvalDataLoader
+
+    # Return Dataloader by ModelType
     model_type = config["MODEL_TYPE"]
     if phase == "train":
         # Return Dataloader based on the modeltype
         if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
-        else:
+        elif model_type == ModelType.SEQUENTIAL:
+            if config["AUGMENT_ITEM_SEQ"]:
+                return SequentialAugmentedDataloader
+            else:
+                return SequentialDataloader
+        elif model_type in [ModelType.GENERAL, ModelType.CONTEXT, ModelType.TRADITIONAL, ModelType.DECISIONTREE]:
             return TrainDataLoader
+        else:
+            raise ValueError(f"Missing dataloader for {model_type}")
+
     else:
         eval_mode = config["eval_args"]["mode"][phase]
         if eval_mode == "full":
@@ -402,36 +421,6 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
                 if task is KnowledgeEvaluationType.LP:
                     return FullSortLPEvalDataLoader
                 return FullSortRecEvalDataLoader
-        else:
-            return NegSampleEvalDataLoader
-
-
-def _get_user_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"]):
-    """Customized function for models that needs only users
-
-    Args:
-        config (Config): An instance object of Config, used to record parameter information.
-        phase (str): The stage of dataloader. It can only take 4 values: 'train', 'valid', 'test' or 'evaluation'.
-            Notes: 'evaluation' has been deprecated, please use 'valid' or 'test' instead.
-
-    Returns:
-        type: The dataloader class that meets the requirements in :attr:`config` and :attr:`phase`.
-    """
-    if phase not in ["train", "valid", "test", "evaluation"]:
-        raise ValueError("`phase` can only be 'train', 'valid', 'test' or 'evaluation'.")
-    if phase == "evaluation":
-        phase = "test"
-        warnings.warn(
-            "'evaluation' has been deprecated, please use 'valid' or 'test' instead.",
-            DeprecationWarning,
-        )
-
-    if phase == "train":
-        return UserDataLoader
-    else:
-        eval_mode = config["eval_args"]["mode"][phase]
-        if eval_mode == "full":
-            return FullSortRecEvalDataLoader
         else:
             return NegSampleEvalDataLoader
 

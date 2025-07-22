@@ -9,19 +9,20 @@ embd_pdrop: 0.5
 attn_pdrop: 0.5
 layer_norm_epsilon: 1e-12
 initializer_range: 0.02
-max_seq_length: 50
+MAX_ITEM_LIST_LENGTH: 50
+AUGMENT_ITEM_SEQ: False
 
 # Semantic ID configs (FAISS OPQ)
-n_codebook: 16
+n_codebook: 4
 codebook_size: 256
 faiss_omp_num_threads: 32
 
 # RPG configs
-use_gcd: True # use graph constrained decoding
-temperature: 0.03
-n_beams: 10
-n_edges: 100
-propagation_steps: 2
+use_gcd: False # use graph constrained decoding
+temperature: 0.07
+n_beams: 50
+n_edges: 50
+propagation_steps: 3
 
 #   decoding graph construction
 chunk_size: 1024

@@ -812,6 +812,10 @@ class TestSequentialRecommender(unittest.TestCase):
             }
             quick_test(config_dict)
 
+    def test_rpg(self):
+        config_dict = {"model": "RPG", "train_neg_sample_args": None}
+        quick_test(config_dict)
+
 
 class TestKnowledgeRecommender(unittest.TestCase):
     def test_cke(self):
