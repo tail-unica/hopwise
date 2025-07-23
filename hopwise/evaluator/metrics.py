@@ -1422,7 +1422,8 @@ class PPT(PathQualityMetric):
         for user, _, _, path in paths:
             if user not in unique_path_pattern:
                 unique_path_pattern[user] = [0, set()]
-            path_pattern = [rid2r_name[path_tuple[0]] for path_tuple in path[1:]]
+
+            path_pattern = [str(path_tuple[0]) for path_tuple in path[1:]]
             unique_path_pattern[user][0] += 1
             unique_path_pattern[user][1].add("_".join(path_pattern))
 

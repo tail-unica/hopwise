@@ -1602,6 +1602,15 @@ class Dataset(torch.utils.data.Dataset):
             self._drop_unused_col()
             cumsum = list(np.cumsum(self.file_size_list))
             datasets = [self.copy(self.inter_feat[start:end]) for start, end in zip([0] + cumsum[:-1], cumsum)]
+
+            if len(datasets) == 2:  # noqa: PLR2004
+                self.logger.info(
+                    set_color(
+                        "Benchmark dataset has two part. The Evaluation on the validation will be done on Training Set.",  # noqa: E501
+                        "red",
+                    )
+                )
+                datasets = [datasets[0], datasets[0], datasets[1]]
             return datasets
 
         # ordering

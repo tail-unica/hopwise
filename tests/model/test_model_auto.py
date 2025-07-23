@@ -473,6 +473,7 @@ class TestSequentialRecommender(unittest.TestCase):
         config_dict = {
             "model": "GRU4Rec",
             "loss_type": "BPR",
+            "train_neg_sample_args": {"distribution": "uniform", "sample_num": 1},
         }
         quick_test(config_dict)
 
@@ -547,11 +548,21 @@ class TestSequentialRecommender(unittest.TestCase):
         quick_test(config_dict)
 
     def test_sasrec_with_BPR_loss_and_relu(self):
-        config_dict = {"model": "SASRec", "loss_type": "BPR", "hidden_act": "relu"}
+        config_dict = {
+            "model": "SASRec",
+            "loss_type": "BPR",
+            "hidden_act": "relu",
+            "train_neg_sample_args": {"distribution": "uniform", "sample_num": 1},
+        }
         quick_test(config_dict)
 
     def test_sasrec_with_BPR_loss_and_sigmoid(self):
-        config_dict = {"model": "SASRec", "loss_type": "BPR", "hidden_act": "sigmoid"}
+        config_dict = {
+            "model": "SASRec",
+            "loss_type": "BPR",
+            "hidden_act": "sigmoid",
+            "train_neg_sample_args": {"distribution": "uniform", "sample_num": 1},
+        }
         quick_test(config_dict)
 
     def test_srgnn(self):
@@ -781,7 +792,12 @@ class TestSequentialRecommender(unittest.TestCase):
         quick_test(config_dict)
 
     def test_gru4reckg_with_BPR_loss(self):
-        config_dict = {"model": "GRU4RecKG", "loss_type": "BPR", "embedding_size": 4}
+        config_dict = {
+            "model": "GRU4RecKG",
+            "loss_type": "BPR",
+            "embedding_size": 4,
+            "train_neg_sample_args": {"distribution": "uniform", "sample_num": 1},
+        }
         quick_test(config_dict)
 
     def test_ksr(self):
@@ -813,7 +829,7 @@ class TestSequentialRecommender(unittest.TestCase):
             quick_test(config_dict)
 
     def test_rpg(self):
-        config_dict = {"model": "RPG", "train_neg_sample_args": None}
+        config_dict = {"model": "RPG", "train_neg_sample_args": None, "n_codebook": 2, "codebook_size": 32}
         quick_test(config_dict)
 
 

@@ -355,9 +355,7 @@ class Config:
                             f"when the loss_type is CE."
                         )
                     if self.final_config_dict.get("AUGMENT_ITEM_SEQ") is None:
-                        raise ValueError(
-                            "AUGMENT_ITEM_SEQ should be set when the loss_type is CE for sequential models."
-                        )
+                        raise ValueError("AUGMENT_ITEM_SEQ should be set for sequential models.")
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.POINTWISE
             elif self.final_config_dict["loss_type"] in ["BPR"]:
                 self.final_config_dict["MODEL_INPUT_TYPE"] = InputType.PAIRWISE

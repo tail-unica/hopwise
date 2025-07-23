@@ -43,7 +43,10 @@ class ProgressBar:
 
 
 def progress_bar(*args, **kwargs):
-    return ProgressBar(progress_bar_rich=not os.environ.get("DISABLE_RICH", False))(*args, **kwargs)
+    global _progress_bar  # noqa: PLW0603
+    if _progress_bar is None:
+        _progress_bar = ProgressBar(progress_bar_rich=not os.environ.get("DISABLE_RICH", False))
+    return _progress_bar(*args, **kwargs)
 
 
 log_colors_config = {
@@ -63,7 +66,7 @@ class RemoveColorFilter(logging.Filter):
 
 
 def set_color(log, color, highlight=True, progress=False):
-    if not progress or progress_bar().progress_bar.func is tqdm.tqdm:
+    if not progress or _progress_bar.progress_bar.func is tqdm.tqdm:
         color_set = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
         try:
             index = color_set.index(color)
@@ -76,7 +79,7 @@ def set_color(log, color, highlight=True, progress=False):
             prev_log += "0;3"
         prev_log += str(index) + "m"
         return prev_log + log + "\033[0m"
-    elif progress_bar().progress_bar.func is tqdm.rich.tqdm:
+    elif _progress_bar.progress_bar.func is tqdm.rich.tqdm:
         return f"[{color}]{log}[/{color}]"
 
 

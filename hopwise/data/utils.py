@@ -407,11 +407,8 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
                 return SequentialAugmentedDataloader
             else:
                 return SequentialDataloader
-        elif model_type in [ModelType.GENERAL, ModelType.CONTEXT, ModelType.TRADITIONAL, ModelType.DECISIONTREE]:
-            return TrainDataLoader
         else:
-            raise ValueError(f"Missing dataloader for {model_type}")
-
+            return TrainDataLoader
     else:
         eval_mode = config["eval_args"]["mode"][phase]
         if eval_mode == "full":

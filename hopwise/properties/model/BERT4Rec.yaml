@@ -11,3 +11,4 @@ mask_ratio: 0.2                 # (float) The probability for a item replaced by
 loss_type: 'CE'                 # (str) The type of loss function.
 transform: mask_itemseq         # (str) The transform operation for batch data process.
 ft_ratio: 0.5                   # (float) The probability of generating fine-tuning samples
+train_neg_sample_args: ~

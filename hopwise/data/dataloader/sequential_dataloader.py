@@ -12,11 +12,11 @@ from logging import getLogger
 
 import numpy as np
 
-from hopwise.data.dataloader.general_dataloader import AbstractDataLoader
+from hopwise.data.dataloader.general_dataloader import TrainDataLoader
 from hopwise.data.interaction import Interaction
 
 
-class SequentialAugmentedDataloader(AbstractDataLoader):
+class SequentialAugmentedDataloader(TrainDataLoader):
     """:class:`SequentialAugmentedDataloader` is a dataloader for SequentialDataset.
 
     Args:
@@ -27,20 +27,7 @@ class SequentialAugmentedDataloader(AbstractDataLoader):
     """
 
     def __init__(self, config, dataset, sampler, shuffle=False):
-        self.logger = getLogger()
-        self.sample_size = len(dataset)
         super().__init__(config, dataset, sampler, shuffle=shuffle)
-
-    def _init_batch_size_and_step(self):
-        batch_size = self.config["train_batch_size"]
-        self.step = batch_size
-        self.set_batch_size(batch_size)
-
-    def collate_fn(self, index):
-        index = np.array(index)
-        data = self._dataset[index]
-        transformed_data = self.transform(self._dataset, data)
-        return transformed_data
 
 
 class SequentialDataloader(SequentialAugmentedDataloader):
