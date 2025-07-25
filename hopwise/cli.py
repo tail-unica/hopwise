@@ -74,7 +74,7 @@ def cli(ctx, debug, rich_traceback):
         allow_interspersed_args=True,
     ),
 )
-@click.option("--model", "-m", default="BPR", help="Model name to train")
+@click.option("--model", "-m", default="KGGLM", help="Model name to train (only KGGLM and PEARLM supported)")
 @click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
 @click.option("--config-files", help="Space-separated config files")
 @click.option("--checkpoint", help="Checkpoint (.pth) file path")

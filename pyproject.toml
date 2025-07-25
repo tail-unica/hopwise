@@ -22,8 +22,8 @@ hopwise = "hopwise.cli:cli"
 [project]
 name = "hopwise"
 description = """
-_hopwise_ is an advanced extension of the Recbole library, designed to enhance recommendation systems with the power of knowledge graphs.
-By integrating knowledge embedding models, path-based reasoning methods, and path language modeling apporaches, hopwise supports both recommendation and link prediction tasks with a focus on interpretability and self-explanation.
+_hopwise_ is a specialized library focused on KGGLM (Knowledge Graph Generative Language Model) for knowledge-aware recommendation systems.
+This distilled version supports KGGLM and PEARLM models for path-based reasoning and explainable recommendations using knowledge graphs.
 """
 authors = [
     { name = "Giacomo Medda", email = "jackm.medda@gmail.com" },
@@ -75,57 +75,21 @@ dependencies = [
   "scikit-learn",
   "rich",
   "cachetools",
-]
-
-[project.optional-dependencies]
-pathlm = [
+  # KGGLM required dependencies
   "transformers",
   "accelerate>=0.26.0",
   "datasets",
   "igraph",
   "joblib",
+  "safetensors",
 ]
-ldiffrec = [
-  "kmeans-pytorch"
-]
-nncf = [
-  "networkx",
-  "python-louvain"
-]
-ncl = [
-  "faiss-cpu"
-]
-lightgbm = [
-  "lightgbm"
-]
-xgboost = [
-  "xgboost"
-]
-kgat = [
-  "dgl>=2.4.0"
-]
-# scatter = [
-#   "torch-scatter",
-# ]
+
+[project.optional-dependencies]
 hyper = [
   "hyperopt==0.2.5",
   "optuna",
   "ray[tune]",
   "plotly"
-]
-tsne = [
-  "plotly",
-  "opentsne",
-]
-all-models = [
-  "hopwise[pathlm]",
-  "hopwise[ldiffrec]",
-  "hopwise[ncl]",
-  "hopwise[nncf]",
-  "hopwise[lightgbm]",
-  "hopwise[xgboost]",
-  "hopwise[kgat]",
-  # "hopwise[scatter]",
 ]
 cli = [
   "click>=8.0.0",
@@ -146,7 +110,7 @@ lint = [
   "pre-commit"
 ]
 dev = [
-  "hopwise[all-models,hyper,cli,tsne]",
+  "hopwise[hyper,cli]",
   {include-group = "docs"},
   {include-group = "test"},
   {include-group = "lint"},
@@ -161,9 +125,8 @@ description = "uv_sync run base"
 dependency_groups = ["dev", "test"]
 extras = ["cuda"]
 commands = [
-  ["uv", "run", "--active", "hopwise", "train", "--epochs=2"],
-  ["uv", "run", "--active", "hopwise", "train", "--model", "LightGCN", "--epochs=2"],
-  ["uv", "run", "--active", "hopwise", "train", "--model", "KGAT", "--epochs=2"]
+  ["uv", "run", "--active", "hopwise", "train", "--model", "KGGLM", "--epochs=2"],
+  ["uv", "run", "--active", "hopwise", "train", "--model", "PEARLM", "--epochs=2"]
 ]
 
 [tool.uv]

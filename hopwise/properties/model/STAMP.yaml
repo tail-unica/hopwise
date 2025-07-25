@@ -1,2 +1,0 @@
-embedding_size: 64              # (int) The embedding size of items.
-loss_type: 'CE'                 # (str) The type of loss function. Range in ['BPR', 'CE'].

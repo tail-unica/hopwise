@@ -75,13 +75,7 @@ def get_model(model_name):
         Recommender: model class
     """
     model_submodule = [
-        "general_recommender",
-        "context_aware_recommender",
-        "sequential_recommender",
-        "knowledge_aware_recommender",
-        "knowledge_graph_embedding_recommender",
         "path_language_modeling_recommender",
-        "exlib_recommender",
     ]
 
     model_file_name = model_name.lower()
@@ -108,11 +102,7 @@ def get_trainer(model_type, model_name):
     Returns:
         Trainer: trainer class
     """
-    register_table = {
-        "PEARLMGPT2": "PEARLMfromscratchTrainer",
-        "PEARLMLlama2": "PEARLMfromscratchTrainer",
-        "PEARLMLlama3": "PEARLMfromscratchTrainer",
-    }
+    register_table = {}
 
     try:
         return getattr(importlib.import_module("hopwise.trainer"), model_name + "Trainer")
@@ -121,10 +111,6 @@ def get_trainer(model_type, model_name):
             return getattr(importlib.import_module("hopwise.trainer"), register_table[model_name])
         elif model_type == ModelType.PATH_LANGUAGE_MODELING:
             return getattr(importlib.import_module("hopwise.trainer"), "HFPathLanguageModelingTrainer")
-        elif model_type == ModelType.KNOWLEDGE:
-            return getattr(importlib.import_module("hopwise.trainer"), "KGTrainer")
-        elif model_type == ModelType.TRADITIONAL:
-            return getattr(importlib.import_module("hopwise.trainer"), "TraditionalTrainer")
         else:
             return getattr(importlib.import_module("hopwise.trainer"), "Trainer")
 
