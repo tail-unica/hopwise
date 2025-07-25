@@ -734,7 +734,7 @@ class RPGDataset(SequentialDataset):
         embeddings = np.vstack(self.itememb_feat["item_embedding"].to_numpy())
 
         # which items are used during training?
-        training_mask = np.zeros(len(self.field2token_id[self.iid_field]) - 1, dtype=bool)
+        training_mask = np.zeros(self.item_num - 1, dtype=bool)
 
         # there can be items not in the training set, so we use the item ids to mask them
         training_mask[self.inter_feat[self.iid_field].to_numpy() - 1] = True
@@ -796,7 +796,7 @@ class RPGDataset(SequentialDataset):
         Returns:
             dict: A dictionary mapping items to their corresponding tokens.
         """
-        item2shifted_sem_id = torch.zeros((len(self.field2id_token[self.iid_field]), self.n_digit), dtype=torch.long)
+        item2shifted_sem_id = torch.zeros((self.item_num, self.n_digit), dtype=torch.long)
         for item, semantic_id_tuple in self.item2sem_ids.items():
             item2shifted_sem_id[int(item)] = torch.LongTensor(semantic_id_tuple)
             for digit in range(self.n_digit):

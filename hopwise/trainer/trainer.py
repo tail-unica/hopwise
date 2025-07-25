@@ -151,6 +151,7 @@ class Trainer(AbstractTrainer):
         saved_model_file = "{}-{}.pth".format(self.config["model"], get_local_time())
         self.saved_model_file = os.path.join(self.checkpoint_dir, saved_model_file)
         self.weight_decay = config["weight_decay"]
+        self.benchmark_item_filename = config["benchmark_item_filename"]
 
         self.start_epoch = 0
         self.cur_step = 0
@@ -535,7 +536,7 @@ class Trainer(AbstractTrainer):
         if not eval_data:
             return
 
-        # self.eval_collector.eval_data_collect(eval_data)
+        self.eval_collector.eval_data_collect(eval_data)
 
         if load_best_model:
             checkpoint_file = model_file or self.saved_model_file
@@ -575,6 +576,8 @@ class Trainer(AbstractTrainer):
             )
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
+            if self.benchmark_item_filename is not None:
+                scores = self.eval_collector.filter_test_items(eval_data, scores)
             self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
         self.eval_collector.model_collect(self.model)
         struct = self.eval_collector.get_data_struct()
@@ -1859,7 +1862,7 @@ class NCLTrainer(Trainer):
                 train_data,
                 total=len(train_data),
                 ncols=100,
-                desc=set_color(f"Train {epoch_idx:>5}", "w", progress=True),
+                desc=set_color(f"Train {epoch_idx:>5}", "magenta", progress=True),
             )
             if show_progress
             else train_data

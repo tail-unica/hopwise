@@ -122,6 +122,7 @@ class Dataset(torch.utils.data.Dataset):
         self.alias = {}
         self._preloaded_weight = {}
         self.benchmark_filename_list = self.config["benchmark_filename"]
+        self.benchmark_item_filename_list = self.config["benchmark_item_filename"]
 
     def _get_field_from_config(self):
         """Initialization common field names."""
@@ -254,6 +255,11 @@ class Dataset(torch.utils.data.Dataset):
         self._load_inter_feat(token, dataset_path)
         self.user_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.USER, "uid_field")
         self.item_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.ITEM, "iid_field")
+
+        if self.benchmark_item_filename_list is not None:
+            for split in self.benchmark_item_filename_list:
+                feat = self._load_user_or_item_feat(f"{token}.{split}", dataset_path, FeatureSource.ITEM, "iid_field")
+                setattr(self, f"item_feat_{split}", feat)
         self._load_additional_feat(token, dataset_path)
 
     def _load_inter_feat(self, token, dataset_path):
@@ -1040,7 +1046,6 @@ class Dataset(torch.utils.data.Dataset):
         for alias in self.alias.values():
             remap_list = self._get_remap_list(alias)
             self._remap(remap_list)
-
         for field in self._rest_fields:
             remap_list = self._get_remap_list(np.array([field]))
             self._remap(remap_list)
@@ -1610,7 +1615,7 @@ class Dataset(torch.utils.data.Dataset):
                         "red",
                     )
                 )
-                datasets = [datasets[0], datasets[0], datasets[1]]
+                datasets = [datasets[0], datasets[1], datasets[1]]
             return datasets
 
         # ordering

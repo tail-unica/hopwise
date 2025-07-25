@@ -13,7 +13,7 @@ MAX_ITEM_LIST_LENGTH: 50
 AUGMENT_ITEM_SEQ: False
 
 # Semantic ID configs (FAISS OPQ)
-n_codebook: 4
+n_codebook: 16
 codebook_size: 256
 faiss_omp_num_threads: 32
 
@@ -33,7 +33,6 @@ eval_args:
   order: TO
   mode: full
 train_neg_sample_args: ~
-reproducible: True
 loss_type: 'CE'
 
 # To load the pretrained embeddings (Typically from a SentenceEncoder) necessary to score the paths

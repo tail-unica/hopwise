@@ -29,7 +29,6 @@ class RPG(SequentialRecommender):
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
-        dataset.item2shifted_sem_id = dataset.item2shifted_sem_id.to(self.device)
 
         self.topk = config["topk"]
         self.use_gcd = config["use_gcd"]
@@ -42,7 +41,7 @@ class RPG(SequentialRecommender):
         self.propagation_steps = config["propagation_steps"]
         self.loss_type = config["loss_type"]  # necessary otherwise hopwise don't recognize seq recommender
 
-        self.item2shifted_sem_id = dataset.item2shifted_sem_id
+        self.item2shifted_sem_id = dataset.item2shifted_sem_id.to(self.device)
         self.n_digit = dataset.n_digit
         self.codebook_size = dataset.codebook_size
 
@@ -99,16 +98,11 @@ class RPG(SequentialRecommender):
         label_mask = labels.view(-1) != 0  # shape (bs * seq_len,)
         selected_states = hidden_states.view(-1, self.n_pred_head, self.embedding_size)[label_mask]
         selected_states = F.normalize(selected_states, dim=-1)
-        selected_states = torch.chunk(
-            selected_states, self.n_pred_head, dim=1
-        )  # separa in tuple le predizioni per ogni head
+        selected_states = torch.chunk(selected_states, self.n_pred_head, dim=1)
         token_emb = self.gpt2.wte.weight[1:-1]  # vocab_size, emb_size -> 8192, 448
         token_emb = F.normalize(token_emb, dim=-1)
 
-        # splitta gli embeddings (8192 (vocab_size)) in 32 parti, quindi una distribuzione su 256 tokens
-        token_embs = torch.chunk(
-            token_emb, self.n_pred_head, dim=0
-        )  # tupla di 4 elementi. Ogni elemento è un tensore di size (256, 448)
+        token_embs = torch.chunk(token_emb, self.n_pred_head, dim=0)
         # calculate the output of each head
         token_logits = [
             torch.matmul(selected_states[i].squeeze(dim=1), token_embs[i].T) / self.temperature
@@ -170,11 +164,6 @@ class RPG(SequentialRecommender):
         return scores
 
     def graph_propagation(self, token_logits):
-        """
-        I don't like this implementation. It propagates only on a random subset
-        (#self.n_beams) of nodes. Does it make sense?
-        """
-
         batch_size = token_logits.shape[0]
 
         adjacency = self.init_graph()

@@ -383,10 +383,7 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
     model = config["model"]
     if input_type == InputType.USERWISE:
         if phase == "train":
-            if model in ["TPRec"]:
-                if config["train_stage"] in ["policy"]:
-                    return UserDataLoader
-            else:
+            if model not in ["TPRec"] or config["train_stage"] in ["policy"]:
                 return UserDataLoader
         else:
             eval_mode = config["eval_args"]["mode"][phase]

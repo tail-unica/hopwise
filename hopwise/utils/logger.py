@@ -45,7 +45,7 @@ class ProgressBar:
 def progress_bar(*args, **kwargs):
     global _progress_bar  # noqa: PLW0603
     if _progress_bar is None:
-        _progress_bar = ProgressBar(progress_bar_rich=not os.environ.get("DISABLE_RICH", False))
+        _progress_bar = ProgressBar(progress_bar_rich=not os.environ.get("DISABLE_RICH", False))  # noqa: PLW1508
     return _progress_bar(*args, **kwargs)
 
 
