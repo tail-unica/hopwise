@@ -101,9 +101,8 @@ lightgbm = [
 xgboost = [
   "xgboost"
 ]
-kgat = [
-  "dgl>=2.4.0"
-]
+kgat = ["dgl"]
+
 # scatter = [
 #   "torch-scatter",
 # ]
@@ -169,8 +168,6 @@ commands = [
 [tool.uv]
 find-links = [
   "https://data.pyg.org/whl/torch-2.4.0+cu124.html",
-  "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html",
-  "https://data.dgl.ai/wheels/torch-2.4/repo.html",
   "https://data.dgl.ai/wheels/cu121/repo.html",
   "https://data.dgl.ai/wheels/repo.html"
 ]
