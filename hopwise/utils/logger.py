@@ -29,8 +29,6 @@ import tqdm.rich
 
 from hopwise.utils.utils import ensure_dir, get_local_time
 
-_progress_bar = None
-
 
 class ProgressBar:
     def __init__(self, progress_bar_rich=True):
@@ -45,8 +43,9 @@ class ProgressBar:
 
 
 def progress_bar(*args, **kwargs):
+    global _progress_bar  # noqa: PLW0603
     if _progress_bar is None:
-        return ProgressBar({"progress_bar_rich": True})(*args, **kwargs)
+        _progress_bar = ProgressBar(progress_bar_rich=not os.environ.get("DISABLE_RICH", False))  # noqa: PLW1508
     return _progress_bar(*args, **kwargs)
 
 

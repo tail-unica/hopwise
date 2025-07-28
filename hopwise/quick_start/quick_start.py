@@ -148,7 +148,6 @@ def run_hopwise(
 
         # dataset splitting
         train_data, valid_data, test_data = data_preparation(config, dataset)
-
         # model loading and initialization
         init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
         model = get_model(config["model"])(config, train_data.dataset)
@@ -229,7 +228,56 @@ def run_hopwise(
     if config["local_rank"] == 0 and queue is not None:
         queue.put(result)  # for multiprocessing, e.g., mp.spawn
 
+    # display rich final table
+    topk_sizes = config["topk"]
+    if len(topk_sizes) > 1:
+        results = {
+            "best validation result": best_valid_result,
+            "test result": test_result,
+        }
+
+        display_metrics_table(results, config)
+
     return result  # for the single process
+
+
+def display_metrics_table(results_dict, config):
+    """
+    Display evaluation metrics in a table format with @k values as rows and metrics as columns.
+    """
+
+    from rich.console import Console
+    from rich.table import Table
+
+    metrics_name = config["metrics"]
+    topk_sizes = config["topk"]
+
+    console = Console()
+
+    for split, results in results_dict.items():
+        if KnowledgeEvaluationType.REC in results or KnowledgeEvaluationType.LP in results:
+            for task, result in results.items():
+                table_rich = Table(title=set_color(f"{split} for {task}", "yellow"))
+
+                table_rich.add_column(" ", justify="center")
+                for metric in metrics_name:
+                    table_rich.add_column(metric.upper(), justify="center")
+                for k in topk_sizes:
+                    row = [f"{result[f'{metric.lower()}@{k}']:.4f}" for metric in metrics_name]
+                    table_rich.add_row(f"@{k}", *row)
+
+                console.print(table_rich)
+        else:
+            table_rich = Table(title=set_color(f"{split} {task}", "yellow"))
+
+            table_rich.add_column(" ", justify="center")
+            for metric in metrics_name:
+                table_rich.add_column(metric.upper(), justify="center")
+            for k in topk_sizes:
+                row = [f"{results[f'{metric.lower()}@{k}']:.4f}" for metric in metrics_name]
+                table_rich.add_row(f"@{k}", *row)
+
+            console.print(table_rich)
 
 
 def get_logger(config):
@@ -244,8 +292,7 @@ def get_logger(config):
 
 
 def format_metrics(metrics):
-    formatted_str = "".join([f"[{key}]: {value} " for key, value in metrics.items()])
-    return formatted_str
+    return "".join([f"[{key}]: {value} " for key, value in metrics.items()])
 
 
 def run_hopwises(rank, *args):

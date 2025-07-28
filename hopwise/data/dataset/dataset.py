@@ -122,6 +122,7 @@ class Dataset(torch.utils.data.Dataset):
         self.alias = {}
         self._preloaded_weight = {}
         self.benchmark_filename_list = self.config["benchmark_filename"]
+        self.benchmark_item_filename_list = self.config["benchmark_item_filename"]
 
     def _get_field_from_config(self):
         """Initialization common field names."""
@@ -254,6 +255,11 @@ class Dataset(torch.utils.data.Dataset):
         self._load_inter_feat(token, dataset_path)
         self.user_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.USER, "uid_field")
         self.item_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.ITEM, "iid_field")
+
+        if self.benchmark_item_filename_list is not None:
+            for split in self.benchmark_item_filename_list:
+                feat = self._load_user_or_item_feat(f"{token}.{split}", dataset_path, FeatureSource.ITEM, "iid_field")
+                setattr(self, f"item_feat_{split}", feat)
         self._load_additional_feat(token, dataset_path)
 
     def _load_inter_feat(self, token, dataset_path):
@@ -818,7 +824,6 @@ class Dataset(torch.utils.data.Dataset):
                 inter_num=item_inter_num,
                 inter_interval=item_inter_num_interval,
             )
-
             if len(ban_users) == 0 and len(ban_items) == 0:
                 break
 
@@ -835,7 +840,6 @@ class Dataset(torch.utils.data.Dataset):
             item_inter = self.inter_feat[self.iid_field]
             dropped_inter |= user_inter.isin(ban_users)
             dropped_inter |= item_inter.isin(ban_items)
-
             user_inter_num -= Counter(user_inter[dropped_inter].values)
             item_inter_num -= Counter(item_inter[dropped_inter].values)
 
@@ -896,6 +900,7 @@ class Dataset(torch.utils.data.Dataset):
                 continue
 
             left_point, right_point = float(endpoint_pair[0]), float(endpoint_pair[1])
+
             if left_point > right_point:
                 self.logger.warning(f"{endpoint_pair_str} is an illegal interval!")
 
@@ -1041,7 +1046,6 @@ class Dataset(torch.utils.data.Dataset):
         for alias in self.alias.values():
             remap_list = self._get_remap_list(alias)
             self._remap(remap_list)
-
         for field in self._rest_fields:
             remap_list = self._get_remap_list(np.array([field]))
             self._remap(remap_list)
@@ -1603,6 +1607,15 @@ class Dataset(torch.utils.data.Dataset):
             self._drop_unused_col()
             cumsum = list(np.cumsum(self.file_size_list))
             datasets = [self.copy(self.inter_feat[start:end]) for start, end in zip([0] + cumsum[:-1], cumsum)]
+
+            if len(datasets) == 2:  # noqa: PLR2004
+                self.logger.info(
+                    set_color(
+                        "Benchmark dataset has two part. The Evaluation on the validation will be done on Training Set.",  # noqa: E501
+                        "red",
+                    )
+                )
+                datasets = [datasets[0], datasets[1], datasets[1]]
             return datasets
 
         # ordering

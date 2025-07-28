@@ -20,8 +20,6 @@ from hopwise.model.abstract_recommender import SequentialRecommender
 from hopwise.model.loss import BPRLoss
 from hopwise.utils import InputType
 
-torch.autograd.set_detect_anomaly(True)
-
 
 class SINE(SequentialRecommender):
     input_type = InputType.PAIRWISE
