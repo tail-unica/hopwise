@@ -10,6 +10,7 @@ Reference code:
 import math
 from logging import getLogger
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -203,20 +204,54 @@ class KGREC(KnowledgeRecommender):
     def __init__(self, config, dataset):
         super().__init__(config, dataset)
 
-        # load dataset info
-        self.n_users = dataset.user_num
-        self.n_items = dataset.item_num
-
         # load parameters info
         self.embedding_size = config['embedding_size']
+        self.decay = config['l2']
+        self.context_hops = config['context_hops']
+        self.node_dropout_rate = ['node_dropout_rate']
+        self.mess_dropout_rate = config['mess_dropout_rate']
+
+        self.ablation = config['ab']
+
+        self.mae_coef = config['mae_coef']
+        self.mae_msize = config['mae_msize']
+        self.cl_coef = config['cl_coef']
+        self.tau = config['cl_tau']
+        self.cl_drop = config['cl_drop_ratio']
+
+        self.samp_func = "torch"
+
+        self.inter_edge, self.inter_edge_w = dataset._create_norm_ckg_adjacency_matrix(symmetric=False)
+        self.kg_graph = dataset.kg_graph(form="coo", value_field="relation_id")  # [n_entities, n_entities]
+        # edge_index: [2, -1]; edge_type: [-1,]
+        self.edge_index, self.edge_type = self.get_edges(self.kg_graph)
 
         # define layers and loss
+        self.n_nodes = self.n_users + self.n_entities
+
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
-        self.loss = BPRLoss()
+        #self.loss = BPRLoss()
 
+        self.gcn = AttnHGCN(channel=self.embedding_size,
+                       n_hops=self.context_hops,
+                       n_users=self.n_users,
+                       n_relations=self.n_relations,
+                       node_dropout_rate=self.node_dropout_rate,
+                       mess_dropout_rate=self.mess_dropout_rate)
+        
+        #self.contrast_fn = Contrast(self.emb_size, tau=self.tau)
+
+        
         # parameters initialization
         self.apply(xavier_normal_initialization)
+
+
+    def get_edges(self, graph):
+            index = torch.LongTensor(np.array([graph.row, graph.col]))
+            type = torch.LongTensor(np.array(graph.data))
+            return index.to(self.device), type.to(self.device)
+
 
     def calculate_loss(self, interaction):
         user = interaction[self.USER_ID]
