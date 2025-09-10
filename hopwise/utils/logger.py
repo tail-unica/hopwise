@@ -29,6 +29,8 @@ import tqdm.rich
 
 from hopwise.utils.utils import ensure_dir, get_local_time
 
+_progress_bar = None
+
 
 class ProgressBar:
     def __init__(self, progress_bar_rich=True):

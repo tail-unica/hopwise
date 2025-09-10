@@ -36,6 +36,15 @@ class BPR(GeneralRecommender):
         # define layers and loss
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
+
+        if config["preload_weight"] is not None:
+            pretrained_user_embedding = dataset.get_preload_weight("user_embedding_id")
+            pretrained_item_embedding = dataset.get_preload_weight("item_embedding_id")
+
+            # replace user and item embeddings
+            self.user_embedding.weight.data.copy_(torch.from_numpy(pretrained_user_embedding))
+            self.item_embedding.weight.data.copy_(torch.from_numpy(pretrained_item_embedding))
+
         self.loss = BPRLoss()
 
         # parameters initialization

@@ -104,8 +104,6 @@ def full_sort_explanations(uid_series, model, test_data, device=None):
         input_interaction = dataset[index]
 
     # Get scores of all items
-    input_interaction = input_interaction.to(device)
-
     _, explanations = model.explain(input_interaction)
 
     # return explanations as pandas dataframe

@@ -75,7 +75,7 @@ class AutoregressiveSelfAttention(nn.Module):
         # Dot product for each head
         # Calculate attention scores
 
-        attn_scores = (q @ k.transpose(2, 3)) / (1.0 / math.sqrt(k.size(-1)))
+        attn_scores = (q @ k.transpose(2, 3)) * (1.0 / math.sqrt(k.size(-1)))
 
         # apply causal masking
         causal_mask = self.causal_mask.bool()[:seq_length, :seq_length]

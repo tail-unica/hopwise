@@ -28,6 +28,7 @@ from scipy.sparse import coo_matrix, diags, dok_matrix
 
 from hopwise.data.interaction import Interaction
 from hopwise.utils import FeatureSource, FeatureType, ensure_dir, set_color
+from hopwise.utils.enum_type import DatasetSets, ModelType
 from hopwise.utils.url import decide_download, download_url, extract_zip, makedirs, rename_atomic_files
 
 
@@ -1563,7 +1564,11 @@ class Dataset(torch.utils.data.Dataset):
         if group_by is None:
             raise ValueError("leave one out strategy require a group field")
 
-        grouped_inter_feat_index = self._grouped_index(self.inter_feat[group_by].numpy())
+        if group_by is None:
+            grouped_inter_feat_index = self.inter_feat
+        else:
+            grouped_inter_feat_index = self._grouped_index(self.inter_feat[group_by].numpy())
+
         if leave_one_mode == "valid_and_test":
             next_index = self._split_index_by_leave_one_out(grouped_inter_feat_index, leave_one_num=2)
         elif leave_one_mode == "valid_only":
@@ -1603,15 +1608,17 @@ class Dataset(torch.utils.data.Dataset):
         """
         self._change_feat_format()
 
-        if self.benchmark_filename_list is not None:
+        if self.benchmark_filename_list is not None and self.config["MODEL_TYPE"] not in [ModelType.SEQUENTIAL]:
+            # if model is sequential, is better to directly format the .inter file without making any split because
+            #  sequential recommenders works with leave one out, so you would have in any case to format
+            # the split to have only one interaction for each user in the test set
             self._drop_unused_col()
             cumsum = list(np.cumsum(self.file_size_list))
             datasets = [self.copy(self.inter_feat[start:end]) for start, end in zip([0] + cumsum[:-1], cumsum)]
-
-            if len(datasets) == 2:  # noqa: PLR2004
+            if len(datasets) == DatasetSets.TEST_ONLY.value:  # noqa: PLR2004
                 self.logger.info(
                     set_color(
-                        "Benchmark dataset has two part. The Evaluation on the validation will be done on Training Set.",  # noqa: E501
+                        "Benchmark dataset has two part. The Evaluation on the validation will be done on the Test Set.",  # noqa: E501
                         "red",
                     )
                 )
@@ -1647,7 +1654,11 @@ class Dataset(torch.utils.data.Dataset):
             else:
                 raise NotImplementedError(f"The grouping method [{group_by}] has not been implemented.")
         elif split_mode == "LS":
-            datasets = self.leave_one_out(group_by=self.uid_field, leave_one_mode=split_args["LS"])
+            if self.config["MODEL_TYPE"] in [ModelType.SEQUENTIAL] and not self.config["AUGMENT_ITEM_SEQ"]:
+                group_by = None
+            else:
+                group_by = self.uid_field
+            datasets = self.leave_one_out(group_by=group_by, leave_one_mode=split_args["LS"])
         else:
             raise NotImplementedError(f"The splitting_method [{split_mode}] has not been implemented.")
 
