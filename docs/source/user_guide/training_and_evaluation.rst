@@ -1,4 +1,4 @@
-Training & Evaluation Introduction
+Training, Evaluation and Metrics Introduction
 ===================================
 
 Training introduction
@@ -89,8 +89,9 @@ The parameters used to control the evaluation metrics are as follows:
   ==============    =================================================
   Type              Metrics
   ==============    =================================================
-  Ranking-based     Recall, MRR, NDCG, Hit, MAP, Precision, GAUC, ItemCoverage, AveragePopularity, GiniIndex, ShannonEntropy, TailPercentage
+  Ranking-based     Recall, MRR, NDCG, Hit, MAP, Precision, GAUC, ItemCoverage, AveragePopularity, GiniIndex, ShannonEntropy, TailPercentage, Serendipity, Novelty
   value-based       AUC, MAE, RMSE, LogLoss
+  path-based        LIR, FID, SEP, SED, PTD, PTC, LITD, SETD, PPT
   ==============    =================================================
 
   Note that value-based metrics and ranking-based metrics can not be used together.

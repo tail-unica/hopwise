@@ -3,6 +3,8 @@ Usage
 In order to help users learn the depth usage of hopwise, we write the following usage docs
 to give a detailed introduction about hopwise's features.
 
+You can decide to use hopwise with the CLI or the Python API with the ``run_hopwise`` function.
+
 .. toctree::
    :maxdepth: 1
 

@@ -2,7 +2,81 @@ Use Modules
 ================
 You can recall different modules in hopwise to satisfy your requirement.
 
+**Configurations initialization**
+
+.. code:: python
+
+    config = Config(model='BPR', dataset='ml-100k')
+
+:class:`~hopwise.config.configurator.Config` module is used to set parameters and experiment setup. 　
+Please refer to :doc:`../configuration` for more details.
+
+
+**Init random seed**
+
+.. code:: python
+
+    init_seed(config['seed'], config['reproducibility'])
+
+Initializing the random seed to ensure the reproducibility of the experiments.
+
+
+**Dataset filtering**
+
+.. code:: python
+
+    dataset = create_dataset(config)
+
+Filtering the data files according to the parameters indicated in the configuration.
+
+
+**Dataset splitting**
+
+.. code:: python
+
+    train_data, valid_data, test_data = data_preparation(config, dataset)
+
+Splitting the dataset according to the parameters indicated in the configuration.
+
+
+**Model initialization**
+
+
+.. code:: python
+
+    model = BPR(config, train_data.dataset).to(config['device'])
+
+Initializing the model according to the model names, and initializing the instance of the model.
+
+**Trainer initialization**
+
+.. code:: python
+　　
+    trainer = Trainer(config, model)
+
+Initializing the trainer, which is used to model training and evaluation.
+
+**Model training**
+
+.. code:: python
+
+    best_valid_score, best_valid_result = trainer.fit(train_data, valid_data)
+
+Inputting the training and valid data, and beginning the training process.
+
+
+**Model evaluation**
+
+.. code:: python
+
+    test_result = trainer.evaluate(test_data)
+
+Inputting the test data, and evaluating based on the trained model.
+
+
 The complete process is as follows:
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 
 .. code:: python
 
@@ -50,72 +124,12 @@ The complete process is as follows:
         print(test_result)
 
 
-Configurations Initialization
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code:: python
-
-    config = Config(model='BPR', dataset='ml-100k')
-
-:class:`~hopwise.config.configurator.Config` module is used to set parameters and experiment setup. 　
-Please refer to :doc:`../configuration` for more details.
-
-
-Init Random Seed
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code:: python
-
-    init_seed(config['seed'], config['reproducibility'])
-
-Initializing the random seed to ensure the reproducibility of the experiments.
-
-
-Dataset Filtering
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code:: python
-
-    dataset = create_dataset(config)
-
-Filtering the data files according to the parameters indicated in the configuration.
-
-
-Dataset Splitting
-^^^^^^^^^^^^^^^^^^^^^
-
-.. code:: python
-
-    train_data, valid_data, test_data = data_preparation(config, dataset)
-
-Splitting the dataset according to the parameters indicated in the configuration.
-
-
-Model Initialization
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code:: python
-
-    model = BPR(config, train_data.dataset).to(config['device'])
-
-Initializing the model according to the model names, and initializing the instance of the model.
-
-
-Trainer Initialization
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code:: python
-　　
-    trainer = Trainer(config, model)
-
-Initializing the trainer, which is used to model training and evaluation.
-
-
-Automatic Selection of Model and Trainer
+Automatic selection of model and trainer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 In the above example, we manually import the model class :class:`~hopwise.model.general_recommender.bpr.BPR` and the trainer class :class:`~hopwise.trainer.trainer.Trainer`.
 For the implemented model, we support the automatic acquisition of the corresponding model class and
-trainer class through the model name.
+trainer class through the model name, i.e. given the name of the model and the trainer, hopwise supports automatically obtaining the appropriate class for that model and the appropriate trainer.
 
 
 .. code:: python
@@ -135,26 +149,7 @@ trainer class through the model name.
         ...
 
 
-Model Training
-^^^^^^^^^^^^^^^^^^^
-
-.. code:: python
-
-    best_valid_score, best_valid_result = trainer.fit(train_data, valid_data)
-
-Inputting the training and valid data, and beginning the training process.
-
-
-Model Evaluation
-^^^^^^^^^^^^^^^^^^^^^^^
-.. code:: python
-
-    test_result = trainer.evaluate(test_data)
-
-Inputting the test data, and evaluating based on the trained model.
-
-
-Resume Model From Break Point
+Resume model from checkpoint
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Our toolkit also supports reloading the parameters from previously trained models.
 

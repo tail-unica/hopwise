@@ -1,4 +1,4 @@
-Add Models to hopwise
+Create Models
 ======================
 Here, we present how to develop a new model, and apply it to the hopwise.
 

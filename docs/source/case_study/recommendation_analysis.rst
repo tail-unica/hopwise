@@ -1,7 +1,7 @@
-Case study
+Top-k Recommendation Analysis
 =============
 
-Case study is an in-depth study of the performance of a specific recommendation algorithm,
+This case study is an in-depth study of the performance of a specific recommendation algorithm,
 which will analysis the recommendation result of some users.
 In hopwise, we implemented :meth:`~hopwise.utils.case_study.full_sort_scores`
 and :meth:`~hopwise.utils.case_study.full_sort_topk` for case study purpose.
@@ -23,7 +23,7 @@ Convert external user id into internal user id
 -------------------------------------------------
 
 Then, we need to use :meth:`~hopwise.data.dataset.dataset.Dataset.token2id`
-to convert external user id which we want to do case study into internal user id.
+to convert external user id which we want to do case study into internal hopwise user id.
 
 .. code:: python3
 
