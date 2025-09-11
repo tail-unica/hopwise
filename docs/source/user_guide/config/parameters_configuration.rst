@@ -104,7 +104,6 @@ output:
     gpu_id: 3
     training_batch_size: 256
 
-
 Priority
 ^^^^^^^^^^^^^^^^^
 RecBole supports the combination of three types of parameter configurations.

@@ -3,7 +3,7 @@ Distributed Training
 
 **hopwise provides the same functionality as RecBole, but with a more user-friendly interface.**
 
-Now we support distributed training and evaluation. Here is a distributed training example for using RecBole.
+Now we support distributed training and evaluation. Here is a distributed training example for using hopwise.
 We will show you how to train and test **BPR** model on the **ml-100k** dataset in the distributed environment.
 
 Prepare your environment
@@ -48,8 +48,7 @@ For more details of data config, please refer to :doc:`../user_guide/config/data
 
 2. Choose a model:
 >>>>>>>>>>>>>>>>>>>>>>>>>
-In RecBole, we implement more than 100 recommendation models covering general recommendation, sequential recommendation,
-context-aware recommendation and knowledge-based recommendation. Here we choose BPR model to train and test.
+Here we choose BPR model to train and test.
 
 Then, you need to set the parameter for BPR model. You can check the :doc:`/user_guide/tasks_models/model/general/bpr` and add the model settings into the `test.yaml`, like:
 
@@ -62,7 +61,7 @@ If you want to run different models, you can read :doc:`../user_guide/usage/runn
 
 3. Set training and evaluation config:
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-In RecBole, we support multiple training and evaluation methods. You can choose how to train and test model by simply setting the config.
+In hopwise, we support multiple training and evaluation methods. You can choose how to train and test model by simply setting the config.
 
 Here we want to train and test the BPR model in training-validation-test method (optimize model parameters on the training set, do parameter selection according to the results on the validation set,
 and finally report the results on the test set) and evaluate the model performance by full ranking with all item candidates,
@@ -214,7 +213,7 @@ RecBole allows tracking and visualizing train loss and valid score with TensorBo
 The above is the whole process of running a model in RecBole, and you can read other docs for depth usage.
 
 
-Quick-start From Source
+Quick-start From CLI
 --------------------------
 Besides using API, you can also directly run the source code of `hopwise <https://github.com/tail-unica/hopwise>`_.
 The whole process is similar to Quick-start From API.

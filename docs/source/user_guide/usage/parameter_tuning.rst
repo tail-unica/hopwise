@@ -1,10 +1,10 @@
 Parameter Tuning
 =====================
 hopwise is featured in the capability of automatic parameter
-(or hyper-parameter) tuning. hopwise introduces Hyperopt and Ray for parameter tuning. One can readily optimize
+(or hyper-parameter) tuning. hopwise introduces Hyperopt, Ray and Optuna for parameter tuning. One can readily optimize
 a given model according to the provided hyper-parameter spaces.
 
- The general steps are given as follows:
+The general steps are given as follows:
 
 To begin with Hyperopt, the user has to claim a
 :class:`~hopwise.trainer.hyper_tuning.HyperTuning`

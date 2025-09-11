@@ -1,8 +1,10 @@
 Running New Dataset
 =======================
-hopwise has a build-in dataset **ml-100k** for users to quickly get start.
+hopwise has a built-in dataset **ml-100k** for users to quickly get start.
 However, if you want to use new dataset, here, we present how to use a new dataset in hopwise.
 
+.. note::
+    Considering the modular structure of Hopwise, the ``Dataset`` class handles dataset preprocessing (i.e., mapping, k-core, discretization, etc.), while the ``Dataloader`` class is responsible for performing negative sampling (if necessary) and dataset splits. Therefore, when ``save_dataset=True`` is set in the configuration file, the preprocessing of the dataset is saved, but not the splits. To save the splits, you need to set ``save_dataloaders=True``.
 
 Prepare atomic files
 -------------------------

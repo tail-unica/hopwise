@@ -1,4 +1,4 @@
-Create DataLoaders
+Create Dataloaders
 ======================
 Here, we present how to develop a new DataLoader, and apply it into our tool. If we have a new model,
 and there is special requirement for loading the data, then we need to design a new DataLoader.

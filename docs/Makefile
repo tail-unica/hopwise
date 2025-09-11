@@ -1,5 +1,5 @@
 # Minimal makefile for Sphinx documentation
-#
+# REQUIRE python >=3.10
 
 # You can set these variables from the command line, and also
 # from the environment for the first two.
@@ -11,6 +11,9 @@ BUILDDIR      = build
 # Put it first so that "make" without argument is like "make help".
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+livehtml:
+	sphinx-autobuild --host 0.0.0.0 --port 8080 "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 .PHONY: help Makefile
 
