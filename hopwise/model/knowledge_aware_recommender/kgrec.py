@@ -23,6 +23,46 @@ from hopwise.model.loss import BPRLoss
 from hopwise.utils import InputType
 
 
+class Contrast(torch.nn.Module):
+    def __init__(self, num_hidden: int, tau: float = 0.7):
+        super(Contrast, self).__init__()
+        self.tau: float = tau
+
+        self.mlp1 = torch.nn.Sequential(
+            torch.nn.Linear(num_hidden, num_hidden, bias=True),
+            torch.nn.ReLU(),
+            torch.nn.Linear(num_hidden, num_hidden, bias=True),
+        )
+        self.mlp2 = torch.nn.Sequential(
+            torch.nn.Linear(num_hidden, num_hidden, bias=True),
+            torch.nn.ReLU(),
+            torch.nn.Linear(num_hidden, num_hidden, bias=True),
+        )
+
+    def sim(self, z1: torch.Tensor, z2: torch.Tensor):
+        z1 = F.normalize(z1)
+        z2 = F.normalize(z2)
+        return torch.mm(z1, z2.t())
+    
+    def self_sim(self, z1, z2):
+        z1 = F.normalize(z1)
+        z2 = F.normalize(z2)
+        return (z1 * z2).sum(1)
+
+    def loss(self, z1: torch.Tensor, z2: torch.Tensor):
+        f = lambda x: torch.exp(x / self.tau)
+        between_sim = f(self.self_sim(z1, z2))
+        rand_item = torch.randperm(z1.shape[0])
+        neg_sim = f(self.self_sim(z1, z2[rand_item])) + f(self.self_sim(z2, z1[rand_item]))
+
+        return -torch.log(between_sim / (between_sim + between_sim + neg_sim))
+
+    def forward(self, z1: torch.Tensor, z2: torch.Tensor):
+        h1 = self.mlp1(z1)
+        h2 = self.mlp2(z2)
+        loss = self.loss(h1, h2).mean()
+        return loss
+    
 class AttnHGCN(nn.Module):
     """
     Heterogeneous Graph Convolutional Network
@@ -206,7 +246,7 @@ class KGREC(KnowledgeRecommender):
 
         # load parameters info
         self.embedding_size = config['embedding_size']
-        self.decay = config['l2']
+        self.decay = config['reg_weight']
         self.context_hops = config['context_hops']
         self.node_dropout_rate = ['node_dropout_rate']
         self.mess_dropout_rate = config['mess_dropout_rate']
@@ -220,8 +260,15 @@ class KGREC(KnowledgeRecommender):
         self.cl_drop = config['cl_drop_ratio']
 
         self.samp_func = "torch"
+        
+        # hp_dict = None
 
-        self.inter_edge, self.inter_edge_w = dataset._create_norm_ckg_adjacency_matrix(symmetric=False)
+        # if hp_dict is not None:
+        #     self.load_other_parameter(hp_dict)
+
+        self.interact_mat, _ = dataset._create_norm_ckg_adjacency_matrix(symmetric=False)
+        self.inter_edge = self.interact_mat.indices().to(self.device)
+        self.inter_edge_w = self.interact_mat.values().to(self.device)
         self.kg_graph = dataset.kg_graph(form="coo", value_field="relation_id")  # [n_entities, n_entities]
         # edge_index: [2, -1]; edge_type: [-1,]
         self.edge_index, self.edge_type = self.get_edges(self.kg_graph)
@@ -231,7 +278,7 @@ class KGREC(KnowledgeRecommender):
 
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
-        #self.loss = BPRLoss()
+        self.loss = BPRLoss()
 
         self.gcn = AttnHGCN(channel=self.embedding_size,
                        n_hops=self.context_hops,
@@ -240,12 +287,11 @@ class KGREC(KnowledgeRecommender):
                        node_dropout_rate=self.node_dropout_rate,
                        mess_dropout_rate=self.mess_dropout_rate)
         
-        #self.contrast_fn = Contrast(self.emb_size, tau=self.tau)
+        self.contrast_fn = Contrast(self.embedding_size, tau=self.tau)
 
         
         # parameters initialization
         self.apply(xavier_normal_initialization)
-
 
     def get_edges(self, graph):
             index = torch.LongTensor(np.array([graph.row, graph.col]))
