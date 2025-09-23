@@ -69,6 +69,10 @@ class TrainDataLoader(NegSampleDataLoader):
         transformed_data = self.transform(self._dataset, data)
         return self._neg_sampling(transformed_data)
 
+    @property
+    def split(self):
+        return self._split
+
 
 class NegSampleEvalDataLoader(NegSampleDataLoader):
     """:class:`NegSampleEvalDataLoader` is a dataloader for neg-sampling evaluation.
@@ -180,7 +184,6 @@ class FullSortEvalDataLoader(AbstractDataLoader):
 
     def __init__(self, config, dataset, sampler, shuffle=False):
         self.logger = getLogger()
-
         if shuffle:
             self.logger.warning("FullSortEvalDataLoader can't shuffle")
             shuffle = False
@@ -278,6 +281,10 @@ class FullSortEvalDataLoader(AbstractDataLoader):
             positive_i = transformed_interaction[self.iid_field]
 
             return transformed_interaction, None, positive_u, positive_i
+
+    @property
+    def split(self):
+        return self._split
 
 
 class FullSortRecEvalDataLoader(FullSortEvalDataLoader):

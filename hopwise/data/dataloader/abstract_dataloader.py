@@ -20,7 +20,7 @@ import torch
 
 from hopwise.data.interaction import Interaction
 from hopwise.data.transform import construct_transform
-from hopwise.utils import FeatureSource, FeatureType, InputType, ModelType
+from hopwise.utils import FeatureSource, FeatureType, InputType, ModelType, set_color
 
 start_iter = False
 
@@ -49,6 +49,7 @@ class AbstractDataLoader(torch.utils.data.DataLoader):
         self.config = config
         self._dataset = dataset
         self._sampler = sampler
+        self._split = None
         self._batch_size = self.step = self.model = None
         self._init_batch_size_and_step()
         index_sampler = None
@@ -109,6 +110,45 @@ class AbstractDataLoader(torch.utils.data.DataLoader):
         if not start_iter and __name == "dataset":
             __name = "_dataset"
         return super().__getattribute__(__name)
+
+    def __str__(self):
+        inter_feat = self._dataset.inter_feat
+        dataset = self.config["dataset"]
+        benchmark_item_file = self.config["benchmark_item_filename"]
+
+        info = [set_color(f"{self.split} {dataset}", "green")]
+        info.extend(
+            [
+                set_color("The number of users", "blue") + f": {len(inter_feat[self.uid_field].unique())}",
+                set_color("Average actions of users in inters", "blue") + f": {self._dataset.avg_actions_of_users}",
+                set_color("The number of items in inters", "blue") + f": {self._dataset.item_num}",
+                set_color("Average actions of items in inters", "blue") + f": {self._dataset.avg_actions_of_items}",
+                set_color("The number of inters", "blue") + f": {self._dataset.inter_num}",
+                set_color("The sparsity of the dataset", "blue") + f": {self.sparsity_data_split * 100}%",
+            ]
+        )
+        if benchmark_item_file is not None:
+            import numpy as np
+
+            item_feat = getattr(self._dataset, f"item_feat_{self.split}")[self._dataset.iid_field].to_numpy()
+            info.extend(
+                [
+                    set_color(f"The number of valid items in {self.split} phase", "blue")
+                    + f": {len(np.unique(item_feat))}",
+                ]
+            )
+        return "\n".join(info)
+
+    @property
+    def sparsity_data_split(self):
+        """Get the sparsity of this dataset.
+
+        Returns:
+            float: Sparsity of this dataset.
+        """
+        user_num_split = len(self._dataset.inter_feat[self.uid_field].unique())
+        item_num_split = len(self._dataset.inter_feat[self.iid_field].unique())
+        return 1 - self._dataset.inter_num / user_num_split / item_num_split
 
 
 class NegSampleDataLoader(AbstractDataLoader):

@@ -27,6 +27,7 @@ from hopwise.config import Config
 from hopwise.data import construct_transform, create_dataset, data_preparation
 from hopwise.trainer import HFPathLanguageModelingTrainer
 from hopwise.utils import (
+    DatasetSets,
     KnowledgeEvaluationType,
     ModelType,
     calculate_valid_score,
@@ -124,7 +125,6 @@ def run_hopwise(
         saved (bool, optional): Whether to save the model. Defaults to ``True``.
         queue (torch.multiprocessing.Queue, optional): The queue used to pass the result to the main process. Defaults to ``None``.
     """  # noqa: E501
-
     # Initialize configuration
     config = Config(
         model=model,
@@ -147,6 +147,17 @@ def run_hopwise(
 
         # dataset splitting
         train_data, valid_data, test_data = data_preparation(config, dataset)
+
+        # visualize split data
+        logger.info(train_data)
+
+        if (
+            config["benchmark_filename"] is None
+            or len(config["benchmark_filename"]) == DatasetSets.VALID_AND_TEST.value
+        ):
+            logger.info(valid_data)
+        logger.info(test_data)
+
         # model loading and initialization
         init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
         model = get_model(config["model"])(config, train_data.dataset)

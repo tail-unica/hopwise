@@ -448,6 +448,8 @@ class Config:
             ad_suf = self.final_config_dict["additional_feat_suffix"]
             if isinstance(ad_suf, str):
                 self.final_config_dict["additional_feat_suffix"] = [ad_suf]
+        elif self.final_config_dict["model"] in ["Similarity"]:
+            raise ValueError("additional_feat_suffix should be set for Similarity model.")
 
         # train_neg_sample_args checking
         default_train_neg_sample_args = {

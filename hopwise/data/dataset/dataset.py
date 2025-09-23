@@ -256,7 +256,6 @@ class Dataset(torch.utils.data.Dataset):
         self._load_inter_feat(token, dataset_path)
         self.user_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.USER, "uid_field")
         self.item_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.ITEM, "iid_field")
-
         if self.benchmark_item_filename_list is not None:
             for split in self.benchmark_item_filename_list:
                 feat = self._load_user_or_item_feat(f"{token}.{split}", dataset_path, FeatureSource.ITEM, "iid_field")
@@ -354,6 +353,13 @@ class Dataset(torch.utils.data.Dataset):
         """
         if self.config["additional_feat_suffix"] is None:
             return
+
+        model = self.config["model"]
+        if model in ["Similarity"] and self.config["encoder_name"] is not None:
+            token = f"{token}_{self.config['encoder_name']}"
+        else:
+            raise ValueError("encoder_name must be set if model is Similarity.")
+
         for suf in self.config["additional_feat_suffix"]:
             if hasattr(self, f"{suf}_feat"):
                 raise ValueError(f"{suf}_feat already exist.")
@@ -363,7 +369,6 @@ class Dataset(torch.utils.data.Dataset):
                 feat_path = self.config["preload_weight_path"] or dataset_path
             else:
                 feat_path = dataset_path
-
             feat_path = os.path.join(feat_path, f"{token}.{suf}")
             if os.path.isfile(feat_path):
                 feat = self._load_feat(feat_path, suf)
@@ -1607,7 +1612,6 @@ class Dataset(torch.utils.data.Dataset):
             list: List of built :class:`Dataset`.
         """
         self._change_feat_format()
-
         if self.benchmark_filename_list is not None and self.config["MODEL_TYPE"] not in [ModelType.SEQUENTIAL]:
             # if model is sequential, is better to directly format the .inter file without making any split because
             #  sequential recommenders works with leave one out, so you would have in any case to format

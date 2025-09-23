@@ -326,6 +326,10 @@ def data_preparation(config, dataset):
             if config["save_dataloaders"]:
                 save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
 
+    train_data._split = "train"
+    valid_data._split = "valid"
+    test_data._split = "test"
+
     logger = getLogger()
     logger.info(
         set_color("[Training]: ", "magenta")

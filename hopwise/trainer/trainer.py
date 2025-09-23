@@ -1339,7 +1339,7 @@ class MKRTrainer(Trainer):
 
 
 class TraditionalTrainer(Trainer):
-    """TraditionalTrainer is designed for Traditional model(Pop,ItemKNN),
+    """TraditionalTrainer is designed for Traditional model(Pop,ItemKNN,Random,Similarity),
     which set the epoch to 1 whatever the config."""
 
     def __init__(self, config, model):

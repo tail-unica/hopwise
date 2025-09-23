@@ -19,6 +19,8 @@ wandb_project: 'hopwise'        # (str) The project to conduct experiments in W&
 progress_bar_rich: True         # (bool) Whether or not to use rich progress bar.
 shuffle: True                   # (bool) Whether or not to shuffle the training data before each epoch.
 weight_precision: float32
+benchmark_filename: ~
+benchmark_item_filename: ~
 
 # Training Settings
 epochs: 300                     # (int) The number of training epochs.
