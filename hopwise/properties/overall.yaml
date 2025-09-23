@@ -21,6 +21,7 @@ shuffle: True                   # (bool) Whether or not to shuffle the training 
 weight_precision: float32
 benchmark_filename: ~
 benchmark_item_filename: ~
+proc_title: ~
 
 # Training Settings
 epochs: 300                     # (int) The number of training epochs.

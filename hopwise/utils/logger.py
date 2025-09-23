@@ -98,6 +98,11 @@ def init_logger(config):
         >>> logger.debug(train_state)
         >>> logger.info(train_result)
     """
+
+    # remove previous handlers, otherwise in case of multiple data/models, it continue writing to old files
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
     colorama.init(autoreset=True)
     LOGROOT = "./log/"
     dir_name = os.path.dirname(LOGROOT)
