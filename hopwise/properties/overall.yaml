@@ -10,6 +10,7 @@ checkpoint_dir: 'saved'         # (str) The path to save checkpoint file.
 show_progress: True             # (bool) Whether or not to show the progress bar of every epoch.
 verbose: True                   # (bool) Whether or not to show the evaluation results of each epoch.
 show_configuration: True        # (bool) Whether or not to show the configuration of the experiment.
+show_split_data: False          # (str) Whether or not to show the statistics of the dataloader.
 save_dataset: False             # (bool) Whether or not to save filtered dataset.
 dataset_save_path: ~            # (str) The path of saved dataset.
 save_dataloaders: False         # (bool) Whether or not save split dataloaders.

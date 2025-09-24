@@ -355,10 +355,11 @@ class Dataset(torch.utils.data.Dataset):
             return
 
         model = self.config["model"]
-        if model in ["Similarity"] and self.config["encoder_name"] is not None:
-            token = f"{token}_{self.config['encoder_name']}"
-        else:
-            raise ValueError("encoder_name must be set if model is Similarity.")
+        if model in ["Similarity"]:
+            if self.config["encoder_name"] is not None:
+                token = f"{token}_{self.config['encoder_name']}"
+            else:
+                raise ValueError("encoder_name must be set if model is Similarity.")
 
         for suf in self.config["additional_feat_suffix"]:
             if hasattr(self, f"{suf}_feat"):
