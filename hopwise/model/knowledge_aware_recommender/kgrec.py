@@ -19,6 +19,7 @@ from torch_scatter import scatter_mean, scatter_sum
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
 from hopwise.model.init import xavier_normal_initialization
+from hopwise.model.layers import SparseDropout
 from hopwise.model.loss import BPRLoss
 from hopwise.utils import InputType
 
@@ -43,7 +44,7 @@ class Contrast(torch.nn.Module):
         z1 = F.normalize(z1)
         z2 = F.normalize(z2)
         return torch.mm(z1, z2.t())
-    
+
     def self_sim(self, z1, z2):
         z1 = F.normalize(z1)
         z2 = F.normalize(z2)
@@ -62,54 +63,73 @@ class Contrast(torch.nn.Module):
         h2 = self.mlp2(z2)
         loss = self.loss(h1, h2).mean()
         return loss
-    
+
 class AttnHGCN(nn.Module):
     """
     Heterogeneous Graph Convolutional Network
     """
-    def __init__(self, channel, n_hops, n_users,
-                 n_relations,
-                node_dropout_rate=0.5, mess_dropout_rate=0.1):
+    def __init__(
+        self,
+        embedding_size,
+        n_hops,
+        n_users,
+        n_relations,
+        edge_index,
+        edge_type,
+        inter_edge,
+        inter_edge_w,
+        node_dropout_rate=0.5,
+        mess_dropout_rate=0.1
+    ):
         super().__init__()
 
         self.logger = getLogger()
 
         self.no_attn_convs = nn.ModuleList()
+
+        self.embedding_size = embedding_size
+        self.edge_index = edge_index
+        self.edge_type = edge_type
+        self.n_hops = n_hops
         self.n_relations = n_relations
         self.n_users = n_users
+        self.inter_edge=inter_edge,
+        self.inter_edge_w = inter_edge_w,
         self.node_dropout_rate = node_dropout_rate
         self.mess_dropout_rate = mess_dropout_rate
 
-        initializer = nn.init.xavier_uniform_
-        relation_emb = initializer(torch.empty(n_relations - 1, channel))  # not include interact
-        self.relation_emb = nn.Parameter(relation_emb)  # [n_relations - 1, in_channel]
+        # initializer = nn.init.xavier_uniform_
+        # relation_emb = initializer(torch.empty(n_relations - 1, embedding_size))  # not include interact
+        # self.relation_emb = nn.Parameter(relation_emb)  # [n_relations - 1, in_channel]
 
-        self.W_Q = nn.Parameter(torch.Tensor(channel, channel))
+        self.relation_emb = nn.Embedding(self.n_relations, self.embedding_size)
+
+
+        self.W_Q = nn.Parameter(torch.Tensor(self.embedding_size, embedding_size))
 
         self.n_heads = 2
-        self.d_k = channel // self.n_heads
+        self.d_k = self.embedding_size // self.n_heads
 
         nn.init.xavier_uniform_(self.W_Q)
 
-        self.n_hops = n_hops
+        self.node_dropout = SparseDropout(p=self.mess_dropout_rate)  # node dropout
+        self.mess_dropout = nn.Dropout(p=self.mess_dropout_rate)  # mess dropout
 
-        self.dropout = nn.Dropout(p=mess_dropout_rate)  # mess dropout
-    
-    def non_attn_agg(self, user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w, relation_emb):
+    def non_attn_agg(self, user_emb, entity_emb, relation_emb):
 
         n_entities = entity_emb.shape[0]
 
         """KG aggregate"""
-        head, tail = edge_index
-        edge_relation_emb = relation_emb[edge_type - 1]  # exclude interact, remap [1, n_relations) to [0, n_relations-1)
+        head, tail = self.edge_index
+        edge_relation_emb = relation_emb[self.edge_type - 1]  # exclude interact, remap [1, n_relations) to [0, n_relations-1)
         neigh_relation_emb = entity_emb[tail] * edge_relation_emb  # [-1, channel]
         entity_agg = scatter_mean(src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0)
 
         """user aggregate"""
-        item_agg = inter_edge_w.unsqueeze(-1) * entity_emb[inter_edge[1, :]]
-        user_agg = scatter_sum(src=item_agg, index=inter_edge[0, :], dim_size=user_emb.shape[0], dim=0)
+        item_agg = self.inter_edge_w.unsqueeze(-1) * entity_emb[self.inter_edge[1, :]]
+        user_agg = scatter_sum(src=item_agg, index=self.inter_edge[0, :], dim_size=user_emb.shape[0], dim=0)
         return entity_agg, user_agg
-        
+
     def shared_layer_agg(self, user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w, relation_emb):
         n_entities = entity_emb.shape[0]
         head, tail = edge_index
@@ -140,7 +160,7 @@ class AttnHGCN(nn.Module):
 
     # @TimeCounter.count_time(warmup_interval=4)
     def forward(self, user_emb, entity_emb, edge_index, edge_type,
-                inter_edge, inter_edge_w, mess_dropout=True, item_attn=None):
+                inter_edge, inter_edge_w, item_attn=None):
 
         if item_attn is not None:
             item_attn = item_attn[inter_edge[1, :]]
@@ -148,17 +168,18 @@ class AttnHGCN(nn.Module):
             norm = scatter_sum(torch.ones_like(inter_edge[0, :]), inter_edge[0, :], dim=0, dim_size=user_emb.shape[0])
             norm = torch.index_select(norm, 0, inter_edge[0, :])
             item_attn = item_attn * norm
-            inter_edge_w = inter_edge_w * item_attn
+            inter_edge_w = self.inter_edge_w * item_attn
 
-        entity_res_emb = entity_emb  # [n_entity, channel]
-        user_res_emb = user_emb  # [n_users, channel]
+        entity_res_emb = entity_emb  # [n_entity, embedding_size]
+        user_res_emb = user_emb  # [n_users, embedding_size]
         for i in range(self.n_hops):
-            entity_emb, user_emb = self.shared_layer_agg(user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w, self.relation_emb)
+            entity_emb, user_emb = self.shared_layer_agg(user_emb, entity_emb, edge_index, edge_type, inter_edge, 
+                                                         inter_edge_w, self.relation_emb)
 
             """message dropout"""
-            if mess_dropout:
-                entity_emb = self.dropout(entity_emb)
-                user_emb = self.dropout(user_emb)
+            if self.mess_dropout:
+                entity_emb = self.mess_dropout(entity_emb)
+                user_emb = self.mess_dropout(user_emb)
             entity_emb = F.normalize(entity_emb)
             user_emb = F.normalize(user_emb)
 
@@ -167,29 +188,29 @@ class AttnHGCN(nn.Module):
             user_res_emb = torch.add(user_res_emb, user_emb)
 
         return entity_res_emb, user_res_emb
-    
+
     def forward_ui(self, user_emb, item_emb, inter_edge, inter_edge_w, mess_dropout=True):
         item_res_emb = item_emb  # [n_entity, channel]
         for i in range(self.n_hops):
             user_emb, item_emb = self.ui_agg(user_emb, item_emb, inter_edge, inter_edge_w)
             """message dropout"""
             if mess_dropout:
-                item_emb = self.dropout(item_emb)
-                user_emb = self.dropout(user_emb)
+                item_emb = self.mess_dropout(item_emb)
+                user_emb = self.mess_dropout(user_emb)
             item_emb = F.normalize(item_emb)
             user_emb = F.normalize(user_emb)
 
             """result emb"""
             item_res_emb = torch.add(item_res_emb, item_emb)
         return item_res_emb
-    
+
     def forward_kg(self, entity_emb, edge_index, edge_type, mess_dropout=True):
         entity_res_emb = entity_emb
         for i in range(self.n_hops):
             entity_emb = self.kg_agg(entity_emb, edge_index, edge_type)
             """message dropout"""
             if mess_dropout:
-                entity_emb = self.dropout(entity_emb)
+                entity_emb = self.mess_dropout(entity_emb)
             entity_emb = F.normalize(entity_emb)
 
             """result emb"""
@@ -260,7 +281,7 @@ class KGREC(KnowledgeRecommender):
         self.cl_drop = config['cl_drop_ratio']
 
         self.samp_func = "torch"
-        
+
         # hp_dict = None
 
         # if hp_dict is not None:
@@ -280,23 +301,27 @@ class KGREC(KnowledgeRecommender):
         self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
         self.loss = BPRLoss()
 
-        self.gcn = AttnHGCN(channel=self.embedding_size,
+        self.gcn = AttnHGCN(embedding_size=self.embedding_size,
                        n_hops=self.context_hops,
                        n_users=self.n_users,
                        n_relations=self.n_relations,
+                       edge_index=self.edge_index,
+                       edge_type=self.edge_type,
+                       inter_edge=self.inter_edge,
+                       inter_edge_w = self.inter_edge_w,
                        node_dropout_rate=self.node_dropout_rate,
                        mess_dropout_rate=self.mess_dropout_rate)
-        
+
         self.contrast_fn = Contrast(self.embedding_size, tau=self.tau)
 
-        
+
         # parameters initialization
         self.apply(xavier_normal_initialization)
 
     def get_edges(self, graph):
-            index = torch.LongTensor(np.array([graph.row, graph.col]))
-            type = torch.LongTensor(np.array(graph.data))
-            return index.to(self.device), type.to(self.device)
+        index = torch.LongTensor(np.array([graph.row, graph.col]))
+        type = torch.LongTensor(np.array(graph.data))
+        return index.to(self.device), type.to(self.device)
 
 
     def calculate_loss(self, interaction):

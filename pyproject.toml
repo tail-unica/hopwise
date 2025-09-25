@@ -75,6 +75,8 @@ dependencies = [
   "scikit-learn",
   "rich",
   "cachetools",
+  "torch-scatter>=2.1.2",
+  "torch-geometric>=2.6.1",
 ]
 
 [project.optional-dependencies]
