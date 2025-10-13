@@ -26,7 +26,7 @@ from hopwise.utils import InputType
 
 class Contrast(torch.nn.Module):
     def __init__(self, num_hidden: int, tau: float = 0.7):
-        super(Contrast, self).__init__()
+        super().__init__()
         self.tau: float = tau
 
         self.mlp1 = torch.nn.Sequential(
@@ -51,7 +51,9 @@ class Contrast(torch.nn.Module):
         return (z1 * z2).sum(1)
 
     def loss(self, z1: torch.Tensor, z2: torch.Tensor):
-        f = lambda x: torch.exp(x / self.tau)
+        def f(x):
+            return torch.exp(x / self.tau)
+        
         between_sim = f(self.self_sim(z1, z2))
         rand_item = torch.randperm(z1.shape[0])
         neg_sim = f(self.self_sim(z1, z2[rand_item])) + f(self.self_sim(z2, z1[rand_item]))
@@ -140,12 +142,12 @@ class AttnHGCN(nn.Module):
         key = key * relation_emb[edge_type - 1].view(-1, self.n_heads, self.d_k)
 
         edge_attn_score = (query * key).sum(dim=-1) / math.sqrt(self.d_k)
+        edge_attn_score = scatter_softmax(edge_attn_score, head)
 
         relation_emb = relation_emb[edge_type - 1] # exclude interact, remap [1, n_relations) to [0, n_relations-1)
         neigh_relation_emb = entity_emb[tail] * relation_emb  # [-1, channel]
         value = neigh_relation_emb.view(-1, self.n_heads, self.d_k)
-
-        edge_attn_score = scatter_softmax(edge_attn_score, head)
+        
         entity_agg = value * edge_attn_score.view(-1, self.n_heads, 1)
         entity_agg = entity_agg.view(-1, self.n_heads*self.d_k)
         # attn weight makes mean to sum
@@ -259,7 +261,12 @@ class AttnHGCN(nn.Module):
         return edge_attn_score
 
 class KGREC(KnowledgeRecommender):
-
+    '''
+        Losses:
+        - bpr loss
+        - masked autoencoder loss (mae)
+        - contrastive loss
+    '''
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
@@ -299,7 +306,7 @@ class KGREC(KnowledgeRecommender):
 
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
-        self.loss = BPRLoss()
+        self.bpr_loss = BPRLoss()
 
         self.gcn = AttnHGCN(embedding_size=self.embedding_size,
                        n_hops=self.context_hops,
@@ -323,31 +330,98 @@ class KGREC(KnowledgeRecommender):
         type = torch.LongTensor(np.array(graph.data))
         return index.to(self.device), type.to(self.device)
 
+    def forward(self):
+        user_emb = self.user_embedding.weight
+        item_emb = self.item_embedding.weight
 
+        """node dropout"""
+        # 1. graph sprasification;
+        # edge_index, edge_type = _relation_aware_edge_sampling(
+        #     self.edge_index, self.edge_type, self.n_relations, self.node_dropout_rate)
+        # # 2. compute rationale scores;
+        # edge_attn_score, edge_attn_logits = self.gcn.norm_attn_computer(
+        #     item_emb, edge_index, edge_type, print=epoch_start, return_logits=True)
+        # # for adaptive UI MAE
+        # item_attn_mean_1 = scatter_mean(edge_attn_score, edge_index[0], dim=0, dim_size=self.n_entities)
+        # item_attn_mean_1[item_attn_mean_1 == 0.] = 1.
+        # item_attn_mean_2 = scatter_mean(edge_attn_score, edge_index[1], dim=0, dim_size=self.n_entities)
+        # item_attn_mean_2[item_attn_mean_2 == 0.] = 1.
+        # item_attn_mean = (0.5 * item_attn_mean_1 + 0.5 * item_attn_mean_2)[:self.n_items]
+        # # for adaptive MAE training
+        # std = torch.std(edge_attn_score).detach()
+        # noise = -torch.log(-torch.log(torch.rand_like(edge_attn_score)))
+        # edge_attn_score = edge_attn_score + noise
+        # topk_v, topk_attn_edge_id = torch.topk(
+        #     edge_attn_score, self.mae_msize, sorted=False)
+        # top_attn_edge_type = edge_type[topk_attn_edge_id]
+
+        # enc_edge_index, enc_edge_type, masked_edge_index, masked_edge_type, mask_bool = _mae_edge_mask_adapt_mixed(edge_index, edge_type, topk_attn_edge_id)
+
+        
+
+        # entity_all_emb, user_all_emb = self.gcn(
+        #     user_emb, item_emb, enc_edge_index, enc_edge_type,
+        #     self.inter_edge, self.inter_edge_w, item_attn=None
+        # )
+
+        # cl_kg_edge, cl_kg_type = _adaptive_kg_drop_cl(
+        #     edge_index, edge_type, edge_attn_score, keep_rate=1-self.cl_drop)
+        # cl_ui_edge, cl_ui_w = _adaptive_ui_drop_cl(
+        #     item_attn_mean, inter_edge, inter_edge_w, 1-self.cl_drop, samp_func=self.samp_func)
+
+        # item_agg_ui = self.gcn.forward_ui(
+        #     user_emb, item_emb[:self.n_items], cl_ui_edge, cl_ui_w)
+        # item_agg_kg = self.gcn.forward_kg(
+        #     item_emb, cl_kg_edge, cl_kg_type)[:self.n_items]
+        
+
+        # return user embeddings, entity/item embeddings, and edge-level rationale scores
+        # return user_all_emb, entity_all_emb
+    
     def calculate_loss(self, interaction):
+        r"""Calculate the training loss for a batch data of KG.
+
+        Args:
+            interaction (Interaction): Interaction class of the batch.
+
+        Returns:
+            torch.Tensor: Training loss, shape: []
+        """
+
         user = interaction[self.USER_ID]
         pos_item = interaction[self.ITEM_ID]
         neg_item = interaction[self.NEG_ITEM_ID]
 
-        user_e = self.user_embedding(user)                        # [batch_size, embedding_size]
-        pos_item_e = self.item_embedding(pos_item)                # [batch_size, embedding_size]
-        neg_item_e = self.item_embedding(neg_item)                # [batch_size, embedding_size]
-        pos_item_score = torch.mul(user_e, pos_item_e).sum(dim=1) # [batch_size]
-        neg_item_score = torch.mul(user_e, neg_item_e).sum(dim=1) # [batch_size]
+        user_all_embeddings, entity_all_embeddings, masked_edge_index, \
+            masked_edge_type, item_agg_ui, item_agg_kg = self.forward()
 
-        loss = self.loss(pos_item_score, neg_item_score)          # []
+        u_embeddings = user_all_embeddings[user]
+        pos_embeddings = entity_all_embeddings[pos_item]
+        neg_embeddings = entity_all_embeddings[neg_item]
 
-        return loss
+        pos_scores = torch.mul(u_embeddings, pos_embeddings).sum(dim=1)
+        neg_scores = torch.mul(u_embeddings, neg_embeddings).sum(dim=1)
+        bpr_loss = self.bpr_loss(pos_scores, neg_scores)
+
+        node_pair_emb = entity_all_embeddings[masked_edge_index.t()]
+        # mask_size, channel
+        masked_edge_emb = self.gcn.relation_emb[masked_edge_type-1]
+        mae_loss = self.mae_coef * self.create_mae_loss(node_pair_emb, masked_edge_emb)
+        
+        cl_loss = self.cl_coef * self.contrast_fn(item_agg_ui, item_agg_kg)
+
+        total_loss = bpr_loss + mae_loss + cl_loss
+        return total_loss
 
     def predict(self, interaction):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
 
-        user_e = self.user_embedding(user)            # [batch_size, embedding_size]
-        item_e = self.item_embedding(item)            # [batch_size, embedding_size]
+        user_all_embeddings, entity_all_embeddings, _ = self.forward()
 
-        scores = torch.mul(user_e, item_e).sum(dim=1) # [batch_size]
-
+        u_embeddings = user_all_embeddings[user]
+        i_embeddings = entity_all_embeddings[item]
+        scores = torch.mul(u_embeddings, i_embeddings).sum(dim=1)
         return scores
 
     def full_sort_predict(self, interaction):
@@ -358,4 +432,15 @@ class KGREC(KnowledgeRecommender):
 
         scores = torch.matmul(user_e, all_item_e.transpose(0, 1)) # [batch_size, n_items]
 
+        return scores
+    
+    def create_mae_loss(self, node_pair_emb, masked_edge_emb=None):
+        head_embs, tail_embs = node_pair_emb[:, 0, :], node_pair_emb[:, 1, :]
+        if masked_edge_emb is not None:
+            pos1 = tail_embs * masked_edge_emb
+        else:
+            pos1 = tail_embs
+        # scores = (pos1 - head_embs).sum(dim=1).abs().mean(dim=0)
+        scores = - \
+            torch.log(torch.sigmoid(torch.mul(pos1, head_embs).sum(1))).mean()
         return scores
