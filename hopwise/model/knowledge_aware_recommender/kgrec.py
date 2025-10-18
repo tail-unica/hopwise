@@ -255,7 +255,7 @@ class AttnHGCN(nn.Module):
         edge_attn_score = edge_attn_score * norm
         # print attn score
         if print:
-            self.logger.info("edge_attn_score std: {}".format(edge_attn_score.std()))
+            self.logger.info(f"edge_attn_score std: {edge_attn_score.std()}")
         if return_logits:
             return edge_attn_score, edge_attn_logits
         return edge_attn_score
@@ -330,53 +330,137 @@ class KGREC(KnowledgeRecommender):
         type = torch.LongTensor(np.array(graph.data))
         return index.to(self.device), type.to(self.device)
 
+    def relation_aware_edge_sampling(self, edge_index, edge_type, n_relations, samp_rate=0.5):
+        # exclude interaction
+        for i in range(n_relations - 1):
+            edge_index_i, edge_type_i = self.edge_sampling(
+                edge_index[:, edge_type == i], edge_type[edge_type == i], samp_rate)
+            if i == 0:
+                edge_index_sampled = edge_index_i
+                edge_type_sampled = edge_type_i
+            else:
+                edge_index_sampled = torch.cat(
+                    [edge_index_sampled, edge_index_i], dim=1)
+                edge_type_sampled = torch.cat(
+                    [edge_type_sampled, edge_type_i], dim=0)
+        return edge_index_sampled, edge_type_sampled
+    
+    def edge_sampling(edge_index, edge_type, samp_rate=0.5):
+        # edge_index: [2, -1]
+        # edge_type: [-1]
+        n_edges = edge_index.shape[1]
+        random_indices = np.random.choice(
+            n_edges, size=int(n_edges * samp_rate), replace=False)
+        return edge_index[:, random_indices], edge_type[random_indices]
+
+    def mae_edge_mask_adapt_mixed(edge_index, edge_type, topk_egde_id):
+        # edge_index: [2, -1]
+        # edge_type: [-1]
+        n_edges = edge_index.shape[1]
+        topk_egde_id = topk_egde_id.cpu().numpy()
+        topk_mask = np.zeros(n_edges, dtype=bool)
+        topk_mask[topk_egde_id] = True
+        # add another group of random mask
+        random_indices = np.random.choice(
+            n_edges, size=topk_egde_id.shape[0], replace=False)
+        random_mask = np.zeros(n_edges, dtype=bool)
+        random_mask[random_indices] = True
+        # combine two masks
+        mask = topk_mask | random_mask
+
+        remain_edge_index = edge_index[:, ~mask]
+        remain_edge_type = edge_type[~mask]
+        masked_edge_index = edge_index[:, mask]
+        masked_edge_type = edge_type[mask]
+
+        return remain_edge_index, remain_edge_type, masked_edge_index, masked_edge_type, mask
+
+    def adaptive_kg_drop_cl(edge_index, edge_type, edge_attn_score, keep_rate):
+        _, least_attn_edge_id = torch.topk(-edge_attn_score,
+                                        int((1-keep_rate) * edge_attn_score.shape[0]), sorted=False)
+        cl_kg_mask = torch.ones_like(edge_attn_score).bool()
+        cl_kg_mask[least_attn_edge_id] = False
+        cl_kg_edge = edge_index[:, cl_kg_mask]
+        cl_kg_type = edge_type[cl_kg_mask]
+        return cl_kg_edge, cl_kg_type
+
+    def adaptive_ui_drop_cl(item_attn_mean, inter_edge, inter_edge_w, keep_rate=0.7, samp_func = "torch"):
+        inter_attn_prob = item_attn_mean[inter_edge[1]]
+        # add gumbel noise
+        noise = -torch.log(-torch.log(torch.rand_like(inter_attn_prob)))
+        """ prob based drop """
+        inter_attn_prob = inter_attn_prob + noise
+        inter_attn_prob = F.softmax(inter_attn_prob, dim=0)
+
+        if samp_func == "np":
+            # we observed abnormal behavior of torch.multinomial on mind
+            sampled_edge_idx = np.random.choice(np.arange(inter_edge_w.shape[0]), size=int(keep_rate * inter_edge_w.shape[0]), replace=False, p=inter_attn_prob.cpu().numpy())
+        else:
+            sampled_edge_idx = torch.multinomial(inter_attn_prob, int(keep_rate * inter_edge_w.shape[0]), replacement=False)
+
+        return inter_edge[:, sampled_edge_idx], inter_edge_w[sampled_edge_idx]/keep_rate
+
     def forward(self):
         user_emb = self.user_embedding.weight
         item_emb = self.item_embedding.weight
 
         """node dropout"""
         # 1. graph sprasification;
-        # edge_index, edge_type = _relation_aware_edge_sampling(
-        #     self.edge_index, self.edge_type, self.n_relations, self.node_dropout_rate)
-        # # 2. compute rationale scores;
-        # edge_attn_score, edge_attn_logits = self.gcn.norm_attn_computer(
-        #     item_emb, edge_index, edge_type, print=epoch_start, return_logits=True)
-        # # for adaptive UI MAE
-        # item_attn_mean_1 = scatter_mean(edge_attn_score, edge_index[0], dim=0, dim_size=self.n_entities)
-        # item_attn_mean_1[item_attn_mean_1 == 0.] = 1.
-        # item_attn_mean_2 = scatter_mean(edge_attn_score, edge_index[1], dim=0, dim_size=self.n_entities)
-        # item_attn_mean_2[item_attn_mean_2 == 0.] = 1.
-        # item_attn_mean = (0.5 * item_attn_mean_1 + 0.5 * item_attn_mean_2)[:self.n_items]
-        # # for adaptive MAE training
-        # std = torch.std(edge_attn_score).detach()
-        # noise = -torch.log(-torch.log(torch.rand_like(edge_attn_score)))
-        # edge_attn_score = edge_attn_score + noise
-        # topk_v, topk_attn_edge_id = torch.topk(
-        #     edge_attn_score, self.mae_msize, sorted=False)
-        # top_attn_edge_type = edge_type[topk_attn_edge_id]
+        edge_index, edge_type = self.relation_aware_edge_sampling(
+            self.edge_index, self.edge_type, self.n_relations, self.node_dropout_rate)
+        # 2. compute rationale scores;
+        edge_attn_score, _ = self.gcn.norm_attn_computer(
+            item_emb, edge_index, edge_type, return_logits=True)
+        
+        # for adaptive MAE training
+        noise = -torch.log(-torch.log(torch.rand_like(edge_attn_score)))
+        edge_attn_score = edge_attn_score + noise
+        _, topk_attn_edge_id = torch.topk(
+            edge_attn_score, self.mae_msize, sorted=False)
 
-        # enc_edge_index, enc_edge_type, masked_edge_index, masked_edge_type, mask_bool = _mae_edge_mask_adapt_mixed(edge_index, edge_type, topk_attn_edge_id)
+        enc_edge_index, enc_edge_type, masked_edge_index, masked_edge_type, _ = \
+                        self.mae_edge_mask_adapt_mixed(edge_index, edge_type, topk_attn_edge_id)
 
         
+        # rec task
+        entity_gcn_emb, user_gcn_emb = self.gcn(user_emb,
+                                                item_emb,
+                                                enc_edge_index,
+                                                enc_edge_type,
+                                                self.inter_edge,
+                                                self.inter_edge_w,
+                                                mess_dropout=self.mess_dropout_rate,
+                                                )
 
-        # entity_all_emb, user_all_emb = self.gcn(
-        #     user_emb, item_emb, enc_edge_index, enc_edge_type,
-        #     self.inter_edge, self.inter_edge_w, item_attn=None
-        # )
+        # MAE task with dot-product decoder
+        # mask_size, 2, channel
+        node_pair_emb = entity_gcn_emb[masked_edge_index.t()]
+        # mask_size, channel
+        masked_edge_emb = self.gcn.relation_emb[masked_edge_type-1]
+        mae_loss = self.create_mae_loss(node_pair_emb, masked_edge_emb)
 
-        # cl_kg_edge, cl_kg_type = _adaptive_kg_drop_cl(
-        #     edge_index, edge_type, edge_attn_score, keep_rate=1-self.cl_drop)
-        # cl_ui_edge, cl_ui_w = _adaptive_ui_drop_cl(
-        #     item_attn_mean, inter_edge, inter_edge_w, 1-self.cl_drop, samp_func=self.samp_func)
+        # for adaptive UI MAE
+        item_attn_mean_1 = scatter_mean(edge_attn_score, edge_index[0], dim=0, dim_size=self.n_entities)
+        item_attn_mean_1[item_attn_mean_1 == 0.] = 1.
+        item_attn_mean_2 = scatter_mean(edge_attn_score, edge_index[1], dim=0, dim_size=self.n_entities)
+        item_attn_mean_2[item_attn_mean_2 == 0.] = 1.
+        item_attn_mean = (0.5 * item_attn_mean_1 + 0.5 * item_attn_mean_2)[:self.n_items]
 
-        # item_agg_ui = self.gcn.forward_ui(
-        #     user_emb, item_emb[:self.n_items], cl_ui_edge, cl_ui_w)
-        # item_agg_kg = self.gcn.forward_kg(
-        #     item_emb, cl_kg_edge, cl_kg_type)[:self.n_items]
-        
+        # CL task
+        """adaptive sampling"""
+        cl_kg_edge, cl_kg_type = self.adaptive_kg_drop_cl(
+            edge_index, edge_type, edge_attn_score, keep_rate=1-self.cl_drop)
+        cl_ui_edge, cl_ui_w = self.adaptive_ui_drop_cl(
+            item_attn_mean, self.inter_edge, self.inter_edge_w, 1-self.cl_drop, samp_func=self.samp_func)
+
+        item_agg_ui = self.gcn.forward_ui(
+            user_emb, item_emb[:self.n_items], cl_ui_edge, cl_ui_w)
+        item_agg_kg = self.gcn.forward_kg(
+            item_emb, cl_kg_edge, cl_kg_type)[:self.n_items]
+        cl_loss = self.contrast_fn(item_agg_ui, item_agg_kg)
 
         # return user embeddings, entity/item embeddings, and edge-level rationale scores
-        # return user_all_emb, entity_all_emb
+        return user_gcn_emb, entity_gcn_emb, mae_loss, cl_loss
     
     def calculate_loss(self, interaction):
         r"""Calculate the training loss for a batch data of KG.
@@ -392,8 +476,7 @@ class KGREC(KnowledgeRecommender):
         pos_item = interaction[self.ITEM_ID]
         neg_item = interaction[self.NEG_ITEM_ID]
 
-        user_all_embeddings, entity_all_embeddings, masked_edge_index, \
-            masked_edge_type, item_agg_ui, item_agg_kg = self.forward()
+        user_all_embeddings, entity_all_embeddings, mae_loss, cl_loss = self.forward()
 
         u_embeddings = user_all_embeddings[user]
         pos_embeddings = entity_all_embeddings[pos_item]
@@ -401,14 +484,11 @@ class KGREC(KnowledgeRecommender):
 
         pos_scores = torch.mul(u_embeddings, pos_embeddings).sum(dim=1)
         neg_scores = torch.mul(u_embeddings, neg_embeddings).sum(dim=1)
-        bpr_loss = self.bpr_loss(pos_scores, neg_scores)
 
-        node_pair_emb = entity_all_embeddings[masked_edge_index.t()]
-        # mask_size, channel
-        masked_edge_emb = self.gcn.relation_emb[masked_edge_type-1]
-        mae_loss = self.mae_coef * self.create_mae_loss(node_pair_emb, masked_edge_emb)
-        
-        cl_loss = self.cl_coef * self.contrast_fn(item_agg_ui, item_agg_kg)
+        # the three losses
+        bpr_loss = self.bpr_loss(pos_scores, neg_scores)
+        mae_loss = self.mae_coef * mae_loss
+        cl_loss = self.cl_coef * cl_loss
 
         total_loss = bpr_loss + mae_loss + cl_loss
         return total_loss
