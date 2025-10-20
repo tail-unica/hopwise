@@ -20,7 +20,7 @@ from torch_scatter import scatter_mean, scatter_sum
 from hopwise.model.abstract_recommender import KnowledgeRecommender
 from hopwise.model.init import xavier_normal_initialization
 from hopwise.model.layers import SparseDropout
-from hopwise.model.loss import BPRLoss
+from hopwise.model.loss import BPRLoss, EmbLoss
 from hopwise.utils import InputType
 
 
@@ -117,20 +117,20 @@ class AttnHGCN(nn.Module):
         self.node_dropout = SparseDropout(p=self.mess_dropout_rate)  # node dropout
         self.mess_dropout = nn.Dropout(p=self.mess_dropout_rate)  # mess dropout
 
-    def non_attn_agg(self, user_emb, entity_emb, relation_emb):
+    # def non_attn_agg(self, user_emb, entity_emb, relation_emb):
 
-        n_entities = entity_emb.shape[0]
+    #     n_entities = entity_emb.shape[0]
 
-        """KG aggregate"""
-        head, tail = self.edge_index
-        edge_relation_emb = relation_emb[self.edge_type - 1]  # exclude interact, remap [1, n_relations) to [0, n_relations-1)
-        neigh_relation_emb = entity_emb[tail] * edge_relation_emb  # [-1, channel]
-        entity_agg = scatter_mean(src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0)
+    #     """KG aggregate"""
+    #     head, tail = self.edge_index
+    #     edge_relation_emb = relation_emb[self.edge_type - 1]  # exclude interact, remap [1, n_relations) to [0, n_relations-1)
+    #     neigh_relation_emb = entity_emb[tail] * edge_relation_emb  # [-1, channel]
+    #     entity_agg = scatter_mean(src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0)
 
-        """user aggregate"""
-        item_agg = self.inter_edge_w.unsqueeze(-1) * entity_emb[self.inter_edge[1, :]]
-        user_agg = scatter_sum(src=item_agg, index=self.inter_edge[0, :], dim_size=user_emb.shape[0], dim=0)
-        return entity_agg, user_agg
+    #     """user aggregate"""
+    #     item_agg = self.inter_edge_w.unsqueeze(-1) * entity_emb[self.inter_edge[1, :]]
+    #     user_agg = scatter_sum(src=item_agg, index=self.inter_edge[0, :], dim_size=user_emb.shape[0], dim=0)
+    #     return entity_agg, user_agg
 
     def shared_layer_agg(self, user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w, relation_emb):
         n_entities = entity_emb.shape[0]
@@ -274,12 +274,10 @@ class KGREC(KnowledgeRecommender):
 
         # load parameters info
         self.embedding_size = config['embedding_size']
-        self.decay = config['reg_weight']
+        self.reg_weight = config['reg_weight']
         self.context_hops = config['context_hops']
         self.node_dropout_rate = ['node_dropout_rate']
         self.mess_dropout_rate = config['mess_dropout_rate']
-
-        self.ablation = config['ab']
 
         self.mae_coef = config['mae_coef']
         self.mae_msize = config['mae_msize']
@@ -306,7 +304,8 @@ class KGREC(KnowledgeRecommender):
 
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
-        self.bpr_loss = BPRLoss()
+        self.mf_loss = BPRLoss()
+        self.reg_loss = EmbLoss()
 
         self.gcn = AttnHGCN(embedding_size=self.embedding_size,
                        n_hops=self.context_hops,
@@ -400,37 +399,39 @@ class KGREC(KnowledgeRecommender):
 
         return inter_edge[:, sampled_edge_idx], inter_edge_w[sampled_edge_idx]/keep_rate
 
+    def create_mae_loss(self, node_pair_emb, masked_edge_emb=None):
+        head_embs, tail_embs = node_pair_emb[:, 0, :], node_pair_emb[:, 1, :]
+        if masked_edge_emb is not None:
+            pos1 = tail_embs * masked_edge_emb
+        else:
+            pos1 = tail_embs
+        # scores = (pos1 - head_embs).sum(dim=1).abs().mean(dim=0)
+        scores = - \
+            torch.log(torch.sigmoid(torch.mul(pos1, head_embs).sum(1))).mean()
+        return scores
+    
     def forward(self):
         user_emb = self.user_embedding.weight
         item_emb = self.item_embedding.weight
 
         """node dropout"""
         # 1. graph sprasification;
-        edge_index, edge_type = self.relation_aware_edge_sampling(
-            self.edge_index, self.edge_type, self.n_relations, self.node_dropout_rate)
+        edge_index, edge_type = self.relation_aware_edge_sampling(self.edge_index, self.edge_type, self.n_relations,\
+                                                                  self.node_dropout_rate)
         # 2. compute rationale scores;
-        edge_attn_score, _ = self.gcn.norm_attn_computer(
-            item_emb, edge_index, edge_type, return_logits=True)
+        edge_attn_score, _ = self.gcn.norm_attn_computer(item_emb, edge_index, edge_type, return_logits=True)
         
         # for adaptive MAE training
         noise = -torch.log(-torch.log(torch.rand_like(edge_attn_score)))
         edge_attn_score = edge_attn_score + noise
-        _, topk_attn_edge_id = torch.topk(
-            edge_attn_score, self.mae_msize, sorted=False)
+        _, topk_attn_edge_id = torch.topk(edge_attn_score, self.mae_msize, sorted=False)
 
         enc_edge_index, enc_edge_type, masked_edge_index, masked_edge_type, _ = \
                         self.mae_edge_mask_adapt_mixed(edge_index, edge_type, topk_attn_edge_id)
 
-        
         # rec task
-        entity_gcn_emb, user_gcn_emb = self.gcn(user_emb,
-                                                item_emb,
-                                                enc_edge_index,
-                                                enc_edge_type,
-                                                self.inter_edge,
-                                                self.inter_edge_w,
-                                                mess_dropout=self.mess_dropout_rate,
-                                                )
+        entity_gcn_emb, user_gcn_emb = self.gcn(user_emb, item_emb, enc_edge_index, enc_edge_type, self.inter_edge,
+                                                self.inter_edge_w, mess_dropout=self.mess_dropout_rate,)
 
         # MAE task with dot-product decoder
         # mask_size, 2, channel
@@ -448,15 +449,11 @@ class KGREC(KnowledgeRecommender):
 
         # CL task
         """adaptive sampling"""
-        cl_kg_edge, cl_kg_type = self.adaptive_kg_drop_cl(
-            edge_index, edge_type, edge_attn_score, keep_rate=1-self.cl_drop)
-        cl_ui_edge, cl_ui_w = self.adaptive_ui_drop_cl(
-            item_attn_mean, self.inter_edge, self.inter_edge_w, 1-self.cl_drop, samp_func=self.samp_func)
-
-        item_agg_ui = self.gcn.forward_ui(
-            user_emb, item_emb[:self.n_items], cl_ui_edge, cl_ui_w)
-        item_agg_kg = self.gcn.forward_kg(
-            item_emb, cl_kg_edge, cl_kg_type)[:self.n_items]
+        cl_kg_edge, cl_kg_type = self.adaptive_kg_drop_cl(edge_index, edge_type, edge_attn_score, keep_rate=1-self.cl_drop)
+        cl_ui_edge, cl_ui_w = self.adaptive_ui_drop_cl(item_attn_mean, self.inter_edge, self.inter_edge_w, \
+                                                       1-self.cl_drop, samp_func=self.samp_func)
+        item_agg_ui = self.gcn.forward_ui(user_emb, item_emb[:self.n_items], cl_ui_edge, cl_ui_w)
+        item_agg_kg = self.gcn.forward_kg(item_emb, cl_kg_edge, cl_kg_type)[:self.n_items]
         cl_loss = self.contrast_fn(item_agg_ui, item_agg_kg)
 
         # return user embeddings, entity/item embeddings, and edge-level rationale scores
@@ -486,7 +483,9 @@ class KGREC(KnowledgeRecommender):
         neg_scores = torch.mul(u_embeddings, neg_embeddings).sum(dim=1)
 
         # the three losses
-        bpr_loss = self.bpr_loss(pos_scores, neg_scores)
+        mf_loss = self.mf_loss(pos_scores, neg_scores)
+        reg_loss = self.reg_loss(u_embeddings, pos_embeddings, neg_embeddings)
+        bpr_loss = mf_loss + self.reg_weight * reg_loss
         mae_loss = self.mae_coef * mae_loss
         cl_loss = self.cl_coef * cl_loss
 
@@ -514,13 +513,3 @@ class KGREC(KnowledgeRecommender):
 
         return scores
     
-    def create_mae_loss(self, node_pair_emb, masked_edge_emb=None):
-        head_embs, tail_embs = node_pair_emb[:, 0, :], node_pair_emb[:, 1, :]
-        if masked_edge_emb is not None:
-            pos1 = tail_embs * masked_edge_emb
-        else:
-            pos1 = tail_embs
-        # scores = (pos1 - head_embs).sum(dim=1).abs().mean(dim=0)
-        scores = - \
-            torch.log(torch.sigmoid(torch.mul(pos1, head_embs).sum(1))).mean()
-        return scores
