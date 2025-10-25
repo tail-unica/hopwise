@@ -1,0 +1,12 @@
+embedding_size: 64 # (int) The embedding size of users, items, entities and relations.
+reg_weight: 1e-5 # (float) The L2 regularization weight.
+context_hops: 2 # (int) The number of context hops in GCN layer.
+node_dropout_rate: 0.5 # (float) The node dropout rate in GCN layer.
+mess_dropout_rate: 0.0 # (float) The message dropout rate in GCN layer.
+mae_coef: 0.1 # (float) The masked autoencoder loss coefficient
+mae_msize: 256 # (int) The size of the masked edge set
+cl_coef: 0.01 # (float) The contrastive loss coefficient
+cl_tau: 1.0 # (float) The temperature in contrastive loss
+cl_drop: 0.5 # (float) The graph dropout rate for contrastive learning
+samp_func: "torch" # (str) The type of sampling function: torch or np
+hp_dict: {}
