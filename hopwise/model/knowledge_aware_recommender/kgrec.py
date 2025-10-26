@@ -8,7 +8,6 @@ Reference code:
 
 
 import math
-from logging import getLogger
 
 import numpy as np
 import torch
@@ -92,12 +91,13 @@ class AttnHGCN(nn.Module):
         self.n_hops = n_hops
         self.n_relations = n_relations
         self.n_users = n_users
-        self.inter_edge=inter_edge,
-        self.inter_edge_w = inter_edge_w,
+        self.inter_edge=inter_edge
+        self.inter_edge_w = inter_edge_w
         self.mess_dropout_rate = mess_dropout_rate
 
         self.relation_emb = nn.Embedding(self.n_relations, self.embedding_size)
-        self.W_Q = nn.Parameter(torch.Tensor(self.embedding_size, embedding_size))
+        w_q = nn.init.xavier_uniform_(torch.Tensor(self.embedding_size, embedding_size))
+        self.W_Q = nn.Parameter(w_q)
 
         self.n_heads = 2
         self.d_k = self.embedding_size // self.n_heads
@@ -251,7 +251,7 @@ class KGREC(KnowledgeRecommender):
         self.embedding_size = config['embedding_size']
         self.reg_weight = config['reg_weight']
         self.context_hops = config['context_hops']
-        self.node_dropout_rate = ['node_dropout_rate']
+        self.node_dropout_rate = config['node_dropout_rate']
         self.mess_dropout_rate = config['mess_dropout_rate']
 
         self.mae_coef = config['mae_coef']
@@ -265,8 +265,8 @@ class KGREC(KnowledgeRecommender):
         self.load_other_parameter(hp_dict)
 
         self.interact_mat, _ = dataset._create_norm_ckg_adjacency_matrix(symmetric=False)
-        self.inter_edge = self.interact_mat.indices().to(self.device)
-        self.inter_edge_w = self.interact_mat.values().to(self.device)
+        self.inter_edge = self.interact_mat._indices().to(self.device)
+        self.inter_edge_w = self.interact_mat._values().to(self.device)
         self.kg_graph = dataset.kg_graph(form="coo", value_field="relation_id")  # [n_entities, n_entities]
         # edge_index: [2, -1]; edge_type: [-1,]
         self.edge_index, self.edge_type = self.get_edges(self.kg_graph)
@@ -292,6 +292,7 @@ class KGREC(KnowledgeRecommender):
                        mess_dropout_rate=self.mess_dropout_rate)
 
         self.contrast_fn = Contrast(self.embedding_size, tau=self.cl_tau)
+        self.node_dropout = SparseDropout(p=self.node_dropout_rate)
 
 
         # parameters initialization
@@ -301,20 +302,6 @@ class KGREC(KnowledgeRecommender):
         index = torch.LongTensor(np.array([graph.row, graph.col]))
         type = torch.LongTensor(np.array(graph.data))
         return index.to(self.device), type.to(self.device)
-    
-    def sparse_dropout(i, v, keep_rate=0.5):
-        noise_shape = i.shape[1]
-
-        random_tensor = keep_rate
-        # the drop rate is 1 - keep_rate
-        random_tensor += torch.rand(noise_shape).to(i.device)
-        dropout_mask = torch.floor(random_tensor).type(torch.bool)
-
-        i = i[:, dropout_mask]
-        v = v[dropout_mask] / keep_rate
-
-        return i, v
-
 
     def forward(self):
         user_emb = self.user_embedding.weight
@@ -325,7 +312,8 @@ class KGREC(KnowledgeRecommender):
         if self.node_dropout_rate > 0.0:
             edge_index, edge_type = self.relation_aware_edge_sampling(self.edge_index, self.edge_type, self.n_relations,\
                                                                   self.node_dropout_rate)
-            inter_edge, inter_edge_w = self.sparse_dropout(self.inter_edge, self.inter_edge_w, self.node_dropout_rate)
+            interact_mat = self.node_dropout(self.interact_mat)
+            inter_edge, inter_edge_w = interact_mat._indices(), interact_mat._values()
         else:
             edge_index, edge_type = self.edge_index, self.edge_type
             inter_edge, inter_edge_w = self.inter_edge, self.inter_edge_w
@@ -346,9 +334,7 @@ class KGREC(KnowledgeRecommender):
                                                 inter_edge_w)
 
         # MAE task with dot-product decoder
-        # mask_size, 2, emb size
         node_pair_emb = entity_gcn_emb[masked_edge_index.t()]
-        # mask_size, emb size
         masked_edge_emb = self.gcn.relation_emb[masked_edge_type]
         mae_loss = self.create_mae_loss(node_pair_emb, masked_edge_emb)
 
@@ -407,7 +393,7 @@ class KGREC(KnowledgeRecommender):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
 
-        user_all_embeddings, entity_all_embeddings, _ = self.forward()
+        user_all_embeddings, entity_all_embeddings, _, _ = self.forward()
 
         u_embeddings = user_all_embeddings[user]
         i_embeddings = entity_all_embeddings[item]
@@ -417,7 +403,7 @@ class KGREC(KnowledgeRecommender):
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         if self.restore_user_e is None or self.restore_entity_e is None:
-            self.restore_user_e, self.restore_entity_e, _ = self.forward()
+            self.restore_user_e, self.restore_entity_e, _, _ = self.forward()
 
         u_embeddings = self.restore_user_e[user]
         i_embeddings = self.restore_entity_e[: self.n_items]
@@ -441,14 +427,14 @@ class KGREC(KnowledgeRecommender):
                     [edge_type_sampled, edge_type_i], dim=0)
         return edge_index_sampled, edge_type_sampled
     
-    def edge_sampling(edge_index, edge_type, samp_rate=0.5):
+    def edge_sampling(self, edge_index, edge_type, samp_rate=0.5):
         # edge_index: [2, -1]
         # edge_type: [-1]
         n_edges = edge_index.shape[1]
         random_indices = np.random.choice(n_edges, size=int(n_edges * samp_rate), replace=False)
         return edge_index[:, random_indices], edge_type[random_indices]
 
-    def mae_edge_mask_adapt_mixed(edge_index, edge_type, topk_egde_id):
+    def mae_edge_mask_adapt_mixed(self, edge_index, edge_type, topk_egde_id):
         # edge_index: [2, -1]
         # edge_type: [-1]
         n_edges = edge_index.shape[1]
