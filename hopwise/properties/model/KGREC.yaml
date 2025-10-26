@@ -9,4 +9,4 @@ cl_coef: 0.01 # (float) The contrastive loss coefficient
 cl_tau: 1.0 # (float) The temperature in contrastive loss
 cl_drop: 0.5 # (float) The graph dropout rate for contrastive learning
 samp_func: "torch" # (str) The type of sampling function: torch or np
-hp_dict: {}
+hp_dict: null
