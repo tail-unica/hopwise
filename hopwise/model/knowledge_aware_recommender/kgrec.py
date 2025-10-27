@@ -236,12 +236,13 @@ class AttnHGCN(nn.Module):
         return edge_attn_score
 
 class KGREC(KnowledgeRecommender):
-    '''
-        Losses:
-        - bpr loss
-        - masked autoencoder loss (mae)
-        - contrastive loss
-    '''
+    r"""KGRec is a self-supervised knowledge-aware recommender that identifies and focuses on informative knowledge 
+    graph connections through an attentive rationalization mechanism. It combines generative masking reconstruction 
+    and contrastive learning tasks to highlight and align meaningful knowledge and interaction signals. By masking 
+    and rebuilding high-rationale edges while filtering noisy ones, KGRec learns more interpretable and noise-resistant
+    recommendations.
+    """
+
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
