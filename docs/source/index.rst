@@ -58,6 +58,12 @@ New Features:
 
 .. toctree::
    :maxdepth: 1
+   :caption: Tutorials
+
+   tutorial/00_introduction
+
+.. toctree::
+   :maxdepth: 1
    :caption: User Guide
 
    user_guide/usage
@@ -67,6 +73,10 @@ New Features:
    user_guide/tasks_models_intro
    user_guide/training_and_evaluation
    user_guide/hyperparameters_tuning
+   user_guide/qa
+   user_guide/significance_test
+   user_guide/item_cold_start
+   user_guide/half_precision_training
 
 .. toctree::
    :maxdepth: 1
@@ -80,7 +90,18 @@ New Features:
    developer_guide/create_models
    developer_guide/create_metrics
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Case Study
 
+   case_study/recommendation_analysis
+   case_study/tsne_visualization
+   case_study/rq_vae_semantic_ids
+   case_study/semantic_ids_faiss
+
+.. toctree::
+   :maxdepth: 1
+   :caption: API
 
 The Team
 ------------------
