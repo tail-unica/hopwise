@@ -1,4 +1,4 @@
-U Configuration
+Customize Configuration
 ======================
 Here we present how to change or add the configuration object to allow more configuration options, and apply it into hopwise.
 
