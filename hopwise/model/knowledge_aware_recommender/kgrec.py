@@ -310,8 +310,8 @@ class KGREC(KnowledgeRecommender):
         """node dropout"""
         # 1. graph sparsification;
         if self.node_dropout_rate > 0.0:
-            edge_index, edge_type = self.relation_aware_edge_sampling(self.edge_index, self.edge_type, self.n_relations,\
-                                                                  self.node_dropout_rate)
+            edge_index, edge_type = self.relation_aware_edge_sampling(self.edge_index, self.edge_type, 
+                                                                      self.n_relations, self.node_dropout_rate)
             interact_mat = self.node_dropout(self.interact_mat)
             inter_edge, inter_edge_w = interact_mat._indices(), interact_mat._values()
         else:
@@ -477,10 +477,12 @@ class KGREC(KnowledgeRecommender):
 
         if self.samp_func == "np":
             # we observed abnormal behavior of torch.multinomial on mind
-            sampled_edge_idx = np.random.choice(np.arange(inter_edge_w.shape[0]), size=int(keep_rate * inter_edge_w.shape[0]),\
-                                                 replace=False, p=inter_attn_prob.cpu().numpy())
+            sampled_edge_idx = np.random.choice(np.arange(inter_edge_w.shape[0]), 
+                                                size=int(keep_rate * inter_edge_w.shape[0]),
+                                                replace=False, p=inter_attn_prob.cpu().numpy())
         else:
-            sampled_edge_idx = torch.multinomial(inter_attn_prob, int(keep_rate * inter_edge_w.shape[0]), replacement=False)
+            sampled_edge_idx = torch.multinomial(inter_attn_prob, int(keep_rate * inter_edge_w.shape[0]),
+                                                 replacement=False)
 
         return inter_edge[:, sampled_edge_idx], inter_edge_w[sampled_edge_idx]/keep_rate
 
