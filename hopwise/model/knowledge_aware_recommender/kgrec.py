@@ -76,10 +76,6 @@ class AttnHGCN(nn.Module):
         n_hops,
         n_users,
         n_relations,
-        edge_index,
-        edge_type,
-        inter_edge,
-        inter_edge_w,
         mess_dropout_rate=0.1,
     ):
         super().__init__()
@@ -87,18 +83,13 @@ class AttnHGCN(nn.Module):
         self.no_attn_convs = nn.ModuleList()
 
         self.embedding_size = embedding_size
-        self.edge_index = edge_index
-        self.edge_type = edge_type
         self.n_hops = n_hops
         self.n_relations = n_relations
         self.n_users = n_users
-        self.inter_edge = inter_edge
-        self.inter_edge_w = inter_edge_w
         self.mess_dropout_rate = mess_dropout_rate
 
-        self.relation_emb = nn.Embedding(self.n_relations, self.embedding_size)
-        w_q = nn.init.xavier_uniform_(torch.Tensor(self.embedding_size, embedding_size))
-        self.W_Q = nn.Parameter(w_q)
+        self.relation_embedding = nn.Embedding(self.n_relations, self.embedding_size)
+        self.W_Q = nn.Parameter(torch.Tensor(self.embedding_size, self.embedding_size))
 
         self.n_heads = 2
         self.d_k = self.embedding_size // self.n_heads
@@ -109,20 +100,19 @@ class AttnHGCN(nn.Module):
         # parameters initialization
         self.apply(xavier_uniform_initialization)
 
-    def shared_layer_agg(self, user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w, relation_emb):
+    def shared_layer_agg(self, user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w):
         n_entities = entity_emb.shape[0]
         head, tail = edge_index
 
         query = (entity_emb[head] @ self.W_Q).view(-1, self.n_heads, self.d_k)
         key = (entity_emb[tail] @ self.W_Q).view(-1, self.n_heads, self.d_k)
 
-        key = key * relation_emb[edge_type].view(-1, self.n_heads, self.d_k)
+        key = key * self.relation_embedding(edge_type).view(-1, self.n_heads, self.d_k)
 
         edge_attn_score = (query * key).sum(dim=-1) / math.sqrt(self.d_k)
         edge_attn_score = scatter_softmax(edge_attn_score, head)
 
-        relation_emb = relation_emb[edge_type]
-        neigh_relation_emb = entity_emb[tail] * relation_emb  # [-1, embedding_size]
+        neigh_relation_emb = entity_emb[tail] * self.relation_embedding(edge_type)  # [-1, embedding_size]
         value = neigh_relation_emb.view(-1, self.n_heads, self.d_k)
 
         entity_agg = value * edge_attn_score.view(-1, self.n_heads, 1)
@@ -148,11 +138,8 @@ class AttnHGCN(nn.Module):
 
         entity_res_emb = entity_emb  # [n_entity, embedding_size]
         user_res_emb = user_emb  # [n_users, embedding_size]
-        relation_emb = self.relation_emb.weight  # [n_relations, embedding_size]
         for i in range(self.n_hops):
-            entity_emb, user_emb = self.shared_layer_agg(
-                user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w, relation_emb
-            )
+            entity_emb, user_emb = self.shared_layer_agg(user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w)
 
             """message dropout"""
             if self.mess_dropout_rate > 0.0:
@@ -162,10 +149,10 @@ class AttnHGCN(nn.Module):
             user_emb = F.normalize(user_emb)
 
             """result emb"""
-            entity_res_emb = torch.add(entity_res_emb, entity_emb)
             user_res_emb = torch.add(user_res_emb, user_emb)
+            entity_res_emb = torch.add(entity_res_emb, entity_emb)
 
-        return entity_res_emb, user_res_emb
+        return user_res_emb, entity_res_emb
 
     def forward_ui(self, user_emb, item_emb, inter_edge, inter_edge_w):
         item_res_emb = item_emb  # [n_entity, channel]
@@ -206,7 +193,7 @@ class AttnHGCN(nn.Module):
     def kg_agg(self, entity_emb, edge_index, edge_type):
         n_entities = entity_emb.shape[0]
         head, tail = edge_index
-        edge_relation_emb = self.relation_emb[edge_type]
+        edge_relation_emb = self.relation_embedding(edge_type)
         neigh_relation_emb = entity_emb[tail] * edge_relation_emb  # [-1, embedding_size]
         entity_agg = scatter_mean(src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0)
         return entity_agg
@@ -219,7 +206,7 @@ class AttnHGCN(nn.Module):
         key = (entity_emb[tail] @ self.W_Q).view(-1, self.n_heads, self.d_k)
 
         if edge_type is not None:
-            key = key * self.relation_emb[edge_type].view(-1, self.n_heads, self.d_k)
+            key = key * self.relation_embedding(edge_type).view(-1, self.n_heads, self.d_k)
 
         edge_attn = (query * key).sum(dim=-1) / math.sqrt(self.d_k)
         edge_attn_logits = edge_attn.mean(-1).detach()
@@ -259,24 +246,17 @@ class KGRec(KnowledgeRecommender):
         self.mae_msize = config["mae_msize"]
         self.cl_coef = config["cl_coef"]
         self.cl_tau = config["cl_tau"]
-        self.cl_drop = config["cl_drop_ratio"]
+        self.cl_drop = config["cl_drop"]
         self.samp_func = config["samp_func"]
 
-        hp_dict = config["hp_dict"]
-        self.load_other_parameter(hp_dict)
-
-        self.interact_mat, _ = dataset._create_norm_ckg_adjacency_matrix(symmetric=False)
-        self.inter_edge = self.interact_mat._indices().to(self.device)
-        self.inter_edge_w = self.interact_mat._values().to(self.device)
+        self.inter_edge, _ = dataset._create_norm_ckg_adjacency_matrix(symmetric=False)
+        self.inter_edge = self.inter_edge.to(self.device)
         self.kg_graph = dataset.kg_graph(form="coo", value_field="relation_id")  # [n_entities, n_entities]
         # edge_index: [2, -1]; edge_type: [-1,]
         self.edge_index, self.edge_type = self.get_edges(self.kg_graph)
 
-        # define layers and loss
-        self.n_nodes = self.n_users + self.n_entities
-
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
-        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
+        self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
         self.mf_loss = BPRLoss()
         self.reg_loss = EmbLoss()
         self.restore_user_e = None
@@ -287,10 +267,6 @@ class KGRec(KnowledgeRecommender):
             n_hops=self.context_hops,
             n_users=self.n_users,
             n_relations=self.n_relations,
-            edge_index=self.edge_index,
-            edge_type=self.edge_type,
-            inter_edge=self.inter_edge,
-            inter_edge_w=self.inter_edge_w,
             mess_dropout_rate=self.mess_dropout_rate,
         )
 
@@ -307,22 +283,27 @@ class KGRec(KnowledgeRecommender):
 
     def forward(self):
         user_emb = self.user_embedding.weight
-        item_emb = self.item_embedding.weight
+        entity_emb = self.entity_embedding.weight
 
         """node dropout"""
         # 1. graph sparsification;
         if self.node_dropout_rate > 0.0:
-            edge_index, edge_type = self.relation_aware_edge_sampling(
-                self.edge_index, self.edge_type, self.n_relations, self.node_dropout_rate
-            )
-            interact_mat = self.node_dropout(self.interact_mat)
-            inter_edge, inter_edge_w = interact_mat._indices(), interact_mat._values()
+            edge_index, edge_type = self.relation_aware_edge_sampling(sampling_rate=self.node_dropout_rate)
+            inter_edge = self.node_dropout(self.inter_edge)
         else:
             edge_index, edge_type = self.edge_index, self.edge_type
-            inter_edge, inter_edge_w = self.inter_edge, self.inter_edge_w
+            inter_edge = self.inter_edge
+        inter_edge, inter_edge_w = inter_edge._indices(), inter_edge._values()
 
         # 2. compute rationale scores;
-        edge_attn_score, _ = self.gcn.norm_attn_computer(item_emb, edge_index, edge_type, return_logits=True)
+        edge_attn_score, _ = self.gcn.norm_attn_computer(entity_emb, edge_index, edge_type, return_logits=True)
+
+        # for adaptive UI MAE
+        item_attn_mean_1 = scatter_mean(edge_attn_score, edge_index[0], dim=0, dim_size=self.n_entities)
+        item_attn_mean_1[item_attn_mean_1 == 0.0] = 1.0
+        item_attn_mean_2 = scatter_mean(edge_attn_score, edge_index[1], dim=0, dim_size=self.n_entities)
+        item_attn_mean_2[item_attn_mean_2 == 0.0] = 1.0
+        item_attn_mean = (0.5 * item_attn_mean_1 + 0.5 * item_attn_mean_2)[: self.n_items]
 
         # for adaptive MAE training
         noise = -torch.log(-torch.log(torch.rand_like(edge_attn_score)))
@@ -334,28 +315,21 @@ class KGRec(KnowledgeRecommender):
         )
 
         # rec task
-        entity_gcn_emb, user_gcn_emb = self.gcn(
-            user_emb, item_emb, enc_edge_index, enc_edge_type, inter_edge, inter_edge_w
+        user_gcn_emb, entity_gcn_emb = self.gcn(
+            user_emb, entity_emb, enc_edge_index, enc_edge_type, inter_edge, inter_edge_w
         )
 
         # MAE task with dot-product decoder
         node_pair_emb = entity_gcn_emb[masked_edge_index.t()]
-        masked_edge_emb = self.gcn.relation_emb[masked_edge_type]
+        masked_edge_emb = self.gcn.relation_embedding(masked_edge_type)
         mae_loss = self.create_mae_loss(node_pair_emb, masked_edge_emb)
-
-        # for adaptive UI MAE
-        item_attn_mean_1 = scatter_mean(edge_attn_score, edge_index[0], dim=0, dim_size=self.n_entities)
-        item_attn_mean_1[item_attn_mean_1 == 0.0] = 1.0
-        item_attn_mean_2 = scatter_mean(edge_attn_score, edge_index[1], dim=0, dim_size=self.n_entities)
-        item_attn_mean_2[item_attn_mean_2 == 0.0] = 1.0
-        item_attn_mean = (0.5 * item_attn_mean_1 + 0.5 * item_attn_mean_2)[: self.n_items]
 
         # CL task
         """adaptive sampling"""
         cl_kg_edge, cl_kg_type = self.adaptive_kg_drop_cl(edge_index, edge_type, edge_attn_score)
         cl_ui_edge, cl_ui_w = self.adaptive_ui_drop_cl(item_attn_mean, inter_edge, inter_edge_w)
-        item_agg_ui = self.gcn.forward_ui(user_emb, item_emb[: self.n_items], cl_ui_edge, cl_ui_w)
-        item_agg_kg = self.gcn.forward_kg(item_emb, cl_kg_edge, cl_kg_type)[: self.n_items]
+        item_agg_ui = self.gcn.forward_ui(user_emb, entity_emb[: self.n_items], cl_ui_edge, cl_ui_w)
+        item_agg_kg = self.gcn.forward_kg(entity_emb, cl_kg_edge, cl_kg_type)[: self.n_items]
         cl_loss = self.contrast_fn(item_agg_ui, item_agg_kg)
 
         # return user embeddings, entity/item embeddings, and edge-level rationale scores
@@ -386,7 +360,7 @@ class KGRec(KnowledgeRecommender):
 
         # the three losses
         mf_loss = self.mf_loss(pos_scores, neg_scores)
-        reg_loss = self.reg_loss(u_embeddings, pos_embeddings, neg_embeddings)
+        reg_loss = self.reg_loss(u_embeddings, pos_embeddings, neg_embeddings, require_pow=True)
         bpr_loss = mf_loss + self.reg_weight * reg_loss
         mae_loss = self.mae_coef * mae_loss
         cl_loss = self.cl_coef * cl_loss
@@ -398,7 +372,14 @@ class KGRec(KnowledgeRecommender):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
 
-        user_all_embeddings, entity_all_embeddings, _, _ = self.forward()
+        user_all_embeddings, entity_all_embeddings = self.gcn(
+            self.user_embedding.weight,
+            self.entity_embedding.weight,
+            self.edge_index,
+            self.edge_type,
+            self.inter_edge._indices(),
+            self.inter_edge._values(),
+        )
 
         u_embeddings = user_all_embeddings[user]
         i_embeddings = entity_all_embeddings[item]
@@ -408,7 +389,14 @@ class KGRec(KnowledgeRecommender):
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         if self.restore_user_e is None or self.restore_entity_e is None:
-            self.restore_user_e, self.restore_entity_e, _, _ = self.forward()
+            self.restore_user_e, self.restore_entity_e = self.gcn(
+                self.user_embedding.weight,
+                self.entity_embedding.weight,
+                self.edge_index,
+                self.edge_type,
+                self.inter_edge._indices(),
+                self.inter_edge._values(),
+            )
 
         u_embeddings = self.restore_user_e[user]
         i_embeddings = self.restore_entity_e[: self.n_items]
@@ -417,11 +405,13 @@ class KGRec(KnowledgeRecommender):
 
         return scores.view(-1)
 
-    def relation_aware_edge_sampling(self, edge_index, edge_type, n_relations, samp_rate=0.5):
+    def relation_aware_edge_sampling(self, sampling_rate=0.5):
         # exclude interaction
-        for i in range(n_relations - 1):
+        for i in range(self.n_relations - 1):
             edge_index_i, edge_type_i = self.edge_sampling(
-                edge_index[:, edge_type == i], edge_type[edge_type == i], samp_rate
+                self.edge_index[:, self.edge_type == i],
+                self.edge_type[self.edge_type == i],
+                sampling_rate=sampling_rate
             )
             if i == 0:
                 edge_index_sampled = edge_index_i
@@ -431,11 +421,11 @@ class KGRec(KnowledgeRecommender):
                 edge_type_sampled = torch.cat([edge_type_sampled, edge_type_i], dim=0)
         return edge_index_sampled, edge_type_sampled
 
-    def edge_sampling(self, edge_index, edge_type, samp_rate=0.5):
+    def edge_sampling(self, edge_index, edge_type, sampling_rate=0.5):
         # edge_index: [2, -1]
         # edge_type: [-1]
         n_edges = edge_index.shape[1]
-        random_indices = np.random.choice(n_edges, size=int(n_edges * samp_rate), replace=False)
+        random_indices = np.random.choice(n_edges, size=int(n_edges * sampling_rate), replace=False)
         return edge_index[:, random_indices], edge_type[random_indices]
 
     def mae_edge_mask_adapt_mixed(self, edge_index, edge_type, topk_egde_id):
