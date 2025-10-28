@@ -104,8 +104,12 @@ xgboost = [
 kgat = [
   "dgl>=2.4.0"
 ]
-# scatter = [
+# kgin = [
 #   "torch-scatter",
+# ]
+# kgrec = [
+#   "torch-scatter",
+#   "torch-geometric",
 # ]
 hyper = [
   "hyperopt==0.2.5",

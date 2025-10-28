@@ -943,7 +943,7 @@ class TestKnowledgeRecommender(unittest.TestCase):
 
     def test_kgrec(self):
         config_dict = {
-            "model": "KGREC",
+            "model": "KGRec",
         }
         quick_test(config_dict)
 
