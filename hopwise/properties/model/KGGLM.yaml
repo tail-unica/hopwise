@@ -1,24 +1,23 @@
 learning_rate: 2e-4
 weight_decay: 0.01
 warmup_steps: 250               # (int) Number of warmup steps for learning rate scheduler.
-context_length: 24              # (int) Maximum length of the context.
 embedding_size: 768             # (int) Size of the embeddings.
 num_heads: 12                   # (int) Number of heads in the multi-head attention.
 num_layers: 6                   # (int) Number of layers in the transformer.
+use_kg_token_types: True        # (bool) Whether to use token types for the knowledge graph.
+
 save_step: 50                   # (int) Number of steps to save the model during pre-training.
-pretrain_epochs: 150            # (int) Number of epochs for pre-training.
-train_stage: 'lp_pretrain'      # (str) The training stage. Range in ['lp_pretrain', 'finetune'].
+pretrain_epochs: 1              # (int) Number of epochs for pre-training.
+train_stage: 'pretrain'         # (str) The training stage. Range in ['pretrain', 'finetune'].
 pre_model_path: ''              # (str) The path of pretrained model.
+
+base_model: distilgpt2
+sequence_postprocessor: Cumulative
 
 path_sample_args:
     restrict_by_phase: False    # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.
     pretrain_hop_length: (3,3)  # (tuple) The range of the hop length for pre-training.
-    pretrain_paths: 10000       # (int) Number of paths for pre-training.
-
-path_generation_args:
-    paths_per_user: 30          # (int) Number of paths generated per user.
-    num_beams: 50           # (int) Number of beams for beam search.
-    num_beam_groups: 5      # (int) Number of groups for diverse beam search.
-    diversity_penalty: 0.3  # (float) Diversity penalty for beam search.
-    length_penalty: 0.0     # (float) Length penalty for beam search.
-    do_sample: False        # (bool) Whether to use sampling ; use greedy decoding otherwise.
+    pretrain_paths: 1           # (int) Number of paths for pre-training. i.e. how many paths per entity?
+    temporal_causality: False
+    strategy: simple-ui
+    MAX_RW_TRIES_PER_IID: 1     # (int) Maximum number of tries per positive item (during pretraining applies per entity).

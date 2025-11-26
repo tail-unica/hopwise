@@ -291,7 +291,7 @@ class MCCLK(KnowledgeRecommender):
 
         # load dataset info
         # inter_matrix: [n_users, n_entities]; inter_graph: [n_users + n_entities, n_users + n_entities]
-        self.inter_matrix, self.inter_graph = dataset._create_norm_adjacency_matrix(symmetric=False)
+        self.inter_matrix, self.inter_graph = dataset._create_norm_ckg_adjacency_matrix(symmetric=False)
         self.inter_matrix = self.inter_matrix.to(self.device)
         self.inter_graph = self.inter_graph.to(self.device)
         self.kg_graph = dataset.kg_graph(form="coo", value_field="relation_id")  # [n_entities, n_entities]

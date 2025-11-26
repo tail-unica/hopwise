@@ -7,11 +7,17 @@
 # @Author : Yushuo Chen
 # @email  : chenyushuo@ruc.edu.cn
 
+# UPDATE
+# @Time   : 2025/06
+# @Author : Alessandro Soccol, Giacomo Medda
+# @email  : alessandro.soccol@unica.it, giacomo.medda@unica.it
+
 """hopwise.utils.case_study
 #####################################
 """
 
 import numpy as np
+import pandas as pd
 import torch
 
 from hopwise.data.interaction import Interaction
@@ -66,6 +72,44 @@ def full_sort_scores(uid_series, model, test_data, device=None):
         scores[history_index] = -np.inf  # set scores of history items to -inf
 
     return scores
+
+
+@torch.no_grad()
+def full_sort_explanations(uid_series, model, test_data, device=None):
+    """Calculate the scores of all items for each user in uid_series.
+
+    Note:
+        The score of [pad] and history items will be set into -inf.
+
+    Args:
+        uid_series (numpy.ndarray or list): User id series.
+        model (AbstractRecommender): Model to predict.
+        test_data (FullSortEvalDataLoader): The test_data of model.
+        device (torch.device, optional): The device which model will run on. Defaults to ``None``.
+            Note: ``device=None`` is equivalent to ``device=torch.device('cpu')``.
+
+    Returns:
+        torch.Tensor: the scores of all items for each user in uid_series.
+    """
+    device = device or torch.device("cpu")
+    uid_series = torch.tensor(uid_series)
+    uid_field = test_data.dataset.uid_field
+    dataset = test_data.dataset
+    model.eval()
+
+    if not test_data.is_sequential:
+        input_interaction = dataset.join(Interaction({uid_field: uid_series}))
+    else:
+        _, index = (dataset.inter_feat[uid_field] == uid_series[:, None]).nonzero(as_tuple=True)
+        input_interaction = dataset[index]
+
+    # Get scores of all items
+    input_interaction = input_interaction.to(device)
+
+    _, explanations = model.explain(input_interaction)
+
+    # return explanations as pandas dataframe
+    return pd.DataFrame(explanations, columns=["user", "item", "score", "path"])
 
 
 def full_sort_topk(uid_series, model, test_data, k, device=None):

@@ -4,9 +4,11 @@
 
 """DistMult
 ##################################################
-Reference: Bishan Yang, Wen-tau Yih, Xiaodong He, Jianfeng Gao, Li Deng: Embedding Entities and Relations for Learning
-and Inference in Knowledge Bases. ICLR (Poster) 2015
+Reference:
+    Yang et al. "Embedding Entities and Relations for Learning and Inference in Knowledge Bases." in ICLR 2015.
 
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import torch

@@ -1,31 +1,8 @@
-# path_constraint: [
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.prequel","entity"],["film.film.prequel","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.actor","entity"],["film.film.actor","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.actor.film","entity"],["film.actor.film","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.sequel","entity"],["film.film.sequel","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film_subject.films","entity"],["film.film_subject.films","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.subjects","entity"],["film.film.subjects","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.rating","entity"],["film.film.rating","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.content_rating.film","entity"],["film.content_rating.film","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.genre","entity"],["film.film.genre","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film_genre.films_in_this_genre","entity"],["film.film_genre.films_in_this_genre","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.written_by","entity"],["film.film.written_by","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.writer.film","entity"],["film.writer.film","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.directed_by","entity"],["film.film.directed_by","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.director.film","entity"],["film.director.film","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.cinematography","entity"],["film.film.cinematography","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.cinematographer.film","entity"],["film.cinematographer.film","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.produced_by","entity"],["film.film.produced_by","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.producer.film","entity"],["film.producer.film","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.production_companies","entity"],["film.film.production_companies","entity"]],
-#   [[null, 'user'], ["[UI-Relation]","entity"], ["film.production_company.films","entity"],["film.production_company.films","entity"]],
-# ]
+# These contraints are used by PGPR and CAFE.
+# While in CAFE are left as they are, in PGPR reverse relations are removed and only not-null relations are considered.
 
 path_constraint: [
   [[null, 'user'], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"], ["[UI-Relation]","entity"]],
-  # [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.prequel","entity"]],
-  # [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.sequel","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.prequel","entity"], ["film.film.prequel","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.sequel","entity"], ["film.film.sequel","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.actor","entity"],["film.actor.film","entity"]],
@@ -39,4 +16,26 @@ path_constraint: [
   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.cinematography","entity"],["film.cinematographer.film","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.produced_by","entity"],["film.producer.film","entity"]],
   [[null, 'user'], ["[UI-Relation]","entity"], ["film.film.production_companies","entity"],["film.production_company.films","entity"]],
+]
+
+metapaths: [
+    [['item_id', 'film.film.prequel', 'entity_id'], ['entity_id', 'film.film.prequel', 'item_id']],
+    [['item_id', 'film.film.actor', 'entity_id'], ['entity_id', 'film.actor.film', 'item_id']],
+    [['item_id', 'film.actor.film', 'entity_id'], ['entity_id', 'film.actor.film', 'item_id']],
+    [['item_id', 'film.film.sequel', 'entity_id'], ['entity_id', 'film.film.sequel', 'item_id']],
+    [['item_id', 'film.film_subject.films', 'entity_id'], ['entity_id', 'film.film_subject.films', 'item_id']],
+    [['item_id', 'film.film.subjects', 'entity_id'], ['entity_id', 'film.film.subjects', 'item_id']],
+    [['item_id', 'film.film.rating', 'entity_id'], ['entity_id', 'film.content_rating.film', 'item_id']],
+    [['item_id', 'film.film.sequel', 'item_id']],
+    [['item_id', 'film.film.prequel', 'item_id']],
+    ['film.film.genre', 'film.film_genre.films_in_this_genre'],
+    ['film.film.written_by', 'film.writer.film'],
+    ['film.film.directed_by', 'film.director.film'],
+    ['film.film.cinematography', 'film.cinematographer.film'],
+    ['film.film.produced_by', 'film.producer.film'],
+    ['film.film.production_companies', 'film.production_company.films'],
+    ['film.film.language'],
+    ['film.film.country'],
+    ['film.film.award_nomination'],
+    ['film.film.award_won']
 ]

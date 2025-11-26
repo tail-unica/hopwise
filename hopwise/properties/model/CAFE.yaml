@@ -8,10 +8,13 @@ kg_reverse_r: True
 topk_paths: 25
 clip_grad_norm:
   max_norm: 5.0
+max_user_trials: 50
+epochs: 50
+eval_step: 50
+
 
 # Embeddings
 additional_feat_suffix: [useremb, entityemb, relationemb]
-
 # To load the pretrained embeddings (Typically from TransE) necessary to score the paths
 load_col:
     useremb: [user_embedding_id, user_embedding]

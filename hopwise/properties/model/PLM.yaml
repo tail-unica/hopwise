@@ -1,0 +1,13 @@
+learning_rate: 2e-4
+weight_decay: 0.01
+warmup_steps: 250               # (int) Number of warmup steps for learning rate scheduler.
+embedding_size: 768             # (int) Size of the embeddings.
+num_heads: 12                   # (int) Number of heads in the multi-head attention.
+num_layers: 6                   # (int) Number of layers in the transformer.
+use_kg_token_types: True        # (bool) Whether to use token types for the knowledge graph.
+
+base_model: distilgpt2
+sequence_postprocessor: Cumulative
+
+path_sample_args:
+    restrict_by_phase: False    # (bool) Whether to restrict the last item in the reasoning path by the used ids in the dataloader phase.

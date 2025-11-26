@@ -13,6 +13,7 @@
 
 # ruff: noqa: F403, F405
 
+import gc
 import importlib
 import os
 import pickle
@@ -21,9 +22,8 @@ from typing import Literal
 
 from hopwise.data.dataloader import *
 from hopwise.sampler import KGSampler, RepeatableSampler, Sampler
-from hopwise.utils import ModelType, ensure_dir, set_color
+from hopwise.utils import KnowledgeEvaluationType, ModelType, ensure_dir, progress_bar, set_color
 from hopwise.utils.argument_list import dataset_arguments
-from hopwise.utils.enum_type import KnowledgeEvaluationType
 
 
 def create_dataset(config):
@@ -76,13 +76,43 @@ def create_dataset(config):
                 break
         if dataset_args_unchanged:
             logger = getLogger()
-            logger.info(set_color("Load filtered dataset from", "pink") + f": [{file}]")
+            logger.info(set_color("Load filtered dataset from", "magenta") + f": [{file}]")
             return dataset
 
     dataset = dataset_class(config)
     if config["save_dataset"]:
         dataset.save()
     return dataset
+
+
+def _get_dataloader_name(config, dataloaders_folder):
+    path_gen_args = config["path_sample_args"]
+
+    max_path_per_user = config["MAX_PATHS_PER_USER"]
+    max_rw_tries_per_iid = config["MAX_RW_TRIES_PER_IID"]
+    restrict_by_phase = path_gen_args["restrict_by_phase"]
+    temporal_causality = path_gen_args["temporal_causality"]
+    strategy = path_gen_args["strategy"]
+    collaborative_path = path_gen_args["collaborative_path"]
+
+    filename = f"{config['dataset']}-for-{config['model']}"
+    f"-str {strategy}"
+    f"-mppu {max_path_per_user}"
+    f"-max_tries {max_rw_tries_per_iid}"
+    f"-temp {temporal_causality}"
+    f"-col {collaborative_path}"
+    f"-restrbyphase {restrict_by_phase}-dataloader.pth"
+
+    if "train_stage" in config and config["MODEL_TYPE"] in [ModelType.PATH_LANGUAGE_MODELING]:
+        filename += f"-{config['train_stage']}"
+
+    file_path = os.path.join(
+        config["checkpoint_dir"],
+        dataloaders_folder,
+        filename,
+    )
+
+    return file_path
 
 
 def save_split_dataloaders(config, dataloaders):
@@ -93,12 +123,18 @@ def save_split_dataloaders(config, dataloaders):
         dataloaders (tuple of AbstractDataLoader): The split dataloaders.
     """
     ensure_dir(config["checkpoint_dir"])
-    file_path = os.path.join(
-        config["checkpoint_dir"],
-        f"{config['dataset']}-for-{config['model']}-dataloader.pth",
-    )
+    if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
+        dataloaders_folder = f"{config['model']} - {config['dataset']} - dataloaders"
+        ensure_dir(os.path.join(config["checkpoint_dir"], dataloaders_folder))
+        file_path = _get_dataloader_name(config, dataloaders_folder)
+    else:
+        file_path = os.path.join(
+            config["checkpoint_dir"],
+            f"{config['dataset']}-for-{config['model']}-dataloader.pth",
+        )
+
     logger = getLogger()
-    logger.info(set_color("Saving split dataloaders into", "pink") + f": [{file_path}]")
+    logger.info(set_color("Saving split dataloaders into", "magenta") + f": [{file_path}]")
     serialization_dataloaders = []
     for dataloader in dataloaders:
         if isinstance(dataloader, KnowledgeBasedDataLoader):
@@ -129,11 +165,19 @@ def load_split_dataloaders(config):
     Returns:
         dataloaders (tuple of AbstractDataLoader or None): The split dataloaders.
     """
-    default_file = os.path.join(
-        config["checkpoint_dir"],
-        f"{config['dataset']}-for-{config['model']}-dataloader.pth",
-    )
-    dataloaders_save_path = config["dataloaders_save_path"] or default_file
+
+    if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
+        dataloaders_folder = f"{config['model']} - {config['dataset']} - dataloaders"
+        dataloaders_save_path = _get_dataloader_name(config, dataloaders_folder)
+
+    else:
+        default_file = os.path.join(
+            config["checkpoint_dir"],
+            f"{config['dataset']}-for-{config['model']}-dataloader.pth",
+        )
+        # used if you want to load a specific dataloader
+        dataloaders_save_path = config["dataloaders_save_path"] or default_file
+
     if not os.path.exists(dataloaders_save_path):
         return None
     with open(dataloaders_save_path, "rb") as f:
@@ -165,7 +209,6 @@ def load_split_dataloaders(config):
             train_data, valid_inter_data, valid_kg_data, test_inter_data, test_kg_data = dataloaders
         else:
             train_data, valid_data, test_data = dataloaders
-
     for arg in dataset_arguments + ["seed", "repeatable", "eval_args"]:
         if isinstance(train_data, KnowledgeBasedDataLoader):
             general_config = train_data.general_dataloader.config
@@ -187,7 +230,7 @@ def load_split_dataloaders(config):
         valid_data.update_config(config)
         test_data.update_config(config)
     logger = getLogger()
-    logger.info(set_color("Load split dataloaders from", "pink") + f": [{dataloaders_save_path}]")
+    logger.info(set_color("Load split dataloaders from", "magenta") + f": [{dataloaders_save_path}]")
     return train_data, valid_data, test_data
 
 
@@ -213,15 +256,11 @@ def data_preparation(config, dataset):
         dataset._change_feat_format()
     else:
         model_type = config["MODEL_TYPE"]
-        model = config["model"]
+        model_input_type = config["MODEL_INPUT_TYPE"]
+        # model = config["model"]
         built_datasets = dataset.build()
 
-        special_knowledge_aware = ["PGPR", "CAFE"]
-
-        if (
-            model_type in [ModelType.KNOWLEDGE, ModelType.PATH_LANGUAGE_MODELING]
-            and model not in special_knowledge_aware
-        ):
+        if model_type in [ModelType.KNOWLEDGE] and model_input_type not in [InputType.USERWISE]:
             if isinstance(built_datasets, dict):
                 # then the kg has been split
                 train_kg_dataset, valid_kg_dataset, test_kg_dataset = built_datasets[KnowledgeEvaluationType.LP]
@@ -292,7 +331,6 @@ def data_preparation(config, dataset):
             train_data = get_dataloader(config, "train")(
                 config, train_dataset, train_sampler, shuffle=config["shuffle"]
             )
-
             valid_data = get_dataloader(config, "valid")(config, valid_dataset, valid_sampler, shuffle=False)
             test_data = get_dataloader(config, "test")(config, test_dataset, test_sampler, shuffle=False)
 
@@ -301,7 +339,7 @@ def data_preparation(config, dataset):
 
     logger = getLogger()
     logger.info(
-        set_color("[Training]: ", "pink")
+        set_color("[Training]: ", "magenta")
         + set_color("train_batch_size", "cyan")
         + " = "
         + set_color(f"[{config['train_batch_size']}]", "yellow")
@@ -318,7 +356,7 @@ def data_preparation(config, dataset):
         eval_lp_args_info = ""
 
     logger.info(
-        set_color("[Evaluation]: ", "pink")
+        set_color("[Evaluation]: ", "magenta")
         + set_color("eval_batch_size", "cyan")
         + " = "
         + set_color(f"[{config['eval_batch_size']}]", "yellow")
@@ -341,6 +379,7 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
     Returns:
         type: The dataloader class that meets the requirements in :attr:`config` and :attr:`phase`.
     """
+
     if phase not in ["train", "valid", "test", "evaluation"]:
         raise ValueError("`phase` can only be 'train', 'valid', 'test' or 'evaluation'.")
     if phase == "evaluation":
@@ -350,31 +389,18 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
             DeprecationWarning,
         )
 
-    register_table = {
-        "MultiDAE": _get_user_dataloader,
-        "MultiVAE": _get_user_dataloader,
-        "MacridVAE": _get_user_dataloader,
-        "CDAE": _get_user_dataloader,
-        "ENMF": _get_user_dataloader,
-        "RaCT": _get_user_dataloader,
-        "RecVAE": _get_user_dataloader,
-        "DiffRec": _get_user_dataloader,
-        "LDiffRec": _get_user_dataloader,
-        "PGPR": _get_user_dataloader,
-        "CAFE": _get_user_dataloader,
-        "UCPR": _get_user_dataloader,
-    }
-
-    if config["model"] in register_table:
-        return register_table[config["model"]](config, phase)
+    if config["MODEL_INPUT_TYPE"] == InputType.USERWISE:
+        if config["model"] in ["TPRec"]:
+            if config["train_stage"] in ["policy"]:
+                return _get_user_dataloader(config, phase)
+        else:
+            return _get_user_dataloader(config, phase)
 
     model_type = config["MODEL_TYPE"]
     if phase == "train":
         # Return Dataloader based on the modeltype
         if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
-        elif model_type == ModelType.PATH_LANGUAGE_MODELING:
-            return KnowledgePathDataLoader
         else:
             return TrainDataLoader
     else:
@@ -497,3 +523,44 @@ def create_samplers(config, dataset, built_datasets):
     )
     test_sampler = test_sampler.set_phase("test") if test_sampler else None
     return train_sampler, valid_sampler, test_sampler
+
+
+def user_parallel_sampling(sampling_func_factory):
+    """Decorator to parallelize path sampling functions."""
+
+    import joblib
+
+    # https://github.com/DLR-RM/stable-baselines3/issues/1645#issuecomment-2194345304
+    tqdm_objects = [obj for obj in gc.get_objects() if "tqdm" in type(obj).__name__]
+    for tqdm_object in tqdm_objects:
+        if "tqdm_rich" in type(tqdm_object).__name__:
+            tqdm_object.close()
+
+    def wrapper(*args, **kwargs):
+        user_num = kwargs.get("user_num", None)
+        tqdm_kws = dict(
+            total=user_num - 1,
+            ncols=100,
+            desc="[red]KG Path Sampling",
+        )
+
+        sampling_func = sampling_func_factory(*args, **kwargs)
+
+        parallel_max_workers = kwargs.pop("parallel_max_workers", "")
+        if not parallel_max_workers:
+            iter_users = map(sampling_func, range(1, user_num))
+        else:
+            iter_users = joblib.Parallel(n_jobs=parallel_max_workers, prefer="processes", return_as="generator")(
+                joblib.delayed(sampling_func)(u) for u in range(1, user_num)
+            )
+
+        try:
+            iter_users = progress_bar(iter_users, **tqdm_kws)
+            return [p for p in iter_users]
+        except Exception:
+            if hasattr(iter_users, "close"):
+                iter_users.close()
+
+            raise
+
+    return wrapper

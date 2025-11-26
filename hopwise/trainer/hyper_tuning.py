@@ -8,6 +8,10 @@
 # @Author : Gaowei Zhang
 # @Email  : zgw15630559577@163.com
 
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
 """hopwise.trainer.hyper_tuning
 ############################
 """
@@ -161,6 +165,7 @@ class HyperTuning:
         early_stop=10,
         output_path=None,
         timeout=None,
+        show_progress=False,
         study_name=None,
         resume=False,
     ):
@@ -172,6 +177,7 @@ class HyperTuning:
         self.params_list = []
         self.score_list = []
 
+        self.show_progress = show_progress
         self.objective_function = objective_function
         self.max_evals = max_evals
         self.timeout = timeout
@@ -491,6 +497,12 @@ class HyperTuning:
         output_file = os.path.join(output_path, self.study_name + ".txt")
 
         with open(output_file, "w") as fp:
+            fp.write("***Best trial***\n")
+            fp.write("Best valid score: %.4f\n" % self.best_score)
+            fp.write("Best parameters: " + dict2str(self.best_params) + "\n")
+            fp.write("Best valid result:\n" + dict2str(self.best_valid_result) + "\n")
+            fp.write("Best test result:\n" + dict2str(self.best_test_result) + "\n\n")
+
             for params in self.params2result:
                 fp.write(params + "\n")
                 fp.write("Valid result:\n" + dict2str(self.params2result[params]["best_valid_result"]) + "\n")
@@ -528,6 +540,8 @@ class HyperTuning:
         if not self.best_score or (bigger and score > self.best_score) or (not bigger and score < self.best_score):
             self.best_score = score
             self.best_params = params
+            self.best_valid_result = result_dict["best_valid_result"]
+            self.best_test_result = result_dict["test_result"]
             self._print_result(result_dict)
 
         if bigger:

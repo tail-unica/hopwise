@@ -12,6 +12,7 @@
 """
 
 import numpy as np
+import pandas as pd
 import torch
 
 from hopwise.utils import EvaluatorType
@@ -26,9 +27,23 @@ class AbstractMetric:
     """
 
     smaller = False
+    metric_need = []
 
     def __init__(self, config):
         self.decimal_place = config["metric_decimal_place"]
+
+    def __init_subclass__(cls, **kwargs):
+        """Automatically extend parent's metric_need if subclass defines metric_need."""
+        super().__init_subclass__(**kwargs)
+
+        if hasattr(cls, "metric_need") and cls.metric_need is not cls.__bases__[0].metric_need:
+            # Get parents' metric_need
+            parent_metric_need = []
+            for base in cls.__bases__:
+                if hasattr(base, "metric_need"):
+                    parent_metric_need.extend(base.metric_need)
+
+            cls.metric_need = list(set(parent_metric_need + cls.metric_need))
 
     def calculate_metric(self, dataobject):
         """Get the dictionary of a metric.
@@ -212,3 +227,32 @@ class ConsumerTopKMetric(AbstractMetric):
         result = self.get_dp(ranking_result, group_mask1, group_mask2)
         metric_dict = self.ranking_metric.topk_result(self.__class__.__name__.lower(), result)
         return metric_dict
+
+
+class PathQualityMetric(TopkMetric):
+    # TODO: add support for gender and age based metrics
+    """:class:`PathQualityMetric` is a base object of path-based metrics. If you want to
+    implement a path based metric, you can inherit this class.
+
+    Args:
+        config (Config): The config of evaluator.
+    """
+
+    metric_type = EvaluatorType.RANKING
+    metric_need = ["rec.paths"]
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def used_info(self, dataobject):
+        paths = dataobject.get("rec.paths")
+        return paths
+
+    def normalized_ema(self, values):
+        if max(values) == min(values):
+            values = list(range(len(values)))
+
+        values = pd.Series(values)
+        ema_vals = values.ewm(span=len(values)).mean()
+        normalized_ema_vals = (ema_vals - ema_vals.min()) / (ema_vals.max() - ema_vals.min())
+        return normalized_ema_vals.to_numpy()

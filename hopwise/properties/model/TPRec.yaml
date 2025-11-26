@@ -1,0 +1,38 @@
+# PGPR model parameters
+state_history: 1
+max_acts: 250
+gamma: 0.99
+action_dropout: 0.0
+hidden_sizes: [512,256]
+max_path_len: 3
+weight_factor: 1e-3
+beam_search_hop: [25,5,1]
+
+fix_scores_sorting_bug: False
+epochs: 50
+eval_step: 50
+
+train_stage: pretrain # one in {'pretrain', 'policy'}
+margin: 1.0 # transe
+pretrain_epochs: 5 # https://github.com/Go0day/TPRec/blob/main/train_transe_model.py
+cluster_num: 14
+save_step: 1
+cluster_feature: w-stat
+
+# The kge embeddings necessary to score paths
+additional_feat_suffix: [useremb, entityemb, relationemb]
+
+# To load the pretrained embeddings (Typically from TransE) necessary to score the paths
+load_col:
+    useremb: [user_embedding_id, user_embedding]
+    entityemb: [entity_embedding_id, entity_embedding]
+    relationemb: [relation_embedding_id, relation_embedding]
+
+alias_of_user_id: [user_embedding_id]
+alias_of_entity_id: [entity_embedding_id]
+alias_of_relation_id: [relation_embedding_id]
+
+preload_weight:
+  user_embedding_id: user_embedding
+  entity_embedding_id: entity_embedding
+  relation_embedding_id: relation_embedding

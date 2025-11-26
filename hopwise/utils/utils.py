@@ -7,14 +7,21 @@
 # @Author : Jiawei Guan, Lei Wang, Gaowei Zhang
 # @Email  : guanjw@ruc.edu.cn, zxcptss@gmail.com, zgw2022101006@ruc.edu.cn
 
+# UPDATE
+# @Time   : 2025
+# @Author : Alessandro Soccol
+# @Email  : alessandro.soccol@unica.it
+
 """hopwise.utils.utils
 ################################
 """
 
+import copy
 import datetime
 import importlib
 import os
 import random
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -46,6 +53,16 @@ def ensure_dir(dir_path):
 
     """
     os.makedirs(dir_path, exist_ok=True)
+
+
+def deep_dict_update(updated_dict, updating_dict):
+    overwrite_keys = ["split"]
+    if isinstance(updated_dict, dict) and isinstance(updating_dict, dict):
+        for key, value in updating_dict.items():
+            if isinstance(value, dict) and isinstance(updated_dict.get(key), dict) and key not in overwrite_keys:
+                deep_dict_update(updated_dict[key], value)
+            else:
+                updated_dict[key] = value
 
 
 def get_model(model_name):
@@ -91,7 +108,11 @@ def get_trainer(model_type, model_name):
     Returns:
         Trainer: trainer class
     """
-    register_table = {}
+    register_table = {
+        "PEARLMGPT2": "PEARLMfromscratchTrainer",
+        "PEARLMLlama2": "PEARLMfromscratchTrainer",
+        "PEARLMLlama3": "PEARLMfromscratchTrainer",
+    }
 
     try:
         if model_name.startswith("User"):
@@ -264,8 +285,6 @@ def get_flops(model, dataset, device, logger, transform, verbose=False):
     if model.__class__.__name__ == "Pop":
         return 1
 
-    import copy
-
     model = copy.deepcopy(model)
 
     def count_normalization(m, x, y):
@@ -437,3 +456,40 @@ def get_environment(config):
     )
 
     return table
+
+
+def get_sequence_postprocessor(postprocessor_name):
+    try:
+        postprocessor_name = postprocessor_name + "SequenceScorePostProcessor"
+        return getattr(importlib.import_module("hopwise.model.sequence_postprocessor"), postprocessor_name)
+    except AttributeError:
+        return getattr(
+            importlib.import_module("hopwise.model.sequence_postprocessor"), "BeamSearchSequenceScorePostProcessor"
+        )
+
+
+def get_logits_processor(model_name):
+    try:
+        return getattr(
+            importlib.import_module("hopwise.model.logits_processor"), model_name + "LogitsProcessorWordLevel"
+        )
+    except AttributeError:
+        return getattr(
+            importlib.import_module("hopwise.model.logits_processor"), "ConstrainedLogitsProcessorWordLevel"
+        )
+
+
+@dataclass
+class GenerationOutputs(dict):
+    r"""Dataclass to hold the outputs of the generation process.
+
+    Attributes:
+        sequences (torch.Tensor): The generated sequences.
+        scores (torch.Tensor): The scores for each generated token.
+    """
+
+    sequences: torch.Tensor
+    scores: torch.Tensor
+
+    def __post_init__(self):
+        self.update({"sequences": self.sequences, "scores": self.scores})

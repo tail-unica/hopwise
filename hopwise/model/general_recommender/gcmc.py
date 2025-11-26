@@ -234,9 +234,9 @@ class GcEncoder(nn.Module):
                     ]
                 )
         else:
-            assert (
-                self.gcn_output_dim % self.num_support == 0
-            ), "output_dim must be multiple of num_support for stackGC"
+            assert self.gcn_output_dim % self.num_support == 0, (
+                "output_dim must be multiple of num_support for stackGC"
+            )
             self.sub_hidden_dim = self.gcn_output_dim // self.num_support
 
             self.weights_u = nn.ParameterList(

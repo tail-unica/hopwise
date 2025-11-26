@@ -5,7 +5,10 @@
 """TuckER
 ##################################################
 Reference:
-    TuckER: Tensor Factorization for Knowledge Graph Completion (Balazevic et al., EMNLP-IJCNLP 2019)
+    Balažević et al. "TuckER: Tensor Factorization for Knowledge Graph Completion." in EMNLP/IJCNLP 2019.
+
+Reference code:
+    https://github.com/ibalazevic/TuckER
 """
 
 import torch

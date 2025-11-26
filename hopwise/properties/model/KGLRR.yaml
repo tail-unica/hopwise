@@ -1,0 +1,17 @@
+# KGLRR specific
+kgcn: "RGAT"
+latent_dim_rec: 64
+lightGCN_n_layers: 3
+dropout: 1
+device: "cuda:0"
+
+r_logic: 1.0e-4
+r_length: 1.0e-5
+l2_loss: 1.0e-4
+loss_sum: False
+
+layers: 1
+maxhis: 10
+sim_scale: 10
+
+max_entities_per_user: 10

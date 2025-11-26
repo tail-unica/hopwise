@@ -1101,6 +1101,523 @@ class TestKGPathDataset(unittest.TestCase):
         assert dataset1._format_path(collaborative_path) == "U3 -> R5 -> I2 -> R5 -> U2 -> R5 -> I3"
         assert dataset2._format_path(full_path) == "U3 ## R5 ## I2 ## R1 ## E8 ## R2 ## E9 ## R3 ## I3"
 
+    def test_kg_generate_path_weighted_random_walk_unrestricted_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "weighted-rw",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": False,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        used_ids = train_dataset.get_user_used_ids()
+        paths = []
+        for _ in range(5):  # try multiple times to get a valid path due to randomness
+            paths.append(train_dataset.generate_user_paths())  # path ids not remapped
+        paths = np.vstack(paths)
+        paths_used_ids = used_ids[paths[:, 0]]
+        assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
+
+    def test_kg_generate_path_weighted_random_walk_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "weighted-rw",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        potential_paths = np.array(
+            [
+                [2, 5, 6, 1, 11, 1, 7],  # ub->[UI-Relation]->eb->ra->ei->ra->ec
+                [2, 5, 7, 1, 11, 1, 6],  # reverse of above
+                [3, 5, 7, 1, 12, 1, 8],  # uc->[UI-Relation]->ec->ra->ej->ra->ed
+                [3, 5, 8, 1, 12, 1, 7],  # reverse of above
+                [2, 5, 6, 2, 13, 3, 7],  # ub->[UI-Relation]->eb->rb->ek->rc->ec
+                [2, 5, 7, 3, 13, 2, 6],  # reverse of above
+                [3, 5, 7, 2, 14, 3, 8],  # uc->[UI-Relation]->ec->rb->el->rc->ed
+                [3, 5, 8, 3, 14, 2, 7],  # reverse of above
+            ]
+        )
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        paths = []
+        for _ in range(5):  # try multiple times to get a valid path due to randomness
+            paths.append(train_dataset.generate_user_paths())  # path ids not remapped
+        paths = np.vstack(paths)
+        potential_paths_found = paths[:, None] == potential_paths
+        assert potential_paths_found.all(axis=-1).any()
+
+    def test_kg_generate_path_weighted_random_walk_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "weighted-rw",
+                "collaborative_path": True,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        user_num = train_dataset.user_num
+        paths = []
+        for _ in range(5):  # try multiple times to get a valid path due to randomness
+            paths.append(train_dataset.generate_user_paths())  # path ids not remapped
+        paths = np.vstack(paths)
+        assert (paths[:, 4] < user_num).any()
+
+    def test_kg_generate_path_weighted_random_walk_no_collaborative_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "weighted-rw",
+                "collaborative_path": False,
+                "temporal_causality": True,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        user = train_dataset.inter_feat[train_dataset.uid_field].numpy()
+        item = train_dataset.inter_feat[train_dataset.iid_field].numpy()
+        timestamp = train_dataset.inter_feat[train_dataset.time_field].numpy()
+        temporal_matrix = np.zeros((train_dataset.user_num, train_dataset.item_num), dtype=timestamp.dtype)
+        temporal_matrix[user, item] = timestamp
+        paths = []
+        for _ in range(5):  # try multiple times to get a valid path due to randomness
+            paths.append(train_dataset.generate_user_paths())  # path ids not remapped
+        paths = np.vstack(paths)
+        users = paths[:, 0]
+        starting_pos_items = paths[:, 2] - train_dataset.user_num
+        subsequent_pos_items = paths[:, -1] - train_dataset.user_num
+        assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
+
+    def test_kg_generate_path_constrained_random_walk_unrestricted_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "constrained-rw",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": False,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        used_ids = train_dataset.get_user_used_ids()
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        paths_used_ids = used_ids[paths[:, 0]]
+        assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
+
+    def test_kg_generate_path_constrained_random_walk_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "constrained-rw",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        potential_paths = np.array(
+            [
+                [2, 5, 6, 1, 11, 1, 7],  # ub->[UI-Relation]->eb->ra->ei->ra->ec
+                [2, 5, 7, 1, 11, 1, 6],  # reverse of above
+                [3, 5, 7, 1, 12, 1, 8],  # uc->[UI-Relation]->ec->ra->ej->ra->ed
+                [3, 5, 8, 1, 12, 1, 7],  # reverse of above
+                [2, 5, 6, 2, 13, 3, 7],  # ub->[UI-Relation]->eb->rb->ek->rc->ec
+                [2, 5, 7, 3, 13, 2, 6],  # reverse of above
+                [3, 5, 7, 2, 14, 3, 8],  # uc->[UI-Relation]->ec->rb->el->rc->ed
+                [3, 5, 8, 3, 14, 2, 7],  # reverse of above
+            ]
+        )
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        potential_paths_found = paths[:, None] == potential_paths
+        assert potential_paths_found.all(axis=-1).any()
+
+    def test_kg_generate_path_constrained_random_walk_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "constrained-rw",
+                "collaborative_path": True,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        user_num = train_dataset.user_num
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        assert (paths[:, 4] < user_num).any()
+
+    def test_kg_generate_path_constrained_random_walk_no_collaborative_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "constrained-rw",
+                "collaborative_path": False,
+                "temporal_causality": True,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        user = train_dataset.inter_feat[train_dataset.uid_field].numpy()
+        item = train_dataset.inter_feat[train_dataset.iid_field].numpy()
+        timestamp = train_dataset.inter_feat[train_dataset.time_field].numpy()
+        temporal_matrix = np.zeros((train_dataset.user_num, train_dataset.item_num), dtype=timestamp.dtype)
+        temporal_matrix[user, item] = timestamp
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        users = paths[:, 0]
+        starting_pos_items = paths[:, 2] - train_dataset.user_num
+        subsequent_pos_items = paths[:, -1] - train_dataset.user_num
+        assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
+
+    def test_kg_generate_path_all_simple_unrestricted_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "simple",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": False,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        used_ids = train_dataset.get_user_used_ids()
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        paths_used_ids = used_ids[paths[:, 0]]
+        assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
+
+    def test_kg_generate_path_all_simple_no_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "simple",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        potential_paths = np.array(
+            [
+                [2, 5, 6, 1, 11, 1, 7],  # ub->[UI-Relation]->eb->ra->ei->ra->ec
+                [2, 5, 7, 1, 11, 1, 6],  # reverse of above
+                [3, 5, 7, 1, 12, 1, 8],  # uc->[UI-Relation]->ec->ra->ej->ra->ed
+                [3, 5, 8, 1, 12, 1, 7],  # reverse of above
+                [2, 5, 6, 2, 13, 3, 7],  # ub->[UI-Relation]->eb->rb->ek->rc->ec
+                [2, 5, 7, 3, 13, 2, 6],  # reverse of above
+                [3, 5, 7, 2, 14, 3, 8],  # uc->[UI-Relation]->ec->rb->el->rc->ed
+                [3, 5, 8, 3, 14, 2, 7],  # reverse of above
+            ]
+        )
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        potential_paths_found = paths[:, None] == potential_paths
+        assert potential_paths_found.all(axis=-1).any()
+
+    def test_kg_generate_path_all_simple_collaborative_no_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "simple",
+                "collaborative_path": True,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        user_num = train_dataset.user_num
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        assert (paths[:, 4] < user_num).any()
+
+    def test_kg_generate_path_all_simple_no_collaborative_temporal(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "simple",
+                "collaborative_path": False,
+                "temporal_causality": True,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        user = train_dataset.inter_feat[train_dataset.uid_field].numpy()
+        item = train_dataset.inter_feat[train_dataset.iid_field].numpy()
+        timestamp = train_dataset.inter_feat[train_dataset.time_field].numpy()
+        temporal_matrix = np.zeros((train_dataset.user_num, train_dataset.item_num), dtype=timestamp.dtype)
+        temporal_matrix[user, item] = timestamp
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        users = paths[:, 0]
+        starting_pos_items = paths[:, 2] - train_dataset.user_num
+        subsequent_pos_items = paths[:, -1] - train_dataset.user_num
+        assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
+
+    def test_kg_generate_path_metapaths_unrestricted_no_collaborative_no_temporal(self):
+        metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "metapath",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": False,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "metapaths": metapaths,
+        }
+        # Differently from igraph, reverse paths must be explicitly defined in the KG
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        used_ids = train_dataset.get_user_used_ids()
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        paths_used_ids = used_ids[paths[:, 0]]
+        assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
+
+    def test_kg_generate_path_metapaths_no_collaborative_no_temporal(self):
+        metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "metapath",
+                "collaborative_path": False,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "metapaths": metapaths,
+        }
+        # Differently from igraph, reverse paths must be explicitly defined in the KG
+        potential_paths = np.array(
+            [
+                [2, 5, 6, 1, 11, 1, 7],  # ub->[UI-Relation]->eb->ra->ei->ra->ec
+                [2, 5, 7, 1, 11, 1, 6],  # reverse of above ub->[UI-Relation]->ec->ra->ei->ra->eb
+                [3, 5, 7, 1, 12, 1, 8],  # uc->[UI-Relation]->ec->ra->ej->ra->ed
+                [2, 5, 6, 2, 13, 3, 7],  # ub->[UI-Relation]->eb->rb->ek->rc->ec
+                [3, 5, 7, 2, 14, 3, 8],  # uc->[UI-Relation]->ec->rb->el->rc->ed
+            ]
+        )
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        potential_paths_found = paths[:, None] == potential_paths
+        assert potential_paths_found.all(axis=-1).any()
+
+    def test_kg_generate_path_metapaths_collaborative_no_temporal(self):
+        metapaths = [
+            [
+                ("item_id", "[UI-Relation]", "user_id"),
+                ("user_id", "[UI-Relation]", "item_id"),
+                ("item_id", "ra", "entity_id"),
+                ("entity_id", "ra", "item_id"),
+            ],
+            [("item_id", "[UI-Relation]", "user_id"), ("user_id", "[UI-Relation]", "item_id")],
+        ]
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "metapath",
+                "collaborative_path": True,
+                "temporal_causality": False,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "metapaths": metapaths,
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        user_num = train_dataset.user_num
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        assert (paths[:, 4] < user_num).any()
+
+    def test_kg_generate_path_metapaths_no_collaborative_temporal(self):
+        metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "MAX_PATHS_PER_USER": 2,
+            "path_sample_args": {
+                "parallel_max_workers": 0,
+                "strategy": "metapath",
+                "collaborative_path": False,
+                "temporal_causality": True,
+                "restrict_by_phase": True,
+            },
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "metapaths": metapaths,
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        user = train_dataset.inter_feat[train_dataset.uid_field].numpy()
+        item = train_dataset.inter_feat[train_dataset.iid_field].numpy()
+        timestamp = train_dataset.inter_feat[train_dataset.time_field].numpy()
+        temporal_matrix = np.zeros((train_dataset.user_num, train_dataset.item_num), dtype=timestamp.dtype)
+        temporal_matrix[user, item] = timestamp
+        paths = train_dataset.generate_user_paths()  # path ids not remapped
+        users = paths[:, 0]
+        starting_pos_items = paths[:, 2] - train_dataset.user_num
+        subsequent_pos_items = paths[:, -1] - train_dataset.user_num
+        assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
+
+    def test_kg_add_paths_relations(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        paths = np.array(
+            [
+                [2, 6, 11, 7],  # ub->eb->ei->ec
+                [2, 7, 11, 6],  # reverse of above
+                [2, 6, 13, 7],  # ub->eb->ek->ec
+                # [3, 7, 14, -1],  # uc->ec->-el->-1  # not supported yet
+            ]
+        )
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        graph = train_dataset._create_ckg_igraph(show_relation=True, directed=False)
+        paths_with_relations = train_dataset._add_paths_relations(graph, paths)
+        assert paths_with_relations[0].tolist() == [2, 5, 6, 1, 11, 1, 7]
+        assert paths_with_relations[1].tolist() == [2, 5, 7, 1, 11, 1, 6]
+        assert paths_with_relations[2].tolist() == [2, 5, 6, 2, 13, 3, 7]
+        # assert paths_with_relations[3] == [3, 5, 7, 2, 14, -1, -1]  # not supported yet
+
+    def test_kg_tokenize_path_dataset(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+            "path_sample_args": {"parallel_max_workers": 0, "path_token_separator": " "},
+            "tokenizer": {
+                "model": "WordLevel",
+                "context_length": 24,
+                "special_tokens": {
+                    "mask_token": "[MASK]",
+                    "unk_token": "[UNK]",
+                    "pad_token": "[PAD]",
+                    "eos_token": "[EOS]",
+                    "bos_token": "[BOS]",
+                    "sep_token": "[SEP]",
+                    "cls_token": "[CLS]",
+                },
+                "template": "{bos_token}:0 $A:0 {eos_token}",
+            },
+        }
+        dataset = new_dataset(config_dict=config_dict)
+        path_string = "U2 R5 I2 R1 E7 R1 I3\nU2 R5 I3 R1 E7 R1 I2\nU2 R5 I2 R2 E9 R3 I3"
+        dataset._path_dataset = path_string
+        train_dataset, valid_dataset, test_dataset = dataset.build()
+        tokenized_path_string = train_dataset.tokenized_dataset["input_ids"].tolist()
+        split_path_string = path_string.split("\n")
+        assert tokenized_path_string[0] == train_dataset.tokenizer(split_path_string[0])["input_ids"]
+        assert tokenized_path_string[1] == train_dataset.tokenizer(split_path_string[1])["input_ids"]
+        assert tokenized_path_string[2] == train_dataset.tokenizer(split_path_string[2])["input_ids"]
+
 
 if __name__ == "__main__":
     pytest.main()

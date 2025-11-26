@@ -7,6 +7,10 @@
 # @Author  :   Xingyu Pan, Lanling Xu
 # @email   :   panxy@ruc.edu.cn, xulanling_sherry@163.com
 
+# @Time   : 2025
+# @Author : Giacomo Medda, Alessandro Soccol
+# @Email  : giacomo.medda@unica.it, alessandro.soccol@unica.it
+
 import os
 import tempfile
 import unittest
@@ -17,8 +21,8 @@ current_path = os.path.dirname(os.path.realpath(__file__))
 config_file_list = [os.path.join(current_path, "test_model.yaml")]
 
 
-def quick_test(config_dict):
-    objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=False)
+def quick_test(config_dict, saved=False):
+    objective_function(config_dict=config_dict, config_file_list=config_file_list, saved=saved)
 
 
 class TestGeneralRecommender(unittest.TestCase):
@@ -940,12 +944,22 @@ class TestKnowledgeRecommender(unittest.TestCase):
     def test_pgpr(self):
         config_dict = {
             "model": "PGPR",
+            "train_neg_sample_args": {"sample_size": "none"},
+            "user_inter_num_interval": [1, 10],
         }
         quick_test(config_dict)
 
     def test_cafe(self):
         config_dict = {
             "model": "CAFE",
+            # "train_neg_sample_args": {"sample_size": "none"},
+            "user_inter_num_interval": [1, 10],
+        }
+        quick_test(config_dict)
+
+    def test_kglrr(self):
+        config_dict = {
+            "model": "KGLRR",
         }
         quick_test(config_dict)
 
@@ -1009,7 +1023,7 @@ class TestKnowledgeGraphEmbeddingRecommender(unittest.TestCase):
 
 
 class TestPathLanguageModelingRecommender(unittest.TestCase):
-    lm_base_config = {
+    hf_lm_base_config = {
         "embedding_size": 4,
         "num_heads": 2,
         "num_layers": 2,
@@ -1020,32 +1034,50 @@ class TestPathLanguageModelingRecommender(unittest.TestCase):
         },
     }
 
+    scratch_lm_base_config = {
+        **hf_lm_base_config,
+        "user_inter_num_interval": [1, 10],
+        "path_generation_args": {"paths_per_user": 2},
+    }
+
     def test_pearlm(self):
-        config_dict = {"model": "PEARLM", **self.lm_base_config}
+        config_dict = {"model": "PEARLM", **self.hf_lm_base_config}
         quick_test(config_dict)
 
-    # def test_plm(self):
-    #     config_dict = {"model": "PLM", **self.lm_base_config}
-    #     quick_test(config_dict)
+    def test_pearlmgpt2(self):
+        config_dict = {"model": "PEARLMGPT2", **self.scratch_lm_base_config}
+        quick_test(config_dict)
+
+    def test_pearlmllama2(self):
+        config_dict = {"model": "PEARLMLlama2", **self.scratch_lm_base_config}
+        quick_test(config_dict)
+
+    def test_pearlmllama3(self):
+        config_dict = {"model": "PEARLMLlama3", **self.scratch_lm_base_config}
+        quick_test(config_dict)
+
+    def test_plm(self):
+        config_dict = {"model": "PLM", **self.hf_lm_base_config}
+        quick_test(config_dict)
 
     def test_kgglm(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
             config_dict = {
                 "model": "KGGLM",
-                "train_stage": "lp_pretrain",
+                "train_stage": "pretrain",
                 "save_step": 1,
                 "checkpoint_dir": tmpdirname,
                 "pretrain_epochs": 1,
-                **self.lm_base_config,
-                "path_sample_args": {"pretrain_paths": 100},
+                **self.hf_lm_base_config,
+                "path_sample_args": {"pretrain_paths": 2},
             }
-            quick_test(config_dict)
+            quick_test(config_dict, saved=True)
 
             config_dict = {
                 "model": "KGGLM",
                 "train_stage": "finetune",
-                "pre_model_path": os.path.join(tmpdirname, "huggingface-KGGLM-test-pretrained-1.pth"),
-                **self.lm_base_config,
+                "pre_model_path": os.path.join(tmpdirname, "huggingface-distilgpt2-KGGLM-test-pretrained.pth"),
+                **self.hf_lm_base_config,
             }
             quick_test(config_dict)
 

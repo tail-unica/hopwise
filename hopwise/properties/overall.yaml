@@ -14,7 +14,9 @@ save_dataloaders: False         # (bool) Whether or not save split dataloaders.
 dataloaders_save_path: ~        # (str) The path of saved dataloaders.
 log_wandb: False                # (bool) Whether or not to use Weights & Biases(W&B).
 wandb_project: 'hopwise'        # (str) The project to conduct experiments in W&B.
+progress_bar_rich: True         # (bool) Whether or not to use rich progress bar.
 shuffle: True                   # (bool) Whether or not to shuffle the training data before each epoch.
+weight_precision: float32
 
 # Training Settings
 epochs: 300                     # (int) The number of training epochs.

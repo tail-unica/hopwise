@@ -4,9 +4,11 @@
 
 """RotatE
 ##################################################
-Reference: Zhiqing Sun and Zhi-Hong Deng and Jian-Yun Nie and Jian Tang.
-RotatE: Knowledge Graph Embedding by Relational Rotation in Complex Space.
-International Conference on Learning Representations, 2019.
+Reference:
+    Sun et al. "RotatE: Knowledge Graph Embedding by Relational Rotation in Complex Space." in ICLR 2019.
+
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import math

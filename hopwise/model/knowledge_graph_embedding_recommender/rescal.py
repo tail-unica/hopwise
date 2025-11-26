@@ -4,10 +4,11 @@
 
 """RESCAL
 ##################################################
-Reference: Maximilian Nickel, Volker Tresp, and Hans-Peter Kriegel. 2011.
-A three-way model for collective learning on multi-relational data.
-In Proceedings of the 28th International Conference on International Conference on Machine Learning (ICML'11)
+Reference:
+    Nickel et al. "A three-way model for collective learning on multi-relational data." in ICML 2011.
 
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import torch

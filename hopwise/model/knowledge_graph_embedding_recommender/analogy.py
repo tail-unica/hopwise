@@ -5,7 +5,10 @@
 """Analogy
 ##################################################
 Reference:
-    Hanxiao Liu, Yuexin Wu, and Yiming Yang. Analogical Inference for Multi-Relational Embeddings. May 2017.
+    Liu et al. "Analogical Inference for Multi-Relational Embeddings." in ICML 2017.
+
+Reference code:
+    https://github.com/torchkge-team/torchkge
 """
 
 import torch

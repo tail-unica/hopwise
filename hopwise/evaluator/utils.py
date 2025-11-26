@@ -16,9 +16,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import torch
-from openTSNE import TSNE
 
 
 def pad_sequence(sequences, len_list, pad_to=None, padding_value=0):
@@ -118,6 +116,8 @@ def _binary_clf_curve(trues, preds):
 
 
 def plot_tsne_embeddings(model, **kwargs):
+    import plotly.express as px
+
     embeddings_list = list()
     identifiers_list = list()
 
@@ -157,6 +157,8 @@ def plot_tsne_embeddings(model, **kwargs):
 
 
 def train_tsne(model, config, load_best_model):
+    from openTSNE import TSNE
+
     tsne = TSNE(
         perplexity=config["perplexity"],
         n_jobs=config["n_jobs"],

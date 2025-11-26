@@ -23,7 +23,7 @@ from torch import nn
 from hopwise.model.abstract_recommender import AutoEncoderMixin, GeneralRecommender
 from hopwise.model.init import xavier_normal_initialization
 from hopwise.model.layers import MLPLayers
-from hopwise.utils.enum_type import InputType
+from hopwise.utils import InputType
 
 
 class ModelMeanType(enum.Enum):
@@ -79,7 +79,7 @@ class DiffRec(GeneralRecommender, AutoEncoderMixin):
     We implement the the DiffRec model with only user dataloader.
     """
 
-    input_type = InputType.LISTWISE
+    input_type = InputType.USERWISE
 
     def __init__(self, config, dataset):
         super().__init__(config, dataset)

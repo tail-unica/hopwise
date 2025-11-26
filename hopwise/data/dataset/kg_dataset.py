@@ -7,6 +7,11 @@
 # @Author : Yupeng Hou, Xingyu Pan, Yushuo Chen, Lanling Xu
 # @Email  : houyupeng@ruc.edu.cn, panxy@ruc.edu.cn, chenyushuo@ruc.edu.cn, xulanling_sherry@163.com
 
+# UPDATE:
+# @Time   : 2025
+# @Author : Giacomo Medda, Alessandro Soccol
+# @Email  : giacomo.medda@unica.it, alessandro.soccol@unica.it
+
 """hopwise.data.kg_dataset
    hopwise.data.user_item_kg_dataset
 ##########################
@@ -24,8 +29,7 @@ from scipy.sparse import coo_matrix
 
 from hopwise.data.dataset import Dataset
 from hopwise.data.interaction import Interaction
-from hopwise.utils import FeatureSource, FeatureType, set_color
-from hopwise.utils.enum_type import KnowledgeEvaluationType
+from hopwise.utils import FeatureSource, FeatureType, KnowledgeEvaluationType, set_color
 from hopwise.utils.url import decide_download, download_url, extract_zip
 
 
@@ -206,39 +210,30 @@ class KnowledgeBasedDataset(Dataset):
         group_by = self.config["eval_args"]["group_by"]
 
         datasets = dict()
-
         if knowledge_split_mode == "RS":
             # Manage knowledge graph split
             if not isinstance(knowledge_split_args["RS"], list):
                 raise ValueError(
                     f'The value of "RS" in knowledge_split_args [{knowledge_split_args}] should be a list.'
                 )
-            if knowledge_group_by is None:
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
-                    group_by=None,
-                )
-            elif knowledge_group_by == "head":
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": "kg"},
-                    group_by=self.head_entity_field,
-                )
-            elif knowledge_group_by == "tail":
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
-                    group_by=self.tail_entity_field,
-                )
-            elif knowledge_group_by == "relation":
-                datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
-                    knowledge_split_args["RS"],
-                    data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
-                    group_by=self.relation_field,
-                )
-            else:
-                raise NotImplementedError(f"The knowledge grouping method [{group_by}] has not been implemented.")
+
+            if knowledge_group_by is not None:
+                if knowledge_group_by.lower() == "head":
+                    knowledge_group_by = self.head_entity_field
+                elif knowledge_group_by.lower() == "tail":
+                    knowledge_group_by = self.tail_entity_field
+                elif knowledge_group_by.lower() == "relation":
+                    knowledge_group_by = self.relation_field
+                else:
+                    raise NotImplementedError(
+                        f"The knowledge grouping method [{knowledge_group_by}] has not been implemented."
+                    )
+
+            datasets[KnowledgeEvaluationType.LP] = self.split_by_ratio(
+                knowledge_split_args["RS"],
+                data={"data": self.kg_feat, "name": KnowledgeEvaluationType.LP},
+                group_by=knowledge_group_by,
+            )
 
         if split_mode == "RS":
             # Manage interaction split
@@ -264,7 +259,6 @@ class KnowledgeBasedDataset(Dataset):
             )
         else:
             raise NotImplementedError(f"The splitting_method [{split_mode}] has not been implemented.")
-
         return datasets[KnowledgeEvaluationType.REC] if KnowledgeEvaluationType.LP not in datasets else datasets
 
     def copy(self, new_inter_feat, data_type=KnowledgeEvaluationType.REC):
@@ -401,13 +395,76 @@ class KnowledgeBasedDataset(Dataset):
         self.tail_feat = None
         self.item2entity, self.entity2item = self._load_link(self.dataset_name, self.dataset_path)
 
+    @property
+    def kg_num(self):
+        """Get the number of interaction records.
+
+        Returns:
+            int: Number of interaction records.
+        """
+        return len(self.kg_feat)
+
+    @property
+    def sparsity_kg(self):
+        """Get the sparsity of this dataset.
+
+        Returns:
+            float: Sparsity of this dataset.
+        """
+        return 1 - self.kg_num / (self.entity_num**2)
+
+    @property
+    def sparsity_kg_rel(self):
+        """Get the sparsity of this dataset.
+
+        Returns:
+            float: Sparsity of this dataset.
+        """
+        return 1 - self.kg_num / (self.entity_num**2 * self.relation_num)
+
+    @property
+    def avg_degree_kg_item(self):
+        """Get the average degree of items in the knowledge graph.
+
+        Returns:
+            float: Average number of KG triples each item is involved in.
+        """  # assumes a DataFrame or dict with head, relation, tail
+        if isinstance(self.kg_feat, pd.DataFrame):
+            head_counts = self.kg_feat[self.head_entity_field].value_counts()
+            tail_counts = self.kg_feat[self.tail_entity_field].value_counts()
+            total_counts = head_counts.add(tail_counts, fill_value=0)
+            item_degrees = total_counts[total_counts.index.astype(str).isin(self.item2entity.keys())]
+            return item_degrees.mean() if not item_degrees.empty else 0.0
+        else:
+            # fallback if not using pandas
+            head = self.kg_feat[self.head_entity_field].numpy()
+            tail = self.kg_feat[self.tail_entity_field].numpy()
+            counter = Counter(head) + Counter(tail)
+            item_degrees = [counter[pid] for pid in self.item2entity.keys()]
+            return np.mean(item_degrees) if item_degrees else 0.0
+
+    @property
+    def avg_degree_kg(self):
+        """Get the average degree of all entities in the knowledge graph.
+
+        Returns:
+            float: Average number of triples each entity is involved in.
+        """
+        return 2 * self.kg_num / self.entity_num
+
     def __str__(self):
         info = [
             super().__str__(),
-            f"The number of entities: {self.entity_num}",
-            f"The number of relations: {self.relation_num}",
-            f"The number of triples: {len(self.kg_feat)}",
-            f"The number of items that have been linked to KG: {len(self.item2entity)}",
+            set_color("The number of entities","green") + f": {self.entity_num}",
+            set_color("The number of relations","green")+ f": {self.relation_num}",
+            set_color("The number of triples","green")+ f": {self.kg_num}",
+            set_color("The number of items that have been linked to KG", "green") + f": {len(self.item2entity)}",
+            set_color("The number of items that have not been linked to KG",
+                      "green") + f": {self.item_num - len(self.item2entity)}",
+            set_color("The sparsity of the KG","green") + f": {self.sparsity_kg_rel}",
+            set_color("The sparsity of the KG (relation-aware)","green") + f": {self.sparsity_kg}",
+            set_color("The average degree of entities in the KG:","green") + f": {self.avg_degree_kg}",
+            set_color("The average degree of items in the KG:","green") + f": {self.avg_degree_kg_item}",
         ]  # yapf: disable
         return "\n".join(info)
 
@@ -487,7 +544,7 @@ class KnowledgeBasedDataset(Dataset):
             if ftype == FeatureType.TOKEN:
                 feat[field] = new_idx
             else:
-                split_point = np.cumsum(feat[field].agg(len))[:-1]
+                split_point = np.cumsum(feat[field].transform(len))[:-1]
                 feat[field] = np.split(new_idx, split_point)
 
     def _merge_item_and_entity(self):
@@ -611,7 +668,30 @@ class KnowledgeBasedDataset(Dataset):
         """
         return self.kg_feat[self.relation_field].numpy()
 
-    def _create_norm_adjacency_matrix(self, size=None, symmetric=True):
+    def norm_ckg_adjacency_matrix(self, form="torch_sparse"):
+        """Get the collaborative normalized adjacency matrix of users and items.
+
+        Construct the square matrix from the training data and normalize it
+        using the laplace matrix.
+
+        .. math::
+            A_{hat} = D^{-0.5} \times A \times D^{-0.5}
+
+        Args:
+            form (str, optional): Format of the normalized adjacency matrix. Defaults to ``torch_sparse``.
+
+        Returns:
+            torch.sparse.FloatTensor: Normalized adjacency matrix.
+
+        Raises:
+            NotImplementedError: If the format of the normalized adjacency matrix is not implemented.
+        """
+        if form == "torch_sparse":
+            return self._create_norm_ckg_adjacency_matrix()
+        else:
+            raise NotImplementedError(f"Normalized adjacency matrix format [{form}] has not been implemented.")
+
+    def _create_norm_ckg_adjacency_matrix(self, size=None, symmetric=True):
         """Get the normalized interaction matrix of users and entities (items) and
         the normalized adjacency matrix of the collaborative knowledge graph.
 
@@ -628,7 +708,7 @@ class KnowledgeBasedDataset(Dataset):
         if size is None:
             size = self.user_num + self.entity_num
 
-        norm_graph = super()._create_norm_adjacency_matrix(size=size, symmetric=symmetric)
+        norm_graph = self._create_norm_adjacency_matrix(size=size, symmetric=symmetric)
         if not norm_graph.is_coalesced():
             norm_graph = norm_graph.coalesce()
 
@@ -703,7 +783,6 @@ class KnowledgeBasedDataset(Dataset):
 
             uids = self.inter_feat[self.uid_field].numpy()
             iids = self.inter_feat[self.iid_field].numpy() + user_num
-
             src = np.concatenate([uids, iids, hids])
             tgt = np.concatenate([iids, uids, tids])
         elif form == "torch":
@@ -956,26 +1035,25 @@ class KnowledgeBasedDataset(Dataset):
         else:
             raise NotImplementedError("ckg hetero graph format [{}] has not been implemented.")
 
-    def ckg_dict_graph(self):
+    def ckg_dict_graph(self, ui_bidirectional=True):
         """Get a dictionary representation of the collaborative knowledge graph.
         Returns:
             dict: Dictionary representation of the collaborative knowledge graph.
         """
-        src, tgt = self._create_ckg_source_target(form="numpy")
-        # Adjust the indices to account for the user_num offset
-        src[src >= self.user_num] -= self.user_num
-        tgt[tgt >= self.user_num] -= self.user_num
+        uids = self.inter_feat[self.uid_field].numpy()
+        iids = self.inter_feat[self.iid_field].numpy()
+
+        src = np.concatenate([uids, self.head_entities])
+        tgt = np.concatenate([iids, self.tail_entities])
 
         ui_relation_id = self.field2token_id[self.relation_field][self.ui_relation]
-        rels = np.concatenate([np.full(self.inter_num * 2, ui_relation_id), self.relations])
+        rels = np.concatenate([np.full(self.inter_num, ui_relation_id), self.relations])
 
         graph_dict = {"user": {}, "entity": {}}
         for idx, (src_id, rel_id, tgt_id) in enumerate(zip(src, rels, tgt)):
             if rel_id == ui_relation_id:
-                if idx < self.inter_num:
-                    src_type = "user"
-                else:
-                    src_type = "entity"
+                src_type = "user"
+                end_type = "entity"
 
                 if src_id not in graph_dict[src_type]:
                     graph_dict[src_type][src_id] = dict()
@@ -984,6 +1062,14 @@ class KnowledgeBasedDataset(Dataset):
 
                 # UI interaction case
                 graph_dict[src_type][src_id][rel_id].append(tgt_id)
+                if ui_bidirectional:
+                    if tgt_id not in graph_dict[end_type]:
+                        graph_dict[end_type][tgt_id] = dict()
+                    if rel_id not in graph_dict[end_type][tgt_id]:
+                        graph_dict[end_type][tgt_id][rel_id] = list()
+
+                    graph_dict[end_type][tgt_id][rel_id].append(src_id)
+
             else:
                 if src_id not in graph_dict["entity"]:
                     graph_dict["entity"][src_id] = dict()

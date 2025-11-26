@@ -7,6 +7,12 @@
 # @Author : Zhen Tian, Yupeng Hou, Yushuo Chen, Kaiyuan Li
 # @email  : chenyuwuxinn@gmail.com, houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, tsotfsk@outlook.com
 
+# UPDATE
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
+
 """hopwise.data.dataloader.knowledge_dataloader
 ################################################
 """
@@ -14,8 +20,6 @@
 from logging import getLogger
 
 import numpy as np
-from datasets import Dataset as HuggingFaceDataset
-from datasets import DatasetDict
 
 from hopwise.data.dataloader.abstract_dataloader import AbstractDataLoader
 from hopwise.data.dataloader.general_dataloader import FullSortRecEvalDataLoader, TrainDataLoader
@@ -173,82 +177,26 @@ class KnowledgeBasedDataLoader:
             self.general_dataloader.sampler.set_epoch(epoch_seed)
 
 
-class KnowledgePathDataLoader(KnowledgeBasedDataLoader):
-    """:class:`KnowledgePathDataLoader` is a dataloader for path-language-modeling on knowledge graphs.
-
-    It mainly serves as a wrapper to :class:`~hopwise.data.dataset.kg_path_dataset.KnowledgePathDataset`,
-    so as to be aware of generating paths only for the training phase.
-    class:'KnowledgeBasedDataLoader' is subclassed to preserve the API of the original dataloader.
-
-    Path dataset is tokenized at a later stage, so that the post_processor can be manipulated
-    to add special tokens for path language modeling, e.g. token type ids.
-    Args:
-        config (Config): The config of dataloader.
-        dataset (Dataset): The dataset of dataloader.
-        sampler (Sampler): The sampler of dataloader.
-        kg_sampler (KGSampler): The knowledge graph sampler of dataloader.
-        shuffle (bool, optional): Whether the dataloader will be shuffle after a round. Defaults to ``False``.
-    Attributes:
-        tokenized_dataset (DatasetDict): The tokenized path dataset.
-    """
-
-    def __init__(self, config, dataset, sampler, kg_sampler, shuffle=False):
-        super().__init__(config, dataset, sampler, kg_sampler, shuffle=shuffle)
-        self._tokenized_dataset = None
-        # needs to be pre-generated
-        self._dataset.generate_user_path_dataset(sampler.used_ids)
-
-    @property
-    def tokenized_dataset(self):
-        if self._tokenized_dataset is None:
-            self.tokenize_path_dataset(phase="train")
-        return self._tokenized_dataset
-
-    def tokenize_path_dataset(self, phase="train"):
-        """Tokenize the path dataset.
-
-        Args:
-            phase (str, optional): The phase for which the path dataset is used. Defaults to "train".
-        """
-
-        if self._tokenized_dataset is None:
-
-            def tokenization(example):
-                return self._dataset.tokenizer(
-                    example["path"],
-                    truncation=True,
-                    padding=True,
-                    max_length=self._dataset.context_length,
-                    add_special_tokens=True,
-                )
-
-            hf_path_dataset = HuggingFaceDataset.from_dict({"path": self._dataset.path_dataset.split("\n")})
-            tokenized_dataset = hf_path_dataset.map(tokenization, batched=True, remove_columns=["path"])
-            tokenized_dataset = DatasetDict({phase: tokenized_dataset})
-            self._tokenized_dataset = tokenized_dataset
-
-
 class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):
     def __init__(self, config, dataset, sampler, shuffle=False):
         super().__init__(config, dataset, sampler, shuffle)
 
-        from datasets import Dataset
-
         user_df = self.user_df[self.uid_field]
         ui_relation = dataset.field2token_id[dataset.relation_field][dataset.ui_relation]
-        inference_path_dataset = {
-            self.uid_field: [
-                dataset.path_token_separator.join(
-                    [
-                        dataset.tokenizer.bos_token,
-                        PathLanguageModelingTokenType.USER.value + str(uid.item()),
-                        PathLanguageModelingTokenType.RELATION.value + str(ui_relation),
-                    ]
-                )
-                for uid in user_df
-            ]
-        }
-        self.inference_path_dataset = Dataset.from_dict(inference_path_dataset)
+        inference_path_dataset = [
+            dataset.path_token_separator.join(
+                [
+                    dataset.tokenizer.bos_token,
+                    PathLanguageModelingTokenType.USER.token + str(uid.item()),
+                    PathLanguageModelingTokenType.RELATION.token + str(ui_relation),
+                ]
+            )
+            for uid in user_df
+        ]
+        inference_tokenized_dataset = dataset.tokenizer(
+            inference_path_dataset, return_tensors="pt", add_special_tokens=False
+        )
+        self.inference_tokenized_dataset = Interaction(inference_tokenized_dataset.data)
 
     def _init_batch_size_and_step(self):
         batch_size = self.config["eval_batch_size"]
@@ -257,4 +205,4 @@ class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):
 
     def collate_fn(self, index):
         _, history_index, positive_u, positive_i = super().collate_fn(index)
-        return self.inference_path_dataset[index][self.uid_field], history_index, positive_u, positive_i
+        return self.inference_tokenized_dataset[index], history_index, positive_u, positive_i

@@ -2,6 +2,11 @@
 # @Author : Yupeng Hou
 # @Email  : houyupeng@ruc.edu.cn
 
+# UPDATE
+# @Time   : 2025
+# @Author : Giacomo Medda
+# @Email  : giacomo.medda@unica.it
+
 """hopwise.utils.enum_type
 #######################
 """
@@ -75,12 +80,14 @@ class InputType(Enum):
     - ``PAIRWISE``: Pair-wise input, like ``uid, pos_iid, neg_iid``.
     - ``LISTWISE``: List-wise input, like ``uid, [iid1, iid2, ...]``.
     - ``PATHWISE``: KG Path-wise input, like ``uid, pos_iid, eid1, eid2, next_pos_iid``.
+    - ``USERWISE``: User-wise input, like ``uid0, uid1, ...., uidn``.
     """
 
     POINTWISE = 1
     PAIRWISE = 2
     LISTWISE = 3
     PATHWISE = 4
+    USERWISE = 5
 
 
 class FeatureType(Enum):
@@ -122,14 +129,22 @@ class FeatureSource(Enum):
 class PathLanguageModelingTokenType(Enum):
     """Type of tokens in paths for Path Language Modeling.
 
-    - ``USER``: User tokens.
-    - ``ITEM``: Item tokens.
+    - ``SPECIAL``: Special tokens, like start and end of a path.
     - ``ENTITY``: Entity tokens.
     - ``RELATION``: Relation tokens.
-
+    - ``USER``: User tokens.
+    - ``ITEM``: Item tokens.
     """
 
-    USER = "U"
-    ITEM = "I"
-    ENTITY = "E"
-    RELATION = "R"
+    SPECIAL = ("S", 0)
+    ENTITY = ("E", 1)
+    RELATION = ("R", 2)
+    USER = ("U", 3)
+    ITEM = ("I", 4)
+
+    def __init__(self, token, token_id):
+        self.token = token
+        self.token_id = token_id
+
+    def __str__(self):
+        return self.token
