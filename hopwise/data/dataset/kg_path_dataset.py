@@ -48,7 +48,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self._tokenized_dataset = None  # tokenized path dataset is generated with tokenize_path_dataset
         self._tokenizer = None
         self.used_ids = None
-
         self._init_tokenizer()
 
     def _get_field_from_config(self):
@@ -156,7 +155,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 for spec_token in [self.bos_token, self.eos_token]
             ],
         )
-
         self._tokenizer = PreTrainedTokenizerFast(
             tokenizer_object=tokenizer_object,
             model_max_length=self.context_length,
@@ -603,7 +601,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                         paths_with_relations[:, 1::2] = valid_relations
                         paths_with_relations[:, 2::2] = valid_path_nodes
                         paths_with_relations = paths_with_relations.unique(dim=0)
-
                         n_paths = min(self.max_paths_per_user - user_path_sample_size, paths_with_relations.shape[0])
                         paths_with_relations = paths_with_relations[:n_paths]
 
@@ -744,7 +741,7 @@ class UserItemKnowledgePathDataset(UserItemKnowledgeBasedDataset, KnowledgePathD
         self._path_dataset = None
         self._tokenized_dataset = None
         self._tokenizer = None
-
+        KnowledgePathDataset.__init__(self, config)
         KnowledgePathDataset._get_field_from_config(self)
 
 
