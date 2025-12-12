@@ -521,6 +521,9 @@ def user_parallel_sampling(sampling_func_factory):
     Uses thread-based parallelism instead of process-based to avoid duplicating
     large graph objects in memory. This is efficient because igraph operations
     release the GIL, allowing true parallelism for graph traversals.
+
+    Note: This optimization specifically applies to igraph C++ operations. Pure
+    Python graph operations would be limited by the GIL.
     """
 
     import joblib
@@ -548,6 +551,7 @@ def user_parallel_sampling(sampling_func_factory):
             # Use threads instead of processes to share the graph object in memory
             # and avoid expensive serialization. igraph operations are implemented
             # in C++ and release the GIL, providing true parallelism.
+            # See: https://python.igraph.org/en/stable/tutorial.html#igraph-and-the-outside-world
             iter_users = joblib.Parallel(n_jobs=parallel_max_workers, prefer="threads", return_as="generator")(
                 joblib.delayed(sampling_func)(u) for u in range(1, user_num)
             )
