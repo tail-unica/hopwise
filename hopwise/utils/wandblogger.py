@@ -31,7 +31,11 @@ class WandbLogger:
 
             # Initialize a W&B run
             if self._wandb.run is None:
-                self._wandb.init(project=self.config.wandb_project, config=self.config)
+                self._wandb.init(
+                    project=self.config.wandb_project,
+                    config=self.config,
+                    settings=self._wandb.Settings(git_commit=None),
+                )
 
             self._set_steps()
 
