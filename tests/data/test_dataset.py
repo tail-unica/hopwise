@@ -18,7 +18,7 @@ import pytest
 
 from hopwise.config import Config
 from hopwise.data import create_dataset
-from hopwise.utils import init_seed
+from hopwise.utils import PathLanguageModelingTokenType, init_seed
 
 current_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -1039,7 +1039,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
-                "parallel_max_workers": None,
                 "strategy": "weighted-rw",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -1079,7 +1078,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "max_paths_per_user": 2,
             "path_sample_args": {
-                "parallel_max_workers": None,
                 "strategy": "weighted-rw",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -1110,7 +1108,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -1136,7 +1133,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -1173,7 +1169,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
                 "collaborative_path": True,
                 "temporal_causality": False,
@@ -1198,7 +1193,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "weighted-rw",
                 "collaborative_path": False,
                 "temporal_causality": True,
@@ -1230,7 +1224,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -1253,7 +1246,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -1287,7 +1279,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
                 "collaborative_path": True,
                 "temporal_causality": False,
@@ -1309,7 +1300,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "constrained-rw",
                 "collaborative_path": False,
                 "temporal_causality": True,
@@ -1329,113 +1319,229 @@ class TestKGPathDataset(unittest.TestCase):
         subsequent_pos_items = paths[:, -1] - train_dataset.user_num
         assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
 
-    def test_kg_generate_path_all_simple_unrestricted_no_collaborative_no_temporal(self):
+    def test_kg_generate_path_simple_ui_unrestricted_no_collaborative_no_temporal(self):
         config_dict = {
             "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "MAX_PATHS_PER_USER": 2,
+            "MAX_PATHS_PER_USER": 100,
             "path_sample_args": {
-                "parallel_max_workers": 0,
-                "strategy": "simple",
+                "strategy": "simple-ui",
                 "collaborative_path": False,
                 "temporal_causality": False,
                 "restrict_by_phase": False,
             },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
-        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
-        used_ids = train_dataset.get_user_used_ids()
-        paths = train_dataset.generate_user_paths()  # path ids not remapped
-        paths_used_ids = used_ids[paths[:, 0]]
-        assert any((paths[i, -1] not in paths_used_ids[i] and paths[i, -1] != paths[i, 0]) for i in range(len(paths)))
+        possible_valid_paths = {
+            # User 1 paths
+            (1, 5, 6, 1, 11, 1, 7),  # ua: eb(6)→ra→ei(11)→ra→ec(7)
+            (1, 5, 6, 2, 13, 3, 7),  # ua: eb(6)→rb→ek(13)→rc→ec(7)
+            # User 2 paths
+            (2, 5, 6, 1, 11, 1, 7),  # ub: eb(6)→ra→ei(11)→ra→ec(7)
+            (2, 5, 7, 1, 11, 1, 6),  # ub: ec(7)→ra→ei(11)→ra→eb(6)
+            (2, 5, 6, 2, 13, 3, 7),  # ub: eb(6)→rb→ek(13)→rc→ec(7)
+            (2, 5, 7, 1, 12, 1, 8),  # ub: ec(7)→ra→ej(12)→ra→ed(8)
+            (2, 5, 7, 2, 14, 3, 8),  # ub: ec(7)→rb→el(14)→rc→ed(8)
+            # User 3 paths
+            (3, 5, 7, 1, 11, 1, 6),  # uc: ec(7)→ra→ei(11)→ra→eb(6)
+            (3, 5, 7, 1, 12, 1, 8),  # uc: ec(7)→ra→ej(12)→ra→ed(8)
+            (3, 5, 7, 2, 14, 3, 8),  # uc: ec(7)→rb→el(14)→rc→ed(8)
+            # ed(8) has no outgoing edges, so no paths starting from id(8)
+        }
 
-    def test_kg_generate_path_all_simple_no_collaborative_no_temporal(self):
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        paths = train_dataset.generate_user_paths()
+        valid_paths = paths[paths[:, -1] != -1]
+        found_paths = set(tuple(p) for p in valid_paths)
+
+        # All found paths must be in the set of possible valid paths
+        invalid_paths = found_paths - possible_valid_paths
+        assert len(invalid_paths) == 0, f"Found invalid paths: {invalid_paths}"
+
+        # With unrestricted mode, we expect paths that reach items outside positive items
+        # At minimum, some paths should be found
+        assert len(found_paths) > 0, "No paths found, but valid paths should exist"
+
+    def test_kg_generate_path_simple_ui_no_collaborative_no_temporal(self):
         config_dict = {
             "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "MAX_PATHS_PER_USER": 2,
+            "MAX_PATHS_PER_USER": 100,
             "path_sample_args": {
-                "parallel_max_workers": 0,
-                "strategy": "simple",
+                "strategy": "simple-ui",
                 "collaborative_path": False,
                 "temporal_causality": False,
                 "restrict_by_phase": True,
             },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
-        potential_paths = np.array(
-            [
-                [2, 5, 6, 1, 11, 1, 7],  # ub->[UI-Relation]->eb->ra->ei->ra->ec
-                [2, 5, 7, 1, 11, 1, 6],  # reverse of above
-                [3, 5, 7, 1, 12, 1, 8],  # uc->[UI-Relation]->ec->ra->ej->ra->ed
-                [3, 5, 8, 1, 12, 1, 7],  # reverse of above
-                [2, 5, 6, 2, 13, 3, 7],  # ub->[UI-Relation]->eb->rb->ek->rc->ec
-                [2, 5, 7, 3, 13, 2, 6],  # reverse of above
-                [3, 5, 7, 2, 14, 3, 8],  # uc->[UI-Relation]->ec->rb->el->rc->ed
-                [3, 5, 8, 3, 14, 2, 7],  # reverse of above
-            ]
-        )
+        possible_valid_paths = {
+            (2, 5, 6, 1, 11, 1, 7),  # ub: ib(6)->ra->ei(11)->ra->ic(7)
+            (2, 5, 7, 1, 11, 1, 6),  # ub: ic(7)->ra->ei(11)->ra->ib(6)  (reverse exists in KG)
+            (2, 5, 6, 2, 13, 3, 7),  # ub: ib(6)->rb->ek(13)->rc->ic(7)
+            (3, 5, 7, 1, 12, 1, 8),  # uc: ic(7)->ra->ej(12)->ra->id(8)
+            (3, 5, 7, 2, 14, 3, 8),  # uc: ic(7)->rb->el(14)->rc->id(8)
+        }
         train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        used_ids = train_dataset.get_user_used_ids()
         paths = train_dataset.generate_user_paths()  # path ids not remapped
-        potential_paths_found = paths[:, None] == potential_paths
-        assert potential_paths_found.all(axis=-1).any()
+        # Filter out padding values
+        valid_paths = paths[paths[:, -1] != -1]
 
-    def test_kg_generate_path_all_simple_collaborative_no_temporal(self):
+        # Verify that all found paths are valid (subset of possible paths)
+        found_paths = set(tuple(p) for p in valid_paths)
+        assert found_paths.issubset(possible_valid_paths), f"Found invalid paths: {found_paths - possible_valid_paths}"
+
+        # Verify some paths were found (since simple-ui uses sampling, not exhaustive search)
+        assert len(found_paths) > 0, "No paths found, but valid paths exist"
+
+        # User 1 should have NO paths (ia and ib are not connected via 2-hop entity paths)
+        user1_paths = valid_paths[valid_paths[:, 0] == 1]
+        assert len(user1_paths) == 0, f"User 1 should have no paths, but found {len(user1_paths)}"
+
+        # User 2 should have paths - verify they end in user's positive items
+        user2_paths = valid_paths[valid_paths[:, 0] == 2]
+        user2_pos_items_graph = {iid + train_dataset.user_num for iid in used_ids[2] if iid != 0}
+        reached_items = set(user2_paths[:, -1])
+        assert reached_items.issubset(user2_pos_items_graph)
+
+        # User 3 should have paths (but only starting from ic, not from id due to directed KG)
+        user3_paths = valid_paths[valid_paths[:, 0] == 3]
+        user3_pos_items_graph = {iid + train_dataset.user_num for iid in used_ids[3] if iid != 0}
+        reached_items = set(user3_paths[:, -1])
+        assert reached_items.issubset(user3_pos_items_graph)
+
+    def test_kg_generate_path_simple_ui_collaborative_no_temporal(self):
         config_dict = {
             "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "MAX_PATHS_PER_USER": 2,
+            "MAX_PATHS_PER_USER": 100,
             "path_sample_args": {
-                "parallel_max_workers": 0,
-                "strategy": "simple",
+                "strategy": "simple-ui",
                 "collaborative_path": True,
                 "temporal_causality": False,
                 "restrict_by_phase": True,
             },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
-        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
-        user_num = train_dataset.user_num
-        paths = train_dataset.generate_user_paths()  # path ids not remapped
-        assert (paths[:, 4] < user_num).any()
+        possible_valid_paths = {
+            # User 1 (ua=1): items {ia/ea=5, ib/eb=6}
+            # KG paths: ia has no 2-hop path to ib via entities
+            # Collaborative: ia→ua→ib exists via UI-Relation
+            (1, 5, 5, 5, 1, 5, 6),  # ua: ia(5)→ui_rel→ua(1)→ui_rel→ib(6)
+            (1, 5, 6, 5, 1, 5, 5),  # ua: ib(6)→ui_rel→ua(1)→ui_rel→ia(5)
+            # User 2 (ub=2): items {ib/eb=6, ic/ec=7}
+            # KG paths:
+            (2, 5, 6, 1, 11, 1, 7),  # ub: eb(6)→ra→ei(11)→ra→ec(7)
+            (2, 5, 7, 1, 11, 1, 6),  # ub: ec(7)→ra→ei(11)→ra→eb(6)
+            (2, 5, 6, 2, 13, 3, 7),  # ub: eb(6)→rb→ek(13)→rc→ec(7)
+            # Collaborative:
+            (2, 5, 6, 5, 2, 5, 7),  # ub: eb(6)→ui_rel→ub(2)→ui_rel→ec(7)
+            (2, 5, 7, 5, 2, 5, 6),  # ub: ec(7)→ui_rel→ub(2)→ui_rel→eb(6)
+            # User 3 (uc=3): items {ic/ec=7, id/ed=8}
+            # KG paths:
+            (3, 5, 7, 1, 12, 1, 8),  # uc: ec(7)→ra→ej(12)→ra→ed(8)
+            (3, 5, 7, 2, 14, 3, 8),  # uc: ec(7)→rb→el(14)→rc→ed(8)
+            # ed(8) has no outgoing edges in KG
+            # Collaborative:
+            (3, 5, 7, 5, 3, 5, 8),  # uc: ec(7)→ui_rel→uc(3)→ui_rel→ed(8)
+            (3, 5, 8, 5, 3, 5, 7),  # uc: ed(8)→ui_rel→uc(3)→ui_rel→ec(7)
+        }
 
-    def test_kg_generate_path_all_simple_no_collaborative_temporal(self):
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        paths = train_dataset.generate_user_paths()
+        valid_paths = paths[paths[:, -1] != -1]
+        found_paths = set(tuple(p) for p in valid_paths)
+
+        # All found paths must be valid
+        invalid_paths = found_paths - possible_valid_paths
+        assert len(invalid_paths) == 0, f"Found invalid paths: {invalid_paths}"
+
+        # Must find at least some paths
+        assert len(found_paths) > 0, "No paths found, but valid paths should exist"
+
+        # Check paths end in user's positive items
+        used_ids = train_dataset.get_user_used_ids()
+        for path in valid_paths:
+            user_id = path[0]
+            end_item = path[-1]
+            user_positive_items_graph = {iid + train_dataset.user_num for iid in used_ids[user_id]}
+            assert (
+                end_item in user_positive_items_graph
+            ), f"Path {tuple(path)} ends at {end_item} which is not in user {user_id}'s positive items"
+
+    def test_kg_generate_path_simple_ui_no_collaborative_temporal(self):
         config_dict = {
             "model": "PEARLM",
             "dataset": "kg_generate_path",
             "data_path": current_path,
             "load_col": None,
             "path_hop_length": 3,
-            "MAX_PATHS_PER_USER": 2,
+            "MAX_PATHS_PER_USER": 100,
             "path_sample_args": {
-                "parallel_max_workers": 0,
-                "strategy": "simple",
+                "strategy": "simple-ui",
                 "collaborative_path": False,
                 "temporal_causality": True,
                 "restrict_by_phase": True,
             },
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
         }
+        # Expected valid paths with temporal constraint (start_time < end_time):
+        # User 1: ia(t=1)→...→ib(t=2). But ia and ib not connected via 2-hop KG paths
+        #         ia has edges to eg, eh (which have no outgoing edges)
+        #         So NO valid paths for user 1 with temporal constraint.
+        # User 2: ib(t=1)→...→ic(t=2). eb→ei→ec and eb→ek→ec exist!
+        # User 3: ic(t=1)→...→id(t=2). ec→ej→ed and ec→el→ed exist!
+        possible_valid_paths = {
+            # User 2: ib(t=1)→ic(t=2)
+            (2, 5, 6, 1, 11, 1, 7),  # ub: eb(6)→ra→ei(11)→ra→ec(7)
+            (2, 5, 6, 2, 13, 3, 7),  # ub: eb(6)→rb→ek(13)→rc→ec(7)
+            # User 3: ic(t=1)→id(t=2)
+            (3, 5, 7, 1, 12, 1, 8),  # uc: ec(7)→ra→ej(12)→ra→ed(8)
+            (3, 5, 7, 2, 14, 3, 8),  # uc: ec(7)→rb→el(14)→rc→ed(8)
+        }
+
         train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        paths = train_dataset.generate_user_paths()
+        valid_paths = paths[paths[:, -1] != -1]
+        found_paths = set(tuple(p) for p in valid_paths)
+
+        # All found paths must be valid
+        invalid_paths = found_paths - possible_valid_paths
+        assert len(invalid_paths) == 0, f"Found invalid paths: {invalid_paths}"
+
+        # Some paths should be found (users 2 and 3 have valid temporal paths)
+        assert len(found_paths) > 0, "No paths found, but valid paths should exist"
+
+        # User 1 should have NO paths (ia and ib not connected via 2-hop entity paths)
+        user1_paths = valid_paths[valid_paths[:, 0] == 1]
+        assert len(user1_paths) == 0, "User 1 should have no paths with temporal constraint"
+
+        # Verify temporal constraint: check that start item's timestamp < end item's timestamp
         user = train_dataset.inter_feat[train_dataset.uid_field].numpy()
         item = train_dataset.inter_feat[train_dataset.iid_field].numpy()
         timestamp = train_dataset.inter_feat[train_dataset.time_field].numpy()
         temporal_matrix = np.zeros((train_dataset.user_num, train_dataset.item_num), dtype=timestamp.dtype)
         temporal_matrix[user, item] = timestamp
-        paths = train_dataset.generate_user_paths()  # path ids not remapped
-        users = paths[:, 0]
-        starting_pos_items = paths[:, 2] - train_dataset.user_num
-        subsequent_pos_items = paths[:, -1] - train_dataset.user_num
-        assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
+
+        for path in valid_paths:
+            user_id = path[0]
+            start_item = path[2] - train_dataset.user_num  # Convert graph ID to item ID
+            end_item = path[-1] - train_dataset.user_num
+            start_time = temporal_matrix[user_id, start_item]
+            end_time = temporal_matrix[user_id, end_item]
+            assert start_time < end_time, (
+                f"Temporal constraint violated: path {tuple(path)} " f"starts at t={start_time}, ends at t={end_time}"
+            )
 
     def test_kg_generate_path_metapaths_unrestricted_no_collaborative_no_temporal(self):
         metapaths = [[("item_id", "ra", "entity_id"), ("entity_id", "ra", "item_id")], ["rb", "rc"]]
@@ -1447,7 +1553,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "metapath",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -1473,7 +1578,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "metapath",
                 "collaborative_path": False,
                 "temporal_causality": False,
@@ -1515,7 +1619,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "metapath",
                 "collaborative_path": True,
                 "temporal_causality": False,
@@ -1539,7 +1642,6 @@ class TestKGPathDataset(unittest.TestCase):
             "path_hop_length": 3,
             "MAX_PATHS_PER_USER": 2,
             "path_sample_args": {
-                "parallel_max_workers": 0,
                 "strategy": "metapath",
                 "collaborative_path": False,
                 "temporal_causality": True,
@@ -1560,31 +1662,6 @@ class TestKGPathDataset(unittest.TestCase):
         subsequent_pos_items = paths[:, -1] - train_dataset.user_num
         assert (temporal_matrix[users, starting_pos_items] < temporal_matrix[users, subsequent_pos_items]).all()
 
-    def test_kg_add_paths_relations(self):
-        config_dict = {
-            "model": "PEARLM",
-            "dataset": "kg_generate_path",
-            "data_path": current_path,
-            "load_col": None,
-            "path_hop_length": 3,
-            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
-        }
-        paths = np.array(
-            [
-                [2, 6, 11, 7],  # ub->eb->ei->ec
-                [2, 7, 11, 6],  # reverse of above
-                [2, 6, 13, 7],  # ub->eb->ek->ec
-                # [3, 7, 14, -1],  # uc->ec->-el->-1  # not supported yet
-            ]
-        )
-        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
-        graph = train_dataset._create_ckg_igraph(show_relation=True, directed=False)
-        paths_with_relations = train_dataset._add_paths_relations(graph, paths)
-        assert paths_with_relations[0].tolist() == [2, 5, 6, 1, 11, 1, 7]
-        assert paths_with_relations[1].tolist() == [2, 5, 7, 1, 11, 1, 6]
-        assert paths_with_relations[2].tolist() == [2, 5, 6, 2, 13, 3, 7]
-        # assert paths_with_relations[3] == [3, 5, 7, 2, 14, -1, -1]  # not supported yet
-
     def test_kg_tokenize_path_dataset(self):
         config_dict = {
             "model": "PEARLM",
@@ -1592,7 +1669,7 @@ class TestKGPathDataset(unittest.TestCase):
             "data_path": current_path,
             "load_col": None,
             "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
-            "path_sample_args": {"parallel_max_workers": 0, "path_token_separator": " "},
+            "path_sample_args": {"path_token_separator": " "},
             "tokenizer": {
                 "model": "WordLevel",
                 "context_length": 24,
@@ -1617,6 +1694,30 @@ class TestKGPathDataset(unittest.TestCase):
         assert tokenized_path_string[0] == train_dataset.tokenizer(split_path_string[0])["input_ids"]
         assert tokenized_path_string[1] == train_dataset.tokenizer(split_path_string[1])["input_ids"]
         assert tokenized_path_string[2] == train_dataset.tokenizer(split_path_string[2])["input_ids"]
+
+
+class TestKGGLMDataset(unittest.TestCase):
+    def test_generate_pretrain_dataset(self):
+        config_dict = {
+            "model": "KGGLM",
+            "dataset": "kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_hop_length": 3,
+            "max_paths_per_user": 2,
+            "path_sample_args": {"pretrain_paths": 5, "pretrain_hop_length": (1, 3)},
+            "train_stage": "pretrain",
+            "eval_args": {"split": {"LS": "valid_and_test"}, "order": "TO"},
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        paths = train_dataset.path_dataset.split("\n")
+        path_lengths = [p.count("R") for p in paths]
+        for p_len in range(
+            config_dict["path_sample_args"]["pretrain_hop_length"][0],
+            config_dict["path_sample_args"]["pretrain_hop_length"][1] + 1,
+        ):
+            assert p_len in path_lengths
+        assert not any([PathLanguageModelingTokenType.USER.token in p for p in paths])
 
 
 if __name__ == "__main__":

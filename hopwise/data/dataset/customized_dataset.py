@@ -17,13 +17,14 @@ Customized datasets named ``[Model Name]Dataset`` can be automatically called.
 
 import datetime
 
-import joblib
+import numba
 import numpy as np
 import pandas as pd
 import torch
 from sklearn.mixture import GaussianMixture as GMM
 
 from hopwise.data.dataset import KGSeqDataset, KnowledgeBasedDataset, KnowledgePathDataset, SequentialDataset
+from hopwise.data.dataset.kg_path_dataset import CSRGraph
 from hopwise.data.interaction import Interaction
 from hopwise.sampler import SeqSampler
 from hopwise.utils import FeatureType, progress_bar, set_color
@@ -149,7 +150,8 @@ class KGGLMDataset(KnowledgePathDataset):
 
         path_sample_args = self.config["path_sample_args"]
         self.pretrain_hop_length = path_sample_args["pretrain_hop_length"]
-        self.pretrain_hop_length = tuple(map(int, self.pretrain_hop_length[1:-1].split(",")))
+        if isinstance(self.pretrain_hop_length, str):
+            self.pretrain_hop_length = tuple(map(int, self.pretrain_hop_length[1:-1].split(",")))
         self.pretrain_paths = path_sample_args["pretrain_paths"]
 
     def generate_user_path_dataset(self):
@@ -159,71 +161,145 @@ class KGGLMDataset(KnowledgePathDataset):
             super().generate_user_path_dataset()
 
     def generate_pretrain_dataset(self):
-        """Generate pretrain dataset for KGGLM model."""
+        """Generate pretrain dataset for KGGLM model using CSR-based parallel random walks."""
 
         if self._path_dataset is None:
-            graph = self._create_ckg_igraph(show_relation=True, directed=False)
-            kg_rel_num = len(self.relations)
-            graph.es["weight"] = [0.0] * (self.inter_num) + [1.0] * kg_rel_num
+            # Build CSRGraph with UI relations excluded (weight=0)
+            csr_matrix = self._create_ckg_sparse_matrix(form="csr", show_relation=True)
+            ui_rel_id = self.relation_num - 1
+            csr_graph = CSRGraph.from_sparse_matrix(csr_matrix, ui_rel_id, exclude_ui=True)
+            indptr, indices, relations, weights = csr_graph.unpack()
 
             graph_min_iid = 1 + self.user_num
+            num_entities = self.entity_num + self.item_num
             min_hop, max_hop = self.pretrain_hop_length
-
-            paths = set()
-            iter_paths = progress_bar(
-                range(graph_min_iid + 1, len(graph.vs)),
-                ncols=100,
-                total=len(graph.vs) - graph_min_iid,
-                desc=set_color("KGGLM Pre-training Path Sampling", "red", progress=True),
-            )
             max_tries_per_entity = self.config["path_sample_args"]["MAX_RW_TRIES_PER_IID"]
 
-            kwargs = dict(
-                graph=graph,
-                min_hop=min_hop,
-                max_hop=max_hop,
-                pretrain_paths=self.pretrain_paths,
-                max_tries_per_entity=max_tries_per_entity,
-                paths=paths,
+            # Prepare all start nodes and hop lengths for batch processing
+            entity_ids = np.arange(graph_min_iid, graph_min_iid + num_entities, dtype=np.int64)
+
+            # Generate start nodes: each entity gets pretrain_paths * max_tries samples
+            samples_per_entity = self.pretrain_paths * max_tries_per_entity
+            all_start_nodes = np.repeat(entity_ids, samples_per_entity)
+
+            # Generate random hop lengths for each walk
+            all_hop_lengths = np.random.randint(min_hop, max_hop + 1, size=len(all_start_nodes))
+
+            self.logger.info(
+                set_color(f"Running {len(all_start_nodes)} parallel random walks for pretraining...", "blue")
             )
 
-            if not self.parallel_max_workers:
-                for entity in iter_paths:
-                    _generate_paths_random_walks(entity)
-            else:
-                joblib.Parallel(n_jobs=self.parallel_max_workers, prefer="threads", return_as="generator")(
-                    joblib.delayed(_generate_paths_random_walks)(entity, **kwargs) for entity in iter_paths
-                )
+            # Run parallel random walks with max_hop (we'll truncate based on actual hop length later)
+            paths, path_rels = _kgglm_csr_parallel_random_walks(
+                indptr, indices, relations, weights, all_start_nodes, all_hop_lengths, max_hop
+            )
 
-            paths_with_relations = self._add_paths_relations(graph, paths)
+            # Deduplicate and collect unique paths per entity
+            unique_paths = set()
+            entity_path_counts = {}
 
+            iter_paths = progress_bar(
+                range(len(paths)),
+                ncols=100,
+                total=len(paths),
+                desc=set_color("KGGLM Pre-training Path Sampling", "red", progress=True),
+            )
+
+            for idx in iter_paths:
+                entity = all_start_nodes[idx]
+                hop_length = all_hop_lengths[idx]
+
+                # Check if entity already has enough paths
+                if entity_path_counts.get(entity, 0) >= self.pretrain_paths:
+                    continue
+
+                # Get the actual path (truncated to hop_length)
+                path = tuple(paths[idx, : hop_length + 1])
+                path_rel = tuple(path_rels[idx, :hop_length])
+
+                # Skip if path has invalid nodes (walk got stuck)
+                if -1 in path:
+                    continue
+
+                # Build path with relations interleaved
+                path_with_rel = []
+                for i, node in enumerate(path):
+                    path_with_rel.append(node)
+                    if i < len(path_rel):
+                        path_with_rel.append(path_rel[i])
+                path_with_rel = tuple(path_with_rel)
+
+                # Add to unique paths if not seen
+                if path_with_rel not in unique_paths:
+                    unique_paths.add(path_with_rel)
+                    entity_path_counts[entity] = entity_path_counts.get(entity, 0) + 1
+
+            # Format paths to string
             path_string = ""
-            for path in paths_with_relations:
-                path_string += self._format_path(path) + "\n"
+            for path in unique_paths:
+                path_string += self._format_path(np.array(path)) + "\n"
 
             self._path_dataset = path_string
 
 
-def _generate_paths_random_walks(start_node, **kwargs):
-    graph = kwargs.get("graph")
-    min_hop = kwargs.get("min_hop")
-    max_hop = kwargs.get("max_hop")
-    pretrain_paths = kwargs.get("pretrain_paths")
-    max_tries_per_entity = kwargs.get("max_tries_per_entity")
-    paths = kwargs.get("paths")
+@numba.njit(parallel=True)
+def _kgglm_csr_parallel_random_walks(indptr, indices, relations, weights, start_nodes, hop_lengths, max_hop):
+    """Parallel random walks on CSR graph with variable hop lengths for KGGLM pretraining.
 
-    for _ in range(pretrain_paths):
-        path_hop_length = np.random.randint(min_hop, max_hop + 1)
-        tries_per_entity = max_tries_per_entity
+    Note: Set np.random.seed() before calling this function for reproducibility.
 
-        while tries_per_entity > 0:
-            generated_path = graph.random_walk(start_node, path_hop_length, weights="weight")
-            generated_path = tuple(generated_path)
-            if generated_path not in paths:
+    Args:
+        indptr: CSR row pointers
+        indices: CSR column indices
+        relations: Edge relation types
+        weights: Edge weights
+        start_nodes: Array of starting nodes
+        hop_lengths: Array of hop lengths per walk
+        max_hop: Maximum hop length (for output array sizing)
+
+    Returns:
+        paths: (n_walks, max_hop + 1) node paths
+        path_relations: (n_walks, max_hop) relation paths
+    """
+    n_walks = len(start_nodes)
+    paths = np.full((n_walks, max_hop + 1), -1, dtype=np.int64)
+    path_relations = np.full((n_walks, max_hop), -1, dtype=np.int64)
+
+    for i in numba.prange(n_walks):
+        node = start_nodes[i]
+        num_steps = hop_lengths[i]
+        paths[i, 0] = node
+
+        for step in range(num_steps):
+            start_idx = indptr[node]
+            end_idx = indptr[node + 1]
+            n_neighbors = end_idx - start_idx
+
+            if n_neighbors == 0:
                 break
-            tries_per_entity -= 1
 
-        paths.add(generated_path)
+            # random choice replacement for numba with p=weights
+            edge_weights = weights[start_idx:end_idx]
+            total_weight = edge_weights.sum()
+
+            if total_weight == 0:
+                break
+
+            r = np.random.random() * total_weight
+            cumsum = 0.0
+            selected_idx = 0
+            for j in range(n_neighbors):
+                cumsum += edge_weights[j]
+                if r <= cumsum:
+                    selected_idx = j
+                    break
+
+            neighbor_idx = start_idx + selected_idx
+            node = indices[neighbor_idx]
+            paths[i, step + 1] = node
+            path_relations[i, step] = relations[neighbor_idx]
+
+    return paths, path_relations
 
 
 class TPRecTimestampDataset:
