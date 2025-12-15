@@ -849,12 +849,14 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         """Generate simple paths from users to their positive items using parallel random walks.
 
         This method uses parallel random walks with iterative re-sampling to find paths
-        connecting positive items. It's much faster than exhaustive BFS for large graphs.
+        connecting positive items. It keeps retrying until all paths are found or
+        no progress is made for max_consecutive_invalid consecutive attempts.
 
         Strategy:
-        1. First pass: parallel random walks from all positive items
-        2. Check coverage: identify (user, start_item) pairs with insufficient paths
-        3. Re-sample: targeted re-sampling for missing pairs (up to max_consecutive_invalid attempts)
+        1. Run parallel random walks from all positive items needing paths
+        2. Check coverage: count pairs that still need paths
+        3. Re-sample: if missing pairs count unchanged for max_consecutive_invalid attempts, stop
+        4. Otherwise, continue until all pairs are satisfied
 
         Args:
             csr_graph: CSRGraph instance containing graph arrays
@@ -887,8 +889,30 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         if len(user_pos_items) == 0:
             return np.array([], dtype=np.int64).reshape(0, self.path_hop_length * 2 + 1)
 
-        # Paths per starting item (configurable, similar to paths_per_hop in constrained-rw)
-        paths_per_start_item = self.config["path_sample_args"].get("MAX_RW_PATHS_PER_HOP", 1)
+        # Paths per (user, positive_item) pair
+        paths_per_pair = self.max_paths_per_user
+
+        # Info and warning messages for simple-ui behavior
+        self.logger.info(
+            set_color(
+                f"simple-ui: max_paths_per_user ({paths_per_pair}) limits paths per (user, positive_item) pair",
+                "blue",
+            )
+        )
+
+        # Warn if paths_per_pair seems high relative to average user actions
+        if paths_per_pair > 0.1 * self.avg_actions_of_users:
+            self.logger.warning(
+                set_color(
+                    f"max_paths_per_user ({paths_per_pair}) > 10% of avg_actions_of_users in training set "
+                    f"({self.avg_actions_of_users:.2f}). This may result in excessive path generation.",
+                    "yellow",
+                )
+            )
+
+        # simple-ui forces restrict_by_phase by design (paths must connect positive items in order)
+        if not self.restrict_by_phase:
+            self.logger.info(set_color("simple-ui forces restrict_by_phase=True by design", "blue"))
 
         # Track paths per (user, start_item) pair
         # Key: (user_id, start_item_graph_id), Value: set of path tuples
@@ -896,32 +920,68 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         ui_rel_id = self.field2token_id[self.relation_field][self.ui_relation]
 
         # Initialize tracking for all (user, start_item) pairs
+        total_pairs = sum(len(pos_items) for pos_items in user_pos_items.values())
         for u, pos_items in user_pos_items.items():
             for start_item in pos_items:
                 user_item_paths[(u, start_item)] = set()
 
-        # Iterative sampling with re-sampling for missing pairs
-        for attempt in range(self.max_consecutive_invalid):
+        # Target: total paths we want to find
+        target_total_paths = total_pairs * paths_per_pair
+
+        # Tracking for early stopping
+        consecutive_no_progress = 0
+        prev_missing_pairs_count = total_pairs
+        attempt = 0
+
+        # Create a single progress bar showing total paths found
+        pbar = progress_bar(
+            total=target_total_paths,
+            ncols=100,
+            desc=set_color("KG Path Sampling (simple-ui)", "red", progress=True),
+        )
+        current_total_paths = 0
+
+        # Iterative sampling until all paths found or no progress for max_consecutive_invalid attempts
+        while True:
+            attempt += 1
+
             # Find pairs that still need more paths
             pairs_needing_paths = [
-                (u, start_item)
-                for (u, start_item), paths in user_item_paths.items()
-                if len(paths) < paths_per_start_item
+                (u, start_item) for (u, start_item), paths in user_item_paths.items() if len(paths) < paths_per_pair
             ]
 
-            if len(pairs_needing_paths) == 0:
-                self.logger.info(set_color(f"All pairs satisfied after {attempt + 1} attempts", "green"))
+            missing_pairs_count = len(pairs_needing_paths)
+
+            if missing_pairs_count == 0:
+                self.logger.info(set_color(f"All pairs satisfied after {attempt} attempts", "green"))
                 break
+
+            # Check for progress: if missing pairs count unchanged, increment counter
+            if missing_pairs_count == prev_missing_pairs_count:
+                consecutive_no_progress += 1
+                if consecutive_no_progress >= self.max_consecutive_invalid:
+                    self.logger.info(
+                        set_color(
+                            f"No progress for {self.max_consecutive_invalid} consecutive attempts, "
+                            f"stopping with {missing_pairs_count} pairs still missing paths",
+                            "yellow",
+                        )
+                    )
+                    break
+            else:
+                # Progress was made, reset counter
+                consecutive_no_progress = 0
+                prev_missing_pairs_count = missing_pairs_count
 
             # Prepare batch data for this iteration
             all_start_nodes = []
             all_user_ids = []
 
-            # Sample multiple times per pair to increase chances of finding valid paths
-            samples_per_pair = max(1, paths_per_start_item * 2)  # Oversample slightly
+            # Oversample more aggressively to find paths faster
+            samples_per_pair = max(4, paths_per_pair * 4)
 
             for u, start_item in pairs_needing_paths:
-                needed = paths_per_start_item - len(user_item_paths[(u, start_item)])
+                needed = paths_per_pair - len(user_item_paths[(u, start_item)])
                 n_samples = needed * samples_per_pair
                 all_start_nodes.extend([start_item] * n_samples)
                 all_user_ids.extend([u] * n_samples)
@@ -932,21 +992,16 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             all_start_nodes = np.array(all_start_nodes, dtype=np.int64)
             all_user_ids = np.array(all_user_ids, dtype=np.int64)
 
-            # Run parallel random walks
-            # collaborative_path determines if user nodes can be intermediate nodes
-            desc = f"KG Path Sampling (simple-ui, attempt {attempt + 1}/{self.max_consecutive_invalid})"
-            paths, path_rels = _run_batched_numba(
-                numba_func=_csr_constrained_random_walks,
-                batched_arrays=[all_start_nodes],
-                fixed_args_before=(indptr, indices, relations),
-                fixed_args_after=(
-                    path_hop_length,
-                    graph_min_iid,
-                    graph_max_iid,
-                    self.collaborative_path,
-                ),
-                batch_size=self.PARALLEL_BATCH_SIZE,
-                desc=desc,
+            # Run parallel random walks (without individual progress bar - we have the outer one)
+            paths, path_rels = _csr_constrained_random_walks(
+                indptr,
+                indices,
+                relations,
+                all_start_nodes,
+                path_hop_length,
+                graph_min_iid,
+                graph_max_iid,
+                self.collaborative_path,
             )
 
             # Filter and validate paths
@@ -954,37 +1009,35 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             valid_mask &= (paths[:, -1] >= graph_min_iid) & (paths[:, -1] <= graph_max_iid)
             valid_mask &= paths[:, -1] != all_start_nodes  # End different from start
 
-            # Additional filter: end node must be in user's positive items
+            # Single merged validation loop: check end node is positive item AND respects temporal order
+            # simple-ui always enforces restrict_by_phase behavior
             for idx in np.where(valid_mask)[0]:
                 u = all_user_ids[idx]
+                start_node = all_start_nodes[idx]
                 end_node = paths[idx, -1]
+
+                # End node must be in user's positive items
                 if end_node not in user_pos_set[u]:
                     valid_mask[idx] = False
+                    continue
 
-            # Apply restrict_by_phase if needed
-            if self.restrict_by_phase:
-                for idx in np.where(valid_mask)[0]:
-                    u = all_user_ids[idx]
-                    start_node = all_start_nodes[idx]
-                    end_node = paths[idx, -1]
-                    pos_items = user_pos_items[u]
+                # Enforce restrict_by_phase: end must be valid relative to start
+                pos_items = user_pos_items[u]
+                start_idx = np.where(pos_items == start_node)[0]
+                if len(start_idx) == 0:
+                    valid_mask[idx] = False
+                    continue
+                start_idx = start_idx[0]
 
-                    # Find indices
-                    start_idx = np.where(pos_items == start_node)[0]
-                    if len(start_idx) == 0:
-                        valid_mask[idx] = False
-                        continue
-                    start_idx = start_idx[0]
+                if temporal_matrix is not None:
+                    # End must come after start in temporal order
+                    valid_candidates = set(pos_items[start_idx + 1 :])
+                else:
+                    # Any other positive item is valid
+                    valid_candidates = set(pos_items) - {start_node}
 
-                    if temporal_matrix is not None:
-                        # End must come after start in temporal order
-                        valid_candidates = set(pos_items[start_idx + 1 :])
-                    else:
-                        # Any other positive item is valid
-                        valid_candidates = set(pos_items) - {start_node}
-
-                    if end_node not in valid_candidates:
-                        valid_mask[idx] = False
+                if end_node not in valid_candidates:
+                    valid_mask[idx] = False
 
             valid_indices = np.where(valid_mask)[0]
 
@@ -996,7 +1049,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 key = (u, start_node)
 
                 # Check if this pair already has enough paths
-                if len(user_item_paths[key]) >= paths_per_start_item:
+                if len(user_item_paths[key]) >= self.max_paths_per_user:
                     continue
 
                 path = paths[idx]
@@ -1017,29 +1070,19 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                     user_item_paths[key].add(path_tuple)
                     new_paths_found += 1
 
-            self.logger.debug(
-                set_color(
-                    f"Attempt {attempt + 1}: found {new_paths_found} new paths, "
-                    f"{len(pairs_needing_paths)} pairs still need paths",
-                    "blue",
+            # Update progress bar with new paths found
+            if new_paths_found > 0:
+                current_total_paths += new_paths_found
+                pbar.update(new_paths_found)
+                # Update description with attempt info
+                pbar.set_description(
+                    set_color(f"KG Path Sampling (simple-ui, attempt {attempt})", "red", progress=True)
                 )
-            )
 
-            # If no new paths found in this iteration, unlikely to find more
-            if new_paths_found == 0:
-                self.logger.info(set_color(f"No new paths found in attempt {attempt + 1}, stopping early", "yellow"))
-                break
+        pbar.close()
 
-        # Collect all paths, respecting max_paths_per_user limit
-        all_final_paths = []
-        user_path_counts = {}
-
-        for (u, start_item), paths_set in user_item_paths.items():
-            for path_tuple in paths_set:
-                if user_path_counts.get(u, 0) >= self.max_paths_per_user:
-                    break
-                all_final_paths.append(path_tuple)
-                user_path_counts[u] = user_path_counts.get(u, 0) + 1
+        # Collect all paths - each pair is already limited to max_paths_per_user during sampling
+        all_final_paths = [path_tuple for paths_set in user_item_paths.values() for path_tuple in paths_set]
 
         if len(all_final_paths) == 0:
             return np.array([], dtype=np.int64).reshape(0, self.path_hop_length * 2 + 1)
