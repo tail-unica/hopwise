@@ -237,7 +237,25 @@ We expect all contributions discussed in the issue tracker and going through PRs
 If you find **hopwise** useful for your research or development, please cite with:
 
 ```bibtex
-the paper is under revision
+
+@inproceedings{10.1145/3746252.3761641,
+  author = {Boratto, Ludovico and Fenu, Gianni and Marras, Mirko and Medda, Giacomo and Soccol, Alessandro},
+  title = {hopwise: A Python Library for Explainable Recommendation based on Path Reasoning over Knowledge Graphs},
+  year = {2025},
+  isbn = {9798400720406},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  url = {https://doi.org/10.1145/3746252.3761641},
+  doi = {10.1145/3746252.3761641},
+  abstract = {Explainability is becoming central to the development of responsible recommender systems, especially as path reasoning over knowledge graphs saw increased adoption for extracting structured, semantic user-item connections. However, reproducible research in such field remains limited due to fragmented implementations, missing utilities, and the lack of standardized evaluation pipelines. In this paper, we propose hopwise, an open-source library that supports the full life-cycle of explainable path reasoning recommendation methods over knowledge graphs, from knowledge graph preparation to explanation path delivery and evaluation. Rather than creating a new library from scratch, hopwise builds upon the modular and widely adopted RecBole ecosystem, enriching it with more knowledge graphs, path sampling utilities, path reasoning methods, and metrics for evaluating explanation path utility, coverage, and diversity. We show the framework's utility by means of a benchmark including two knowledge graphs and several recommendation methods. Code and Data: https://github.com/tail-unica/hopwise.},
+  booktitle = {Proceedings of the 34th ACM International Conference on Information and Knowledge Management},
+  pages = {6328–6333},
+  numpages = {6},
+  keywords = {language model, path reasoning, reproducibility, transparency},
+  location = {Seoul, Republic of Korea},
+  series = {CIKM '25}
+  }
+
 ```
 
 ## The Team
