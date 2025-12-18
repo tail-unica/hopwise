@@ -88,7 +88,8 @@ class AttnHGCN(nn.Module):
         self.n_users = n_users
         self.mess_dropout_rate = mess_dropout_rate
 
-        self.relation_embedding = nn.Embedding(self.n_relations, self.embedding_size)
+        # interact relation is ignored
+        self.relation_embedding = nn.Embedding(self.n_relations - 1, self.embedding_size)
         self.W_Q = nn.Parameter(torch.Tensor(self.embedding_size, self.embedding_size))
 
         self.n_heads = 2
@@ -126,7 +127,6 @@ class AttnHGCN(nn.Module):
         user_agg = scatter_sum(src=item_agg, index=inter_edge[0, :], dim_size=user_emb.shape[0], dim=0)
         return entity_agg, user_agg
 
-    # @TimeCounter.count_time(warmup_interval=4)
     def forward(self, user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w, item_attn=None):
         if item_attn is not None:
             item_attn = item_attn[inter_edge[1, :]]
