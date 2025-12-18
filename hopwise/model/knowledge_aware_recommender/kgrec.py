@@ -12,8 +12,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch_geometric.utils import softmax as scatter_softmax
-from torch_scatter import scatter_mean, scatter_sum
 
 from hopwise.model.abstract_recommender import KnowledgeRecommender
 from hopwise.model.init import xavier_uniform_initialization
@@ -88,7 +86,8 @@ class AttnHGCN(nn.Module):
         self.n_users = n_users
         self.mess_dropout_rate = mess_dropout_rate
 
-        self.relation_embedding = nn.Embedding(self.n_relations, self.embedding_size)
+        # interact relation is ignored
+        self.relation_embedding = nn.Embedding(self.n_relations - 1, self.embedding_size)
         self.W_Q = nn.Parameter(torch.Tensor(self.embedding_size, self.embedding_size))
 
         self.n_heads = 2
@@ -101,6 +100,9 @@ class AttnHGCN(nn.Module):
         self.apply(xavier_uniform_initialization)
 
     def shared_layer_agg(self, user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w):
+        from torch_geometric.utils import softmax as scatter_softmax
+        from torch_scatter import scatter_sum
+
         n_entities = entity_emb.shape[0]
         head, tail = edge_index
 
@@ -126,8 +128,10 @@ class AttnHGCN(nn.Module):
         user_agg = scatter_sum(src=item_agg, index=inter_edge[0, :], dim_size=user_emb.shape[0], dim=0)
         return entity_agg, user_agg
 
-    # @TimeCounter.count_time(warmup_interval=4)
     def forward(self, user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w, item_attn=None):
+        from torch_geometric.utils import softmax as scatter_softmax
+        from torch_scatter import scatter_sum
+
         if item_attn is not None:
             item_attn = item_attn[inter_edge[1, :]]
             item_attn = scatter_softmax(item_attn, inter_edge[0, :])
@@ -139,7 +143,9 @@ class AttnHGCN(nn.Module):
         entity_res_emb = entity_emb  # [n_entity, embedding_size]
         user_res_emb = user_emb  # [n_users, embedding_size]
         for i in range(self.n_hops):
-            entity_emb, user_emb = self.shared_layer_agg(user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w)
+            entity_emb, user_emb = self.shared_layer_agg(
+                user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w
+            )
 
             """message dropout"""
             if self.mess_dropout_rate > 0.0:
@@ -183,6 +189,8 @@ class AttnHGCN(nn.Module):
         return entity_res_emb
 
     def ui_agg(self, user_emb, item_emb, inter_edge, inter_edge_w):
+        from torch_scatter import scatter_sum
+
         num_items = item_emb.shape[0]
         item_emb = inter_edge_w.unsqueeze(-1) * item_emb[inter_edge[1, :]]
         user_agg = scatter_sum(src=item_emb, index=inter_edge[0, :], dim_size=user_emb.shape[0], dim=0)
@@ -191,6 +199,8 @@ class AttnHGCN(nn.Module):
         return user_agg, item_agg
 
     def kg_agg(self, entity_emb, edge_index, edge_type):
+        from torch_scatter import scatter_mean
+
         n_entities = entity_emb.shape[0]
         head, tail = edge_index
         edge_relation_emb = self.relation_embedding(edge_type)
@@ -200,6 +210,9 @@ class AttnHGCN(nn.Module):
 
     @torch.no_grad()
     def norm_attn_computer(self, entity_emb, edge_index, edge_type=None, return_logits=False):
+        from torch_geometric.utils import softmax as scatter_softmax
+        from torch_scatter import scatter_sum
+
         head, tail = edge_index
 
         query = (entity_emb[head] @ self.W_Q).view(-1, self.n_heads, self.d_k)
@@ -282,6 +295,8 @@ class KGRec(KnowledgeRecommender):
         return index.to(self.device), type.to(self.device)
 
     def forward(self):
+        from torch_scatter import scatter_mean
+
         user_emb = self.user_embedding.weight
         entity_emb = self.entity_embedding.weight
 
@@ -376,7 +391,7 @@ class KGRec(KnowledgeRecommender):
             edge_index_i, edge_type_i = self.edge_sampling(
                 self.edge_index[:, self.edge_type == i],
                 self.edge_type[self.edge_type == i],
-                sampling_rate=sampling_rate
+                sampling_rate=sampling_rate,
             )
             if i == 0:
                 edge_index_sampled = edge_index_i
@@ -458,7 +473,7 @@ class KGRec(KnowledgeRecommender):
         # scores = (pos1 - head_embs).sum(dim=1).abs().mean(dim=0)
         scores = -torch.log(torch.sigmoid(torch.mul(pos1, head_embs).sum(1))).mean()
         return scores
-    
+
     def predict(self, interaction):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
