@@ -129,7 +129,8 @@ all-models = [
   "hopwise[lightgbm]",
   "hopwise[xgboost]",
   "hopwise[kgat]",
-  # "hopwise[scatter]",
+  # "hopwise[kgin]",
+  # "hopwise[kgrec]",
 ]
 cli = [
   "click>=8.0.0",
