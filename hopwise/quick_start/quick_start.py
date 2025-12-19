@@ -124,7 +124,6 @@ def run_hopwise(
         saved (bool, optional): Whether to save the model. Defaults to ``True``.
         queue (torch.multiprocessing.Queue, optional): The queue used to pass the result to the main process. Defaults to ``None``.
     """  # noqa: E501
-
     # Initialize configuration
     config = Config(
         model=model,
@@ -132,7 +131,6 @@ def run_hopwise(
         config_file_list=config_file_list,
         config_dict=config_dict,
     )
-
     if checkpoint is not None:
         config, model, dataset, train_data, valid_data, test_data = load_data_and_model(
             model_file=checkpoint, updating_config=config
@@ -148,6 +146,12 @@ def run_hopwise(
 
         # dataset splitting
         train_data, valid_data, test_data = data_preparation(config, dataset)
+
+        # visualize split data
+        if config["show_split_data"]:
+            logger.info(train_data)
+            logger.info(valid_data)
+            logger.info(test_data)
 
         # model loading and initialization
         init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
@@ -169,7 +173,7 @@ def run_hopwise(
             trainer.resume_checkpoint(checkpoint)
 
         best_valid_score, best_valid_result = trainer.fit(
-            train_data, valid_data, saved=saved, show_progress=config["show_progress"]
+            train_data, valid_data, saved=saved, verbose=config["verbose"], show_progress=config["show_progress"]
         )
 
     elif run == "evaluate":
@@ -229,7 +233,59 @@ def run_hopwise(
     if config["local_rank"] == 0 and queue is not None:
         queue.put(result)  # for multiprocessing, e.g., mp.spawn
 
+    # display rich final table
+    topk_sizes = config["topk"]
+    if len(topk_sizes) > 1:
+        results = {
+            "best validation result": best_valid_result,
+            "test result": test_result,
+        }
+
+        display_metrics_table(results, config)
+
     return result  # for the single process
+
+
+def display_metrics_table(results_dict, config):
+    """
+    Display evaluation metrics in a table format with @k values as rows and metrics as columns.
+    """
+
+    from rich.console import Console
+    from rich.table import Table
+
+    metrics_name = config["metrics"]
+    topk_sizes = config["topk"]
+
+    console = Console()
+
+    for split, results in results_dict.items():
+        if results is None:
+            continue
+
+        if KnowledgeEvaluationType.REC in results or KnowledgeEvaluationType.LP in results:
+            for task, result in results.items():
+                table_rich = Table(title=set_color(f"{split} for {task}", "yellow"))
+
+                table_rich.add_column(" ", justify="center")
+                for metric in metrics_name:
+                    table_rich.add_column(metric.upper(), justify="center")
+                for k in topk_sizes:
+                    row = [f"{result[f'{metric.lower()}@{k}']:.4f}" for metric in metrics_name]
+                    table_rich.add_row(f"@{k}", *row)
+
+                console.print(table_rich)
+        else:
+            table_rich = Table(title=set_color(f"{split}", "yellow"))
+
+            table_rich.add_column(" ", justify="center")
+            for metric in metrics_name:
+                table_rich.add_column(metric.upper(), justify="center")
+            for k in topk_sizes:
+                row = [f"{results[f'{metric.lower()}@{k}']:.4f}" for metric in metrics_name]
+                table_rich.add_row(f"@{k}", *row)
+
+            console.print(table_rich)
 
 
 def get_logger(config):
@@ -238,14 +294,14 @@ def get_logger(config):
     init_logger(config)
     logger = getLogger()
     logger.info(sys.argv)
-    logger.info(config)
+    if config["show_configuration"]:
+        logger.info(config)
 
     return logger
 
 
 def format_metrics(metrics):
-    formatted_str = "".join([f"[{key}]: {value} " for key, value in metrics.items()])
-    return formatted_str
+    return "".join([f"[{key}]: {value} " for key, value in metrics.items()])
 
 
 def run_hopwises(rank, *args):
@@ -352,6 +408,28 @@ def load_data_and_model(model_file, load_only_data=False, updating_config=None):
             if not issubclass(model_class, PreTrainedModel):
                 model.load_state_dict(checkpoint["state_dict"])
                 model.load_other_parameter(checkpoint.get("other_parameter"))
+            else:
+                import os
+
+                from safetensors.torch import load_file
+
+                HOPWISE_SAVE_PATH_SUFFIX = "hopwise-"
+                HUGGINGFACE_SAVE_PATH_SUFFIX = "huggingface-"
+
+                if os.path.basename(model_file).startswith(HUGGINGFACE_SAVE_PATH_SUFFIX):
+                    hf_resume_file = model_file
+                    hopwise_resume_file = model_file.replace(HUGGINGFACE_SAVE_PATH_SUFFIX, HOPWISE_SAVE_PATH_SUFFIX)
+                elif os.path.basename(model_file).startswith(HOPWISE_SAVE_PATH_SUFFIX):
+                    hopwise_resume_file = model_file
+                    hf_resume_file = model_file.replace(HOPWISE_SAVE_PATH_SUFFIX, HUGGINGFACE_SAVE_PATH_SUFFIX)
+                else:
+                    raise ValueError(
+                        f"The directory name [{model_file}] does not indicate a HuggingFace or Hopwise model."
+                    )
+
+                checkpoint = torch.load(hopwise_resume_file, map_location=config["device"], weights_only=False)
+                weights = load_file(os.path.join(hf_resume_file, "model.safetensors"))
+                model.load_state_dict(weights, strict=False)
         else:
             model.load_state_dict(checkpoint["state_dict"])
             model.load_other_parameter(checkpoint.get("other_parameter"))

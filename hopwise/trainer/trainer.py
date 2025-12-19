@@ -151,6 +151,7 @@ class Trainer(AbstractTrainer):
         saved_model_file = "{}-{}.pth".format(self.config["model"], get_local_time())
         self.saved_model_file = os.path.join(self.checkpoint_dir, saved_model_file)
         self.weight_decay = config["weight_decay"]
+        self.benchmark_item_filename = config["benchmark_item_filename"]
 
         self.start_epoch = 0
         self.cur_step = 0
@@ -233,10 +234,8 @@ class Trainer(AbstractTrainer):
             if show_progress
             else train_data
         )
-
         if not self.config["single_spec"] and train_data.shuffle:
             train_data.sampler.set_epoch(epoch_idx)
-
         scaler = grad_scaler(self.device, enabled=self.enable_scaler)
         for batch_idx, batch_interaction in enumerate(iter_data):
             interaction = batch_interaction.to(self.device)
@@ -401,7 +400,6 @@ class Trainer(AbstractTrainer):
         if self.config["train_neg_sample_args"].get("dynamic", False):
             train_data.get_model(self.model)
         valid_step = 0
-
         for epoch_idx in range(self.start_epoch, self.epochs):
             # train
             training_start_time = time()
@@ -497,7 +495,6 @@ class Trainer(AbstractTrainer):
                 scores = self.model.predict(new_inter)
             else:
                 scores = self._split_predict(new_inter, batch_size)
-
         scores = scores.view(-1, tot_item_num)
         scores[:, 0] = -np.inf
         if history_index is not None:
@@ -539,7 +536,7 @@ class Trainer(AbstractTrainer):
         if not eval_data:
             return
 
-        # self.eval_collector.eval_data_collect(eval_data)
+        self.eval_collector.eval_data_collect(eval_data)
 
         if load_best_model:
             checkpoint_file = model_file or self.saved_model_file
@@ -579,6 +576,8 @@ class Trainer(AbstractTrainer):
             )
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
+            if self.benchmark_item_filename is not None:
+                scores = self.eval_collector.filter_test_items(eval_data, scores)
             self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
         self.eval_collector.model_collect(self.model)
         struct = self.eval_collector.get_data_struct()
@@ -802,7 +801,6 @@ class KGTrainer(Trainer):
             results[task] = self.evaluate_data_loop(
                 rec_eval_data, task, tot_item_num, item_tensor, show_progress=show_progress
             )
-
         # LP task
         if KnowledgeEvaluationType.LP in task_eval_data:
             task = KnowledgeEvaluationType.LP
@@ -1341,7 +1339,7 @@ class MKRTrainer(Trainer):
 
 
 class TraditionalTrainer(Trainer):
-    """TraditionalTrainer is designed for Traditional model(Pop,ItemKNN),
+    """TraditionalTrainer is designed for Traditional model(Pop,ItemKNN,Random,Similarity),
     which set the epoch to 1 whatever the config."""
 
     def __init__(self, config, model):

@@ -95,18 +95,22 @@ def train(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_
     config_file_list = config_files.strip().split(" ") if config_files else None
 
     try:
-        run(
-            model,
-            dataset,
-            "train",
-            checkpoint,
-            config_file_list=config_file_list,
-            nproc=nproc,
-            world_size=world_size,
-            ip=ip,
-            port=port,
-            group_offset=group_offset,
-        )
+        models = model.split(",")
+        datasets = dataset.split(",")
+        for method in models:
+            for data in datasets:
+                run(
+                    method,
+                    data,
+                    "train",
+                    checkpoint,
+                    config_file_list=config_file_list,
+                    nproc=nproc,
+                    world_size=world_size,
+                    ip=ip,
+                    port=port,
+                    group_offset=group_offset,
+                )
     except KeyboardInterrupt:
         console.print("\n[bold yellow]⚠️  Training interrupted by user[/bold yellow]")
         sys.exit(130)
@@ -214,7 +218,7 @@ def benchmark(
     paper results or conducting systematic model comparisons.
 
     Example:
-        hopwise benchmark --models "BPR,LightGCN,KGAT" --dataset ml-100k --show-progress
+        hopwise benchmark --models "BPR,LightGCN,KGAT" --dataset ml-100k
     """
 
     if proc_title is None:

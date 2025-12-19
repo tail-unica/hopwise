@@ -30,11 +30,10 @@ class SequentialDataset(Dataset):
     """
 
     def __init__(self, config):
+        self.item_id_list_field = config["ITEM_ID_FIELD"] + config["LIST_SUFFIX"]
         self.max_item_list_len = config["MAX_ITEM_LIST_LENGTH"]
         self.item_list_length_field = config["ITEM_LIST_LENGTH_FIELD"]
         super().__init__(config)
-        if config["benchmark_filename"] is not None:
-            self._benchmark_presets()
 
     def _change_feat_format(self):
         """Change feat format from :class:`pandas.DataFrame` to :class:`Interaction`,
@@ -42,8 +41,6 @@ class SequentialDataset(Dataset):
         """
         super()._change_feat_format()
 
-        if self.config["benchmark_filename"] is not None:
-            return
         self.logger.debug("Augmentation for sequential recommendation.")
         self.data_augmentation()
 
@@ -89,7 +86,6 @@ class SequentialDataset(Dataset):
         self.logger.debug("data_augmentation")
 
         self._aug_presets()
-
         self._check_field("uid_field", "time_field")
         max_item_list_len = self.config["MAX_ITEM_LIST_LENGTH"]
         self.sort(by=[self.uid_field, self.time_field], ascending=True)
@@ -137,15 +133,6 @@ class SequentialDataset(Dataset):
 
         new_data.update(Interaction(new_dict))
         self.inter_feat = new_data
-
-    def _benchmark_presets(self):
-        list_suffix = self.config["LIST_SUFFIX"]
-        for field in self.inter_feat:
-            if field + list_suffix in self.inter_feat:
-                list_field = field + list_suffix
-                setattr(self, f"{field}_list_field", list_field)
-        self.set_field_property(self.item_list_length_field, FeatureType.TOKEN, FeatureSource.INTERACTION, 1)
-        self.inter_feat[self.item_list_length_field] = self.inter_feat[self.item_id_list_field].transform(len)
 
     def inter_matrix(self, form="coo", value_field=None):
         """Get sparse matrix that describe interactions between user_id and item_id.

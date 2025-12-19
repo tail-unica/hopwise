@@ -205,6 +205,23 @@ class Collector:
             self.label_field = self.config["LABEL_FIELD"]
             self.data_struct.update_tensor("data.label", interaction[self.label_field].to(self.device))
 
+    def filter_test_items(self, eval_data, scores):
+        # consider a case where only a subset of the items can be recommended.
+        # for example, in the test set that is over a time period, only a subset of items can be recommended
+        # to use this approach use benchmark_files and split the dataset accordingly
+
+        # mapping from dataset (raw) id to hopwise item id
+        raw_item_id2item_id = eval_data.dataset.field2token_id[eval_data.dataset.iid_field]
+
+        # allowed items during test period
+        items = {item.item() for item in eval_data.dataset.item_feat[eval_data.dataset.iid_field]}
+        allowed_items = eval_data.dataset.item_feat_test[eval_data.dataset.iid_field].to_numpy()
+        allowed_items = set(raw_item_id2item_id[item_id] for item_id in allowed_items)
+        items = list(items - allowed_items)
+
+        scores[:, items] = -torch.inf
+        return scores
+
     def model_collect(self, model: torch.nn.Module, load_best_model=False):
         """Collect the evaluation resource from model and do something with the model.
 

@@ -704,10 +704,10 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def __str__(self):
         info = [
             super().__str__(),
-            f"The number of hops used for path sampling: {self.path_hop_length}",
-            f"Maximum number of paths sampled per user: {self.max_paths_per_user}",
-            f"The path sampling strategy: {self.strategy}",
-            f"The tokenizer model: {self.tokenizer_model}",
+            set_color(f"The number of hops used for path sampling: {self.path_hop_length}", "yellow"),
+            set_color(f"Maximum number of paths sampled per user: {self.max_paths_per_user}", "yellow"),
+            set_color(f"The path sampling strategy: {self.strategy}", "yellow"),
+            set_color(f"The tokenizer model: {self.tokenizer_model}", "yellow"),
         ]
         return "\n".join(info)
 

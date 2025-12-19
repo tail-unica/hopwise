@@ -8,6 +8,9 @@ reproducibility: True           # (bool) Whether or not to make results reproduc
 data_path: 'dataset/'           # (str) The path of input dataset.
 checkpoint_dir: 'saved'         # (str) The path to save checkpoint file.
 show_progress: True             # (bool) Whether or not to show the progress bar of every epoch.
+verbose: True                   # (bool) Whether or not to show the evaluation results of each epoch.
+show_configuration: True        # (bool) Whether or not to show the configuration of the experiment.
+show_split_data: False          # (str) Whether or not to show the statistics of the dataloader.
 save_dataset: False             # (bool) Whether or not to save filtered dataset.
 dataset_save_path: ~            # (str) The path of saved dataset.
 save_dataloaders: False         # (bool) Whether or not save split dataloaders.
@@ -17,6 +20,9 @@ wandb_project: 'hopwise'        # (str) The project to conduct experiments in W&
 progress_bar_rich: True         # (bool) Whether or not to use rich progress bar.
 shuffle: True                   # (bool) Whether or not to shuffle the training data before each epoch.
 weight_precision: float32
+benchmark_filename: ~
+benchmark_item_filename: ~
+proc_title: ~
 
 # Training Settings
 epochs: 300                     # (int) The number of training epochs.

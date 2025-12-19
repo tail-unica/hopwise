@@ -13,8 +13,8 @@ epochs: 50
 eval_step: 50
 
 train_stage: pretrain # one in {'pretrain', 'policy'}
-margin: 1.0 # transe
-pretrain_epochs: 5 # https://github.com/Go0day/TPRec/blob/main/train_transe_model.py
+margin: 1.0
+pretrain_epochs: 5
 cluster_num: 14
 save_step: 1
 cluster_feature: w-stat

@@ -148,3 +148,14 @@ class PathLanguageModelingTokenType(Enum):
 
     def __str__(self):
         return self.token
+
+
+class DatasetSets(Enum):
+    """Type of Models' input.
+
+    - ``TEST_ONLY``: only the test set``.
+    - ``VALID_AND_TEST``: validation and test set``.
+    """
+
+    TEST_ONLY = 2
+    VALID_AND_TEST = 3

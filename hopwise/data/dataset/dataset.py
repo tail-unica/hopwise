@@ -28,6 +28,7 @@ from scipy.sparse import coo_matrix, diags, dok_matrix
 
 from hopwise.data.interaction import Interaction
 from hopwise.utils import FeatureSource, FeatureType, ensure_dir, set_color
+from hopwise.utils.enum_type import DatasetSets, ModelType
 from hopwise.utils.url import decide_download, download_url, extract_zip, makedirs, rename_atomic_files
 
 
@@ -122,6 +123,7 @@ class Dataset(torch.utils.data.Dataset):
         self.alias = {}
         self._preloaded_weight = {}
         self.benchmark_filename_list = self.config["benchmark_filename"]
+        self.benchmark_item_filename_list = self.config["benchmark_item_filename"]
 
     def _get_field_from_config(self):
         """Initialization common field names."""
@@ -254,6 +256,10 @@ class Dataset(torch.utils.data.Dataset):
         self._load_inter_feat(token, dataset_path)
         self.user_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.USER, "uid_field")
         self.item_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.ITEM, "iid_field")
+        if self.benchmark_item_filename_list is not None:
+            for split in self.benchmark_item_filename_list:
+                feat = self._load_user_or_item_feat(f"{token}.{split}", dataset_path, FeatureSource.ITEM, "iid_field")
+                setattr(self, f"item_feat_{split}", feat)
         self._load_additional_feat(token, dataset_path)
 
     def _load_inter_feat(self, token, dataset_path):
@@ -347,6 +353,14 @@ class Dataset(torch.utils.data.Dataset):
         """
         if self.config["additional_feat_suffix"] is None:
             return
+
+        model = self.config["model"]
+        if model in ["Similarity"]:
+            if self.config["encoder_name"] is not None:
+                token = f"{token}_{self.config['encoder_name']}"
+            else:
+                raise ValueError("encoder_name must be set if model is Similarity.")
+
         for suf in self.config["additional_feat_suffix"]:
             if hasattr(self, f"{suf}_feat"):
                 raise ValueError(f"{suf}_feat already exist.")
@@ -356,7 +370,6 @@ class Dataset(torch.utils.data.Dataset):
                 feat_path = self.config["preload_weight_path"] or dataset_path
             else:
                 feat_path = dataset_path
-
             feat_path = os.path.join(feat_path, f"{token}.{suf}")
             if os.path.isfile(feat_path):
                 feat = self._load_feat(feat_path, suf)
@@ -818,7 +831,6 @@ class Dataset(torch.utils.data.Dataset):
                 inter_num=item_inter_num,
                 inter_interval=item_inter_num_interval,
             )
-
             if len(ban_users) == 0 and len(ban_items) == 0:
                 break
 
@@ -835,7 +847,6 @@ class Dataset(torch.utils.data.Dataset):
             item_inter = self.inter_feat[self.iid_field]
             dropped_inter |= user_inter.isin(ban_users)
             dropped_inter |= item_inter.isin(ban_items)
-
             user_inter_num -= Counter(user_inter[dropped_inter].values)
             item_inter_num -= Counter(item_inter[dropped_inter].values)
 
@@ -896,6 +907,7 @@ class Dataset(torch.utils.data.Dataset):
                 continue
 
             left_point, right_point = float(endpoint_pair[0]), float(endpoint_pair[1])
+
             if left_point > right_point:
                 self.logger.warning(f"{endpoint_pair_str} is an illegal interval!")
 
@@ -1041,7 +1053,6 @@ class Dataset(torch.utils.data.Dataset):
         for alias in self.alias.values():
             remap_list = self._get_remap_list(alias)
             self._remap(remap_list)
-
         for field in self._rest_fields:
             remap_list = self._get_remap_list(np.array([field]))
             self._remap(remap_list)
@@ -1559,7 +1570,11 @@ class Dataset(torch.utils.data.Dataset):
         if group_by is None:
             raise ValueError("leave one out strategy require a group field")
 
-        grouped_inter_feat_index = self._grouped_index(self.inter_feat[group_by].numpy())
+        if group_by is None:
+            grouped_inter_feat_index = self.inter_feat
+        else:
+            grouped_inter_feat_index = self._grouped_index(self.inter_feat[group_by].numpy())
+
         if leave_one_mode == "valid_and_test":
             next_index = self._split_index_by_leave_one_out(grouped_inter_feat_index, leave_one_num=2)
         elif leave_one_mode == "valid_only":
@@ -1598,11 +1613,21 @@ class Dataset(torch.utils.data.Dataset):
             list: List of built :class:`Dataset`.
         """
         self._change_feat_format()
-
-        if self.benchmark_filename_list is not None:
+        if self.benchmark_filename_list is not None and self.config["MODEL_TYPE"] not in [ModelType.SEQUENTIAL]:
+            # if model is sequential, is better to directly format the .inter file without making any split because
+            #  sequential recommenders works with leave one out, so you would have in any case to format
+            # the split to have only one interaction for each user in the test set
             self._drop_unused_col()
             cumsum = list(np.cumsum(self.file_size_list))
             datasets = [self.copy(self.inter_feat[start:end]) for start, end in zip([0] + cumsum[:-1], cumsum)]
+            if len(datasets) == DatasetSets.TEST_ONLY.value:  # noqa: PLR2004
+                self.logger.info(
+                    set_color(
+                        "Benchmark dataset has two part. The Evaluation on the validation will be done on the Test Set.",  # noqa: E501
+                        "red",
+                    )
+                )
+                datasets = [datasets[0], datasets[1], datasets[1]]
             return datasets
 
         # ordering
@@ -1634,7 +1659,11 @@ class Dataset(torch.utils.data.Dataset):
             else:
                 raise NotImplementedError(f"The grouping method [{group_by}] has not been implemented.")
         elif split_mode == "LS":
-            datasets = self.leave_one_out(group_by=self.uid_field, leave_one_mode=split_args["LS"])
+            if self.config["MODEL_TYPE"] in [ModelType.SEQUENTIAL] and not self.config["AUGMENT_ITEM_SEQ"]:
+                group_by = None
+            else:
+                group_by = self.uid_field
+            datasets = self.leave_one_out(group_by=group_by, leave_one_mode=split_args["LS"])
         else:
             raise NotImplementedError(f"The splitting_method [{split_mode}] has not been implemented.")
 

@@ -45,8 +45,9 @@ class ProgressBar:
 
 
 def progress_bar(*args, **kwargs):
+    global _progress_bar  # noqa: PLW0603
     if _progress_bar is None:
-        return ProgressBar({"progress_bar_rich": True})(*args, **kwargs)
+        _progress_bar = ProgressBar(progress_bar_rich=not os.environ.get("DISABLE_RICH", False))  # noqa: PLW1508
     return _progress_bar(*args, **kwargs)
 
 
@@ -97,6 +98,11 @@ def init_logger(config):
         >>> logger.debug(train_state)
         >>> logger.info(train_result)
     """
+
+    # remove previous handlers, otherwise in case of multiple data/models, it continue writing to old files
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
     colorama.init(autoreset=True)
     LOGROOT = "./log/"
     dir_name = os.path.dirname(LOGROOT)
