@@ -11,6 +11,9 @@ Path Reasoning methods are a new type of recommendation methods that utilize the
 
    model/path_reasoning/kgglm
    model/path_reasoning/pearlm
+   model/path_reasoning/pearlmgpt2
+   model/path_reasoning/pearlmllama2
+   model/path_reasoning/pearlmllama3
    model/path_reasoning/plm
 
 

@@ -1,6 +1,6 @@
 Parameters Configuration
 ------------------------------
-RecBole supports three types of parameter configurations: Config files,
+hopwise supports three types of parameter configurations: Config files,
 Parameter Dicts and Command Line. The parameters are assigned via the
 Configuration module.
 
@@ -23,7 +23,7 @@ parameter settings.
 
 .. code:: python
 
-    from recbole.config import Config
+    from hopwise.config import Config
 
     config = Config(model='BPR', dataset='ml-100k', config_file_list=['example.yaml'])
     print('gpu_id: ', config['gpu_id'])
@@ -57,7 +57,7 @@ An example is as follows:
 
 .. code:: python
 
-    from recbole.config import Config
+    from hopwise.config import Config
 
     parameter_dict = {
         'gpu_id': 2,
@@ -85,7 +85,7 @@ Write the following code to the python file (e.g. `run.py`):
 
 .. code:: python
 
-    from recbole.config import Config
+    from hopwise.config import Config
 
     config = Config(model='BPR', dataset='ml-100k')
     print('gpu_id: ', config['gpu_id'])
@@ -106,7 +106,7 @@ output:
 
 Priority
 ^^^^^^^^^^^^^^^^^
-RecBole supports the combination of three types of parameter configurations.
+hopwise supports the combination of three types of parameter configurations.
 
 The priority of the configuration methods is: Command Line > Parameter Dicts
 > Config Files > Default Settings
@@ -124,7 +124,7 @@ A example is as follows:
 
 .. code:: python
 
-    from recbole.config import Config
+    from hopwise.config import Config
 
     parameter_dict = {
         'gpu_id': 2,
