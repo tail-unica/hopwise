@@ -43,14 +43,24 @@ def create_dataset(config):
         dataset_class = getattr(dataset_module, config["model"] + "Dataset")
     else:
         model_type = config["MODEL_TYPE"]
+
+        if os.path.isfile(os.path.join(config["data_path"], f'{config["dataset"]}.user_link')) and os.path.isfile(
+            os.path.join(config["data_path"], f'{config["dataset"]}.item_link')
+        ):
+            kg_dataset_classname = "UserItemKnowledgeBasedDataset"
+            path_language_model_dataset_classname = "UserItemKnowledgePathDataset"
+        else:
+            kg_dataset_classname = "KnowledgeBasedDataset"
+            path_language_model_dataset_classname = "KnowledgePathDataset"
+
         type2class = {
             ModelType.GENERAL: "Dataset",
             ModelType.SEQUENTIAL: "SequentialDataset",
             ModelType.CONTEXT: "Dataset",
-            ModelType.KNOWLEDGE: "KnowledgeBasedDataset",
+            ModelType.KNOWLEDGE: kg_dataset_classname,
             ModelType.TRADITIONAL: "Dataset",
             ModelType.DECISIONTREE: "Dataset",
-            ModelType.PATH_LANGUAGE_MODELING: "KnowledgePathDataset",
+            ModelType.PATH_LANGUAGE_MODELING: path_language_model_dataset_classname,
         }
         dataset_class = getattr(dataset_module, type2class[model_type])
 

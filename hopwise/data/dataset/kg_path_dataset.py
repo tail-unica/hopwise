@@ -10,7 +10,7 @@ import numba
 import numpy as np
 
 from hopwise.data import Interaction
-from hopwise.data.dataset import KnowledgeBasedDataset
+from hopwise.data.dataset import KnowledgeBasedDataset, UserItemKnowledgeBasedDataset
 from hopwise.data.utils import user_parallel_sampling
 from hopwise.utils import PathLanguageModelingTokenType, progress_bar, set_color
 
@@ -48,7 +48,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self._tokenized_dataset = None  # tokenized path dataset is generated with tokenize_path_dataset
         self._tokenizer = None
         self.used_ids = None
-
         self._init_tokenizer()
 
     def _get_field_from_config(self):
@@ -156,7 +155,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 for spec_token in [self.bos_token, self.eos_token]
             ],
         )
-
         self._tokenizer = PreTrainedTokenizerFast(
             tokenizer_object=tokenizer_object,
             model_max_length=self.context_length,
@@ -603,7 +601,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                         paths_with_relations[:, 1::2] = valid_relations
                         paths_with_relations[:, 2::2] = valid_path_nodes
                         paths_with_relations = paths_with_relations.unique(dim=0)
-
                         n_paths = min(self.max_paths_per_user - user_path_sample_size, paths_with_relations.shape[0])
                         paths_with_relations = paths_with_relations[:n_paths]
 
@@ -710,6 +707,42 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             f"The tokenizer model: {self.tokenizer_model}",
         ]
         return "\n".join(info)
+
+
+class UserItemKnowledgePathDataset(UserItemKnowledgeBasedDataset, KnowledgePathDataset):
+    """:class:`UserItemKnowledgePathDataset` is based on :class:`~hopwise.data.dataset.KnowledgePathDataset`,
+    and :class:`~hopwise.data.dataset.UserItemKnowledgeBasedDataset` to be used with user-side KG too.
+    It provides an interface to prepare tokenized knowledge graph path for path language modeling.
+
+    Attributes:
+        path_hop_length (int): The same as ``config["path_hop_length"]``.
+
+        max_paths_per_user (int): The same as ``config["max_paths_per_user"]``.
+
+        temporal_causality (bool): The same as ``config["path_sample_args"]["temporal_causality"]``.
+
+        collaborative_path (bool): The same as ``config["path_sample_args"]["collaborative_path"]``.
+        Not used when :attr:`strategy` = `metapaths` as collaborative metapaths must be explicitly defined.
+
+        strategy (str): The same as ``config["path_sample_args"]["strategy"]``.
+
+        reasoning_template (str): The same as ``config["path_sample_args"]["reasoning_template"]``.
+
+        restrict_by_phase (bool): The same as ``config["path_sample_args"]["restrict_by_phase"]``.
+
+        max_consecutive_invalid (int): The same as ``config["MAX_CONSECUTIVE_INVALID"]``.
+
+        tokenizer (PreTrainedTokenizerFast): Tokenizer to process the sample paths.
+    """
+
+    def __init__(self, config):
+        UserItemKnowledgeBasedDataset.__init__(self, config)
+
+        self._path_dataset = None
+        self._tokenized_dataset = None
+        self._tokenizer = None
+        KnowledgePathDataset.__init__(self, config)
+        KnowledgePathDataset._get_field_from_config(self)
 
 
 def _check_temporal_causality_feasibility(temporal_matrix, pos_iid):

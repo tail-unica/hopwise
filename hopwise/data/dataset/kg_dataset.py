@@ -13,6 +13,7 @@
 # @Email  : giacomo.medda@unica.it, alessandro.soccol@unica.it
 
 """hopwise.data.kg_dataset
+   hopwise.data.user_item_kg_dataset
 ##########################
 """
 
@@ -124,19 +125,12 @@ class KnowledgeBasedDataset(Dataset):
         relation_kg_num = Counter(self.kg_feat[self.relation_field].values) if relation_kg_num_interval else Counter()
 
         while True:
-            ban_head_entities = self._get_illegal_ids_by_inter_num(
-                field=self.head_entity_field,
+            ban_entities = self._get_illegal_ids_by_inter_num(
+                field=f"{self.head_entity_field}-{self.tail_entity_field}",
                 feat=None,
                 inter_num=entity_kg_num,
                 inter_interval=entity_kg_num_interval,
             )
-            ban_tail_entities = self._get_illegal_ids_by_inter_num(
-                field=self.tail_entity_field,
-                feat=None,
-                inter_num=entity_kg_num,
-                inter_interval=entity_kg_num_interval,
-            )
-            ban_entities = ban_head_entities | ban_tail_entities
             ban_relations = self._get_illegal_ids_by_inter_num(
                 field=self.relation_field,
                 feat=None,
@@ -1043,7 +1037,6 @@ class KnowledgeBasedDataset(Dataset):
 
     def ckg_dict_graph(self, ui_bidirectional=True):
         """Get a dictionary representation of the collaborative knowledge graph.
-
         Returns:
             dict: Dictionary representation of the collaborative knowledge graph.
         """
@@ -1093,3 +1086,389 @@ class KnowledgeBasedDataset(Dataset):
                 graph_dict["entity"][tgt_id][rel_id].append(src_id)
 
         return graph_dict
+
+
+class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
+    """:class:`UserItemKnowledgeBasedDataset` is based on :class:`~hopwise.data.dataset.dataset.KnowledgeBasedDataset`,
+    and load ``.kg`` and ``.user_link`` and ``.item_link`` additionally.
+
+    Entities are remapped together with ``user_id`` and ``item_id`` specially.
+    All entities are remapped into three consecutive ID sections.
+
+    - virtual entities that only exist in interaction data.
+    - entities that exist both in interaction data and kg triplets.
+    - entities only exist in kg triplets.
+
+    It also provides several interfaces to transfer ``.kg`` features into coo sparse matrix,
+    csr sparse matrix, :class:`DGL.Graph` or :class:`PyG.Data`.
+
+    Attributes:
+        head_entity_field (str): The same as ``config['HEAD_ENTITY_ID_FIELD']``.
+
+        tail_entity_field (str): The same as ``config['TAIL_ENTITY_ID_FIELD']``.
+
+        relation_field (str): The same as ``config['RELATION_ID_FIELD']``.
+
+        entity_field (str): The same as ``config['ENTITY_ID_FIELD']``.
+
+        kg_feat (pandas.DataFrame): Internal data structure stores the kg triplets.
+            It's loaded from file ``.kg``.
+
+        user2entity (dict): Dict maps ``user_id`` to ``entity``,
+            which is loaded from  file ``.user_link``.
+
+        entity2user (dict): Dict maps ``entity`` to ``user_id``,
+            which is loaded from  file ``.user_link``.
+
+        item2entity (dict): Dict maps ``item_id`` to ``entity``,
+            which is loaded from  file ``.item_link``.
+
+        entity2item (dict): Dict maps ``entity`` to ``item_id``,
+            which is loaded from  file ``.item_link``.
+
+    Note:
+        :attr:`entity_field` doesn't exist exactly. It's only a symbol,
+        representing entity features.
+
+        :attr:`ui_relation` is a special relation token, which is used to represent
+        the interaction relation between users and items.
+    """
+
+    def _filter_link(self):
+        """Filter rows of :attr:`item2entity` and :attr:`entity2item`,
+        whose ``entity_id`` doesn't occur in kg triplets and
+        ``item_id`` doesn't occur in interaction records.
+        Extended to also filter rows of :attr:`user2entity` and :attr:`entity2user`,
+        whose ``entity_id`` doesn't occur in kg triplets and
+        ``user_id`` doesn't occur in interaction records.
+        """
+        while True:
+            # loop is needed in case dropped index lead to drop of user/item
+            # causing incompatibility between link mappings and field2id_token
+            item_tokens = self._get_rec_token("item_id")
+            user_tokens = self._get_rec_token("user_id")
+            ent_tokens = self._get_entity_token()
+
+            illegal_item = set()
+            illegal_item_ent = set()
+            for item in self.item2entity:
+                ent = self.item2entity[item]
+                if item not in item_tokens or ent not in ent_tokens:
+                    illegal_item.add(item)
+                    illegal_item_ent.add(ent)
+            for item in illegal_item:
+                del self.item2entity[item]
+            for ent in illegal_item_ent:
+                del self.entity2item[ent]
+
+            remained_inter = pd.Series(True, index=self.inter_feat.index)
+            remained_inter &= self.inter_feat[self.iid_field].isin(self.item2entity.keys())
+
+            illegal_user = set()
+            illegal_user_ent = set()
+            for user in self.user2entity:
+                ent = self.user2entity[user]
+                if user not in user_tokens or ent not in ent_tokens:
+                    illegal_user.add(user)
+                    illegal_user_ent.add(ent)
+            for user in illegal_user:
+                del self.user2entity[user]
+            for ent in illegal_user_ent:
+                del self.entity2user[ent]
+
+            remained_inter &= self.inter_feat[self.uid_field].isin(self.user2entity.keys())
+
+            if not (~remained_inter).any():
+                break
+
+            self.inter_feat.drop(self.inter_feat.index[~remained_inter], inplace=True)
+
+        if self.item_feat is not None:
+            remained_item = self.item_feat[self.iid_field].isin(self.item2entity.keys())
+            self.item_feat.drop(self.item_feat.index[~remained_item], inplace=True)
+
+        if self.user_feat is not None:
+            remained_user = self.user_feat[self.uid_field].isin(self.user2entity.keys())
+            self.user_feat.drop(self.user_feat.index[~remained_user], inplace=True)
+
+    def _load_data(self, token, dataset_path):
+        super(KnowledgeBasedDataset, self)._load_data(token, dataset_path)
+        self.kg_feat = self._load_kg(self.dataset_name, self.dataset_path)
+        self.tail_feat = None
+        self.item2entity, self.entity2item, self.user2entity, self.entity2user = self._load_link(
+            self.dataset_name, self.dataset_path
+        )
+
+    def __str__(self):
+        info = [
+            super().__str__(),
+            f"The number of users that have been linked to KG: {len(self.user2entity)}",
+        ]
+        return "\n".join(info)
+
+    def _load_link(self, token, dataset_path):
+        self.logger.debug(set_color(f"Loading link from [{dataset_path}].", "green"))
+        item_link_path = os.path.join(dataset_path, f"{token}.item_link")
+        user_link_path = os.path.join(dataset_path, f"{token}.user_link")
+        if not os.path.isfile(item_link_path) and not os.path.isfile(user_link_path):
+            raise ValueError(f"[{token}.item_link] and [{token}.user_link] not found in [{dataset_path}].")
+        item_df = self._load_feat(item_link_path, "item_link")
+        user_df = self._load_feat(user_link_path, "user_link")
+        self._check_link(item_df, user_df)
+
+        item2entity, entity2item = {}, {}
+        for item_id, entity_id in zip(item_df[self.iid_field].values, item_df[self.entity_field].values):
+            item2entity[item_id] = entity_id
+            entity2item[entity_id] = item_id
+
+        user2entity, entity2user = {}, {}
+        for user_id, entity_id in zip(user_df[self.uid_field].values, user_df[self.entity_field].values):
+            user2entity[user_id] = entity_id
+            entity2user[entity_id] = user_id
+
+        return item2entity, entity2item, user2entity, entity2user
+
+    def _check_link(self, item_link, user_link):
+        link_warn_message = "link data requires field [{}]"
+        assert self.entity_field in item_link, link_warn_message.format(self.entity_field)
+        assert self.iid_field in item_link, link_warn_message.format(self.iid_field)
+        assert self.entity_field in user_link, link_warn_message.format(self.entity_field)
+        assert self.uid_field in user_link, link_warn_message.format(self.uid_field)
+
+    def _get_rec_token(self, field):
+        """Get set of entity tokens from fields in ``rec`` level."""
+        remap_list = self._get_remap_list(self.alias[field])
+        tokens, _ = self._concat_remaped_tokens(remap_list)
+        return set(tokens)
+
+    def _merge_item_and_entity(self):
+        """Merge item-id and entity-id into the same id-space."""
+        item_token = self.field2id_token[self.iid_field]
+        user_token = self.field2id_token[self.uid_field]
+        entity_token = self.field2id_token[self.head_entity_field]
+        item_num = len(item_token)
+        user_num = len(user_token)
+        item_link_num = len(self.item2entity)
+        user_link_num = len(self.user2entity)
+        entity_num = len(entity_token)
+
+        # reset user id
+        user_priority = np.array([token in self.user2entity for token in user_token])
+        user_order = np.argsort(user_priority, kind="stable")
+        user_id_map = np.zeros_like(user_order)
+        user_id_map[user_order] = np.arange(user_num)
+        new_user_id2token = user_token[user_order]
+        new_user_token2id = {t: i for i, t in enumerate(new_user_id2token)}
+        for field in self.alias["user_id"]:
+            self._reset_ent_remapID(field, user_id_map, new_user_id2token, new_user_token2id)
+
+        # reset item id
+        item_priority = np.array([token in self.item2entity for token in item_token])
+        item_order = np.argsort(item_priority, kind="stable")
+        item_id_map = np.zeros_like(item_order)
+        item_id_map[item_order] = np.arange(item_num)
+        new_item_id2token = item_token[item_order]
+        new_item_token2id = {t: i for i, t in enumerate(new_item_id2token)}
+        for field in self.alias["item_id"]:
+            self._reset_ent_remapID(field, item_id_map, new_item_id2token, new_item_token2id)
+
+        # reset entity id
+        entity_priority = np.array(
+            [  # these values will be used to set the order in which the entities are remapped
+                # 0 for padding and user, 1 for item, 2 for other entities
+                0 if token == "[PAD]" or token in self.entity2user else (1 if token in self.entity2item else 2)
+                for token in entity_token
+            ]
+        )
+        entity_order = np.argsort(entity_priority, kind="stable")
+        entity_id_map = np.zeros_like(entity_order)
+        for i in entity_order[1 : user_link_num + 1]:
+            entity_id_map[i] = new_user_token2id[self.entity2user[entity_token[i]]]
+        for i in entity_order[user_link_num + 1 : user_link_num + item_link_num + 1]:
+            entity_id_map[i] = new_item_token2id[self.entity2item[entity_token[i]]]
+        entity_id_map[entity_order[user_link_num + item_link_num + 1 :]] = np.arange(
+            user_num + item_num, user_num + item_num + entity_num - user_link_num - item_link_num - 1
+        )
+        new_entity_id2token = np.concatenate(
+            [new_user_id2token, new_item_id2token, entity_token[entity_order[user_link_num + item_link_num + 1 :]]]
+        )
+        for i in range(user_num - user_link_num, user_num):
+            new_entity_id2token[i] = self.user2entity[new_entity_id2token[i]]
+        for i in range(user_num + item_num - item_link_num, user_num + item_num):
+            new_entity_id2token[i] = self.item2entity[new_entity_id2token[i]]
+        new_entity_token2id = {t: i for i, t in enumerate(new_entity_id2token)}
+        for field in self.alias["entity_id"]:
+            self._reset_ent_remapID(field, entity_id_map, new_entity_id2token, new_entity_token2id)
+        self.field2id_token[self.entity_field] = new_entity_id2token
+        self.field2token_id[self.entity_field] = new_entity_token2id
+
+    def _filter_kg_by_triple_num(self):
+        """Filter by number of triples.
+
+        The interval of the number of triples can be set, and only entities/relations
+        whose number of triples is in the specified interval can be retained.
+        See :doc:`../user_guide/data/data_args` for detail arg setting.
+
+        Note:
+            Lower bound of the interval is also called k-core filtering, which means this method
+            will filter loops until all the entities and relations has at least k triples.
+        """
+        entity_kg_num_interval = self._parse_intervals_str(self.config["entity_kg_num_interval"])
+        relation_kg_num_interval = self._parse_intervals_str(self.config["relation_kg_num_interval"])
+        user_entity_kg_num_interval = self._parse_intervals_str(self.config["user_entity_kg_num_interval"])
+
+        if entity_kg_num_interval is None and relation_kg_num_interval is None:
+            return
+
+        entity_kg_num = Counter()
+        if entity_kg_num_interval is not None or user_entity_kg_num_interval is not None:
+            head_entity_kg_num = Counter(self.kg_feat[self.head_entity_field].values)
+            tail_entity_kg_num = Counter(self.kg_feat[self.tail_entity_field].values)
+            entity_kg_num = head_entity_kg_num + tail_entity_kg_num
+        relation_kg_num = Counter(self.kg_feat[self.relation_field].values) if relation_kg_num_interval else Counter()
+
+        while True:
+            item_entity_kg_num = Counter({k: v for k, v in entity_kg_num.items() if k not in self.entity2user})
+
+            item_ban_entities = self._get_illegal_ids_by_inter_num(
+                field=f"{self.head_entity_field}-{self.tail_entity_field}",
+                feat=None,
+                inter_num=item_entity_kg_num,
+                inter_interval=entity_kg_num_interval,
+            )
+
+            if user_entity_kg_num_interval is None:
+                ban_entities = item_ban_entities
+            else:
+                user_entity_kg_num = Counter({k: v for k, v in entity_kg_num.items() if k in self.entity2user})
+
+                user_ban_entities = self._get_illegal_ids_by_inter_num(
+                    field=f"{self.head_entity_field}-{self.tail_entity_field}",
+                    feat=None,
+                    inter_num=user_entity_kg_num,
+                    inter_interval=user_entity_kg_num_interval,
+                )
+
+                ban_entities = item_ban_entities | user_ban_entities
+
+            ban_relations = self._get_illegal_ids_by_inter_num(
+                field=self.relation_field,
+                feat=None,
+                inter_num=relation_kg_num,
+                inter_interval=relation_kg_num_interval,
+            )
+            if len(ban_entities) == 0 and len(ban_relations) == 0:
+                break
+
+            dropped_kg = pd.Series(False, index=self.kg_feat.index)
+            head_entity_kg = self.kg_feat[self.head_entity_field]
+            tail_entity_kg = self.kg_feat[self.tail_entity_field]
+            relation_kg = self.kg_feat[self.relation_field]
+            dropped_kg |= head_entity_kg.isin(ban_entities)
+            dropped_kg |= tail_entity_kg.isin(ban_entities)
+            dropped_kg |= relation_kg.isin(ban_relations)
+
+            entity_kg_num -= Counter(head_entity_kg[dropped_kg].values)
+            entity_kg_num -= Counter(tail_entity_kg[dropped_kg].values)
+            relation_kg_num -= Counter(relation_kg[dropped_kg].values)
+
+            dropped_index = self.kg_feat.index[dropped_kg]
+            self.logger.debug(f"[{len(dropped_index)}] dropped triples.")
+            self.kg_feat.drop(dropped_index, inplace=True)
+
+    def _create_ckg_source_target(self, form="numpy"):
+        """Create base collaborative knowledge graph.
+
+        Args:
+            form (str, optional): The format of the returned graph source and target.
+            Defaults to ``numpy``.
+        """
+        user_num = self.user_num
+
+        if form == "numpy":
+            hids = self.head_entities
+            tids = self.tail_entities
+
+            uids = self.inter_feat[self.uid_field].numpy()
+            iids = self.inter_feat[self.iid_field].numpy() + user_num
+
+            src = np.concatenate([uids, iids, hids])
+            tgt = np.concatenate([iids, uids, tids])
+        elif form == "torch":
+            kg_tensor = self.kg_feat
+            inter_tensor = self.inter_feat
+
+            hids = kg_tensor[self.head_entity_field]
+            tids = kg_tensor[self.tail_entity_field]
+
+            uids = inter_tensor[self.uid_field]
+            iids = inter_tensor[self.iid_field] + user_num
+
+            src = torch.cat([uids, iids, hids])
+            tgt = torch.cat([iids, uids, tids])
+        else:
+            raise NotImplementedError(f"form [{form}] has not been implemented.")
+
+        return src, tgt
+
+    def _create_ckg_sparse_matrix(self, form="coo", show_relation=False):
+        src, tgt = self._create_ckg_source_target(form="numpy")
+
+        ui_rel_num = self.inter_num
+        ui_rel_id = self.relation_num - 1
+        assert self.field2id_token[self.relation_field][ui_rel_id] == self.ui_relation
+
+        if not show_relation:
+            data = np.ones(len(src))
+        else:
+            kg_rel = self.kg_feat[self.relation_field].numpy()
+            ui_rel = np.full(2 * ui_rel_num, ui_rel_id, dtype=kg_rel.dtype)
+            data = np.concatenate([ui_rel, kg_rel])
+        mat = coo_matrix((data, (src, tgt)), shape=(self.entity_num, self.entity_num))
+        if form == "coo":
+            return mat
+        elif form == "csr":
+            return mat.tocsr()
+        else:
+            raise NotImplementedError(f"Sparse matrix format [{form}] has not been implemented.")
+
+    def _create_ckg_igraph(self, show_relation=False, directed=True):
+        import igraph as ig
+
+        vertex_type_attrs = np.concatenate(
+            [
+                [self.uid_field] * self.user_num,
+                [self.iid_field] * self.item_num,
+                [self.entity_field] * (self.entity_num - self.item_num),
+            ],
+            axis=0,
+        )
+        if show_relation:
+            n_ui_relations = self.inter_num * 2 if directed else self.inter_num
+            edge_type_attrs = np.concatenate(
+                [[self.ui_relation] * n_ui_relations, self.field2id_token[self.relation_field][self.relations]], axis=0
+            )
+        else:
+            edge_type_attrs = None
+
+        if directed:
+            src, tgt = self._create_ckg_source_target(form="numpy")
+        else:
+            hids = self.head_entities
+            tids = self.tail_entities
+
+            uids = self.inter_feat[self.uid_field].numpy()
+            iids = self.inter_feat[self.iid_field].numpy() + self.user_num
+
+            src = np.concatenate([uids, hids])
+            tgt = np.concatenate([iids, tids])
+
+        tuple_graph = list(zip(src, tgt))
+        ig_graph = ig.Graph(
+            edges=tuple_graph,
+            vertex_attrs={"type": vertex_type_attrs},
+            edge_attrs={"type": edge_type_attrs} if show_relation else None,
+            directed=directed,
+        )
+
+        return ig_graph
