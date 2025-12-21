@@ -207,8 +207,9 @@ class CAFE(KnowledgeRecommender):
 
     def fast_sample_path_with_target(self, mpath_id, user_id, target_id, num_paths, sample_size=100):
         """Sample one path given source and target, using BFS from both sides.
+
         Returns:
-            list of entity ids.
+            list: List of entity ids forming the path.
         """
         metapath = self.metapaths[mpath_id]
         path_len = len(metapath) - 1
@@ -524,11 +525,13 @@ class SymbolicNetwork(nn.Module):
 
     def forward(self, metapath, pos_paths, neg_pids):
         """Compute loss.
+
         Args:
             metapath: list of relations, e.g. [USER, (r1, e1),..., (r_n, e_n)].
-            uid: a LongTensor of user ids, with size [bs, ].
-            target_path: a LongTensor of node ids, with size [bs, len(metapath)],
-                    e.g. each path contains [u, e1,..., e_n].
+            pos_paths: a LongTensor of node ids, with size [bs, len(metapath)],
+                e.g. each path contains [u, e1,..., e_n].
+            neg_pids: a LongTensor of negative product ids.
+
         Returns:
             logprobs: sum of log probabilities of given target node ids, with size [bs, ].
         """

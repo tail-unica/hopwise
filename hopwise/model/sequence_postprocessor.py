@@ -46,9 +46,11 @@ class BaseSequencePostProcessor:
             sequences_scores (torch.Tensor): A tensor containing the scores for each sequence.
 
         Returns:
-            scores (torch.Tensor): A tensor of shape (user_num, item_num) containing the scores for each user and item.
-            user_topk_sequences (list): A list of lists, where each inner list contains:
-                [user_id, recommended_item, sequence_score, decoded_sequence].
+            tuple: A tuple containing:
+
+                - scores (torch.Tensor): A tensor of shape (user_num, item_num) containing the scores.
+                - user_topk_sequences (list): A list of lists with
+                    [user_id, recommended_item, score, decoded_sequence].
         """
         user_num = user_index.unique().numel()
         scores = torch.full((user_num, self.item_num), -torch.inf)

@@ -41,6 +41,7 @@ exclude_patterns = []
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 autoapi_dirs = ["../../hopwise"]
 autoapi_type = "python"
+autoapi_keep_files = True  # Keep generated files for debugging
 
 html_favicon = "static/favicon.ico"
 html_theme = "furo"
