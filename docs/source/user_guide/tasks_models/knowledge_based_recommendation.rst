@@ -20,6 +20,7 @@ Knowledge-based recommendation introduces an external knowledge graph to enhance
    model/knowledge_aware/kgcn
    model/knowledge_aware/kgnnls
    model/knowledge_aware/kglrr
+   model/knowledge_aware/kgrec
    model/knowledge_aware/pgpr
    model/knowledge_aware/cafe
    model/knowledge_aware/tprec

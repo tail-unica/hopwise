@@ -4,13 +4,16 @@ DistMult
 Introduction
 ---------------------
 
-`[paper] <...>`_
+`[paper] <https://arxiv.org/abs/1412.6575>`_
 
-**Title:** ....
+**Title:** Embedding Entities and Relations for Learning and Inference in Knowledge Bases
 
-**Authors:** ...
+**Authors:** Bishan Yang, Wen-tau Yih, Xiaodong He, Jianfeng Gao, Li Deng
 
-**Abstract:** ...
+**Abstract:** DistMult is a simple bilinear model for knowledge graph embedding. It represents
+each relation as a diagonal matrix and scores triplets using a bilinear function.
+Despite its simplicity, DistMult achieves competitive results on link prediction tasks.
+However, it can only model symmetric relations.
 
 
 Running with hopwise
@@ -18,9 +21,8 @@ Running with hopwise
 
 **Model Hyper-Parameters:**
 
-- ``embedding_size (int)`` : The embedding size of users, items, entities and relations. Defaults to ``64``.
-- ``loss_function (str)`` : The optimization loss function. Defaults to ``'inner_product'``. Range in ``['inner_product', 'transe']``.
-- ``margin (float)`` : The margin in margin loss, only be used when ``loss_function`` is set to ``'transe'``. Defaults to ``1.0``.
+- ``embedding_size (int)`` : The embedding size of entities and relations. Defaults to ``64``.
+- ``margin (float)`` : The margin used in the MarginRankingLoss. Defaults to ``1.0``.
 
 
 **A Running Example:**
@@ -31,7 +33,7 @@ Write the following code to a python file, such as `run.py`
 
    from hopwise.quick_start import run_hopwise
 
-   run_hopwise(model='CFKG', dataset='ml-100k')
+   run_hopwise(model='DistMult', dataset='ml-100k')
 
 And then:
 
@@ -47,7 +49,7 @@ If you want to use ``HyperTuning`` to tune hyper parameters of this model, you c
 .. code:: bash
 
    learning_rate choice [0.01,0.005,0.001,0.0005,0.0001]
-   loss_function choice ['inner_product', 'transe']
+   embedding_size choice [32,64,128,256]
    margin choice [0.5,1.0,2.0]
 
 Note that we just provide these hyper parameter ranges for reference only, and we can not guarantee that they are the optimal range of this model.

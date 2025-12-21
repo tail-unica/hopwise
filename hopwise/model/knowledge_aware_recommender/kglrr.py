@@ -536,13 +536,14 @@ class KGLRR(KnowledgeRecommender):
         return reg_loss * self.l2s_weight
 
     def check(self, check_list):
-        """
-        Logs the shape and contents of tensors in the provided check_list.
-        Each element in check_list is expected to be a tuple where the first item is a string (label)
-        and the second item is a tensor. For each tuple, this function:
-          - Converts the tensor to a NumPy array after detaching it from the computation graph and moving it to CPU.
-          - Logs the label and the shape of the array.
-          - Logs the array contents, with a threshold of 20 elements for display.
+        """Logs the shape and contents of tensors in the provided check_list.
+
+        Each element in check_list is expected to be a tuple where the first item
+        is a string (label) and the second item is a tensor. For each tuple, this
+        function converts the tensor to a NumPy array after detaching it from the
+        computation graph and moving it to CPU, then logs the label, shape and
+        array contents with a threshold of 20 elements for display.
+
         Args:
             check_list (list of tuple): List of (label, tensor) pairs to be logged for inspection.
         """

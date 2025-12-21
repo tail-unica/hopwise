@@ -4,13 +4,15 @@ TransD
 Introduction
 ---------------------
 
-`[paper] <...>`_
+`[paper] <https://aclanthology.org/P15-1067/>`_
 
-**Title:** ....
+**Title:** Knowledge Graph Embedding via Dynamic Mapping Matrix
 
-**Authors:** ...
+**Authors:** Guoliang Ji, Shizhu He, Liheng Xu, Kang Liu, Jun Zhao
 
-**Abstract:** ...
+**Abstract:** TransD constructs a dynamic mapping matrix for each entity-relation pair,
+replacing the static projection matrix in TransR. This reduces the number of parameters
+and allows for more efficient learning while capturing the diversity of entities and relations.
 
 
 Running with hopwise
@@ -18,9 +20,8 @@ Running with hopwise
 
 **Model Hyper-Parameters:**
 
-- ``embedding_size (int)`` : The embedding size of users, items, entities and relations. Defaults to ``64``.
-- ``loss_function (str)`` : The optimization loss function. Defaults to ``'inner_product'``. Range in ``['inner_product', 'transe']``.
-- ``margin (float)`` : The margin in margin loss, only be used when ``loss_function`` is set to ``'transe'``. Defaults to ``1.0``.
+- ``embedding_size (int)`` : The embedding size of entities and relations. Defaults to ``64``.
+- ``margin (float)`` : The margin used in the TripletMarginLoss. Defaults to ``1.0``.
 
 
 **A Running Example:**
@@ -31,7 +32,7 @@ Write the following code to a python file, such as `run.py`
 
    from hopwise.quick_start import run_hopwise
 
-   run_hopwise(model='CFKG', dataset='ml-100k')
+   run_hopwise(model='TransD', dataset='ml-100k')
 
 And then:
 
@@ -47,7 +48,7 @@ If you want to use ``HyperTuning`` to tune hyper parameters of this model, you c
 .. code:: bash
 
    learning_rate choice [0.01,0.005,0.001,0.0005,0.0001]
-   loss_function choice ['inner_product', 'transe']
+   embedding_size choice [32,64,128]
    margin choice [0.5,1.0,2.0]
 
 Note that we just provide these hyper parameter ranges for reference only, and we can not guarantee that they are the optimal range of this model.

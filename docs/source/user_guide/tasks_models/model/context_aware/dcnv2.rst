@@ -76,6 +76,7 @@ Tuning Hyper Parameters
 If you want to use ``HyperTuning`` to tune hyper parameters of this model, you can copy the following settings and name it as ``hyper.test``.
 
 .. code:: bash
+
    # structure = 'stacked', mixed = False
    learning_rate choice [0.01,0.005,0.001,0.0005,0.0001]
    mlp_hidden_size choice ['[256,256]','[512,512]','[768,768]','[1024, 1024]','[2048, 2048]']
@@ -84,7 +85,7 @@ If you want to use ``HyperTuning`` to tune hyper parameters of this model, you c
    reg_weight choice [0.1,1,2,5,10]
 
    # structure = 'stacked', mixed = True
-   learning_rate choice [0.01 0.005,0.001,0.0005,0.0001]
+   learning_rate choice [0.01,0.005,0.001,0.0005,0.0001]
    mlp_hidden_size choice ['[256,256]','[512,512]','[768,768]','[1024, 1024]','[2048, 2048]']
    cross_layer_num choice [2,3,4,5]
    expert_num choice [3,4,5]
