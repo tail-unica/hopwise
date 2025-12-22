@@ -486,6 +486,9 @@ class Config:
 
         deep_dict_update(default_eval_args, self.final_config_dict["eval_args"])
 
+        if default_eval_args["split"] == "TS" and default_eval_args["order"] != "TO":
+            raise ValueError("The ordering args for time-based splitting must be 'TO'.")
+
         mode = default_eval_args["mode"]
         # backward compatible
         if isinstance(mode, str):
