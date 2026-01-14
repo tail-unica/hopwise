@@ -24,7 +24,7 @@ import pandas as pd
 import torch
 from sklearn.mixture import GaussianMixture as GMM
 
-from hopwise.data.dataset import KGSeqDataset, KnowledgeBasedDataset, KnowledgePathDataset, SequentialDataset
+from hopwise.data.dataset import Dataset, KGSeqDataset, KnowledgeBasedDataset, KnowledgePathDataset, SequentialDataset
 from hopwise.data.interaction import Interaction
 from hopwise.sampler import SeqSampler
 from hopwise.utils import FeatureType, progress_bar, set_color
@@ -730,6 +730,8 @@ class RPGDataset(SequentialDataset):
         """
         import faiss
 
+        breakpoint()
+
         #  Load sentence transformer embeddings
         embeddings = np.vstack(self.itememb_feat["item_embedding"].to_numpy())
 
@@ -759,6 +761,152 @@ class RPGDataset(SequentialDataset):
 
         ivf_index = faiss.downcast_index(index.index)
         invlists = faiss.extract_index_ivf(ivf_index).invlists
+        ls = invlists.list_size(0)
+        # extract semantic id
+        pq_codes = faiss.rev_swig_ptr(invlists.get_codes(0), ls * invlists.code_size)
+        # reshape to obtain |items| x |code_size|
+        pq_codes = pq_codes.reshape(-1, invlists.code_size)
+
+        faiss_sem_ids = []
+        n_bytes = pq_codes.shape[1]
+        for u8code in pq_codes:
+            bs = faiss.BitstringReader(faiss.swig_ptr(u8code), n_bytes)
+            code = []
+            for i in range(self.n_digit):
+                code.append(bs.read(int(math.log2(self.codebook_size))))
+            faiss_sem_ids.append(code)
+        pq_codes = np.array(faiss_sem_ids)
+
+        # Create mapping item -> semantic id
+        item2sem_ids = {}
+        for item in range(pq_codes.shape[0]):
+            item2sem_ids[item + 1] = tuple(pq_codes[item].tolist())
+
+        return item2sem_ids
+
+    def shift_semantic_ids(self):
+        """
+        Converts semantic IDs to tokens.
+
+        This method updates the `item2sem_ids` dictionary by converting
+        each semantic ID into a corresponding token. The conversion is done by adding
+        to each number in the tuple, an offset of self.codebook_size * digit + 1.
+        This is used when doing MTP (Multi Token Prediction) through multiple heads.
+
+        Args:
+
+        Returns:
+            dict: A dictionary mapping items to their corresponding tokens.
+        """
+        item2shifted_sem_id = torch.zeros((self.item_num, self.n_digit), dtype=torch.long)
+        for item, semantic_id_tuple in self.item2sem_ids.items():
+            item2shifted_sem_id[int(item)] = torch.LongTensor(semantic_id_tuple)
+            for digit in range(self.n_digit):
+                # "+ 1" as 0 is reserved for padding
+                item2shifted_sem_id[int(item), digit] += self.codebook_size * digit + 1
+        return item2shifted_sem_id
+
+    def __str__(self):
+        info = [
+            super().__str__(),
+            set_color("Vocabulary Size", "green") + f": {self.vocab_size}",
+            set_color("Number of digits", "green") + f": {self.n_digit}",
+            set_color("Codebook Size and number of PQ centroids", "green") + f": {self.codebook_size}",
+            set_color("FAISS Configuration", "green") + f": {self.index_factory}",
+            set_color("Percentage of unique Semantic IDs", "green")
+            + f": {len(set(self.item2sem_ids.values())) / len(self.item2sem_ids)}",
+        ]
+
+        return "\n".join(info)
+
+
+class SemanticMFDataset(Dataset):
+    """
+    An example when "codebook_size == 256, n_codebooks == 32":
+        0: padding
+        1-256: digit 1
+        257-512: digit 2
+        ...
+        7937-8192: digit 32
+        8193: eos
+
+    Args:
+        config (dict): The configuration dictionary.
+        dataset (AbstractDataset): The dataset object.
+
+    Attributes:
+        n_codebook_bits (int): The number of bits for the codebook.
+        index_factory (str): The index factory name for the OPQ algorithm.
+        item2tokens (dict): A dictionary mapping items to their semantic IDs.
+        base_user_id (int): The base user ID.
+        n_user_tokens (int): The number of user tokens.
+        eos_token (int): The end-of-sequence token.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+        self.n_codebook = config["n_codebook"]
+        self.codebook_size = config["codebook_size"]
+        self.index_factory = f"IVF1,PQ{self.n_codebook}x{int(math.log2(self.codebook_size))}"
+        self.item2sem_ids = self.ANN()
+        self.item2shifted_sem_id = self.shift_semantic_ids()
+
+        self.eos_token = self.n_digit * self.codebook_size + 1
+
+    @property
+    def n_digit(self):
+        """
+        Returns the number of digits for the tokenizer.
+
+        The number of digits is determined by the value of `n_codebooks` in the configuration.
+        """
+        return self.n_codebook
+
+    @property
+    def vocab_size(self) -> int:
+        """
+        Returns the vocabulary size for the TIGER tokenizer.
+        """
+        return self.eos_token + 1
+
+    def get_embeddings(self):
+        # sort self.itememb_feat by item_embedding_id
+        self.itememb_feat = self.itememb_feat.sort_values(by="item_embedding_id").reset_index(drop=True)
+        embeddings = np.vstack(self.itememb_feat["item_embedding"].to_numpy())
+
+        # which items are used during training?
+        training_mask = np.zeros(self.item_num - 1, dtype=bool)
+        # there can be items not in the training set, so we use the item ids to mask them
+        training_items = self.item_feat_train.item_id.apply(lambda x: self.field2token_id[self.iid_field][x])
+        training_mask[training_items - 1] = True
+
+        return embeddings[training_mask], embeddings
+
+    def ANN(self):
+        import faiss
+
+        """
+        Approximate Nearest Neighbor search to generate semantic IDs.
+        """
+
+        train_embeddings, embeddings = self.get_embeddings()
+
+        train_embeddings /= np.linalg.norm(train_embeddings, axis=1, keepdims=True)
+        embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+        faiss.omp_set_num_threads(self.config["faiss_omp_num_threads"])
+
+        # generate ANN from self.index_factory string using inner product to calculate distances
+        index = faiss.index_factory(embeddings.shape[1], self.index_factory, faiss.METRIC_INNER_PRODUCT)
+
+        self.logger.info(set_color("Training index...", "green"))
+
+        index.train(train_embeddings)
+        index.add(embeddings)
+
+        invlists = faiss.extract_index_ivf(index).invlists
+
         ls = invlists.list_size(0)
         # extract semantic id
         pq_codes = faiss.rev_swig_ptr(invlists.get_codes(0), ls * invlists.code_size)

@@ -119,6 +119,7 @@ class AbstractDataLoader(torch.utils.data.DataLoader):
         info = [set_color(f"{self.split} {dataset}", "green")]
         info.extend(
             [
+                set_color("The number of interactions", "blue") + f": {len(inter_feat)}",
                 set_color("The number of users", "blue") + f": {len(inter_feat[self.uid_field].unique())}",
                 set_color("Average actions of users in inters", "blue") + f": {self._dataset.avg_actions_of_users}",
                 set_color("The number of items in inters", "blue") + f": {self._dataset.item_num}",

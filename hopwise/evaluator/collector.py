@@ -215,7 +215,8 @@ class Collector:
 
         # allowed items during test period
         items = {item.item() for item in eval_data.dataset.item_feat[eval_data.dataset.iid_field]}
-        allowed_items = eval_data.dataset.item_feat_test[eval_data.dataset.iid_field].to_numpy()
+        eval_split = getattr(eval_data.dataset, f"item_feat_{eval_data.split}")
+        allowed_items = eval_split[eval_data.dataset.iid_field].to_numpy()
         allowed_items = set(raw_item_id2item_id[item_id] for item_id in allowed_items)
         items = list(items - allowed_items)
 

@@ -333,7 +333,6 @@ class Dataset(torch.utils.data.Dataset):
             raise ValueError(f"{field_name} must be loaded if {source.value}_feat is loaded.")
         if feat is not None:
             feat.drop_duplicates(subset=[field], keep="first", inplace=True)
-
         if field in self.field2source:
             self.field2source[field] = FeatureSource(source.value + "_id")
         return feat
@@ -355,7 +354,7 @@ class Dataset(torch.utils.data.Dataset):
             return
 
         model = self.config["model"]
-        if model in ["Similarity"]:
+        if model in ["Similarity", "SemanticMF"]:
             if self.config["encoder_name"] is not None:
                 token = f"{token}_{self.config['encoder_name']}"
             else:
@@ -367,7 +366,10 @@ class Dataset(torch.utils.data.Dataset):
             preload_fields = self.config["preload_weight"]
             load_col = self.config["load_col"]
             if preload_fields is not None and any(col in load_col[suf] for col in preload_fields):
-                feat_path = self.config["preload_weight_path"] or dataset_path
+                if self.config["model"] in ["Similarity", "SemanticMF"] and self.config["encoder_path"] is not None:
+                    feat_path = os.path.join(self.config["encoder_path"], self.dataset_name)
+                else:
+                    feat_path = self.config["preload_weight_path"] or dataset_path
             else:
                 feat_path = dataset_path
             feat_path = os.path.join(feat_path, f"{token}.{suf}")

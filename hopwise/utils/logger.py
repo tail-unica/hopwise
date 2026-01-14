@@ -112,9 +112,26 @@ def init_logger(config):
     if config["proc_title"] is None:
         config_str = "".join([str(key) for key in config.final_config_dict.values()])
         md5 = hashlib.md5(config_str.encode(encoding="utf-8")).hexdigest()[:6]
-        logfilename = "{}/{}-{}-{}-{}.log".format(
-            config["model"], config["model"], config["dataset"], get_local_time(), md5
-        )
+        if config["model"] in ["Similarity", "SemanticMF"] and config["encoder_name"] is not None:
+            if "self_attention" in config and "loss_fn" in config:
+                logfilename = "{}/{}-{}-{}-{}-{}-{}-{}.log".format(
+                    config["model"],
+                    config["model"],
+                    config["encoder_name"],
+                    config["self_attention"],
+                    config["loss_fn"],
+                    config["dataset"],
+                    get_local_time(),
+                    md5,
+                )
+            else:
+                logfilename = "{}/{}-{}-{}-{}-{}.log".format(
+                    config["model"], config["model"], config["encoder_name"], config["dataset"], get_local_time(), md5
+                )
+        else:
+            logfilename = "{}/{}-{}-{}-{}.log".format(
+                config["model"], config["model"], config["dataset"], get_local_time(), md5
+            )
     else:
         logfilename = "{}/{}-{}.log".format(config["model"], config["proc_title"], get_local_time())
 

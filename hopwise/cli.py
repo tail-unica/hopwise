@@ -109,6 +109,7 @@ def train(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_
                     world_size=world_size,
                     ip=ip,
                     port=port,
+                    saved=method not in ["Similarity", "SemanticMF", "Random", "ItemKNN", "Pop"],
                     group_offset=group_offset,
                 )
     except KeyboardInterrupt:

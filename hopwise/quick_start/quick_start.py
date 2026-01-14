@@ -148,10 +148,13 @@ def run_hopwise(
         train_data, valid_data, test_data = data_preparation(config, dataset)
 
         # visualize split data
-        if config["show_split_data"]:
+        if config["show_split_data"] is not None:
             logger.info(train_data)
-            logger.info(valid_data)
-            logger.info(test_data)
+            if config["show_split_data"] in ["valid_and_test", "valid_only"]:
+                logger.info(valid_data)
+
+            if config["show_split_data"] in ["valid_and_test", "test_only"]:
+                logger.info(test_data)
 
         # model loading and initialization
         init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
