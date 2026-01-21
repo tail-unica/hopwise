@@ -463,8 +463,8 @@ class KnowledgeBasedDataset(Dataset):
                       "green") + f": {self.item_num - len(self.item2entity)}",
             set_color("The sparsity of the KG","green") + f": {self.sparsity_kg_rel}",
             set_color("The sparsity of the KG (relation-aware)","green") + f": {self.sparsity_kg}",
-            set_color("The average degree of entities in the KG:","green") + f": {self.avg_degree_kg}",
-            set_color("The average degree of items in the KG:","green") + f": {self.avg_degree_kg_item}",
+            set_color("The average degree of entities in the KG","green") + f": {self.avg_degree_kg}",
+            set_color("The average degree of items in the KG","green") + f": {self.avg_degree_kg_item}",
         ]  # yapf: disable
         return "\n".join(info)
 
@@ -1202,7 +1202,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
     def __str__(self):
         info = [
             super().__str__(),
-            f"The number of users that have been linked to KG: {len(self.user2entity)}",
+            set_color("The number of users that have been linked to KG", "green") + f": {len(self.user2entity)}",
         ]
         return "\n".join(info)
 
@@ -1472,3 +1472,117 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
         )
 
         return ig_graph
+
+    def _create_hetero_ckg_graph(self, form="dgl", directed=False):
+        """DGL expects each node type to be in the range [0, num_nodes_dict[ntype])."""
+        import dgl
+
+        user_num, item_num = self.user_num, self.item_num
+        inter_tensor = self.inter_feat
+        kg_tensor = self.kg_feat
+
+        uids = inter_tensor[self.uid_field]
+        iids = inter_tensor[self.iid_field]
+
+        graph_data = {(self.uid_field, self.ui_relation, self.iid_field): (uids, iids)}
+        if not directed:
+            graph_data[(self.iid_field, self.ui_relation, self.uid_field)] = (iids, uids)
+
+        hids = kg_tensor[self.head_entity_field]
+        tids = kg_tensor[self.tail_entity_field]
+        kg_rel = kg_tensor[self.relation_field]
+        entity_token = self.field2id_token[self.entity_field]
+        item_entities_mask = np.array([token != "[PAD]" and token in self.entity2item for token in entity_token])
+        user_entities_mask = np.array([token != "[PAD]" and token in self.entity2user for token in entity_token])
+        entities_not_items_and_users_mask = np.array(
+            [
+                token != "[PAD]" and token not in self.entity2item and token not in self.entity2user
+                for token in entity_token
+            ]
+        )
+        for rel, rel_id in self.field2token_id[self.relation_field].items():
+            if rel in ["[PAD]", self.ui_relation]:
+                continue
+
+            rel_mask = kg_rel == rel_id
+            rel_hids = hids[rel_mask]
+            rel_tids = tids[rel_mask]
+
+            rel_hids_items = np.take(item_entities_mask, rel_hids)
+            rel_tids_items = np.take(item_entities_mask, rel_tids)
+            rel_hids_users = np.take(user_entities_mask, rel_hids)
+            rel_tids_users = np.take(user_entities_mask, rel_tids)
+            rel_hids_ents = np.take(entities_not_items_and_users_mask, rel_hids)
+            rel_tids_ents = np.take(entities_not_items_and_users_mask, rel_tids)
+
+            # Entity-entity links
+            entity_entity_links = np.logical_and(rel_hids_ents, rel_tids_ents)
+            if entity_entity_links.any():
+                ee_hids = rel_hids[entity_entity_links] - user_num - item_num
+                ee_tids = rel_tids[entity_entity_links] - user_num - item_num
+                graph_data[(self.entity_field, rel, self.entity_field)] = (ee_hids, ee_tids)
+
+            # Item-item links
+            item_item_links = np.logical_and(rel_hids_items, rel_tids_items)
+            if item_item_links.any():
+                ii_hids = rel_hids[item_item_links] - user_num
+                ii_tids = rel_tids[item_item_links] - user_num
+                graph_data[(self.iid_field, rel, self.iid_field)] = (ii_hids, ii_tids)
+
+            # User-user links
+            user_user_links = np.logical_and(rel_hids_users, rel_tids_users)
+            if user_user_links.any():
+                uu_hids = rel_hids[user_user_links]
+                uu_tids = rel_tids[user_user_links]
+                graph_data[(self.uid_field, rel, self.uid_field)] = (uu_hids, uu_tids)
+
+            # Entity-item links
+            entity_item_links = np.logical_and(rel_hids_ents, rel_tids_items)
+            if entity_item_links.any():
+                ei_hids = rel_hids[entity_item_links] - user_num - item_num
+                ei_tids = rel_tids[entity_item_links] - user_num
+                graph_data[(self.entity_field, rel, self.iid_field)] = (ei_hids, ei_tids)
+
+            # Item-entity links
+            item_entity_links = np.logical_and(rel_hids_items, rel_tids_ents)
+            if item_entity_links.any():
+                ie_hids = rel_hids[item_entity_links] - user_num
+                ie_tids = rel_tids[item_entity_links] - user_num - item_num
+                graph_data[(self.iid_field, rel, self.entity_field)] = (ie_hids, ie_tids)
+
+            # User-entity links
+            user_entity_links = np.logical_and(rel_hids_users, rel_tids_ents)
+            if user_entity_links.any():
+                ue_hids = rel_hids[user_entity_links]
+                ue_tids = rel_tids[user_entity_links] - user_num - item_num
+                graph_data[(self.uid_field, rel, self.entity_field)] = (ue_hids, ue_tids)
+
+            # Entity-user links
+            entity_user_links = np.logical_and(rel_hids_ents, rel_tids_users)
+            if entity_user_links.any():
+                eu_hids = rel_hids[entity_user_links] - user_num - item_num
+                eu_tids = rel_tids[entity_user_links]
+                graph_data[(self.entity_field, rel, self.uid_field)] = (eu_hids, eu_tids)
+
+            # Item-user links
+            item_user_links = np.logical_and(rel_hids_items, rel_tids_users)
+            if item_user_links.any():
+                iu_hids = rel_hids[item_user_links] - user_num
+                iu_tids = rel_tids[item_user_links]
+                graph_data[(self.iid_field, rel, self.uid_field)] = (iu_hids, iu_tids)
+
+            # User-item links
+            user_item_links = np.logical_and(rel_hids_users, rel_tids_items)
+            if user_item_links.any():
+                ui_hids = rel_hids[user_item_links]
+                ui_tids = rel_tids[user_item_links]
+                graph_data[(self.uid_field, rel, self.iid_field)] = (ui_hids, ui_tids)
+
+        num_nodes_dict = {
+            self.uid_field: user_num,
+            self.iid_field: item_num,
+            self.entity_field: self.entity_num - item_num - user_num,
+        }
+        graph = dgl.heterograph(graph_data, num_nodes_dict=num_nodes_dict)
+
+        return graph

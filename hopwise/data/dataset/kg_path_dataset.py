@@ -709,7 +709,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return "\n".join(info)
 
 
-class UserItemKnowledgePathDataset(UserItemKnowledgeBasedDataset, KnowledgePathDataset):
+class UserItemKnowledgePathDataset(KnowledgePathDataset, UserItemKnowledgeBasedDataset):
     """:class:`UserItemKnowledgePathDataset` is based on :class:`~hopwise.data.dataset.KnowledgePathDataset`,
     and :class:`~hopwise.data.dataset.UserItemKnowledgeBasedDataset` to be used with user-side KG too.
     It provides an interface to prepare tokenized knowledge graph path for path language modeling.
@@ -736,13 +736,12 @@ class UserItemKnowledgePathDataset(UserItemKnowledgeBasedDataset, KnowledgePathD
     """
 
     def __init__(self, config):
-        UserItemKnowledgeBasedDataset.__init__(self, config)
-
         self._path_dataset = None
         self._tokenized_dataset = None
         self._tokenizer = None
         KnowledgePathDataset.__init__(self, config)
         KnowledgePathDataset._get_field_from_config(self)
+        UserItemKnowledgeBasedDataset.__init__(self, config)
 
 
 def _check_temporal_causality_feasibility(temporal_matrix, pos_iid):
