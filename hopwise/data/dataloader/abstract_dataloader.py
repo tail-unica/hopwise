@@ -111,12 +111,16 @@ class AbstractDataLoader(torch.utils.data.DataLoader):
             __name = "_dataset"
         return super().__getattribute__(__name)
 
+    @property
+    def split(self):
+        return self._split
+
     def __str__(self):
         inter_feat = self._dataset.inter_feat
         dataset = self.config["dataset"]
         benchmark_item_file = self.config["benchmark_item_filename"]
 
-        info = [set_color(f"{self.split} {dataset}", "green")]
+        info = [set_color(f"{self.split} {dataset}", "yellow")]
         info.extend(
             [
                 set_color("The number of interactions", "blue") + f": {len(inter_feat)}",
@@ -124,7 +128,6 @@ class AbstractDataLoader(torch.utils.data.DataLoader):
                 set_color("Average actions of users in inters", "blue") + f": {self._dataset.avg_actions_of_users}",
                 set_color("The number of items in inters", "blue") + f": {self._dataset.item_num}",
                 set_color("Average actions of items in inters", "blue") + f": {self._dataset.avg_actions_of_items}",
-                set_color("The number of inters", "blue") + f": {self._dataset.inter_num}",
                 set_color("The sparsity of the dataset", "blue") + f": {self.sparsity_data_split * 100}%",
             ]
         )

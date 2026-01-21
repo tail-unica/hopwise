@@ -293,8 +293,16 @@ def data_preparation(config, dataset):
                         dataloaders=(train_data, valid_inter_data, valid_kg_data, test_inter_data, test_kg_data),
                     )
 
+                valid_inter_data._split = "valid interactions"
+                valid_kg_data._split = "valid knowledge graph"
+                test_inter_data._split = "test interactions"
+                test_kg_data._split = "test knowledge graph"
+
+                train_data._split = "train"
+
                 valid_data = [valid_inter_data, valid_kg_data]
                 test_data = [test_inter_data, test_kg_data]
+
             else:
                 # then we want to use the whole kg
                 kg_sampler = KGSampler(
@@ -313,6 +321,7 @@ def data_preparation(config, dataset):
 
                 if config["save_dataloaders"]:
                     save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
+
         else:
             train_dataset, valid_dataset, test_dataset = built_datasets
             train_sampler, valid_sampler, test_sampler = create_samplers(config, dataset, built_datasets)
@@ -326,9 +335,9 @@ def data_preparation(config, dataset):
             if config["save_dataloaders"]:
                 save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
 
-    train_data._split = "train"
-    valid_data._split = "valid"
-    test_data._split = "test"
+            (train_data._split,) = "train"
+            valid_data._split = "valid"
+            test_data._split = "test"
 
     logger = getLogger()
     logger.info(

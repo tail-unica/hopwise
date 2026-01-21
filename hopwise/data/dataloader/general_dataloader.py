@@ -16,12 +16,9 @@ from logging import getLogger
 import numpy as np
 import torch
 
-from hopwise.data.dataloader.abstract_dataloader import (
-    AbstractDataLoader,
-    NegSampleDataLoader,
-)
+from hopwise.data.dataloader.abstract_dataloader import AbstractDataLoader, NegSampleDataLoader
 from hopwise.data.interaction import Interaction, cat_interactions
-from hopwise.utils import InputType, ModelType
+from hopwise.utils import InputType, ModelType, set_color
 
 
 class TrainDataLoader(NegSampleDataLoader):
@@ -350,3 +347,60 @@ class FullSortLPEvalDataLoader(FullSortEvalDataLoader):
         self.kg_df = self._source_df
 
         super().__init__(config, dataset, sampler, shuffle=shuffle)
+
+    def __str__(self):
+        kg_feat = self._dataset.kg_feat
+        dataset = self.config["dataset"]
+        benchmark_item_file = self.config["benchmark_item_filename"]
+
+        info = [set_color(f"{self.split} {dataset}", "yellow")]
+        info.extend(
+            [
+                set_color("The number of triplets", "green") + f": {len(kg_feat)}",
+                set_color("The number of head entities", "green") + f": {len(kg_feat.head_id.unique())}",
+                set_color(f"Average actions of head entities in {self.split} knowledge graph", "green")
+                + f": {self.avg_actions(kg_feat, 'head_id')}",
+                set_color("The number of tail entities", "green") + f": {len(kg_feat.tail_id.unique())}",
+                set_color(f"Average actions of tail entities in {self.split} knowledge graph", "green")
+                + f": {self.avg_actions(kg_feat, 'tail_id')}",
+                set_color("The sparsity of the Knowledge Graph", "green")
+                + f": {self.sparsity_knowledge_data_split * 100}%",
+            ]
+        )
+        if benchmark_item_file is not None:
+            import numpy as np
+
+            item_feat = getattr(self._dataset, f"item_feat_{self.split}")[self._dataset.iid_field].to_numpy()
+            info.extend(
+                [
+                    set_color(f"The number of valid items in {self.split} phase", "blue")
+                    + f": {len(np.unique(item_feat))}",
+                ]
+            )
+        return "\n".join(info)
+
+    @property
+    def sparsity_knowledge_data_split(self):
+        """Get the sparsity of this knowledge dataset.
+
+        Returns:
+            float: Sparsity of this knowledge dataset.
+        """
+        heads = len(self._dataset.kg_feat.head_id.unique())
+        tails = len(self._dataset.kg_feat.tail_id.unique())
+        return 1 - len(self._dataset.kg_feat) / heads / tails
+
+    def avg_actions(self, feat, group_field):
+        """Get the average number of entity heads in kg split.
+
+        Returns:
+            numpy.float64: Average number of entity heads in knowledge graph.
+        """
+        from collections import Counter
+
+        import pandas as pd
+
+        if isinstance(feat, pd.DataFrame):
+            return np.mean(feat.groupby(group_field).size())
+        else:
+            return np.mean(list(Counter(feat[group_field].numpy()).values()))
