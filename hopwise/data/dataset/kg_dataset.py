@@ -530,6 +530,8 @@ class KnowledgeBasedDataset(Dataset):
         return set(tokens)
 
     def _reset_ent_remapID(self, field, idmap, id2token, token2id):
+        if field == self.entity_field:
+            breakpoint()
         self.field2id_token[field] = id2token
         self.field2token_id[field] = token2id
         for feat in self.field2feats(field):
@@ -646,6 +648,15 @@ class KnowledgeBasedDataset(Dataset):
             int: Number of different tokens of entities, including virtual entities.
         """
         return self.num(self.entity_field)
+
+    @property
+    def auxiliary_entity_num(self):
+        """Get the number of different tokens of auxiliary entities (not items).
+
+        Returns:
+            int: Number of different tokens of auxiliary entities.
+        """
+        return self.entity_num - self.item_num
 
     @property
     def head_entities(self):
@@ -1134,6 +1145,15 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
         the interaction relation between users and items.
     """
 
+    @property
+    def auxiliary_entity_num(self):
+        """Get the number of different tokens of auxiliary entities (not users nor items).
+
+        Returns:
+            int: Number of different tokens of auxiliary entities.
+        """
+        return self.entity_num - self.user_num - self.item_num
+
     def _filter_link(self):
         """Filter rows of :attr:`item2entity` and :attr:`entity2item`,
         whose ``entity_id`` doesn't occur in kg triplets and
@@ -1268,7 +1288,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
         item_id_map = np.zeros_like(item_order)
         item_id_map[item_order] = np.arange(item_num)
         new_item_id2token = item_token[item_order]
-        new_item_token2id = {t: i for i, t in enumerate(new_item_id2token)}
+        new_item_token2id = {t: i + self.user_num for i, t in enumerate(new_item_id2token)}
         for field in self.alias["item_id"]:
             self._reset_ent_remapID(field, item_id_map, new_item_id2token, new_item_token2id)
 
@@ -1383,14 +1403,12 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             form (str, optional): The format of the returned graph source and target.
             Defaults to ``numpy``.
         """
-        user_num = self.user_num
-
         if form == "numpy":
             hids = self.head_entities
             tids = self.tail_entities
 
             uids = self.inter_feat[self.uid_field].numpy()
-            iids = self.inter_feat[self.iid_field].numpy() + user_num
+            iids = self.inter_feat[self.iid_field].numpy()  # + user_num
 
             src = np.concatenate([uids, iids, hids])
             tgt = np.concatenate([iids, uids, tids])
@@ -1402,7 +1420,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             tids = kg_tensor[self.tail_entity_field]
 
             uids = inter_tensor[self.uid_field]
-            iids = inter_tensor[self.iid_field] + user_num
+            iids = inter_tensor[self.iid_field]  # + user_num
 
             src = torch.cat([uids, iids, hids])
             tgt = torch.cat([iids, uids, tids])
@@ -1439,7 +1457,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             [
                 [self.uid_field] * self.user_num,
                 [self.iid_field] * self.item_num,
-                [self.entity_field] * (self.entity_num - self.item_num),
+                [self.entity_field] * (self.auxiliary_entity_num),
             ],
             axis=0,
         )
@@ -1458,7 +1476,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             tids = self.tail_entities
 
             uids = self.inter_feat[self.uid_field].numpy()
-            iids = self.inter_feat[self.iid_field].numpy() + self.user_num
+            iids = self.inter_feat[self.iid_field].numpy()  # + self.user_num
 
             src = np.concatenate([uids, hids])
             tgt = np.concatenate([iids, tids])
@@ -1482,7 +1500,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
         kg_tensor = self.kg_feat
 
         uids = inter_tensor[self.uid_field]
-        iids = inter_tensor[self.iid_field]
+        iids = inter_tensor[self.iid_field] - user_num
 
         graph_data = {(self.uid_field, self.ui_relation, self.iid_field): (uids, iids)}
         if not directed:
@@ -1575,13 +1593,13 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             user_item_links = np.logical_and(rel_hids_users, rel_tids_items)
             if user_item_links.any():
                 ui_hids = rel_hids[user_item_links]
-                ui_tids = rel_tids[user_item_links]
+                ui_tids = rel_tids[user_item_links] - user_num
                 graph_data[(self.uid_field, rel, self.iid_field)] = (ui_hids, ui_tids)
 
         num_nodes_dict = {
             self.uid_field: user_num,
             self.iid_field: item_num,
-            self.entity_field: self.entity_num - item_num - user_num,
+            self.entity_field: self.auxiliary_entity_num,
         }
         graph = dgl.heterograph(graph_data, num_nodes_dict=num_nodes_dict)
 
