@@ -176,7 +176,46 @@ class TestExplainabilityLID(unittest.TestCase):
                 self.assertEqual(float(out[key]), float(expected))
 
 
-                
+class TestExplainabilitySED(unittest.TestCase):
+    def test_sed(self):
+        name = "sed"
+        Metric = metrics_dict[name](config)
+        key = f"SED@{K}"
+        dp = config["metric_decimal_place"]
+
+        for case in CASES:
+            with self.subTest(case=case["name"]):
+                # --- run metric ---
+                dataobject = _DummyDataObject(case["paths"])
+                out = Metric.calculate_metric(dataobject)
+                self.assertIn(key, out)
+
+                # --- expected (computed here, per case) ---
+                # Real implementation (metrics.py):
+                #   shared_entity_id = path[-2][-1]
+                #   SED_u = (#distinct shared_entity_id) / (#paths for user u)
+                #   final = average over users
+
+                user_total_paths = defaultdict(int)
+                user_shared_entities = defaultdict(set)
+
+                for user, _, _, path in case["paths"]:
+                    shared_entity_id = path[-2][-1]  # penultimate node
+                    user_total_paths[user] += 1
+                    user_shared_entities[user].add(shared_entity_id)
+
+                per_user_sed = []
+                for user in user_total_paths:
+                    n_paths = user_total_paths[user]
+                    per_user_sed.append(
+                        (len(user_shared_entities[user]) / n_paths) if n_paths else 0.0
+                    )
+
+                expected = (sum(per_user_sed) / len(per_user_sed)) if per_user_sed else 0.0
+                expected = round(expected, dp)
+
+                self.assertEqual(float(out[key]), float(expected))
+
 
 
 if __name__ == "__main__":
