@@ -283,22 +283,15 @@ class TestExplainabilityPTD(unittest.TestCase):
         dp = config["metric_decimal_place"]
 
         # For PTD we must provide: data.max_path_type
-        # In the implementation, len(max_path_type) is used in the denominator. :contentReference[oaicite:1]{index=1}
+        # In the implementation, len(max_path_type) is used in the denominator.
         max_path_type = ["t0", "t1", "t2", "t3"]
 
         for case in CASES:
             with self.subTest(case=case["name"]):
-                # --- run metric ---
                 dataobject = _DummyDataObject(case["paths"], max_path_type=max_path_type)
                 out = Metric.calculate_metric(dataobject)
                 self.assertIn(key, out)
 
-                # --- expected (computed here, per case) ---
-                # PTD.metric_info:
-                #   path_type = path[-1][0]
-                #   if path_type == "self_loop": path_type = path[-2][0]
-                #   PTD_u = (#distinct path_type) / min(#paths_u, len(max_path_type))
-                #   final = average over users
                 user_total_paths = defaultdict(int)
                 user_path_types = defaultdict(set)
 
@@ -316,6 +309,53 @@ class TestExplainabilityPTD(unittest.TestCase):
                     per_user_ptd.append((len(user_path_types[user]) / denom) if n_paths else 0.0)
 
                 expected = (sum(per_user_ptd) / len(per_user_ptd)) if per_user_ptd else 0.0
+                expected = round(expected, dp)
+
+                self.assertEqual(float(out[key]), float(expected))
+
+
+class TestExplainabilityPTC(unittest.TestCase):
+    def test_ptc(self):
+        name = "ptc"
+        Metric = metrics_dict[name](config)
+        key = f"PTC@{K}"
+        dp = config["metric_decimal_place"]
+
+        # For PTC we must provide: data.max_path_type
+        max_path_type = ["t0", "t1", "t2", "t3"]
+
+        for case in CASES:
+            with self.subTest(case=case["name"]):
+                dataobject = _DummyDataObject(case["paths"], max_path_type=max_path_type)
+                out = Metric.calculate_metric(dataobject)
+                self.assertIn(key, out)
+
+                # Expected computed here (per case), mirroring the real metric:
+                # - For each user, count occurrences per path_type.
+                # - ptc = 1 - sum(n*(n-1)) / (N*(N-1)); if N*(N-1)==0 then ptc=0
+                user_total_paths = defaultdict(int)
+                user_path_type_counts = defaultdict(lambda: defaultdict(int))
+
+                for user, _, _, path in case["paths"]:
+                    path_type = path[-1][0]
+                    if path_type == "self_loop":
+                        path_type = path[-2][0]
+                    user_total_paths[user] += 1
+                    user_path_type_counts[user][path_type] += 1
+
+                per_user_ptc = []
+                for user in user_total_paths:
+                    N = user_total_paths[user]
+                    denom = N * (N - 1)
+                    if denom == 0:
+                        per_user_ptc.append(0.0)
+                        continue
+                    numerator = 0
+                    for n in user_path_type_counts[user].values():
+                        numerator += n * (n - 1)
+                    per_user_ptc.append(1.0 - (numerator / denom))
+
+                expected = (sum(per_user_ptc) / len(per_user_ptc)) if per_user_ptc else 0.0
                 expected = round(expected, dp)
 
                 self.assertEqual(float(out[key]), float(expected))
