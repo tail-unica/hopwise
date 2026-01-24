@@ -1,5 +1,6 @@
 # @Time    : 2026/01/24
 # @Author  : Emanuele Caddeo
+# @Author  : Generated for HopWise explainability metrics unit tests (Fidelity + LID + SED + LITD + SETD, 4 cases)
 
 import os
 import sys
@@ -21,18 +22,18 @@ parameters_dict = {
 
 config = Config("BPR", "ml-1m", config_dict=parameters_dict)
 
-K = 5  # we want @5 behavior in this unit test file
+K = 5
 config["topk"] = [K]
 
 
 class _DummyDataObject:
     """
-    Minimal dataobject stub for hopwise metrics.
+    Minimal dataobject stub for hopwise path explainability metrics.
 
-    Current tests (Fidelity/LID) only require:
+    Current tests require:
       - rec.paths
 
-    Future path explainability metrics require additional keys (as in hopwise/evaluator/metrics.py):
+    Future metrics may require:
       - LIR: data.timestamp, data.num_items
       - SEP: data.node_degree
       - PTD/PTC: data.max_path_type
@@ -69,6 +70,12 @@ def _mk_path(user, rec_item, linking_item_id):
     """
     Build one path entry in the exact format expected by hopwise PathQuality metrics:
       (user, item, score, path)
+
+    NOTE (based on hopwise/evaluator/metrics.py):
+    - LID uses: linked_interaction_id = path[1][-1] (int)
+    - SED uses: shared_entity_id = path[-2][-1]
+    - LITD uses: linked_interaction_type = path[1][1]
+    - SETD uses: shared_entity_type = path[-2][1]
     """
     path = [(0, "user", user), (1, "item", linking_item_id), (2, "entity", 999), (3, "item", rec_item)]
     return (user, rec_item, 0.0, path)
@@ -128,7 +135,6 @@ class TestExplainabilityFID(unittest.TestCase):
                 out = Metric.calculate_metric(dataobject)
                 self.assertIn(key, out)
 
-                # Expected computed here (per case)
                 user_items = defaultdict(set)
                 for user, item, _, _ in case["paths"]:
                     user_items[user].add(item)
@@ -157,7 +163,6 @@ class TestExplainabilityLID(unittest.TestCase):
                 out = Metric.calculate_metric(dataobject)
                 self.assertIn(key, out)
 
-                # Expected computed here (per case)
                 user_total_paths = defaultdict(int)
                 user_linking_ids = defaultdict(set)
                 for user, _, _, path in case["paths"]:
@@ -185,31 +190,21 @@ class TestExplainabilitySED(unittest.TestCase):
 
         for case in CASES:
             with self.subTest(case=case["name"]):
-                # --- run metric ---
                 dataobject = _DummyDataObject(case["paths"])
                 out = Metric.calculate_metric(dataobject)
                 self.assertIn(key, out)
 
-                # --- expected (computed here, per case) ---
-                # Real implementation (metrics.py):
-                #   shared_entity_id = path[-2][-1]
-                #   SED_u = (#distinct shared_entity_id) / (#paths for user u)
-                #   final = average over users
-
                 user_total_paths = defaultdict(int)
                 user_shared_entities = defaultdict(set)
-
                 for user, _, _, path in case["paths"]:
-                    shared_entity_id = path[-2][-1]  # penultimate node
+                    shared_entity_id = path[-2][-1]
                     user_total_paths[user] += 1
                     user_shared_entities[user].add(shared_entity_id)
 
                 per_user_sed = []
                 for user in user_total_paths:
                     n_paths = user_total_paths[user]
-                    per_user_sed.append(
-                        (len(user_shared_entities[user]) / n_paths) if n_paths else 0.0
-                    )
+                    per_user_sed.append((len(user_shared_entities[user]) / n_paths) if n_paths else 0.0)
 
                 expected = (sum(per_user_sed) / len(per_user_sed)) if per_user_sed else 0.0
                 expected = round(expected, dp)
@@ -217,6 +212,36 @@ class TestExplainabilitySED(unittest.TestCase):
                 self.assertEqual(float(out[key]), float(expected))
 
 
+class TestExplainabilityLITD(unittest.TestCase):
+    def test_litd(self):
+        name = "litd"
+        Metric = metrics_dict[name](config)
+        key = f"LITD@{K}"
+        dp = config["metric_decimal_place"]
+
+        for case in CASES:
+            with self.subTest(case=case["name"]):
+                dataobject = _DummyDataObject(case["paths"])
+                out = Metric.calculate_metric(dataobject)
+                self.assertIn(key, out)
+
+                user_total_paths = defaultdict(int)
+                user_linking_types = defaultdict(set)
+
+                for user, _, _, path in case["paths"]:
+                    linked_interaction_type = path[1][1]
+                    user_total_paths[user] += 1
+                    user_linking_types[user].add(linked_interaction_type)
+
+                per_user_litd = []
+                for user in user_total_paths:
+                    n_paths = user_total_paths[user]
+                    per_user_litd.append((len(user_linking_types[user]) / n_paths) if n_paths else 0.0)
+
+                expected = (sum(per_user_litd) / len(per_user_litd)) if per_user_litd else 0.0
+                expected = round(expected, dp)
+
+                self.assertEqual(float(out[key]), float(expected))
 
 if __name__ == "__main__":
     unittest.main()
