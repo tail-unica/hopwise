@@ -1,6 +1,5 @@
 # @Time    : 2026/01/24
 # @Author  : Emanuele Caddeo
-# @Author  : Generated for HopWise explainability metrics unit tests (Fidelity + LID + SED + LITD + SETD, 4 cases)
 
 import os
 import sys
@@ -271,6 +270,52 @@ class TestExplainabilitySETD(unittest.TestCase):
                     per_user_setd.append((len(user_shared_types[user]) / n_paths) if n_paths else 0.0)
 
                 expected = (sum(per_user_setd) / len(per_user_setd)) if per_user_setd else 0.0
+                expected = round(expected, dp)
+
+                self.assertEqual(float(out[key]), float(expected))
+
+
+class TestExplainabilityPTD(unittest.TestCase):
+    def test_ptd(self):
+        name = "ptd"
+        Metric = metrics_dict[name](config)
+        key = f"PTD@{K}"
+        dp = config["metric_decimal_place"]
+
+        # For PTD we must provide: data.max_path_type
+        # In the implementation, len(max_path_type) is used in the denominator. :contentReference[oaicite:1]{index=1}
+        max_path_type = ["t0", "t1", "t2", "t3"]
+
+        for case in CASES:
+            with self.subTest(case=case["name"]):
+                # --- run metric ---
+                dataobject = _DummyDataObject(case["paths"], max_path_type=max_path_type)
+                out = Metric.calculate_metric(dataobject)
+                self.assertIn(key, out)
+
+                # --- expected (computed here, per case) ---
+                # PTD.metric_info:
+                #   path_type = path[-1][0]
+                #   if path_type == "self_loop": path_type = path[-2][0]
+                #   PTD_u = (#distinct path_type) / min(#paths_u, len(max_path_type))
+                #   final = average over users
+                user_total_paths = defaultdict(int)
+                user_path_types = defaultdict(set)
+
+                for user, _, _, path in case["paths"]:
+                    path_type = path[-1][0]
+                    if path_type == "self_loop":
+                        path_type = path[-2][0]
+                    user_total_paths[user] += 1
+                    user_path_types[user].add(path_type)
+
+                per_user_ptd = []
+                for user in user_total_paths:
+                    n_paths = user_total_paths[user]
+                    denom = min(n_paths, len(max_path_type)) if n_paths else 1
+                    per_user_ptd.append((len(user_path_types[user]) / denom) if n_paths else 0.0)
+
+                expected = (sum(per_user_ptd) / len(per_user_ptd)) if per_user_ptd else 0.0
                 expected = round(expected, dp)
 
                 self.assertEqual(float(out[key]), float(expected))
