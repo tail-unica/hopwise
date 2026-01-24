@@ -243,5 +243,38 @@ class TestExplainabilityLITD(unittest.TestCase):
 
                 self.assertEqual(float(out[key]), float(expected))
 
+
+class TestExplainabilitySETD(unittest.TestCase):
+    def test_setd(self):
+        name = "setd"
+        Metric = metrics_dict[name](config)
+        key = f"SETD@{K}"
+        dp = config["metric_decimal_place"]
+
+        for case in CASES:
+            with self.subTest(case=case["name"]):
+                dataobject = _DummyDataObject(case["paths"])
+                out = Metric.calculate_metric(dataobject)
+                self.assertIn(key, out)
+
+                user_total_paths = defaultdict(int)
+                user_shared_types = defaultdict(set)
+
+                for user, _, _, path in case["paths"]:
+                    shared_entity_type = path[-2][1]
+                    user_total_paths[user] += 1
+                    user_shared_types[user].add(shared_entity_type)
+
+                per_user_setd = []
+                for user in user_total_paths:
+                    n_paths = user_total_paths[user]
+                    per_user_setd.append((len(user_shared_types[user]) / n_paths) if n_paths else 0.0)
+
+                expected = (sum(per_user_setd) / len(per_user_setd)) if per_user_setd else 0.0
+                expected = round(expected, dp)
+
+                self.assertEqual(float(out[key]), float(expected))
+
+
 if __name__ == "__main__":
     unittest.main()
