@@ -144,5 +144,40 @@ class TestExplainabilityFID(unittest.TestCase):
                 self.assertEqual(float(out[key]), float(expected))
 
 
+class TestExplainabilityLID(unittest.TestCase):
+    def test_lid(self):
+        name = "lid"
+        Metric = metrics_dict[name](config)
+        key = f"LID@{K}"
+        dp = config["metric_decimal_place"]
+
+        for case in CASES:
+            with self.subTest(case=case["name"]):
+                dataobject = _DummyDataObject(case["paths"])
+                out = Metric.calculate_metric(dataobject)
+                self.assertIn(key, out)
+
+                # Expected computed here (per case)
+                user_total_paths = defaultdict(int)
+                user_linking_ids = defaultdict(set)
+                for user, _, _, path in case["paths"]:
+                    linked_interaction_id = path[1][-1]
+                    user_total_paths[user] += 1
+                    user_linking_ids[user].add(linked_interaction_id)
+
+                per_user_lid = []
+                for user in user_total_paths:
+                    n_paths = user_total_paths[user]
+                    per_user_lid.append((len(user_linking_ids[user]) / n_paths) if n_paths else 0.0)
+
+                expected = (sum(per_user_lid) / len(per_user_lid)) if per_user_lid else 0.0
+                expected = round(expected, dp)
+
+                self.assertEqual(float(out[key]), float(expected))
+
+
+                
+
+
 if __name__ == "__main__":
     unittest.main()
