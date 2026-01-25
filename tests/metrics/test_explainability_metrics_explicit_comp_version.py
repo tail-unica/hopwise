@@ -288,5 +288,33 @@ class TestExplainabilitySETD(unittest.TestCase):
         )
 
 
+class TestExplainabilityPTD(unittest.TestCase):
+    def test_ptd(self):
+        name = "ptd"
+        Metric = metrics_dict[name](config)
+        key = f"PTD@{K}"
+        dp = config["metric_decimal_place"]
+
+        # Required by PTD: len(max_path_type) is used in the denominator
+        max_path_type = ["t0", "t1", "t2", "t3"]  # len = 4
+
+        self.assertEqual(
+            [
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[0]["paths"], max_path_type=max_path_type))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[1]["paths"], max_path_type=max_path_type))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[2]["paths"], max_path_type=max_path_type))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[3]["paths"], max_path_type=max_path_type))[key]), dp),
+            ],
+            np.array(
+                [
+                    1 / 4,                        # one_user_basic: 1 distinct type / min(4,4)
+                    1 / 4,                        # one_user_all_explainable_all_distinct: 1 / min(5,4)=1/4
+                    1 / 2,                        # one_user_sparse_all_same_linking: 1 / min(2,4)
+                    ((1 / 3) + (1 / 3)) / 2,      # two_users_mixed: avg of users
+                ]
+            ).round(dp).tolist(),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
