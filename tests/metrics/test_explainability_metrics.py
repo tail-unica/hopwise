@@ -227,6 +227,53 @@ def _expected_serendipity_like_metric(rec_items, num_items, num_users, count_ite
     return out
 
 
+def _expected_novelty_like_metric(rec_items, count_items, num_items, topk, dp):
+    """
+    Mirrors hopwise.evaluator.metrics.Novelty.calculate_metric() behavior:
+
+    - pop(item) = count_items.get(item, 0)
+    - min_pop = min(count_items.values()) if len(count_items.values()) == num_items else 0
+    - max_pop = max(count_items.values())
+    - normalized_pop(item) = (pop(item) - min_pop) / (max_pop - min_pop)
+    - novelty(item) = 1 - normalized_pop(item)
+    - per-user novelty = mean over ALL items in the provided row (note: code does NOT slice by k)
+    - final novelty@k = mean over users, repeated for every k in topk
+    """
+    rec_items = np.array(rec_items)
+
+    # Build pop matrix
+    pop_matrix = np.zeros_like(rec_items, dtype=float)
+    for i in range(rec_items.shape[0]):
+        for j in range(rec_items.shape[1]):
+            pop_matrix[i, j] = count_items.get(int(rec_items[i, j]), 0)
+
+    # Normalize popularity (per the implementation)
+    if len(count_items.values()) == int(num_items):
+        min_pop = min(count_items.values())
+    else:
+        min_pop = 0
+    max_pop = max(count_items.values())
+    denom = (max_pop - min_pop) if (max_pop - min_pop) != 0 else 1.0
+
+    normalized_item_count = {}
+    for i in range(rec_items.shape[0]):
+        for j in range(rec_items.shape[1]):
+            iid = int(rec_items[i, j])
+            if iid not in normalized_item_count:
+                normalized_item_count[iid] = (pop_matrix[i, j] - min_pop) / denom
+
+    # Compute novelty (same value for every @k in current code)
+    novelty_score = []
+    for topk_user in rec_items:
+        novelty_items = [1.0 - float(normalized_item_count[int(iid)]) for iid in topk_user]
+        novelty_score.append(float(np.mean(novelty_items)))
+
+    avg = float(np.mean(novelty_score)) if novelty_score else 0.0
+    avg = round(avg, dp)
+
+    return {f"novelty@{k}": avg for k in topk}
+
+
 class TestExplainabilityFID(unittest.TestCase):
     def test_fidelity(self):
         name = "fidelity"
@@ -554,6 +601,7 @@ class TestExplainabilityPTC(unittest.TestCase):
                     self.assertIn(key, out)
                     self.assertEqual(float(out[key]), float(expected))
 
+
 class TestBeyondUtilitySerendipity(unittest.TestCase):
     def test_serendipity(self):
         name = "serendipity"
@@ -612,7 +660,54 @@ class TestBeyondUtilitySerendipity(unittest.TestCase):
             key = f"serendipity@{k}"
             self.assertIn(key, out)
             self.assertEqual(float(out[key]), float(expected[key]))
+     
 
-            
+class TestBeyondUtilityNovelty(unittest.TestCase):
+    def test_novelty(self):
+        name = "novelty"
+        Metric = metrics_dict[name](config)
+        dp = config["metric_decimal_place"]
+
+        topk = Metric.topk
+        max_k = max(topk)
+
+        # Deterministic setup
+        num_items = 10
+
+        # Provide counts for ALL items to trigger min_pop = min(counts) (not 0)
+        # Ensure max_pop != min_pop to avoid division by zero.
+        count_items = {i: (i + 1) for i in range(num_items)}  # item 9 most popular
+
+        # rec.items must have width >= max(topk), otherwise the metric can crash in other metrics;
+        # for Novelty it won't index by k, but keep consistency with the suite.
+        rec_items = [
+            [(0 + i) % num_items for i in range(max_k)],  # user0
+            [(3 + i) % num_items for i in range(max_k)],  # user1
+        ]
+
+        dataobject = _DummyRankingDataObject(
+            rec_items=rec_items,
+            num_items=num_items,
+            num_users=len(rec_items) + 1,     # dummy but valid
+            count_items=count_items,
+            history_index=np.empty((2, 0), dtype=int),  # dummy, never used by NOV
+        )
+
+        out = Metric.calculate_metric(dataobject)
+
+        expected = _expected_novelty_like_metric(
+            rec_items=rec_items,
+            count_items=count_items,
+            num_items=num_items,
+            topk=topk,
+            dp=dp,
+        )
+
+        for k in topk:
+            key = f"novelty@{k}"
+            self.assertIn(key, out)
+            self.assertEqual(float(out[key]), float(expected[key]))
+
+
 if __name__ == "__main__":
     unittest.main()
