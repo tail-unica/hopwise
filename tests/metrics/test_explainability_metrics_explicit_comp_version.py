@@ -233,5 +233,44 @@ class TestExplainabilityLID(unittest.TestCase):
         )
 
 
+class TestExplainabilitySED(unittest.TestCase):
+    def test_sed(self):
+        name = "sed"
+        Metric = metrics_dict[name](config)
+        key = f"SED@{K}"
+        dp = config["metric_decimal_place"]
+
+        self.assertEqual(
+            [
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[0]["paths"]))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[1]["paths"]))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[2]["paths"]))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[3]["paths"]))[key]), dp),
+            ],
+            np.array(
+                [
+                    # one_user_basic:
+                    # shared entity ids are always the same (entity=999) -> unique shared entities = 1
+                    # paths = 4 => 1/4
+                    1 / 4,
+
+                    # one_user_all_explainable_all_distinct:
+                    # unique shared entities = 1, paths = 5 => 1/5
+                    1 / 5,
+
+                    # one_user_sparse_all_same_linking:
+                    # unique shared entities = 1, paths = 2 => 1/2
+                    1 / 2,
+
+                    # two_users_mixed:
+                    # user0: unique shared entities = 1, paths = 3 => 1/3
+                    # user1: unique shared entities = 1, paths = 3 => 1/3
+                    # average = ((1/3) + (1/3)) / 2
+                    ((1 / 3) + (1 / 3)) / 2,
+                ]
+            ).round(dp).tolist(),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
