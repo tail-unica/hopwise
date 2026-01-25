@@ -22,7 +22,56 @@ parameters_dict = {
 config = Config("BPR", "ml-1m", config_dict=parameters_dict)
 
 K = 5
-config["topk"] = [K]
+config["topk"] = [K]# Support functions (copy & paste)
+
+def _extract_path_type_for_ptc(path):
+    """
+    Mirrors the original PTC implementation:
+    - path_type is the first element of the last tuple in the path (path[-1][0])
+    - if that is 'self_loop', use the previous one (path[-2][0])
+    """
+    path_type = path[-1][0]
+    if path_type == "self_loop":
+        path_type = path[-2][0]
+    return path_type
+
+
+def _expected_ptc_like_metric(case_paths, max_path_type):
+    """
+    Mirrors PTC.metric_info() + average in topk_result():
+    - For each user:
+        numerator = sum_r N(r) * (N(r) - 1)
+        ptc_u = 1 - numerator / (N * (N - 1))   if N*(N-1) > 0 else 0
+    - expected = mean(ptc_u over users)
+    """
+    user_simpson_index = {}  # user -> [N, {path_type: count}]
+    max_type_set = set(max_path_type)
+
+    for user, _, _, path in case_paths:
+        if user not in user_simpson_index:
+            user_simpson_index[user] = [0, {k: 0 for k in max_type_set}]
+
+        path_type = _extract_path_type_for_ptc(path)
+        if path_type not in user_simpson_index[user][1]:
+            user_simpson_index[user][1][path_type] = 0
+
+        user_simpson_index[user][1][path_type] += 1
+        user_simpson_index[user][0] += 1
+
+    per_user = []
+    for user, (N, counts) in user_simpson_index.items():
+        numerator = 0
+        for _, n_i in counts.items():
+            numerator += n_i * (n_i - 1)
+
+        denom = N * (N - 1)
+        if denom == 0:
+            per_user.append(0.0)
+        else:
+            per_user.append(1.0 - (numerator / denom))
+
+    return (sum(per_user) / len(per_user)) if per_user else 0.0
+
 
 
 class _DummyDataObject:
@@ -119,6 +168,63 @@ CASES = [
         ],
     },
 ]
+
+class _NumpyWrap:
+    """Minimal wrapper exposing a .numpy() method."""
+    def __init__(self, arr):
+        self._arr = np.array(arr)
+
+    def numpy(self):
+        return self._arr
+
+
+class _DummyRankingDataObject:
+    """
+    Minimal DataObject-like container exposing .get(key) for Serendipity.
+    """
+    def __init__(self, rec_items, num_items, num_users, count_items, history_index):
+        self._store = {
+            "rec.items": _NumpyWrap(rec_items),
+            "data.num_items": num_items,
+            "data.num_users": num_users,
+            "data.count_items": count_items,
+            "data.history_index": history_index,
+        }
+
+    def get(self, key):
+        return self._store[key]
+
+
+def _expected_serendipity_like_metric(rec_items, num_items, num_users, count_items, history_index, topk, dp):
+    """
+    Mirrors hopwise.evaluator.metrics.Serendipity.calculate_metric() + topk_result().
+    """
+    item_counter = np.zeros(num_items, dtype=int)
+    for it, cnt in count_items.items():
+        item_counter[int(it)] = int(cnt)
+
+    pop_recs = np.tile(item_counter, (num_users, 1))
+    pop_recs[tuple(history_index)] = 0
+    pop_recs = pop_recs[1:]  # remove padding row
+
+    max_k = max(topk)
+    pop_topk = np.argsort(pop_recs, axis=-1)[:, ::-1][:, :max_k]
+
+    rec_items = np.array(rec_items)
+    topk_intersection = np.zeros_like(rec_items, dtype=bool)
+    for u, (user_rec, user_pop_topk) in enumerate(zip(rec_items, pop_topk)):
+        topk_intersection[u] = np.isin(user_rec, user_pop_topk)
+
+    cumsum_pop = topk_intersection.cumsum(axis=1)
+    denom = np.arange(1, topk_intersection.shape[1] + 1)
+    ser_per_user_per_pos = 1.0 - (cumsum_pop / denom)
+
+    avg_result = ser_per_user_per_pos.mean(axis=0)
+
+    out = {}
+    for k in topk:
+        out[f"serendipity@{k}"] = round(float(avg_result[k - 1]), dp)
+    return out
 
 
 class TestExplainabilityFID(unittest.TestCase):
@@ -413,5 +519,100 @@ class TestExplainabilityPPT(unittest.TestCase):
                     key = f"PPT@{k}"
                     self.assertEqual(float(out[key]), float(expected))
 
+
+class TestExplainabilityPTC(unittest.TestCase):
+    def test_ptc(self):
+        name = "ptc"
+        Metric = metrics_dict[name](config)
+        dp = config["metric_decimal_place"]
+
+        for case in CASES:
+            with self.subTest(case=case["name"]):
+                # Build a max_path_type consistent with what PTC expects:
+                # it's the universe of possible path types (relation types used as "explanation types").
+                inferred_types = set()
+                for _, _, _, path in case["paths"]:
+                    inferred_types.add(_extract_path_type_for_ptc(path))
+                max_path_type = sorted(inferred_types)
+
+                dataobject = _DummyDataObject(
+                    case["paths"],
+                    max_path_type=max_path_type,
+                )
+
+                out = Metric.calculate_metric(dataobject)
+
+                expected = _expected_ptc_like_metric(
+                    case_paths=case["paths"],
+                    max_path_type=max_path_type,
+                )
+                expected = round(expected, dp)
+
+                # The original implementation copies the same averaged value to every @k key.
+                for k in Metric.topk:
+                    key = f"PTC@{k}"
+                    self.assertIn(key, out)
+                    self.assertEqual(float(out[key]), float(expected))
+
+class TestBeyondUtilitySerendipity(unittest.TestCase):
+    def test_serendipity(self):
+        name = "serendipity"
+        Metric = metrics_dict[name](config)
+        dp = config["metric_decimal_place"]
+
+        topk = Metric.topk
+        max_k = max(topk)
+
+        num_items = 50  # keep this > max_k and reasonably large
+        # Popularity counts (higher = more popular)
+        # Define counts for all items to avoid accidental ties/zeros dominating.
+        count_items = {i: (num_items - i) for i in range(num_items)}  # item 0 most popular
+
+        # Build rec.items with EXACTLY max_k items per user (required to avoid IndexError).
+        # Use a deterministic pattern, all valid item ids in [0, num_items-1].
+        rec_items = [
+            [(3 + i) % num_items for i in range(max_k)],   # user0
+            [(10 + i) % num_items for i in range(max_k)],  # user1
+        ]
+
+        # data.num_users includes the padding row 0
+        num_users = len(rec_items) + 1
+
+        # Mark some history items as seen for each user (rows 1..num_users-1).
+        # Keep indices in-bounds.
+        history_index = np.array(
+            [
+                [1, 1, 2, 2],  # row indices
+                [0, 1, 2, 3],  # item indices
+            ],
+            dtype=int,
+        )
+
+        dataobject = _DummyRankingDataObject(
+            rec_items=rec_items,
+            num_items=num_items,
+            num_users=num_users,
+            count_items=count_items,
+            history_index=history_index,
+        )
+
+        out = Metric.calculate_metric(dataobject)
+
+        expected = _expected_serendipity_like_metric(
+            rec_items=rec_items,
+            num_items=num_items,
+            num_users=num_users,
+            count_items=count_items,
+            history_index=history_index,
+            topk=topk,
+            dp=dp,
+        )
+
+        for k in topk:
+            key = f"serendipity@{k}"
+            self.assertIn(key, out)
+            self.assertEqual(float(out[key]), float(expected[key]))
+
+            
 if __name__ == "__main__":
     unittest.main()
