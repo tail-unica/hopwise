@@ -316,5 +316,41 @@ class TestExplainabilityPTD(unittest.TestCase):
         )
 
 
+class TestExplainabilityPTC(unittest.TestCase):
+    def test_ptc(self):
+        name = "ptc"
+        Metric = metrics_dict[name](config)
+        key = f"PTC@{K}"
+        dp = config["metric_decimal_place"]
+
+        # Required by PTC: it builds a counter over `max_path_type` and uses it in the Simpson-like formula.
+        # In our _mk_path structure the extracted path_type is the last hop id (e.g., 3), so keep ints.
+        max_path_type = [0, 1, 2, 3]  # len = 4, includes the last-hop type used by the paths
+
+        self.assertEqual(
+            [
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[0]["paths"], max_path_type=max_path_type))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[1]["paths"], max_path_type=max_path_type))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[2]["paths"], max_path_type=max_path_type))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[3]["paths"], max_path_type=max_path_type))[key]), dp),
+            ],
+            np.array(
+                [
+                    # one_user_basic: N=4, all paths are the same type -> numerator = 4*3, denom = 4*3 -> 1 - 1 = 0
+                    0.0,
+
+                    # one_user_all_explainable_all_distinct: N=5, all paths same type -> 1 - (5*4)/(5*4) = 0
+                    0.0,
+
+                    # one_user_sparse_all_same_linking: N=2, all paths same type -> 1 - (2*1)/(2*1) = 0
+                    0.0,
+
+                    # two_users_mixed: each user N=3, all paths same type -> 0 and 0, average -> 0
+                    0.0,
+                ]
+            ).round(dp).tolist(),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
