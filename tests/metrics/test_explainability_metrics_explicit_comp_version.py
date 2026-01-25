@@ -24,56 +24,6 @@ config = Config("BPR", "ml-1m", config_dict=parameters_dict)
 K = 5
 config["topk"] = [K]# Support functions (copy & paste)
 
-def _extract_path_type_for_ptc(path):
-    """
-    Mirrors the original PTC implementation:
-    - path_type is the first element of the last tuple in the path (path[-1][0])
-    - if that is 'self_loop', use the previous one (path[-2][0])
-    """
-    path_type = path[-1][0]
-    if path_type == "self_loop":
-        path_type = path[-2][0]
-    return path_type
-
-
-def _expected_ptc_like_metric(case_paths, max_path_type):
-    """
-    Mirrors PTC.metric_info() + average in topk_result():
-    - For each user:
-        numerator = sum_r N(r) * (N(r) - 1)
-        ptc_u = 1 - numerator / (N * (N - 1))   if N*(N-1) > 0 else 0
-    - expected = mean(ptc_u over users)
-    """
-    user_simpson_index = {}  # user -> [N, {path_type: count}]
-    max_type_set = set(max_path_type)
-
-    for user, _, _, path in case_paths:
-        if user not in user_simpson_index:
-            user_simpson_index[user] = [0, {k: 0 for k in max_type_set}]
-
-        path_type = _extract_path_type_for_ptc(path)
-        if path_type not in user_simpson_index[user][1]:
-            user_simpson_index[user][1][path_type] = 0
-
-        user_simpson_index[user][1][path_type] += 1
-        user_simpson_index[user][0] += 1
-
-    per_user = []
-    for user, (N, counts) in user_simpson_index.items():
-        numerator = 0
-        for _, n_i in counts.items():
-            numerator += n_i * (n_i - 1)
-
-        denom = N * (N - 1)
-        if denom == 0:
-            per_user.append(0.0)
-        else:
-            per_user.append(1.0 - (numerator / denom))
-
-    return (sum(per_user) / len(per_user)) if per_user else 0.0
-
-
-
 class _DummyDataObject:
     """
     Minimal dataobject stub for hopwise path explainability metrics.
@@ -267,6 +217,31 @@ class TestExplainabilitySED(unittest.TestCase):
                     # user1: unique shared entities = 1, paths = 3 => 1/3
                     # average = ((1/3) + (1/3)) / 2
                     ((1 / 3) + (1 / 3)) / 2,
+                ]
+            ).round(dp).tolist(),
+        )
+
+
+class TestExplainabilityLITD(unittest.TestCase):
+    def test_litd(self):
+        name = "litd"
+        Metric = metrics_dict[name](config)
+        key = f"LITD@{K}"
+        dp = config["metric_decimal_place"]
+
+        self.assertEqual(
+            [
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[0]["paths"]))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[1]["paths"]))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[2]["paths"]))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[3]["paths"]))[key]), dp),
+            ],
+            np.array(
+                [
+                    1 / 4,                        # one_user_basic -> 1 / n_paths
+                    1 / 5,                        # one_user_all_explainable_all_distinct -> 1 / n_paths
+                    1 / 2,                        # one_user_sparse_all_same_linking -> 1 / n_paths
+                    ((1 / 3) + (1 / 3)) / 2,      # two_users_mixed -> average of users
                 ]
             ).round(dp).tolist(),
         )
