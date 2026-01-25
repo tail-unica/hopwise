@@ -352,5 +352,47 @@ class TestExplainabilityPTC(unittest.TestCase):
         )
 
 
+class TestExplainabilityPPT(unittest.TestCase):
+    def test_ppt(self):
+        name = "ppt"
+        Metric = metrics_dict[name](config)
+        key = f"PPT@{K}"
+        dp = config["metric_decimal_place"]
+
+        max_path_length = 4
+        rid2relation = ["user", "item", "entity", "item"]
+
+        self.assertEqual(
+            [round(float(Metric.calculate_metric(_DummyDataObject(CASES[0]["paths"], max_path_length=max_path_length, rid2relation=rid2relation))[key]), dp),
+             round(float(Metric.calculate_metric(_DummyDataObject(CASES[1]["paths"], max_path_length=max_path_length, rid2relation=rid2relation))[key]), dp),
+             round(float(Metric.calculate_metric(_DummyDataObject(CASES[2]["paths"], max_path_length=max_path_length, rid2relation=rid2relation))[key]), dp),
+             round(float(Metric.calculate_metric(_DummyDataObject(CASES[3]["paths"], max_path_length=max_path_length, rid2relation=rid2relation))[key]), dp)],
+            np.array(
+                [
+                    # one_user_basic:
+                    # tutti i path hanno lo stesso pattern relazionale
+                    # pattern distinti = 1
+                    # n_paths = 4, max_path_length = 4 -> denom = min(4,4)=4
+                    1 / 4,
+
+                    # one_user_all_explainable_all_distinct:
+                    # pattern distinti = 1
+                    # n_paths = 5, max_path_length = 4 -> denom = min(5,4)=4
+                    1 / 4,
+
+                    # one_user_sparse_all_same_linking:
+                    # pattern distinti = 1
+                    # n_paths = 2, max_path_length = 4 -> denom = min(2,4)=2
+                    1 / 2,
+
+                    # two_users_mixed:
+                    # user0: n_paths=3 -> 1/min(3,4)=1/3
+                    # user1: n_paths=3 -> 1/3
+                    # average = ((1/3)+(1/3))/2 = 1/3
+                    ((1 / 3) + (1 / 3)) / 2,
+                ]
+            ).round(dp).tolist(),
+        )
+
 if __name__ == "__main__":
     unittest.main()
