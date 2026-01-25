@@ -438,5 +438,85 @@ class TestBeyondUtilitySerendipity(unittest.TestCase):
         )
 
 
+class TestBeyondUtilityNovelty(unittest.TestCase):
+    def test_novelty(self):
+        name = "novelty"
+        Metric = metrics_dict[name](config)
+        key = f"novelty@{K}"
+        dp = config["metric_decimal_place"]
+
+        # In questo setup testiamo SOLO novelty@K
+        max_k = K
+
+        # Numero totale di item nel catalogo
+        num_items = 10
+
+        # Popolarità degli item:
+        # item 0 -> count = 1 (meno popolare)
+        # item 9 -> count = 10 (più popolare)
+        count_items = {i: (i + 1) for i in range(num_items)}
+
+        # Raccomandazioni per ciascun utente (lunghezza = K)
+        # user 0 riceve item poco popolari
+        # user 1 riceve item mediamente popolari
+        rec_items = [
+            [(0 + i) % num_items for i in range(max_k)],  # user 0: 0,1,2,3,4,...
+            [(3 + i) % num_items for i in range(max_k)],  # user 1: 3,4,5,6,7,...
+        ]
+
+        # Dummy dataobject (alcuni campi non sono usati da NOV ma servono allo stub)
+        dataobject = _DummyDataObject(
+            paths_value=None,
+            rec_items=rec_items,
+            count_items=count_items,
+            num_items=num_items,
+            num_users=len(rec_items) + 1,
+            history_index=np.empty((2, 0), dtype=int),
+        )
+
+        # 1) Normalizzazione della popolarità
+        #    min_pop = 1
+        #    max_pop = 10
+        #    denom = max_pop - min_pop = 9
+        #
+        #    normalized_pop(i) = (count(i) - 1) / 9 = i / 9
+        #
+        # 2) Novelty di un item:
+        #    novelty(i) = 1 - normalized_pop(i) = 1 - (i / 9)
+        #
+        # 3) Novelty per utente = media delle novelty dei K item raccomandati
+        #
+        # 4) Novelty finale = media delle novelty dei singoli utenti
+        self.assertEqual(
+            [round(float(Metric.calculate_metric(dataobject)[key]), dp)],
+            np.array(
+                [
+                    (
+                        # user 0:
+                        # item: 0,1,2,3,4
+                        # novelty:
+                        # 1 - 0/9 = 1
+                        # 1 - 1/9 = 8/9
+                        # 1 - 2/9 = 7/9
+                        # 1 - 3/9 = 6/9
+                        # 1 - 4/9 = 5/9
+                        ((1 + (8 / 9) + (7 / 9) + (6 / 9) + (5 / 9)) / 5
+                         +
+                         # user 1:
+                         # item: 3,4,5,6,7
+                         # novelty:
+                         # 1 - 3/9 = 6/9
+                         # 1 - 4/9 = 5/9
+                         # 1 - 5/9 = 4/9
+                         # 1 - 6/9 = 3/9
+                         # 1 - 7/9 = 2/9
+                         ((6 / 9) + (5 / 9) + (4 / 9) + (3 / 9) + (2 / 9)) / 5)
+                        / 2  # media sui due utenti
+                    ),
+                ]
+            ).round(dp).tolist(),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
