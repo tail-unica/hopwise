@@ -361,5 +361,57 @@ class TestExplainabilityPTC(unittest.TestCase):
                 self.assertEqual(float(out[key]), float(expected))
 
 
+class TestExplainabilityPPT(unittest.TestCase):
+    def test_ppt(self):
+        name = "ppt"
+        Metric = metrics_dict[name](config)
+        dp = config["metric_decimal_place"]
+
+        max_path_length = 4
+        rid2relation = ["user", "item", "entity", "item"]
+
+        # Build the same rid -> relation_name mapping used by the metric
+        rid2r_name = {i: rel for i, rel in enumerate(rid2relation)}
+
+        for case in CASES:
+            with self.subTest(case=case["name"]):
+                dataobject = _DummyDataObject(
+                    case["paths"],
+                    max_path_length=max_path_length,
+                    rid2relation=rid2relation,
+                )
+                out = Metric.calculate_metric(dataobject)
+
+                # The implementation returns the same averaged value for every k in Metric.topk
+                # this is a property design choice. In the paper is not specified differently.
+                # I assume that PPT does not depend on recommendation ranking.
+                for k in Metric.topk:
+                    key = f"PPT@{k}"
+                    self.assertIn(key, out)
+
+                unique_path_pattern = {}  # user -> [n_paths, set(pattern_strings)]
+                for user, _, _, path in case["paths"]:
+                    if user not in unique_path_pattern:
+                        unique_path_pattern[user] = [0, set()]
+
+                    path_pattern = [rid2r_name[path_tuple[0]] for path_tuple in path[1:]]
+                    pattern_str = "_".join(path_pattern)
+
+                    unique_path_pattern[user][0] += 1
+                    unique_path_pattern[user][1].add(pattern_str)
+
+                per_user_ppt = []
+                for user, (n_paths, pattern_set) in unique_path_pattern.items():
+                    n_path_patterns = len(pattern_set)
+                    denom = min(n_paths, max_path_length) if max_path_length else 1
+                    per_user_ppt.append(min(n_path_patterns / denom, 1.0))
+
+                expected = round(sum(per_user_ppt) / len(per_user_ppt), dp) if per_user_ppt else round(0.0, dp)
+
+                # Check that all PPT@k keys match the same expected value (implementation behavior)
+                for k in Metric.topk:
+                    key = f"PPT@{k}"
+                    self.assertEqual(float(out[key]), float(expected))
+
 if __name__ == "__main__":
     unittest.main()
