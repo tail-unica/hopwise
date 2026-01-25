@@ -195,5 +195,43 @@ class TestExplainabilityFID(unittest.TestCase):
         )
 
 
+class TestExplainabilityLID(unittest.TestCase):
+    def test_lid(self):
+        name = "lid"
+        Metric = metrics_dict[name](config)
+        key = f"LID@{K}"
+        dp = config["metric_decimal_place"]
+
+        self.assertEqual(
+            [
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[0]["paths"]))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[1]["paths"]))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[2]["paths"]))[key]), dp),
+                round(float(Metric.calculate_metric(_DummyDataObject(CASES[3]["paths"]))[key]), dp),
+            ],
+            np.array(
+                [
+                    # one_user_basic:
+                    # linking ids = [10, 11, 10, 12] -> unique = 3, paths = 4 => 3/4
+                    3 / 4,
+
+                    # one_user_all_explainable_all_distinct:
+                    # linking ids = [10, 11, 12, 13, 14] -> unique = 5, paths = 5 => 5/5
+                    5 / 5,
+
+                    # one_user_sparse_all_same_linking:
+                    # linking ids = [10, 10] -> unique = 1, paths = 2 => 1/2
+                    1 / 2,
+
+                    # two_users_mixed:
+                    # user0: [10,10,11] -> unique 2 / 3
+                    # user1: [20,21,22] -> unique 3 / 3
+                    # average = ((2/3) + (3/3)) / 2
+                    ((2 / 3) + (3 / 3)) / 2,
+                ]
+            ).round(dp).tolist(),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
