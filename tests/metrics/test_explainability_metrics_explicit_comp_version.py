@@ -8,6 +8,7 @@ from collections import defaultdict
 
 import numpy as np
 
+
 sys.path.append(os.getcwd())
 
 from hopwise.config import Config
@@ -24,29 +25,32 @@ config = Config("BPR", "ml-1m", config_dict=parameters_dict)
 K = 5
 config["topk"] = [K]# Support functions (copy & paste)
 
+class _NumpyWrap:
+    def __init__(self, arr):
+        self._arr = np.array(arr)
+    def numpy(self):
+        return self._arr
+
+
 class _DummyDataObject:
     """
-    Minimal dataobject stub for hopwise path explainability metrics.
-
-    Current tests require:
-      - rec.paths
-
-    Future metrics may require:
-      - LIR: data.timestamp, data.num_items
-      - SEP: data.node_degree
-      - PTD/PTC: data.max_path_type
-      - PPT: data.max_path_length, data.rid2relation
+    Minimal dataobject stub for hopwise metrics.
     """
 
     def __init__(
         self,
-        paths_value,
+        paths_value=None,
         timestamp_matrix=None,
         num_items=None,
         node_degree=None,
         max_path_type=None,
         max_path_length=None,
         rid2relation=None,
+        # --- added for beyond-utility metrics (Serendipity/Novelty) ---
+        rec_items=None,
+        count_items=None,
+        num_users=None,
+        history_index=None,
     ):
         self._store = {
             "rec.paths": paths_value,
@@ -56,6 +60,11 @@ class _DummyDataObject:
             "data.max_path_type": max_path_type,
             "data.max_path_length": max_path_length,
             "data.rid2relation": rid2relation,
+            # beyond-utility
+            "rec.items": _NumpyWrap(rec_items) if rec_items is not None else None,
+            "data.count_items": count_items,
+            "data.num_users": num_users,
+            "data.history_index": history_index,
         }
 
     def get(self, key):
@@ -393,6 +402,41 @@ class TestExplainabilityPPT(unittest.TestCase):
                 ]
             ).round(dp).tolist(),
         )
+
+
+class TestBeyondUtilitySerendipity(unittest.TestCase):
+    def test_serendipity(self):
+        name = "serendipity"
+        Metric = metrics_dict[name](config)
+        key = f"serendipity@{K}"
+        dp = config["metric_decimal_place"]
+
+        max_k = K  # ensure rec_items width matches the only k tested
+
+        num_items = 10
+        count_items = {i: (num_items - i) for i in range(num_items)}  # item 0 most popular
+
+        rec_items = [
+            [(3 + i) % num_items for i in range(max_k)],  # user 0
+            [(6 + i) % num_items for i in range(max_k)],  # user 1
+        ]
+
+        num_users = len(rec_items) + 1  # includes padding row 0
+        history_index = np.array([[1, 2], [0, 1]], dtype=int)
+
+        dataobject = _DummyDataObject(paths_value=None, rec_items=rec_items, count_items=count_items, num_items=num_items, num_users=num_users, history_index=history_index)
+
+        self.assertEqual(
+            [round(float(Metric.calculate_metric(dataobject)[key]), dp)],
+            np.array(
+                [
+                    # SER@K (here K=5):
+                    # metric output is 0.6, i.e., 3/5
+                    3 / 5,
+                ]
+            ).round(dp).tolist(),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
