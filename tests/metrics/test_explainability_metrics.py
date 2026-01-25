@@ -114,7 +114,18 @@ class _DummyDataObject:
         return self._store[key]
 
 
-def _mk_path(user, rec_item, linking_item_id):
+def _mk_path(
+    user,
+    rec_item,
+    linking_item_id,
+    *,
+    shared_entity_id=999,
+    linking_type="item",
+    shared_type="entity",
+    linking_rid=1,
+    shared_rid=2,
+    last_rid=3,
+):
     """
     Build one path entry in the exact format expected by hopwise PathQuality metrics:
       (user, item, score, path)
@@ -125,11 +136,21 @@ def _mk_path(user, rec_item, linking_item_id):
     - LITD uses: linked_interaction_type = path[1][1]
     - SETD uses: shared_entity_type = path[-2][1]
     """
-    path = [(0, "user", user), (1, "item", linking_item_id), (2, "entity", 999), (3, "item", rec_item)]
+    # Tuple format (rid, node_type, node_id) matches hopwise path quality metrics.
+    # - "rid" is used as relation/path type in some metrics (PTD/PTC) and as pattern token in PPT.
+    # - "node_type" is used by LITD/SETD.
+    # - "node_id" is used by LID/SED.
+    path = [
+        (0, "user", user),
+        (linking_rid, linking_type, linking_item_id),
+        (shared_rid, shared_type, shared_entity_id),
+        (last_rid, "item", rec_item),
+    ]
     return (user, rec_item, 0.0, path)
 
 
 CASES = [
+    # --- Baseline / normal cases ---
     {
         "name": "one_user_basic",
         "paths": [
@@ -165,6 +186,85 @@ CASES = [
             _mk_path(1, 30, 20),
             _mk_path(1, 31, 21),
             _mk_path(1, 32, 22),
+        ],
+    },
+
+    # --- Edge / stress cases ---
+    {
+        "name": "single_user_single_path_denoms_zero",
+        "paths": [
+            # N=1 triggers denom=0 for PTC-like formulas.
+            _mk_path(0, 99, 7, shared_entity_id=500, last_rid=1),
+        ],
+    },
+    {
+        "name": "one_user_more_than_k_unique_items_fidelity_saturates",
+        "paths": [
+            # Unique recommended items = 8 (> K=5) => Fidelity should cap at 1.0
+            _mk_path(0, 100, 1, shared_entity_id=900, last_rid=3),
+            _mk_path(0, 101, 2, shared_entity_id=901, last_rid=3),
+            _mk_path(0, 102, 3, shared_entity_id=902, last_rid=3),
+            _mk_path(0, 103, 4, shared_entity_id=903, last_rid=3),
+            _mk_path(0, 104, 5, shared_entity_id=904, last_rid=3),
+            _mk_path(0, 105, 6, shared_entity_id=905, last_rid=3),
+            _mk_path(0, 106, 7, shared_entity_id=906, last_rid=3),
+            _mk_path(0, 107, 8, shared_entity_id=907, last_rid=3),
+        ],
+    },
+    {
+        "name": "one_user_duplicate_recommended_items",
+        "paths": [
+            # Same rec_item repeated -> Fidelity counts 1 unique item, but LID/SED/etc. depend on paths count.
+            _mk_path(0, 200, 10, shared_entity_id=1, last_rid=2),
+            _mk_path(0, 200, 11, shared_entity_id=2, last_rid=2),
+            _mk_path(0, 200, 12, shared_entity_id=3, last_rid=2),
+            _mk_path(0, 200, 12, shared_entity_id=3, last_rid=2),
+        ],
+    },
+    {
+        "name": "two_users_unbalanced_path_counts",
+        "paths": [
+            _mk_path(0, 300, 1, shared_entity_id=10, last_rid=3),
+            _mk_path(1, 310, 2, shared_entity_id=20, last_rid=3),
+            _mk_path(1, 311, 2, shared_entity_id=21, last_rid=3),
+            _mk_path(1, 312, 3, shared_entity_id=22, last_rid=3),
+            _mk_path(1, 313, 4, shared_entity_id=23, last_rid=3),
+            _mk_path(1, 314, 5, shared_entity_id=24, last_rid=3),
+        ],
+    },
+    {
+        "name": "path_type_diversity_high_and_balanced",
+        "paths": [
+            # Force many path types (last_rid varies) + balanced counts => PTC should be relatively high.
+            _mk_path(0, 400, 10, shared_entity_id=50, last_rid=0),
+            _mk_path(0, 401, 11, shared_entity_id=51, last_rid=1),
+            _mk_path(0, 402, 12, shared_entity_id=52, last_rid=2),
+            _mk_path(0, 403, 13, shared_entity_id=53, last_rid=3),
+            _mk_path(0, 404, 14, shared_entity_id=54, last_rid=0),
+            _mk_path(0, 405, 15, shared_entity_id=55, last_rid=1),
+            _mk_path(0, 406, 16, shared_entity_id=56, last_rid=2),
+            _mk_path(0, 407, 17, shared_entity_id=57, last_rid=3),
+        ],
+    },
+    {
+        "name": "path_type_concentrated_but_not_single",
+        "paths": [
+            # Mostly last_rid=3, with one outlier => PTD>0 but PTC should drop.
+            _mk_path(0, 500, 10, shared_entity_id=70, last_rid=3),
+            _mk_path(0, 501, 11, shared_entity_id=71, last_rid=3),
+            _mk_path(0, 502, 12, shared_entity_id=72, last_rid=3),
+            _mk_path(0, 503, 13, shared_entity_id=73, last_rid=3),
+            _mk_path(0, 504, 14, shared_entity_id=74, last_rid=1),
+        ],
+    },
+    {
+        "name": "interaction_and_entity_types_vary",
+        "paths": [
+            # Stress LITD/SETD by varying node_type strings.
+            _mk_path(0, 600, 1, linking_type="click", shared_type="brand", shared_entity_id=801, last_rid=3),
+            _mk_path(0, 601, 2, linking_type="purchase", shared_type="category", shared_entity_id=802, last_rid=3),
+            _mk_path(0, 602, 3, linking_type="view", shared_type="entity", shared_entity_id=803, last_rid=3),
+            _mk_path(0, 603, 4, linking_type="click", shared_type="brand", shared_entity_id=801, last_rid=3),
         ],
     },
 ]
