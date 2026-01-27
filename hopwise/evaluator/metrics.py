@@ -1533,8 +1533,41 @@ class PTD(PathQualityMetric):
 
 
 class PTC(PathQualityMetric):
-    """
-    Path Type Concentration (PTC)
+    r"""PTC (Path Type Concentration) is a path quality metric that measures how
+    concentrated explanation paths are with respect to their path types.
+
+    Note:
+        In this implementation, PTC quantifies the concentration (i.e., lack of
+        diversity) of path types used in a user’s explanation paths by adopting a
+        Simpson-style concentration index.
+        The path type is identified by the first element of the last node in the path;
+        if the last node corresponds to a self-loop, the path type is taken from the
+        penultimate node.
+
+        The metric is computed per user and then averaged across users.
+        PTC is independent of the cutoff :math:`k`; the same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`N_u = |P_u|` be the number of paths for user :math:`u`,
+        - :math:`n_{u,t}` be the number of paths of type :math:`t` for user :math:`u`.
+
+    The PTC metric is defined as:
+
+    .. math::
+        \mathrm{PTC}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \left(
+            1 - \frac{\sum_{t} n_{u,t}(n_{u,t}-1)}{N_u(N_u-1)}
+        \right)
+
+    Higher values indicate that explanation paths are distributed across multiple
+    path types (lower concentration), while lower values indicate that explanations
+    are dominated by a small number of path types.
     """
 
     metric_need = ["data.max_path_type"]
