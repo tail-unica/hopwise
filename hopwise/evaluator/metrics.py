@@ -1358,9 +1358,37 @@ class LID(PathQualityMetric):
 
 
 class SED(PathQualityMetric):
-    """
-    Diversity of Shared Entities
+    r"""SED (Shared Entity Diversity) is a path quality metric that measures the
+    diversity of shared entities involved in explanation paths.
 
+    Note:
+        In this implementation, SED evaluates how many *distinct shared entities*
+        are used to explain recommendations for each user. The shared entity is
+        defined as the penultimate node of an explanation path.
+        The metric is computed per user as the ratio between the number of distinct
+        shared entity identifiers and the total number of explanation paths, and then
+        averaged across users.
+
+        SED is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`SE_u` be the set of distinct shared entity identifiers appearing
+        as the penultimate node of the paths in :math:`P_u`.
+
+    The SED metric is defined as:
+
+    .. math::
+        \mathrm{SED}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \frac{|SE_u|}{|P_u|}
+
+    Higher values indicate that explanations rely on a more diverse set of shared
+    entities, reflecting richer and less repetitive explanatory structures.
     """
 
     def __init__(self, config):
