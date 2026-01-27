@@ -1441,9 +1441,40 @@ class SED(PathQualityMetric):
 
 
 class PTD(PathQualityMetric):
-    """
-    Path Type Diversity
-    """
+    r"""PTD (Path Type Diversity) is a path quality metric that measures the
+    diversity of path types used in explanation paths.
+
+    Note:
+        In this implementation, PTD evaluates how many *distinct path types* are
+        involved in a user’s explanation paths. The path type is identified by the
+        first element of the last node in the path; if the last node corresponds to
+        a self-loop, the path type is taken from the penultimate node.
+
+        The metric is computed per user as the ratio between the number of distinct
+        path types and the minimum between the number of explanation paths and the
+        total number of possible path types. The final score is obtained by averaging
+        across users.
+
+        PTD is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`T_u` be the set of distinct path types appearing in :math:`P_u`,
+        - :math:`T` be the set of all possible path types.
+
+    The PTD metric is defined as:
+
+    .. math::
+        \mathrm{PTD}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \frac{|T_u|}{\min\left(|P_u|,\;|T|\right)}
+
+    Higher values indicate that explanations exploit a wider variety of path
+    types, reflecting more structurally diverse explanation patterns."""
 
     metric_need = ["data.max_path_type"]
 
