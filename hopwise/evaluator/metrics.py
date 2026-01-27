@@ -1634,9 +1634,46 @@ class PTC(PathQualityMetric):
 
 
 class PPT(PathQualityMetric):
+    r"""PPT (Path Pattern Type) is a path quality metric that measures the diversity
+    of relational path patterns used in explanation paths.
+
+    Note:
+        In this implementation, a path pattern is defined as the ordered sequence of
+        relation names associated with the nodes of an explanation path, excluding the
+        user node. Relation identifiers are mapped to relation names via `rid2relation`.
+        The metric evaluates how many *distinct path patterns* are used per user.
+
+        The score is computed per user as the ratio between the number of distinct path
+        patterns and the minimum between the number of explanation paths and the maximum
+        allowed path length, capped at 1.0. The final value is obtained by averaging
+        across users.
+
+        PPT is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`\\Pi_u` be the set of distinct relational path patterns derived from
+        :math:`P_u`,
+        - :math:`L` be the maximum path length.
+
+    The PPT metric is defined as:
+
+    .. math::
+        \mathrm{PPT}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \min\!\left(
+            \frac{|\Pi_u|}{\min\!\left(|P_u|,\; L\right)},
+            1
+        \right)
+
+    Higher values indicate a greater variety of relational explanation patterns,
+    reflecting richer and less repetitive explanation structures.
     """
-    Path Pattern Type
-    """
+
 
     metric_need = ["data.max_path_length", "data.rid2relation"]
 
