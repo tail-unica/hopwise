@@ -910,10 +910,57 @@ class Serendipity(AbstractMetric):
 
 
 class Novelty(AbstractMetric):
+    r"""Novelty is a ranking-based metric that measures how *unpopular* the recommended
+    items are with respect to their popularity in the training data.
+
+    The intuition behind novelty is that recommendations are more novel when they
+    promote items that are rarely interacted with, rather than frequently consumed
+    popular items.
+
+    Note:
+        This implementation defines novelty as the inverse of normalized item popularity.
+        Item popularity is computed from the interaction counts observed in the training
+        data and then normalized using min-max normalization.
+
+        The metric is computed at different cutoffs `k`, and the final value for each
+        `k` is obtained by averaging the novelty scores across users.
+
+        In particular:
+        - Item popularity is derived from training interaction frequencies.
+        - Popularity values are normalized globally using min-max normalization.
+        - Novelty is computed as the inverse of normalized popularity.
+        - The metric is explicitly dependent on `k`.
+
+    Formally, let:
+        - :math:`R_u^k = (r_{u,1}, \dots, r_{u,k})` be the top-k items recommended to user :math:`u`,
+        - :math:`c(i)` be the interaction count of item :math:`i` in the training data,
+        - :math:`c_{\min}` and :math:`c_{\max}` be the minimum and maximum item popularity,
+        respectively.
+
+    The normalized popularity of an item :math:`i` is defined as:
+
+    .. math::
+        \hat{c}(i) = \frac{c(i) - c_{\min}}{c_{\max} - c_{\min}}
+
+    The novelty of an item :math:`i` is then:
+
+    .. math::
+        \mathrm{novelty}(i) = 1 - \hat{c}(i)
+
+    The novelty score for a user at cutoff :math:`k` is computed as:
+
+    .. math::
+        \mathrm{Novelty@k}(u) = \frac{1}{k} \sum_{i \in R_u^k} \left(1 - \hat{c}(i)\right)
+
+    Finally, the overall novelty is obtained by averaging across all users:
+
+    .. math::
+        \mathrm{Novelty@k} = \frac{1}{|U|} \sum_{u \in U} \mathrm{Novelty@k}(u)
+
+    Higher values indicate more novel recommendations, favoring items with lower
+    training popularity.
     """
-    Paper:
-    Novelty: Inverse of popularity of the items recommended to the user
-    """
+
 
     metric_type = EvaluatorType.RANKING
     metric_need = ["rec.items", "data.count_items", "data.num_items"]
