@@ -1116,8 +1116,36 @@ class LIR(PathQualityMetric):
 
 
 class Fidelity(PathQualityMetric):
-    """
-    Fidelity
+    r"""Fidelity (FID) is an explanation quality metric that measures the proportion of
+    recommended items that can be explained by at least one explanation path.
+
+    Note:
+        In this implementation, an item is considered *explainable* for a user if there exists
+        at least one explanation path connecting the user to that item.
+        Fidelity is computed at cutoff :math:`k` and averaged across users.
+
+        This definition follows the hopwise paper, where fidelity is described as the
+        *percentage of recommended items that are explainable*.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`E_u^k` be the set of top-k recommended items for user :math:`u` that admit
+        at least one explanation path.
+
+    The fidelity at cutoff :math:`k` is defined as:
+
+    .. math::
+        \mathrm{FID@k}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \min\!\left(
+            \frac{|E_u^k|}{k},
+            1
+        \right)
+
+    Higher values indicate that a larger fraction of the recommended items is covered
+    by explanations.
     """
 
     def __init__(self, config):
