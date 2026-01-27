@@ -1725,8 +1725,39 @@ class PPT(PathQualityMetric):
 
 
 class LITD(PathQualityMetric):
-    """
-    Linked Interaction Type Diversity
+    r"""LITD (Linked Interaction Type Diversity) is a path quality metric that measures
+    the diversity of *types* of linking interactions used in explanation paths.
+
+    Note:
+        In this implementation, LITD evaluates how many distinct *linking interaction
+        types* (e.g., item, entity, brand) are involved in a user’s explanation paths.
+        The linking interaction type is identified as the type of the second node in
+        each explanation path.
+
+        The metric is computed per user as the ratio between the number of distinct
+        linking interaction types and the total number of explanation paths, and then
+        averaged across users.
+
+        LITD is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`LT_u` be the set of distinct linking interaction types appearing
+        as the second node of the paths in :math:`P_u`.
+
+    The LITD metric is defined as:
+
+    .. math::
+        \mathrm{LITD}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \frac{|LT_u|}{|P_u|}
+
+    Higher values indicate that explanations rely on a wider variety of linking
+    interaction types, reflecting more heterogeneous explanatory mechanisms.
     """
 
     def __init__(self, config):
