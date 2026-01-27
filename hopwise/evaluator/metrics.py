@@ -808,8 +808,49 @@ DeltaRecall = create_consumer_metric_class("Recall")
 
 
 class Serendipity(AbstractMetric):
-    r"""Serendipity is a measure of how surprising the recommended items are to the user.
-    It is defined as the fraction of recommended items that are not popular in the training data.
+    r"""Serendipity is a ranking-based metric that measures how *unexpected* the recommended
+    items are to a user with respect to item popularity in the training data.
+
+    The intuition behind serendipity is that recommendations are more serendipitous
+    when they avoid globally popular items and instead promote items that the user
+    is unlikely to encounter by chance.
+
+    Note:
+        This implementation defines serendipity as a *popularity-based unexpectedness*
+        measure. For each user, it compares the recommended top-k items with the most
+        popular items in the training data (excluding items already interacted with
+        by the user).
+
+        The metric is computed per user and per rank position, then averaged across
+        users. It is explicitly dependent on `k`, and different values of `k` may
+        produce different serendipity scores.
+
+        In particular:
+        - Item popularity is derived from the training interaction counts.
+        - Items appearing in the user history are excluded from the popularity ranking.
+        - A recommendation is considered *non-serendipitous* if it belongs to the
+          top-k most popular items.
+
+    Formally, for a user :math:`u`, let:
+        - :math:`R_u = (r_{u,1}, \dots, r_{u,k})` be the ranked list of recommended items,
+        - :math:`P_u^k` be the set of the top-k most popular items after removing items
+          already interacted with by user :math:`u`.
+
+    The serendipity at cutoff :math:`k` is defined as:
+
+    .. math::
+        \mathrm{Serendipity@k}(u) =
+        1 - \frac{1}{k} \sum_{i=1}^{k} \mathbb{I}\left[r_{u,i} \in P_u^k\right]
+
+    where :math:`\mathbb{I}[\cdot]` is the indicator function.
+
+    The final metric value is obtained by averaging over all users:
+
+    .. math::
+        \mathrm{Serendipity@k} = \frac{1}{|U|} \sum_{u \in U} \mathrm{Serendipity@k}(u)
+
+    Higher values indicate more serendipitous recommendations, while lower values
+    indicate recommendations dominated by popular items.
     """
 
     metric_type = EvaluatorType.RANKING
