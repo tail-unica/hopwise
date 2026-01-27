@@ -1804,8 +1804,39 @@ class LITD(PathQualityMetric):
 
 
 class SETD(PathQualityMetric):
-    """
-    Shared Entities Type Diversity
+    r"""SETD (Shared Entity Type Diversity) is a path quality metric that measures
+    the diversity of *types* of shared entities involved in explanation paths.
+
+    Note:
+        In this implementation, SETD evaluates how many distinct *shared entity types*
+        (e.g., entity, brand, category) are used in a user’s explanation paths.
+        The shared entity type is identified as the type of the penultimate node in
+        each explanation path.
+
+        The metric is computed per user as the ratio between the number of distinct
+        shared entity types and the total number of explanation paths, and then
+        averaged across users.
+
+        SETD is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`ST_u` be the set of distinct shared entity types appearing as the
+        penultimate node of the paths in :math:`P_u`.
+
+    The SETD metric is defined as:
+
+    .. math::
+        \mathrm{SETD}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \frac{|ST_u|}{|P_u|}
+
+    Higher values indicate that explanations rely on a wider variety of shared
+    entity types, reflecting more heterogeneous explanatory structures.
     """
 
     def __init__(self, config):
