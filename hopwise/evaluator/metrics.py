@@ -1278,9 +1278,36 @@ class SEP(PathQualityMetric):
 
 
 class LID(PathQualityMetric):
-    """
-    Diversity of Linked Interaction (LID)
+    r"""LID (Linked Interaction Diversity) is a path quality metric that measures the
+    diversity of linking interactions used to generate explanations for recommendations.
 
+    Note:
+        In this implementation, LID evaluates how many *distinct linking interactions*
+        (i.e., intermediate items or entities) are involved in a user’s explanation paths.
+        The metric is computed per user as the ratio between the number of distinct
+        linking interaction identifiers and the total number of explanation paths,
+        and then averaged across users.
+
+        LID is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`LI_u` be the set of distinct linking interaction identifiers appearing
+        as the second node of the paths in :math:`P_u`.
+
+    The LID metric is defined as:
+
+    .. math::
+        \mathrm{LID}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \frac{|LI_u|}{|P_u|}
+
+    Higher values indicate that a larger variety of linking interactions is used to
+    explain the recommendations, reflecting more diverse explanatory structures.
     """
 
     def __init__(self, config):
