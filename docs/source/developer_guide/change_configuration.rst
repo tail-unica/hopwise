@@ -35,4 +35,5 @@ As you can see, here we have a Config class that is used to manage the configura
 We can update the configuration dict with the `deep_dict_update` function, which allows us to merge two dictionaries recursively. This is useful when we want to update the configuration with new parameters or override existing ones.
 
 .. code:: python
+
     deep_dict_update(updated_dict, updating_dict)

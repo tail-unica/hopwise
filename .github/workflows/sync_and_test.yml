@@ -35,10 +35,10 @@ jobs:
 
       - if: ${{ inputs.env == 'cuda' }}
         run: |
-          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
+          uv pip install torch-scatter torch-geometric -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
       - if: ${{ inputs.env == 'cpu' }}
         run: |
-          uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.7.0+cpu.html
+          uv pip install torch-scatter torch-geometric -f https://data.pyg.org/whl/torch-2.7.0+cpu.html
 
       # Testing pipeline
       # TODO: add pytest-cov to generate coverage reports with Full Test

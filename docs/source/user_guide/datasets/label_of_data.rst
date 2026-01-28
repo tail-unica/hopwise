@@ -66,7 +66,7 @@ You can set the config like:
         rating: 3
     train_neg_sample_args: None
 
-And then RecBole will automatically set label for interactions based on their rating column.
+And then hopwise will automatically set label for interactions based on their rating column.
 
 3. Negative sampling
 ------------------------------
@@ -82,7 +82,7 @@ You can set the config like:
     train_neg_sample_args:
         uniform: 1
 
-And then, RecBole will automatically select one negative sample for each positive sample uniformly from the unobserved interactions.
+And then, hopwise will automatically select one negative sample for each positive sample uniformly from the unobserved interactions.
 
 At last, for more details about the label config, please read :doc:`../config/data_settings` and :doc:`../config/training_settings`.
 

@@ -1,7 +1,7 @@
 Data Flow
 ===========
 
-**hopwise is based on Recbole, so the data flow is the same.**
+**hopwise is based on RecBole, so the data flow is similar.**
 
 For extensibility and reusability, our data module designs an elegant data flow that transforms raw data into the model input.
 
@@ -15,7 +15,7 @@ The details are as follows:
 - Raw Input
     Unprocessed raw input dataset. Detailed as `Dataset List </dataset_list.html>`_.
 - Atomic Files
-    Basic components for characterizing the input of various recommendation tasks, proposed by RecBole. Detailed as :doc:`atomic_files`.
+    Basic components for characterizing the input of various recommendation tasks. Detailed as :doc:`atomic_files`.
 - Dataset:
     Mainly based on the primary data structure of :class:`pandas.DataFrame` in the library of `pandas <https://pandas.pydata.org/>`_.
     During the transformation step from atomic files to class :class:`Dataset`,

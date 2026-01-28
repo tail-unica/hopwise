@@ -20,14 +20,29 @@ Evaluation settings are designed to set parameters about model evaluation.
 - ``metrics (list or str)``: Evaluation metrics. Defaults to
   ``['Recall', 'MRR', 'NDCG', 'Hit', 'Precision']``. Range in the following table:
 
-  ==============    =================================================
-  Type              Metrics
-  ==============    =================================================
-  Ranking-based     Recall, MRR, NDCG, Hit, MAP, Precision, GAUC, ItemCoverage, AveragePopularity, GiniIndex, ShannonEntropy, TailPercentage
-  value-based       AUC, MAE, RMSE, LogLoss
-  ==============    =================================================
+  ==================    =================================================
+  Type                  Metrics
+  ==================    =================================================
+  Ranking-based         Recall, MRR, NDCG, Hit, MAP, Precision, GAUC, ItemCoverage, AveragePopularity, GiniIndex, ShannonEntropy, TailPercentage
+  Value-based           AUC, MAE, RMSE, LogLoss
+  Path Quality          LIR, Fidelity, SEP, LID, SED, PTD, PTC, PPT, LITD, SETD
+  ==================    =================================================
 
   Note that value-based metrics and ranking-based metrics can not be used together.
+  Path quality metrics are designed for path reasoning models and require generated paths.
+
+  **Path Quality Metrics:**
+
+  - **LIR** (Linking Interaction Recency): Quantifies the time since the linking interaction in the explanation path occurred. Uses exponentially weighted moving average.
+  - **Fidelity**: Measures how faithful the generated paths are to the knowledge graph structure.
+  - **SEP** (Popularity of Shared Entity): Quantifies the extent to which the shared entity in an explanation-path is popular, based on the number of relationships in the KG.
+  - **LID** (Diversity of Linked Interaction): Measures the diversity of linked interactions in the generated paths.
+  - **SED** (Diversity of Shared Entities): Measures the diversity of shared entities in the generated paths.
+  - **PTD** (Path Type Diversity): Measures the diversity of path types in the recommendations.
+  - **PTC** (Path Type Concentration): Measures the concentration of path types (inverse of diversity).
+  - **PPT** (Path Pattern Type): Analyzes the pattern types of the generated paths.
+  - **LITD** (Linked Interaction Type Diversity): Measures the diversity of linked interaction types.
+  - **SETD** (Shared Entities Type Diversity): Measures the diversity of shared entity types.
 
 - ``topk (list or int or None)``: The value of k for topk evaluation metrics.
   Defaults to ``10``.

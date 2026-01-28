@@ -6,6 +6,7 @@ from hopwise.model.knowledge_aware_recommender.kgcn import KGCN
 from hopwise.model.knowledge_aware_recommender.kgin import KGIN
 from hopwise.model.knowledge_aware_recommender.kglrr import KGLRR
 from hopwise.model.knowledge_aware_recommender.kgnnls import KGNNLS
+from hopwise.model.knowledge_aware_recommender.kgrec import KGRec
 from hopwise.model.knowledge_aware_recommender.ktup import KTUP
 from hopwise.model.knowledge_aware_recommender.mcclk import MCCLK
 from hopwise.model.knowledge_aware_recommender.mkr import MKR

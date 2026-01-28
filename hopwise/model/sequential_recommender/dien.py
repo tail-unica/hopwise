@@ -189,21 +189,20 @@ class InterestExtractorNetwork(nn.Module):
         return rnn_outputs, aux_loss
 
     def auxiliary_loss(self, h_states, click_seq, noclick_seq, keys_length):
-        r"""Computes the auxiliary loss
-
-        Formally:
-        ..math: L_{a u x}= \frac{1}{N}(\sum_{i=1}^{N} \sum_{t} \log \sigma(\mathbf{h}_{t}^{i}, \mathbf{e}_{b}^{i}[t+1])
-                + \log (1-\sigma(\mathbf{h}_{t}^{i}, \hat{\mathbf{e}}_{b}^{i}[t+1])))
+        r"""Computes the auxiliary loss.
 
         Args:
-            h_states (torch.Tensor): The output of GRUs' hidden layer, [batch_size, history_length - 1, embedding,size].
-            click_seq (torch.Tensor): The sequence that users consumed, [batch_size, history_length - 1, embedding,size].
-            noclick_seq (torch.Tensor): The sequence that users did not consume, [batch_size, history_length - 1, embedding_size].
+            h_states (torch.Tensor): The output of GRUs' hidden layer,
+                shape [batch_size, history_length - 1, embedding_size].
+            click_seq (torch.Tensor): The sequence that users consumed,
+                shape [batch_size, history_length - 1, embedding_size].
+            noclick_seq (torch.Tensor): The sequence that users did not consume,
+                shape [batch_size, history_length - 1, embedding_size].
+            keys_length (torch.Tensor): The true length of the user history sequence.
 
         Returns:
             torch.Tensor: auxiliary loss
-
-        """  # noqa: E501
+        """
         batch_size, hist_length, embedding_size = h_states.shape
         click_input = torch.cat([h_states, click_seq], dim=-1)
         noclick_input = torch.cat([h_states, noclick_seq], dim=-1)

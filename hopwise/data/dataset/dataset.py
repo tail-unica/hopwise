@@ -1022,12 +1022,9 @@ class Dataset(torch.utils.data.Dataset):
             field_list (numpy.ndarray): List of fields in the same remapping space.
 
         Returns:
-            list:
-            - feat (pandas.DataFrame)
-            - field (str)
-            - ftype (FeatureType)
-
-            They will be concatenated in order, and remapped together.
+            list: List of tuples (feat, field, ftype) where feat is a pandas.DataFrame,
+                field is a str, and ftype is a FeatureType. They will be concatenated
+                in order, and remapped together.
         """
         remap_list = []
         for field in field_list:
@@ -1053,9 +1050,8 @@ class Dataset(torch.utils.data.Dataset):
             remap_list (list): See :meth:`_get_remap_list` for detail.
 
         Returns:
-            tuple: tuple of:
-            - tokens after concatenation.
-            - split points that can be used to restore the concatenated tokens.
+            tuple: A tuple of (tokens, split_point) where tokens is the concatenated
+                array and split_point contains indices to restore the original tokens.
         """
         tokens = []
         for feat, field, ftype in remap_list:
@@ -1787,13 +1783,9 @@ class Dataset(torch.utils.data.Dataset):
             size (int, optional): Size of the normalized interaction matrix. Defaults to ``None``.
                 If ``None``, the size is set to ``self.user_num + self.item_num``.
             symmetric (bool, optional): Whether to use symmetric normalization. Defaults to ``True``.
-                If ``True``, the normalized interaction matrix is calculated as:
-                .. math::
-                    A_{hat} = D^{-0.5} \times A \times D^{-0.5}
-                If ``False``, the normalized interaction matrix is calculated as:
-                .. math::
-                    A_{hat} = D^{-1} \times A
-                where :math:`A` is the adjacency matrix, and :math:`D` is the diagonal degree matrix.
+                If ``True``, uses symmetric normalization: ``A_hat = D^{-0.5} * A * D^{-0.5}``.
+                If ``False``, uses left normalization: ``A_hat = D^{-1} * A``.
+                Here ``A`` is the adjacency matrix and ``D`` is the diagonal degree matrix.
 
         Returns:
             Sparse tensor of the normalized interaction matrix.

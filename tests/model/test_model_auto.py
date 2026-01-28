@@ -941,6 +941,12 @@ class TestKnowledgeRecommender(unittest.TestCase):
         }
         quick_test(config_dict)
 
+    def test_kgrec(self):
+        config_dict = {
+            "model": "KGRec",
+        }
+        quick_test(config_dict)
+
     def test_pgpr(self):
         config_dict = {
             "model": "PGPR",
