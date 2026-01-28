@@ -1,7 +1,7 @@
 Tasks & Models
 ===============
 
-Deriving from RecBole, hopwise provides a variety of tasks and models for different recommendation scenarios.
+Building on RecBole's foundation, Hopwise provides a variety of tasks and models for different recommendation scenarios.
 Details about each model can be found under the corresponding task section.
 
 .. toctree::

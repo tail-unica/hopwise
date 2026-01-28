@@ -1,14 +1,14 @@
 Dataset Download
 ================================
 
-**hopwise provides 4 more datasets in addition to the set of downloadable datasets provided by Recbole.**
+**Hopwise provides 4 additional datasets beyond the standard RecBole datasets.**
 
-In RecBole, they have collected and released 28 commonly-used publiced dataset (detailed as `Dataset List </dataset_list.html>`_).
+Hopwise includes 28 commonly-used published datasets (detailed in `Dataset List </dataset_list.html>`_).
 Users can freely download these datasets in the following three ways:
 
 1. Automatically downloading
 -----------------------------
-For the convenience of users, they implement automatically downloading module in RecBole and now we support to download the :doc:`atomic_files` of 28 commonly-used
+For the convenience of users, Hopwise implements an automatic downloading module and now we support downloading the :doc:`atomic_files` of 28 commonly-used
 publiced datasets (detailed as `Dataset List </dataset_list.html>`_). If you want to run models on a dataset, you just need to set the
 `dataset` and then the data files will be automatically downloaded.
 

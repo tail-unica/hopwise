@@ -54,7 +54,7 @@ Quick-start From API
 >>>>>>>>>>>>>>>>>>>>>>>>>
 
 Before running a model, firstly you need to prepare and load data. To
-help users quickly get start, RecBole has a build-in dataset **ml-100k**
+help users quickly get started, Hopwise has a built-in dataset **ml-100k**
 and you can directly use it. However, if you want to use other datasets,
 you can read `Running New
 Dataset <https://recbole.io/docs/user_guide/usage/running_new_dataset.html>`__
@@ -80,7 +80,7 @@ models utilize the historical interaction sequences to predict the next
 item, so it needs to specify and load the user, item and time columns of
 the dataset. And you should set the maximum length of the sequence.
 
-For sequential dataset, RecBole supports Augmentation processing. For example,  suppose ``u1`` interacts with ``i1,i2,i3,i4,i5`` in time and ``MAX_ITEM_LIST_LENGTH = 3``
+For sequential dataset, Hopwise supports Augmentation processing. For example,  suppose ``u1`` interacts with ``i1,i2,i3,i4,i5`` in time and ``MAX_ITEM_LIST_LENGTH = 3``
 
 .. code:: python
 
@@ -138,7 +138,7 @@ for more information.
 3. Set training and evaluation config:
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-In RecBole, we support multiple training and evaluation methods. You can
+Hopwise supports multiple training and evaluation methods. You can
 choose how to train and test model by simply setting the config.
 
 Here we want to train and test the GRU4Rec model in
@@ -182,8 +182,8 @@ code:
 
 .. code:: python
 
-   from recbole.quick_start import run_recbole
-   run_recbole(model='GRU4Rec', dataset='ml-100k', config_file_list=['test.yaml'])
+   from hopwise.quick_start import run_hopwise
+   run_hopwise(model='GRU4Rec', dataset='ml-100k', config_file_list=['test.yaml'])
 
 Then run the following command:
 
@@ -232,13 +232,13 @@ And you will obtain the output like:
 
 
 Finally you will get the model’s performance on the test set and the
-model file will be saved under the /saved. Besides, RecBole allows
+model file will be saved under the /saved. Besides, Hopwise allows
 tracking and visualizing train loss and valid score with TensorBoard,
 please read the `Use
 Tensorboard <https://recbole.io/docs/user_guide/usage/use_tensorboard.html>`__
 for more details.
 
-The above is the whole process of running a model in RecBole, and you
+The above is the whole process of running a model in Hopwise, and you
 can read other docs for depth usage.
 
 .. _header-n31:
@@ -247,7 +247,7 @@ Quick-start From Source
 --------------------------
 
 Besides using API, you can also directly run the source code of
-`RecBole <https://github.com/RUCAIBox/RecBole>`__. The whole process is
+`Hopwise <https://github.com/tail-unica/hopwise>`__. The whole process is
 similar to Quick-start From API. You can create a yaml file called
 test.yaml and set all the config as follow:
 
@@ -289,7 +289,7 @@ Then run the following command:
 
 .. code:: python
 
-   python run_recbole.py --model=GRU4Rec --dataset=ml-100k --config_files=test.yaml
+   python -m hopwise train --model=GRU4Rec --dataset=ml-100k --config_files=test.yaml
 
 And you will get the output of running the GRU4Rec model on the ml-100k
 dataset.
@@ -299,4 +299,4 @@ set the additional command parameters as you need:
 
 .. code:: python
 
-   python run_recbole.py --model=GRU4Rec --dataset=ml-100k --config_files=test.yaml --embedding_size=100
+   python -m hopwise train --model=GRU4Rec --dataset=ml-100k --config_files=test.yaml --embedding_size=100

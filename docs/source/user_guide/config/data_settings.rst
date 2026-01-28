@@ -1,7 +1,7 @@
 Data settings
 =========================
 
-RecBole provides several arguments for describing:
+Hopwise provides several arguments for describing:
 
 - Basic information of the dataset
 - Operations of dataset preprocessing

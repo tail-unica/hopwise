@@ -1,7 +1,7 @@
 Distributed Training
 =======================
 
-**hopwise provides the same functionality as RecBole, but with a more user-friendly interface.**
+**Hopwise provides distributed training functionality with a user-friendly interface.**
 
 Now we support distributed training and evaluation. Here is a distributed training example for using hopwise.
 We will show you how to train and test **BPR** model on the **ml-100k** dataset in the distributed environment.
@@ -208,9 +208,9 @@ Then run the following command:
 
 
 Finally you will get the model's performance on the test set and the model file will be saved under the `/saved`. Besides,
-RecBole allows tracking and visualizing train loss and valid score with TensorBoard, please read the :doc:`../user_guide/usage/use_tensorboard` for more details.
+Hopwise allows tracking and visualizing train loss and valid score with TensorBoard, please read the :doc:`../user_guide/usage/use_tensorboard` for more details.
 
-The above is the whole process of running a model in RecBole, and you can read other docs for depth usage.
+The above is the whole process of running a model, and you can read other docs for depth usage.
 
 
 Quick-start From CLI

@@ -3,7 +3,7 @@ Training, Evaluation and Metrics Introduction
 
 Training introduction
 -----------------------
-Multiple training strategies are supported by RecBole. For traditional CPU-based
+Multiple training strategies are supported by Hopwise. For traditional CPU-based
 collaborative filter models, non-gradient training is naturally applied. For
 main-stream neural-based models, automatic gradient descent is well equipped
 and set as default training strategy. Also two-stage training strategy is prepared
@@ -15,7 +15,7 @@ Apart from flexible training strategies, an automatic hyper-parameter searching 
 also supported. The implement of searching is fully based on `hyperopt <https://github.com/hyperopt/hyperopt>`_.
 Users can set the range of hyper-parameters in a config file with format of hyperopt
 and the optimal hyper-parameter and result will be output.
-You can read :doc:`usage/parameter_tuning` for more information about hyper-parameter-tuning in RecBole.
+You can read :doc:`usage/parameter_tuning` for more information about hyper-parameter-tuning.
 
 To control the training method, we design a series of training parameters in config,
 and you can read the :doc:`config/training_settings` for more information.
@@ -25,13 +25,13 @@ Evaluation introduction
 -----------------------
 The function of evaluation module is to implement commonly used evaluation
 protocols for recommender systems. Since different models can be compared under
-the same evaluation modules, RecBole standardizes the evaluation of recommender
+the same evaluation modules, Hopwise standardizes the evaluation of recommender
 systems.
 
 Evaluation method
 >>>>>>>>>>>>>>>>>>>>>>>
 
-The evaluation method supported by RecBole is as following. Among them, the
+The evaluation method supported by Hopwise is as following. Among them, the
 first four rows correspond to the dataset splitting methods, while the last two
 rows correspond to the ranking mechanism, namely a full ranking over all the
 items or a sampled-based ranking.
@@ -67,7 +67,7 @@ The parameters used to control the evaluation method are as follows:
 Evaluation metrics
 >>>>>>>>>>>>>>>>>>>>>>>>>>
 
-RecBole supports both value-based and ranking-based evaluation metrics.
+Hopwise supports both value-based and ranking-based evaluation metrics.
 
 The value-based metrics (i.e., for rating prediction) include ``RMSE``, ``MAE``,
 ``AUC`` and ``LogLoss``, measuring the prediction difference between the true

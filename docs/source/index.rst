@@ -1,18 +1,18 @@
 Introduction
 ======================
 
-hopwise
+Hopwise
 ----------------------
 
-hopwise is an advanced extension of the **RecBole** library, designed to enhance recommendation systems with the power of knowledge graphs. By integrating knowledge embedding models, path-based reasoning methods, and path language modeling approaches, hopwise supports both recommendation and link prediction tasks with a focus on explainability.
+Hopwise is an advanced extension of the **RecBole** library, designed to enhance recommendation systems with the power of knowledge graphs. By integrating knowledge embedding models, path-based reasoning methods, and path language modeling approaches, Hopwise supports both recommendation and link prediction tasks with a focus on explainability.
 
 .. image:: asset/hopwise.png
     :width: 600
     :align: center
 
-**It aims to help the researchers to reproduce and develop recommendation models.**
+**It aims to help researchers reproduce and develop recommendation models.**
 
-In the lastest release, our library includes all the algorithms already present in Recbole `[Model List]`_, along with two 🆕 new categories of models and numerous other improvements:
+In the latest release, our library includes all the algorithms already present in RecBole `[Model List]`_, along with two 🆕 new categories of models and numerous other improvements:
 
 
 - General Recommendation
@@ -23,7 +23,7 @@ In the lastest release, our library includes all the algorithms already present 
 - Knowledge Graph Embeddings for Recommendation and Link prediction
 
 
-We have also added 4 new datasets in addition to the 44 datasets already available in Recbole `[Collected Datasets]`_.
+We have also added 4 new datasets in addition to the 44 datasets already available in RecBole `[Collected Datasets]`_.
 
 
 New Features:
@@ -55,6 +55,7 @@ New Features:
    get_started/install
    get_started/distributed_training
    get_started/data_intro
+   get_started/cli_reference
 
 .. toctree::
    :maxdepth: 1
@@ -67,15 +68,19 @@ New Features:
    :caption: User Guide
 
    user_guide/usage
-
    user_guide/configuration
    user_guide/data_intro
    user_guide/tasks_models_intro
    user_guide/training_and_evaluation
-   user_guide/hyperparameters_tuning
    user_guide/qa
+   user_guide/explainability/index
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Advanced Topics
+
+   user_guide/hyperparameters_tuning
    user_guide/significance_test
-   user_guide/item_cold_start
    user_guide/half_precision_training
 
 .. toctree::
@@ -105,9 +110,9 @@ New Features:
 
 The Team
 ------------------
-hopwise is developed and maintained by the **`Trustworthy Artificial Intelligence Laboratory @ University of Cagliari`**.
+Hopwise is developed and maintained by the **`Trustworthy Artificial Intelligence Laboratory @ University of Cagliari`**.
 
 
 License
 ------------
-hopwise uses `MIT License <https://github.com/tail-unica/hopwise/blob/main/LICENSE>`.
+Hopwise uses `MIT License <https://github.com/tail-unica/hopwise/blob/main/LICENSE>`_.

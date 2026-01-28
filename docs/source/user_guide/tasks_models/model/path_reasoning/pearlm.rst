@@ -4,59 +4,102 @@ PEARLM
 Introduction
 ---------------------
 
-`[paper] <...>`_
+`[paper] <https://arxiv.org/abs/2403.16032>`_
 
-**Title:** ....
+**Title:** Faithful Path Language Modeling for Explainable Recommendation over Knowledge Graph
 
-**Authors:** ...
+**Authors:** Giacomo Balloccu, Ludovico Boratto, Christian Cancedda, Gianni Fenu, Mirko Marras
 
-**Abstract:** ...
+**Abstract:** PEARLM (Path-language-modeling Explainable Recommendation over Language Model)
+extends the PLM approach by adding a constrained graph decoding mechanism to ensure
+that the generated paths are valid according to the knowledge graph structure. This
+results in more faithful and reliable explanation paths for recommendations.
 
+PEARLM learns to predict sequences of entity-relation triplets extracted from a
+knowledge graph, and can generate valid reasoning paths that explain recommendations.
 
-Running with hopwise
+Running with Hopwise
 -------------------------
+
+.. note::
+
+   The language model is currently hardcoded to use **DistilGPT-2**. While a ``base_model``
+   parameter exists, changing it is not supported as the tokenizer and model architecture
+   are tied to DistilGPT-2. This may change in future versions.
 
 **Model Hyper-Parameters:**
 
-- ``embedding_size (int)`` : The embedding size of users, items, entities and relations. Defaults to ``64``.
-- ``loss_function (str)`` : The optimization loss function. Defaults to ``'inner_product'``. Range in ``['inner_product', 'transe']``.
-- ``margin (float)`` : The margin in margin loss, only be used when ``loss_function`` is set to ``'transe'``. Defaults to ``1.0``.
+- ``embedding_size (int)`` : Size of the embeddings. Defaults to ``768``.
+- ``num_heads (int)`` : Number of attention heads. Defaults to ``12``.
+- ``num_layers (int)`` : Number of transformer layers. Defaults to ``6``.
+- ``use_kg_token_types (bool)`` : Whether to use token types for KG. Defaults to ``True``.
+- ``warmup_steps (int)`` : Number of warmup steps. Defaults to ``250``.
+- ``MAX_PATHS_PER_USER (int)`` : Maximum paths per user. Defaults to ``1``.
 
 
-**A Running Example:**
+**Configuration Example:**
 
-Write the following code to a python file, such as `run.py`
+.. code:: yaml
 
-.. code:: python
+   # PEARLM Configuration
+   embedding_size: 768
+   num_heads: 12
+   num_layers: 6
+   use_kg_token_types: True
 
-   from hopwise.quick_start import run_hopwise
+   learning_rate: 2e-4
+   weight_decay: 0.01
+   warmup_steps: 250
 
-   run_hopwise(model='CFKG', dataset='ml-100k')
+   MAX_PATHS_PER_USER: 1
+   path_sample_args:
+       temporal_causality: False
+       strategy: simple-ui
 
-And then:
+**Running Example:**
 
 .. code:: bash
 
-   python run.py
+   hopwise train --model=PEARLM --dataset=ml-100k --config_files=pearlm_config.yaml
+
+**Generating Explanations:**
+
+.. code:: python
+
+   from hopwise.quick_start import load_data_and_model
+
+   config, model, dataset, _, _, test_data = load_data_and_model(
+       model_file='saved/PEARLM-xxx.pth'
+   )
+
+   # Generate explanation paths
+   user_id = 1
+   explanations = model.generate(user_id)
+   for exp in explanations:
+       print(exp)
 
 Tuning Hyper Parameters
 -------------------------
 
-If you want to use ``HyperTuning`` to tune hyper parameters of this model, you can copy the following settings and name it as ``hyper.test``.
+.. code:: bash
+
+   learning_rate choice [1e-4,2e-4,5e-4]
+   num_layers choice [4,6,8]
+   num_heads choice [8,12]
+   embedding_size choice [256,512,768]
+
+Then run:
 
 .. code:: bash
 
-   learning_rate choice [0.01,0.005,0.001,0.0005,0.0001]
-   loss_function choice ['inner_product', 'transe']
-   margin choice [0.5,1.0,2.0]
-
-Note that we just provide these hyper parameter ranges for reference only, and we can not guarantee that they are the optimal range of this model.
-
-Then, with the source code of hopwise (you can download it from GitHub), you can run the ``run_hyper.py`` to tuning:
-
-.. code:: bash
-
-	hopwise tune --config_files=[config_files_path] --params_file=hyper.test
+   hopwise tune --model=PEARLM --dataset=ml-100k --params_file=hyper.test
 
 For more details about Parameter Tuning, refer to :doc:`/user_guide/usage/parameter_tuning`.
+
+See Also
+--------
+
+- :doc:`/user_guide/explainability/lm_based_models` - Complete LM models guide
+- :doc:`kgglm` - KGGLM model (extends PEARLM with two-stage training)
+- :doc:`plm` - PLM model (simpler approach without constrained decoding)
 

@@ -56,7 +56,7 @@ Quick-start From API
 >>>>>>>>>>>>>>>>>>>>>>>>>
 
 Before running a model, firstly you need to prepare and load data. To
-help users quickly get start, RecBole has a build-in dataset **ml-100k**
+help users quickly get started, Hopwise has a built-in dataset **ml-100k**
 and you can directly use it. However, if you want to use other datasets,
 you can read `Running New
 Dataset <https://recbole.io/docs/user_guide/usage/running_new_dataset.html>`__
@@ -101,7 +101,7 @@ for more information.
 3. Set training and evaluation config:
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-In RecBole, we support multiple training and evaluation methods. You can
+Hopwise supports multiple training and evaluation methods. You can
 choose how to train and test model by simply setting the config.
 
 Here we want to train and test the BPR model in training-validation-test
@@ -151,8 +151,8 @@ code:
 
 .. code:: python
 
-   from recbole.quick_start import run_recbole
-   run_recbole(model='BPR', dataset='ml-100k', config_file_list=['test.yaml'])
+   from hopwise.quick_start import run_hopwise
+   run_hopwise(model='BPR', dataset='ml-100k', config_file_list=['test.yaml'])
 
 Then run the following command:
 
@@ -198,20 +198,20 @@ And you will obtain the output like:
    24 Aug 01:47    INFO  test result: {'recall@10': 0.2523, 'mrr@10': 0.4855, 'ndcg@10': 0.292, 'hit@10': 0.7953, 'precision@10': 0.1962}
 
 Finally you will get the model’s performance on the test set and the
-model file will be saved under the /saved. Besides, RecBole allows
+model file will be saved under the /saved. Besides, Hopwise allows
 tracking and visualizing train loss and valid score with TensorBoard,
 please read the `Use
 Tensorboard <https://recbole.io/docs/user_guide/usage/use_tensorboard.html>`__
 for more details.
 
-The above is the whole process of running a model in RecBole, and you
+The above is the whole process of running a model in Hopwise, and you
 can read other docs for depth usage.
 
 .. _header-n28:
 
 Quick-start From Source
 --------------------------
-Besides using API, you can also directly run the source code of `RecBole <https://github.com/RUCAIBox/RecBole>`_.
+Besides using API, you can also directly run the source code of `Hopwise <https://github.com/tail-unica/hopwise>`_.
 The whole process is similar to Quick-start From API.
 You can create a `yaml` file called `test.yaml` and set all the config as follow:
 
@@ -250,7 +250,7 @@ Then run the following command:
 
 .. code:: bash
 
-    python run_recbole.py --model=BPR --dataset=ml-100k --config_files=test.yaml
+    python -m hopwise train --model=BPR --dataset=ml-100k --config_files=test.yaml
 
 And you will get the output of running the BPR model on the ml-100k dataset.
 
@@ -259,5 +259,5 @@ just set the additional command parameters as you need:
 
 .. code:: bash
 
-    python run_recbole.py --model=BPR --dataset=ml-100k --config_files=test.yaml --embedding_size=100
+    python -m hopwise train --model=BPR --dataset=ml-100k --config_files=test.yaml --embedding_size=100
 

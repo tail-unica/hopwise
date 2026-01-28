@@ -41,7 +41,7 @@ Quick-start From API
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 Before running a model, firstly you need to prepare and load data. To
-help users quickly get start, RecBole has a build-in dataset **ml-100k**
+help users quickly get started, Hopwise has a built-in dataset **ml-100k**
 and you can directly use it. However, if you want to use other datasets,
 you can read `Running New
 Dataset <https://recbole.io/docs/user_guide/usage/running_new_dataset.html>`__
@@ -85,7 +85,7 @@ You can get the kg triplets by calling ``dataset.kg_feat``, it looks like:
    91629  m.0b_zqd8                      film.film.actor   m.07xv9s
    91630   m.0cr7n8                      film.film.actor  m.0g99qg5
 
-RecBole also offer ``entity2id`` and ``id2entity``, which map ``item_id`` and ``entity``
+Hopwise also offers ``entity2id`` and ``id2entity``, which map ``item_id`` and ``entity``
 
 
 .. _header-n159:
@@ -118,7 +118,7 @@ for more information.
 3. Set training and evaluation config:
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-In RecBole, we support multiple training and evaluation methods. You can
+Hopwise supports multiple training and evaluation methods. You can
 choose how to train and test model by simply setting the config.
 
 Here we want to train and test the CKE model in training-validation-test
@@ -158,8 +158,8 @@ code:
 
 .. code:: python
 
-   from recbole.quick_start import run_recbole
-   run_recbole(model='CKE', dataset='ml-100k', config_file_list=['test.yaml'])
+   from hopwise.quick_start import run_hopwise
+   run_hopwise(model='CKE', dataset='ml-100k', config_file_list=['test.yaml'])
 
 Then run the following command:
 
@@ -214,13 +214,13 @@ And you will obtain the output like:
    16 Jul 17:47    INFO  test result: OrderedDict([('recall@10', 0.2483), ('mrr@10', 0.4895), ('ndcg@10', 0.2912), ('hit@10', 0.7709), ('precision@10', 0.1951)])
 
 Finally you will get the model’s performance on the test set and the
-model file will be saved under the /saved. Besides, RecBole allows
+model file will be saved under the /saved. Besides, Hopwise allows
 tracking and visualizing train loss and valid score with TensorBoard,
 please read the `Use
 Tensorboard <https://recbole.io/docs/user_guide/usage/use_tensorboard.html>`__
 for more details.
 
-The above is the whole process of running a model in RecBole, and you
+The above is the whole process of running a model in Hopwise, and you
 can read other docs for depth usage.
 
 .. _header-n179:
@@ -229,7 +229,7 @@ Quick-start From Source
 --------------------------
 
 Besides using API, you can also directly run the source code of
-`RecBole <https://github.com/RUCAIBox/RecBole>`__. The whole process is
+`Hopwise <https://github.com/tail-unica/hopwise>`__. The whole process is
 similar to Quick-start From API. You can create a yaml file called
 test.yaml and set all the config as follow:
 
@@ -266,7 +266,7 @@ Then run the following command:
 
 .. code:: python
 
-   python run_recbole.py --model=CKE --dataset=ml-100k --config_files=test.yaml
+   python -m hopwise train --model=CKE --dataset=ml-100k --config_files=test.yaml
 
 And you will get the output of running the CKE model on the ml-100k
 dataset.
@@ -276,4 +276,4 @@ set the additional command parameters as you need:
 
 .. code:: python
 
-   python run_recbole.py --model=CKE --dataset=ml-100k --config_files=test.yaml --embedding_size=100
+   python -m hopwise train --model=CKE --dataset=ml-100k --config_files=test.yaml --embedding_size=100
