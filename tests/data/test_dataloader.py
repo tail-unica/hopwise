@@ -427,10 +427,12 @@ class TestGeneralDataloader:
 
 class TestWindowedTimeDataloader:
     def test_general_dataloader(self):
+        from hopwise.utils import InputType
+
         time_window_size = 5
         eval_batch_size = 2
         config_dict = {
-            "model": "Binge",
+            "model": "BPR",  # fake model just for dataloader test
             "dataset": "timewindow_dataloader",
             "data_path": current_path,
             "load_col": None,
@@ -444,7 +446,12 @@ class TestWindowedTimeDataloader:
             "eval_batch_size": eval_batch_size,
             "shuffle": False,
         }
-        train_data, valid_data, test_data = new_dataloader(config_dict=config_dict)
+        config = Config(config_dict=config_dict)
+        init_seed(config["seed"], config["reproducibility"])
+        logging.basicConfig(level=logging.ERROR)
+        config["MODEL_INPUT_TYPE"] = InputType.WINDOWWISE
+        dataset = create_dataset(config)
+        train_data, valid_data, test_data = data_preparation(config, dataset)
 
         def check_dataloader(data, time_list, window_size):
             pr = 0
