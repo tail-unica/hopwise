@@ -1572,6 +1572,34 @@ class Dataset(torch.utils.data.Dataset):
         next_ds = [self.copy(_) for _ in next_df]
         return next_ds
 
+    def split_by_time(self, time_cutoffs):
+        """Split interaction records by time cutoffs.
+
+        Args:
+            time_cutoffs (list): List of time cutoffs to split the interaction records.
+
+        Returns:
+            list: List of :class:`~Dataset`, whose interaction features has been split.
+        """
+        self.logger.debug(f"split by time intervals [{time_cutoffs}]")
+        if time_cutoffs is None:
+            raise ValueError("time based splitting require time cutoffs")
+
+        time_intervals = [
+            (-1, time_cutoffs[0]),
+            (time_cutoffs[0], time_cutoffs[1]),
+            (time_cutoffs[1], float("inf")),
+        ]
+        next_index = [[] for _ in range(len(time_intervals))]
+        for i, (start_time, end_time) in enumerate(time_intervals):
+            mask = (self.inter_feat[self.time_field] > start_time) & (self.inter_feat[self.time_field] <= end_time)
+            next_index[i] = mask.nonzero(as_tuple=True)[0].tolist()
+
+        self._drop_unused_col()
+        next_df = [self.inter_feat[index] for index in next_index]
+        next_ds = [self.copy(_) for _ in next_df]
+        return next_ds
+
     def shuffle(self):
         """Shuffle the interaction records inplace."""
         self.inter_feat.shuffle()
@@ -1631,6 +1659,8 @@ class Dataset(torch.utils.data.Dataset):
                 raise NotImplementedError(f"The grouping method [{group_by}] has not been implemented.")
         elif split_mode == "LS":
             datasets = self.leave_one_out(group_by=self.uid_field, leave_one_mode=split_args["LS"])
+        elif split_mode == "TS":
+            datasets = self.split_by_time(split_args["TS"])
         else:
             raise NotImplementedError(f"The splitting_method [{split_mode}] has not been implemented.")
 

@@ -425,5 +425,52 @@ class TestGeneralDataloader:
         assert test_data.neg_sample_args["sample_num"] == 200
 
 
+class TestWindowedTimeDataloader:
+    def test_general_dataloader(self):
+        from hopwise.utils import InputType
+
+        time_window_size = 5
+        eval_batch_size = 2
+        config_dict = {
+            "model": "BPR",  # fake model just for dataloader test
+            "dataset": "timewindow_dataloader",
+            "data_path": current_path,
+            "load_col": None,
+            "eval_args": {
+                "split": {"RS": [0.8, 0.1, 0.1]},
+                "order": "TO",
+                "mode": "labeled",
+            },
+            "train_neg_sample_args": None,
+            "time_window_size": time_window_size,
+            "eval_batch_size": eval_batch_size,
+            "shuffle": False,
+        }
+        config = Config(config_dict=config_dict)
+        init_seed(config["seed"], config["reproducibility"])
+        logging.basicConfig(level=logging.ERROR)
+        config["MODEL_INPUT_TYPE"] = InputType.WINDOWWISE
+        dataset = create_dataset(config)
+        train_data, valid_data, test_data = data_preparation(config, dataset)
+
+        def check_dataloader(data, time_list, window_size):
+            pr = 0
+            for batch_data in data:
+                start_window = time_list[pr]
+                batch_time_list = [
+                    i for i, t in enumerate(time_list) if start_window <= t < start_window + window_size
+                ]
+                batch_time_list = train_data.dataset[batch_time_list]["timestamp"].numpy()
+
+                user_df = batch_data
+
+                print(batch_time_list)
+                print(user_df["timestamp"].numpy().tolist())
+                assert (user_df["timestamp"].numpy() == batch_time_list).all()
+                pr += len(batch_time_list)
+
+        check_dataloader(train_data, train_data.dataset[:][train_data.dataset.time_field].tolist(), time_window_size)
+
+
 if __name__ == "__main__":
     pytest.main()

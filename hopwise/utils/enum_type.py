@@ -81,6 +81,7 @@ class InputType(Enum):
     - ``LISTWISE``: List-wise input, like ``uid, [iid1, iid2, ...]``.
     - ``PATHWISE``: KG Path-wise input, like ``uid, pos_iid, eid1, eid2, next_pos_iid``.
     - ``USERWISE``: User-wise input, like ``uid0, uid1, ...., uidn``.
+    - ``WINDOWWISE``: Variable window-wise input, like ``[uid1, iid1, iid2, ...], [uid1, iid3]``.
     """
 
     POINTWISE = 1
@@ -88,6 +89,7 @@ class InputType(Enum):
     LISTWISE = 3
     PATHWISE = 4
     USERWISE = 5
+    WINDOWWISE = 6
 
 
 class FeatureType(Enum):

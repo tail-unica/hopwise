@@ -391,6 +391,8 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
         # Return Dataloader based on the modeltype
         if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
+        elif config["MODEL_INPUT_TYPE"] == InputType.WINDOWWISE:
+            return WindowedTimeDataLoader
         else:
             return TrainDataLoader
     else:

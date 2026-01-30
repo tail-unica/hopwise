@@ -687,6 +687,99 @@ class TestDataset:
         assert len(valid_dataset.inter_feat) == 0
         assert len(test_dataset.inter_feat) == 4 + 0 + 1 + 1 + 1 + 1 + 2 + 2
 
+    def test_TO_TS_9_15(self):
+        config_dict = {
+            "model": "BPR",
+            "dataset": "build_dataset",
+            "data_path": current_path,
+            "load_col": None,
+            "eval_args": {
+                "split": {"TS": [9, 15]},
+                "order": "TO",
+                "mode": "labeled",
+            },
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        assert (
+            train_dataset.inter_feat["item_id"].numpy()
+            == [1, 1, 1, 1, 1, 1, 1, 1]
+            + [2, 2, 2, 2, 2, 2, 2]
+            + [3, 3, 3, 3, 3, 3]
+            + [4, 4, 4, 4, 4]
+            + [5, 5, 5, 5, 5]
+            + [6, 6, 6, 6]
+            + [7, 7, 7, 7]
+            + [8, 8, 8, 8]
+            + [9, 9, 9, 9]
+        ).all()
+        assert (
+            valid_dataset.inter_feat["item_id"].numpy() == [10, 10, 10] + [11, 11] + [12] + [13] + [14] + [15]
+        ).all()
+        assert (test_dataset.inter_feat["item_id"].numpy() == [16] + [17] + [18] + [19] + [20]).all()
+
+    def test_TO_TS_9_9(self):
+        config_dict = {
+            "model": "BPR",
+            "dataset": "build_dataset",
+            "data_path": current_path,
+            "load_col": None,
+            "eval_args": {
+                "split": {"TS": [9, 9]},
+                "order": "TO",
+                "mode": "labeled",
+            },
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        print(valid_dataset.inter_feat)
+        assert (
+            train_dataset.inter_feat["item_id"].numpy()
+            == [1, 1, 1, 1, 1, 1, 1, 1]
+            + [2, 2, 2, 2, 2, 2, 2]
+            + [3, 3, 3, 3, 3, 3]
+            + [4, 4, 4, 4, 4]
+            + [5, 5, 5, 5, 5]
+            + [6, 6, 6, 6]
+            + [7, 7, 7, 7]
+            + [8, 8, 8, 8]
+            + [9, 9, 9, 9]
+        ).all()
+        assert (valid_dataset.inter_feat["item_id"].numpy() == []).all()
+        assert (
+            test_dataset.inter_feat["item_id"].numpy()
+            == [10, 10, 10] + [11, 11] + [12] + [13] + [14] + [15] + [16] + [17] + [18] + [19] + [20]
+        ).all()
+
+    def test_TO_TS_9_20(self):
+        config_dict = {
+            "model": "BPR",
+            "dataset": "build_dataset",
+            "data_path": current_path,
+            "load_col": None,
+            "eval_args": {
+                "split": {"TS": [9, 20]},
+                "order": "TO",
+                "mode": "labeled",
+            },
+        }
+        train_dataset, valid_dataset, test_dataset = split_dataset(config_dict=config_dict)
+        assert (
+            train_dataset.inter_feat["item_id"].numpy()
+            == [1, 1, 1, 1, 1, 1, 1, 1]
+            + [2, 2, 2, 2, 2, 2, 2]
+            + [3, 3, 3, 3, 3, 3]
+            + [4, 4, 4, 4, 4]
+            + [5, 5, 5, 5, 5]
+            + [6, 6, 6, 6]
+            + [7, 7, 7, 7]
+            + [8, 8, 8, 8]
+            + [9, 9, 9, 9]
+        ).all()
+        assert (
+            valid_dataset.inter_feat["item_id"].numpy()
+            == [10, 10, 10] + [11, 11] + [12] + [13] + [14] + [15] + [16] + [17] + [18] + [19] + [20]
+        ).all()
+        assert (test_dataset.inter_feat["item_id"].numpy() == []).all()
+
 
 class TestSeqDataset:
     def test_seq_leave_one_out(self):
