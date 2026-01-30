@@ -12,7 +12,7 @@ from collections.abc import Iterator
 
 import torch
 
-from hopwise.data.utils import construct_transform
+from hopwise.data.transform import construct_transform
 from hopwise.utils import ModelType
 
 start_iter = False
@@ -55,28 +55,27 @@ class WindowedTimeSampler(torch.utils.data.SequentialSampler):
                     if predicate(x):
                         yield i
                     else:
-                        self._last = i
+                        self._last = x
                         return
 
             @property
             def last(self):
                 if self._last is None:
-                    raise AttributeError("No last element stored.")
+                    raise AttributeError("No last element stored in windowedtime dataloader iterator.")
                 ret = self._last
                 self._last = None
                 return ret
 
         _takewhile = window_takewhile(len(self.data_source))
 
-        start_window = next(source_iter)
-        batch = [start_window, *_takewhile(lambda x: x - start_window < self.window_size, source_iter)]
+        start_window = self.data_source[0]
+        batch = [*_takewhile(lambda x: x - start_window < self.window_size, source_iter)]
         while batch:
             yield batch
-            try:
-                start_window = _takewhile.last
-                batch = [start_window, *_takewhile(lambda x: x - start_window < self.window_size, source_iter)]
-            except StopIteration:
-                batch = []
+            if _takewhile._last is None:
+                break
+            start_window = _takewhile.last
+            batch = [batch[-1] + 1, *_takewhile(lambda x: x - start_window < self.window_size, source_iter)]
 
     def __len__(self) -> int:
         # This is an approximation since we cannot know the exact number of windows
@@ -99,12 +98,14 @@ class WindowedTimeDataLoader(torch.utils.data.DataLoader):
         sampler (Sampler): The sampler of dataloader.
     """
 
-    def __init__(self, config, dataset, sampler):
+    def __init__(self, config, dataset, sampler, shuffle=False):  # unused but keep the same interface
         self.config = config
         self._dataset = dataset
         self._sampler = sampler
         self.sample_size = len(dataset)
-        index_sampler = WindowedTimeSampler(list(range(self.sample_size)), window_size=self.config["time_window_size"])
+        index_sampler = WindowedTimeSampler(
+            dataset[:][dataset.time_field].tolist(), window_size=self.config["time_window_size"]
+        )
 
         self.transform = construct_transform(config)
         self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
