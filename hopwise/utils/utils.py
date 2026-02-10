@@ -69,7 +69,7 @@ def get_model(model_name):
     r"""Automatically select model class based on model name
 
     Args:
-        model_name (str): model name
+        config (Config): configuration object
 
     Returns:
         Recommender: model class
@@ -83,7 +83,6 @@ def get_model(model_name):
         "path_language_modeling_recommender",
         "exlib_recommender",
     ]
-
     model_file_name = model_name.lower()
     model_module = None
     for submodule in model_submodule:
@@ -91,7 +90,6 @@ def get_model(model_name):
         if importlib.util.find_spec(module_path, __name__):
             model_module = importlib.import_module(module_path, __name__)
             break
-
     if model_module is None:
         raise ValueError(f"`model_name` [{model_name}] is not the name of an existing model.")
     try:
@@ -114,6 +112,7 @@ def get_trainer(model_type, model_name):
     """
     register_table = {
         "PEARLMGPT2": "PEARLMfromscratchTrainer",
+        "ConformalPEARLMGPT2": "PEARLMfromscratchTrainer",
         "PEARLMLlama2": "PEARLMfromscratchTrainer",
         "PEARLMLlama3": "PEARLMfromscratchTrainer",
     }

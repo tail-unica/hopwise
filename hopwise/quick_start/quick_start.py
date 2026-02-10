@@ -131,6 +131,10 @@ def run_hopwise(
         config_file_list=config_file_list,
         config_dict=config_dict,
     )
+
+    if "conformal_risk_control" in config:
+        config["model"] = "Conformal" + config["model"]
+
     if checkpoint is not None:
         config, model, dataset, train_data, valid_data, test_data = load_data_and_model(
             model_file=checkpoint, updating_config=config
@@ -146,7 +150,6 @@ def run_hopwise(
 
         # dataset splitting
         train_data, valid_data, test_data = data_preparation(config, dataset)
-
         # visualize split data
         if config["show_split_data"] is not None:
             logger.info(train_data)
@@ -177,7 +180,6 @@ def run_hopwise(
 
     flops = get_flops(model, dataset, config["device"], logger, transform)
     logger.info(set_color("FLOPs", "blue") + f": {flops}")
-
     # trainer loading and initialization
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
     if run == "train":

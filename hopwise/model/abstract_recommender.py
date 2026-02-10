@@ -292,48 +292,17 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
             topk=config["topk"],
         )
 
-    @torch.no_grad()
-    def generate(self, inputs, top_k=None, paths_per_user=1, **kwargs):
-        """
-        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
-        the sequence max_new_tokens times, feeding the predictions back into the model each time.
-        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
 
-        Args:
-            inputs (dict): A dictionary containing the input_ids tensor with shape (b, t).
-            top_k (int, optional): If specified, only the top k logits will be considered
-                for sampling at each step. Defaults to None.
-            paths_per_user (int, optional): How many paths to return for each user.
-            **kwargs: Additional keyword arguments for the model. In future, it can be used to pass
-                other generation parameters such as temperature, repetition penalty, etc.
-        """
-        max_new_tokens = self.token_sequence_length - inputs["input_ids"].size(1)
+class ConformalRecommender:
+    def __init__(self, config, dataset):
+        self.crc_config = config["conformal_risk_control"]
+        self.lambdas = [torch.linspace(0, 1, self.crc_config["n_lambdas"]) for _ in range(5)]  # 5 max new tokes
 
-        # How many paths to return?
-        inputs["input_ids"] = inputs["input_ids"].repeat_interleave(paths_per_user, dim=0)
-        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, self.n_tokens), -torch.inf).to(self.device)
-        for i in range(max_new_tokens):
-            # forward the model to get the logits for the index in the sequence
-            logits = self.predict(inputs)
-            # pluck the logits at the final step and scale by desired temperature
-            logits = logits[:, -1, :] / self.temperature
+        n_paths_tokenized_dataset = dataset.tokenized_dataset.input_ids.size(0)
+        self.losses = [torch.zeros((n_paths_tokenized_dataset, self.crc_config["n_lambdas"])) for _ in range(5)]
 
-            # KGCD
-            logits = self.logits_processor_list(inputs["input_ids"], logits)
-
-            # optionally crop the logits to only the top k options
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -torch.inf
-            # apply softmax to convert logits to (normalized) probabilities
-            probs = torch.nn.functional.softmax(logits, dim=-1)
-            scores[:, i] = probs
-            # sample from the distribution
-            path_next = torch.multinomial(probs, num_samples=1)
-            # append sampled index to the running sequence and continue
-            inputs["input_ids"] = torch.cat((inputs["input_ids"], path_next), dim=1)
-
-        return GenerationOutputs(sequences=inputs["input_ids"], scores=torch.unbind(scores, dim=1))
+        # after calibration, we memorize the thresh
+        self.thresholds = []
 
 
 class ExplainablePathLanguageModelingRecommender(PathLanguageModelingRecommender, ExplainableRecommender):
@@ -354,8 +323,8 @@ class ExplainablePathLanguageModelingRecommender(PathLanguageModelingRecommender
         max_new_tokens = self.token_sequence_length - inputs["input_ids"].size(1)
 
         scores, sequences = self.sequence_postprocessor.get_sequences(outputs, max_new_tokens=max_new_tokens)
-
         for seq in sequences:
+            seq.append(seq[-1])
             seq[-1] = self.decode_path(seq[-1])
 
         return scores, sequences
@@ -385,6 +354,121 @@ class ExplainablePathLanguageModelingRecommender(PathLanguageModelingRecommender
                 new_node = (relation, "entity", entity_id)
             new_path.append(new_node)
         return new_path
+
+
+class ConformalPathLanguageModelingRecommender(ExplainablePathLanguageModelingRecommender, ConformalRecommender):
+    """
+    This module applies conformal risk control using LTT at each generation step of the
+    path language modeling recommender. The conformal risk control is applied on the validation set,
+    which is used as calibration set, and then the thresholds are applied on the test set to get the final predictions.
+    """
+
+    def __init__(self, config, dataset, _skip_nn_module_init):
+        ExplainablePathLanguageModelingRecommender.__init__(
+            self, config, dataset, _skip_nn_module_init=_skip_nn_module_init
+        )
+        ConformalRecommender.__init__(self, config, dataset)
+
+    @torch.no_grad()
+    def generate(self, inputs, top_k=None, paths_per_user=1, **kwargs):
+        """
+        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
+        the sequence max_new_tokens times, feeding the predictions back into the model each time.
+        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+
+        Args:
+            inputs (dict): A dictionary containing the input_ids tensor with shape (b, t).
+            top_k (int, optional): If specified, only the top k logits will be considered
+                for sampling at each step. Defaults to None.
+            paths_per_user (int, optional): How many paths to return for each user.
+            **kwargs: Additional keyword arguments for the model. In future, it can be used to pass
+                other generation parameters such as temperature, repetition penalty, etc.
+        """
+        max_new_tokens = self.token_sequence_length - inputs["input_ids"].size(1)
+        inputs["input_ids"] = inputs["input_ids"].repeat_interleave(paths_per_user, dim=0)
+
+        # tokenized_path_dict is a dictionary that maps the tokenized path prefix to the list of tokenized paths that share the same prefix. # noqa: E501
+        tokenized_path_dict = kwargs.get("tokenized_path_dict", None)
+
+        # input_ids doesn't contain the full path to predict. So we create a new input_ids that contains all the paths to predict, # noqa: E501
+        # and we create a new targets tensor that contains the target tokens for each path. We also create a losses tensor # noqa: E501
+        # to store the losses for each path and each lambda.
+        if tokenized_path_dict is not None:
+            lambdas = [
+                torch.linspace(0, 1, self.crc_config["n_lambdas"]).to(self.device) for _ in range(max_new_tokens)
+            ]
+            losses = []
+            input_ids = []
+            targets = []
+            for i in range(inputs.input_ids.size(0)):
+                prefix = tuple(inputs.input_ids[i].tolist())
+                if prefix in tokenized_path_dict:
+                    n_paths = len(tokenized_path_dict[prefix])
+
+                    input_ids.extend([list(prefix)] * n_paths)
+                    targets.extend(tokenized_path_dict[prefix])
+                else:
+                    # to account the problem some users in the validation set have no path in the training set,
+                    # we assign them a dummy path with all item tokens, which will be ignored in the loss calculation
+                    # and will not contribute to the calibration of the thresholds.
+                    input_ids.append(list(prefix))
+                    targets.append([4] * 6)
+
+            inputs["input_ids"] = torch.tensor(input_ids).to(self.device)
+            inputs["targets"] = torch.tensor(targets).to(self.device)
+            losses = [
+                torch.zeros((inputs["input_ids"].size(0), self.crc_config["n_lambdas"])).to(self.device)
+                for _ in range(5)
+            ]
+
+        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, self.n_tokens), -torch.inf).to(self.device)
+        for i in range(max_new_tokens):
+            # forward the model to get the logits for the index in the sequence
+            logits = self.predict(inputs)
+            # pluck the logits at the final step and scale by desired temperature
+            logits = logits[:, -1, :] / self.temperature
+
+            # optionally crop the logits to only the top k options
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -torch.inf
+
+            # apply softmax to convert logits to (normalized) probabilities
+            probs = torch.nn.functional.softmax(logits, dim=-1)
+
+            # Calibration on the validation data.
+            if kwargs["data"] == "valid":
+                # NOTE: supposing full batch evaluation on all users interactions at once
+                for j in range(self.crc_config["n_lambdas"]):
+                    T = probs > lambdas[i][j]
+                    set_size = T.sum(dim=1)
+
+                    mask = torch.where(set_size > 0, True, False)
+                    mask = torch.where(inputs["targets"][:, i] != 4, mask, False)  # noqa: PLR2004
+                    losses[i][mask, j] = 1 - (
+                        T.gather(dim=1, index=inputs["targets"][:, i].unsqueeze(1)).squeeze(1)[mask].float()
+                        / set_size[mask].float()
+                    )
+                logits = self.logits_processor_list(inputs["input_ids"], logits)
+                probs = torch.nn.functional.softmax(logits, dim=-1)
+            else:
+                probs = torch.where(probs >= self.lambdas[i][self.thresholds[i]], probs, torch.zeros_like(probs))
+                probs = self.logits_processor_list(inputs["input_ids"], probs)
+                probs = torch.nn.functional.softmax(probs, dim=-1)
+
+            scores[:, i] = probs
+            # sample from the distribution
+            path_next = torch.multinomial(probs, num_samples=1)
+            # append sampled index to the running sequence and continue
+            inputs["input_ids"] = torch.cat((inputs["input_ids"], path_next), dim=1)
+
+        if kwargs["data"] == "valid":
+            from hopwise.utils.conformal_utils import calibrate_predictions
+
+            losses = torch.stack(losses)
+            self.thresholds = calibrate_predictions(losses, self.crc_config)
+
+        return GenerationOutputs(sequences=inputs["input_ids"], scores=torch.unbind(scores, dim=1))
 
 
 class ContextRecommender(AbstractRecommender):

@@ -577,6 +577,9 @@ class Trainer(AbstractTrainer):
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
             if self.benchmark_item_filename is not None:
+                if self.benchmark_item_filename == ["train", "test"]:
+                    # use test set split as item filter if validation is not present
+                    eval_data._split = "test"
                 scores = self.eval_collector.filter_test_items(eval_data, scores)
             self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
         self.eval_collector.model_collect(self.model)
@@ -1020,7 +1023,6 @@ class ExplainableTrainer(Trainer):
 
     def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor, **kwargs):
         interaction, history_index, positive_u, positive_i = batched_data
-
         scores, paths = self.model.explain(interaction.to(self.device), **kwargs)
 
         scores = scores.view(-1, tot_item_num)
@@ -1910,8 +1912,104 @@ class PEARLMfromscratchTrainer(ExplainableTrainer):
 
         self.path_generation_args = config["path_generation_args"]
 
-    def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
-        return super()._full_sort_batch_eval(batched_data, tot_item_num, item_tensor, **self.path_generation_args)
+    @torch.no_grad()
+    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
+        r"""Evaluate the model based on the eval data.
+
+        Args:
+            eval_data (DataLoader): the eval data
+            load_best_model (bool, optional): whether load the best model in the training process, default: True.
+                                              It should be set True, if users want to test the model after training.
+            model_file (str, optional): the saved model file, default: None. If users want to test the previously
+                                        trained model file, they can set this parameter.
+            show_progress (bool): Show the progress of evaluate epoch. Defaults to ``False``.
+
+        Returns:
+            collections.OrderedDict: eval result, key is the eval metric and value in the corresponding metric value.
+        """
+        if not eval_data:
+            return
+
+        self.eval_collector.eval_data_collect(eval_data)
+
+        if load_best_model:
+            checkpoint_file = model_file or self.saved_model_file
+            checkpoint = torch.load(checkpoint_file, weights_only=False, map_location=self.device)
+            missing_keys, unexpected_keys = self.model.load_state_dict(checkpoint["state_dict"], strict=False)
+            if missing_keys:
+                self.logger.info(set_color(f"Missing loaded keys: {missing_keys}", "red"))
+            if unexpected_keys:
+                self.logger.info(set_color(f"Unexpected loaded keys: {unexpected_keys}", "red"))
+            self.model.load_other_parameter(checkpoint.get("other_parameter"))
+            message_output = f"Loading model structure and parameters from {checkpoint_file}"
+            self.logger.info(message_output)
+
+        self.model.eval()
+
+        item_tensor = None
+        tot_item_num = eval_data._dataset.item_num
+        neg_sampling = isinstance(eval_data, NegSampleDataLoader)
+        if not neg_sampling:
+            item_tensor = eval_data._dataset.get_item_feature().to(self.device)
+
+        iter_data = (
+            progress_bar(
+                eval_data,
+                total=len(eval_data),
+                ncols=100,
+                desc=set_color("Evaluate   ", "magenta", progress=True),
+            )
+            if show_progress
+            else eval_data
+        )
+        num_sample = 0
+
+        tokenized_path_dict = eval_data.tokenized_path_dict if hasattr(eval_data, "tokenized_path_dict") else None
+        for batch_idx, batched_data in enumerate(iter_data):
+            num_sample += len(batched_data)
+            interaction, scores, positive_u, positive_i = self._batch_eval(
+                (batched_data, tokenized_path_dict),
+                tot_item_num,
+                neg_sampling=neg_sampling,
+                item_tensor=item_tensor,
+                data=eval_data.split,
+            )
+            if self.gpu_available and show_progress:
+                iter_data.set_postfix_str(set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow"))
+            if self.benchmark_item_filename is not None:
+                if self.benchmark_item_filename == ["train", "test"]:
+                    # use test set split as item filter if validation is not present
+                    eval_data._split = "test"
+                scores = self.eval_collector.filter_test_items(eval_data, scores)
+            self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
+        self.eval_collector.model_collect(self.model)
+        struct = self.eval_collector.get_data_struct()
+        result = self.evaluator.evaluate(struct)
+        if not self.config["single_spec"]:
+            result = self._map_reduce(result, num_sample)
+        self.wandblogger.log_eval_metrics(result, head="eval")
+        return result
+
+    def _batch_eval(self, batched_data, tot_item_num, neg_sampling=False, item_tensor=None, **kwargs):
+        return self._full_sort_batch_eval(batched_data, tot_item_num, item_tensor, **kwargs)
+
+    def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor, **kwargs):
+        if isinstance(batched_data, tuple):
+            batched_data, tokenized_path_dict = batched_data
+            kwargs["tokenized_path_dict"] = tokenized_path_dict
+        interaction, history_index, positive_u, positive_i = batched_data
+
+        scores, paths = self.model.explain(interaction.to(self.device), **kwargs)
+
+        scores = scores.view(-1, tot_item_num)
+        scores[:, 0] = -np.inf
+        if history_index is not None:
+            scores[history_index] = -np.inf
+
+        return interaction, (scores, paths), positive_u, positive_i
+
+    # def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
+    #     return super()._full_sort_batch_eval(batched_data, tot_item_num, item_tensor, **self.path_generation_args)
 
 
 class HFPathLanguageModelingTrainer(ExplainableTrainer):

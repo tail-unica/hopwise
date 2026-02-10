@@ -849,10 +849,12 @@ class SemanticMFDataset(Dataset):
         self.n_codebook = config["n_codebook"]
         self.codebook_size = config["codebook_size"]
         self.index_factory = f"IVF1,PQ{self.n_codebook}x{int(math.log2(self.codebook_size))}"
+        self.eos_token = self.n_digit * self.codebook_size + 1
+
+    def train_ann(self):
+        # this function is used in the train dataloader
         self.item2sem_ids = self.ANN()
         self.item2shifted_sem_id = self.shift_semantic_ids()
-
-        self.eos_token = self.n_digit * self.codebook_size + 1
 
     @property
     def n_digit(self):
@@ -871,16 +873,18 @@ class SemanticMFDataset(Dataset):
         return self.eos_token + 1
 
     def get_embeddings(self):
-        # sort self.itememb_feat by item_embedding_id
-        self.itememb_feat = self.itememb_feat.sort_values(by="item_embedding_id").reset_index(drop=True)
-        embeddings = np.vstack(self.itememb_feat["item_embedding"].to_numpy())
-
+        self.itememb_feat.sort(by="item_embedding_id")
+        embeddings = np.vstack(self.itememb_feat["item_embedding"].numpy())
         # which items are used during training?
-        training_mask = np.zeros(self.item_num - 1, dtype=bool)
+        item_num = self.inter_feat.item_id.unique().size(0)
+        training_mask = np.zeros(item_num, dtype=bool)
         # there can be items not in the training set, so we use the item ids to mask them
-        training_items = self.item_feat_train.item_id.apply(lambda x: self.field2token_id[self.iid_field][x])
+        if hasattr(self, "item_feat_train"):
+            training_items = self.item_feat_train.item_id.apply(lambda x: self.field2token_id[self.iid_field][x])
+        else:
+            # a split has not been provided, use all items in the interaction features
+            training_items = self.inter_feat.item_id.unique()
         training_mask[training_items - 1] = True
-
         return embeddings[training_mask], embeddings
 
     def ANN(self):
@@ -959,8 +963,8 @@ class SemanticMFDataset(Dataset):
             set_color("Number of digits", "green") + f": {self.n_digit}",
             set_color("Codebook Size and number of PQ centroids", "green") + f": {self.codebook_size}",
             set_color("FAISS Configuration", "green") + f": {self.index_factory}",
-            set_color("Percentage of unique Semantic IDs", "green")
-            + f": {len(set(self.item2sem_ids.values())) / len(self.item2sem_ids)}",
+            # set_color("Percentage of unique Semantic IDs", "green")
+            # + f": {len(set(self.item2sem_ids.values())) / len(self.item2sem_ids)}",
         ]
 
         return "\n".join(info)

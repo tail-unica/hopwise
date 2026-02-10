@@ -244,6 +244,15 @@ def data_preparation(config, dataset):
     if dataloaders is not None:
         train_data, valid_data, test_data = dataloaders
         dataset._change_feat_format()
+
+        if train_data._split is None:
+            train_data._split = "train"
+
+        if valid_data._split is None:
+            valid_data._split = "valid"
+
+        if test_data._split is None:
+            test_data._split = "test"
     else:
         model_type = config["MODEL_TYPE"]
         model_input_type = config["MODEL_INPUT_TYPE"]
@@ -332,12 +341,18 @@ def data_preparation(config, dataset):
             valid_data = get_dataloader(config, "valid")(config, valid_dataset, valid_sampler, shuffle=False)
             test_data = get_dataloader(config, "test")(config, test_dataset, test_sampler, shuffle=False)
 
-            if config["save_dataloaders"]:
-                save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
-
-            (train_data._split,) = "train"
+            train_data._split = "train"
             valid_data._split = "valid"
             test_data._split = "test"
+
+            if "conformal_risk_control" in config and model_type == ModelType.PATH_LANGUAGE_MODELING:
+                from hopwise.utils.conformal_utils import get_tokenized_paths_dict
+
+                train_data.tokenized_path_dict = get_tokenized_paths_dict(train_data.dataset.tokenized_dataset)
+                valid_data.tokenized_path_dict = get_tokenized_paths_dict(valid_data.dataset.tokenized_dataset)
+
+            if config["save_dataloaders"]:
+                save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
 
     logger = getLogger()
     logger.info(
@@ -367,6 +382,7 @@ def data_preparation(config, dataset):
         + set_color(f"[{config['eval_args']}]", "yellow")
         + eval_lp_args_info
     )
+
     return train_data, valid_data, test_data
 
 
@@ -409,6 +425,9 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
     # Return Dataloader by ModelType
     model_type = config["MODEL_TYPE"]
     if phase == "train":
+        dataloader_module = importlib.import_module("hopwise.data.dataloader")
+        if hasattr(dataloader_module, config["model"] + "TrainDataloader"):
+            return getattr(dataloader_module, config["model"] + "TrainDataloader")
         # Return Dataloader based on the modeltype
         if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
