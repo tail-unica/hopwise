@@ -1,0 +1,45 @@
+# Config for the backbone decoder model (GPT2)
+embedding_size: 448
+layers: 2
+heads: 4
+embedding_size_inner_mlp: 1024
+activation_function: gelu_new
+resid_pdrop: 0.0
+embd_pdrop: 0.5
+attn_pdrop: 0.5
+layer_norm_epsilon: 1e-12
+initializer_range: 0.02
+MAX_ITEM_LIST_LENGTH: 50
+AUGMENT_ITEM_SEQ: False
+
+# Semantic ID configs (FAISS OPQ)
+n_codebook: 16
+codebook_size: 256
+faiss_omp_num_threads: 32
+
+# RPG configs
+use_gcd: False # use graph constrained decoding
+temperature: 0.07
+n_beams: 50
+n_edges: 50
+propagation_steps: 3
+
+#   decoding graph construction
+chunk_size: 1024
+num_workers: 64
+
+eval_args:
+  split: {'LS': 'valid_and_test'}
+  order: TO
+  mode: full
+train_neg_sample_args: ~
+loss_type: 'CE'
+
+# To load the pretrained embeddings (Typically from a SentenceEncoder) necessary to score the paths
+additional_feat_suffix: [itememb]
+load_col:
+    inter: ['user_id', 'item_id', 'timestamp']
+    itememb: [item_embedding_id, item_embedding]
+alias_of_item_id: [item_embedding_id]
+preload_weight:
+  item_embedding_id: item_embedding

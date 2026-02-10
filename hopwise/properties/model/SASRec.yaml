@@ -8,3 +8,4 @@ hidden_act: 'gelu'              # (str) The activation function in feed-forward 
 layer_norm_eps: 1e-12           # (float) A value added to the denominator for numerical stability.
 initializer_range: 0.02         # (float) The standard deviation for normal initialization.
 loss_type: 'CE'                 # (str) The type of loss function. Range in ['BPR', 'CE'].
+train_neg_sample_args: ~

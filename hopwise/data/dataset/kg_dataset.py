@@ -353,22 +353,48 @@ class KnowledgeBasedDataset(Dataset):
         whose ``entity_id`` doesn't occur in kg triplets and
         ``item_id`` doesn't occur in interaction records.
         """
-        item_tokens = self._get_rec_item_token()
-        ent_tokens = self._get_entity_token()
-        illegal_item = set()
-        illegal_ent = set()
-        for item in self.item2entity:
-            ent = self.item2entity[item]
-            if item not in item_tokens or ent not in ent_tokens:
-                illegal_item.add(item)
-                illegal_ent.add(ent)
-        for item in illegal_item:
-            del self.item2entity[item]
-        for ent in illegal_ent:
-            del self.entity2item[ent]
-        remained_inter = pd.Series(True, index=self.inter_feat.index)
-        remained_inter &= self.inter_feat[self.iid_field].isin(self.item2entity.keys())
-        self.inter_feat.drop(self.inter_feat.index[~remained_inter], inplace=True)
+        while True:
+            # LOOP IS NEEDED IN CASE DROPPED INDEX LEAD TO DROP OF ITEM
+            # CAUSING INCOMPATIBILITY BETWEEN LINK MAPPINGS AND FIELD2ID_TOKEN
+            item_tokens = self._get_rec_item_token()
+            ent_tokens = self._get_entity_token()
+            illegal_item = set()
+            illegal_ent = set()
+            for item in self.item2entity:
+                ent = self.item2entity[item]
+                if item not in item_tokens or ent not in ent_tokens:
+                    illegal_item.add(item)
+                    illegal_ent.add(ent)
+            for item in illegal_item:
+                del self.item2entity[item]
+            for ent in illegal_ent:
+                del self.entity2item[ent]
+            remained_inter = pd.Series(True, index=self.inter_feat.index)
+            remained_inter &= self.inter_feat[self.iid_field].isin(self.item2entity.keys())
+            self.inter_feat.drop(self.inter_feat.index[~remained_inter], inplace=True)
+
+            #################################################
+            # PROPAGATE ILLEGAL ITEM/ENTITY REMOVAL ALSO TO KG
+            # OTHERWISE SOME ITEMS MAY STILL APPEAR AS COMMON ENTITIES IN KG
+            remained_kg = pd.Series(True, index=self.kg_feat.index)
+            remained_kg &= np.logical_not(self.kg_feat[self.head_entity_field].isin(illegal_item | illegal_ent))
+            remained_kg &= np.logical_not(self.kg_feat[self.tail_entity_field].isin(illegal_item | illegal_ent))
+            self.kg_feat.drop(self.kg_feat.index[~remained_kg], inplace=True)
+            #################################################
+
+            #################################################
+            # IF DROPPED ITEMS ARE NOT PROPAGATED TO ITEM FEAT, ITEM NUM IS LARGER
+            # AND ENTITY FIELD2ID_TOKEN INCLUDES MORE MAPPING, EVEN THOUGH ITEMS
+            # DO NOT EXIST EVEN IN INTER FEAT
+            if self.item_feat is not None:
+                remained_item = self.item_feat[self.iid_field].isin(self.item2entity.keys())
+                self.item_feat.drop(self.item_feat.index[~remained_item], inplace=True)
+            #################################################
+
+            # reset index for safe index dropping and while loop stop conditions
+            self._reset_index()
+            if remained_inter.all() and remained_kg.all():
+                break
 
     def _download(self):
         super()._download()

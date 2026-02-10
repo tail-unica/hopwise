@@ -48,6 +48,14 @@ class SASRec(SequentialRecommender):
 
         # define layers and loss
         self.item_embedding = nn.Embedding(self.n_items, self.hidden_size, padding_idx=0)
+        if config["preload_weight"] is not None:
+            pretrained_item_embedding = dataset.get_preload_weight("item_embedding_id")
+
+            # replace user and item embeddings
+            self.item_embedding.weight.data.copy_(torch.from_numpy(pretrained_item_embedding))
+        else:
+            self.item_embedding = nn.Embedding(self.n_items, self.hidden_size, padding_idx=0)
+
         self.position_embedding = nn.Embedding(self.max_seq_length, self.hidden_size)
         self.trm_encoder = TransformerEncoder(
             n_layers=self.n_layers,

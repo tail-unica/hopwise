@@ -48,7 +48,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self._tokenized_dataset = None  # tokenized path dataset is generated with tokenize_path_dataset
         self._tokenizer = None
         self.used_ids = None
-
         self._init_tokenizer()
 
     def _get_field_from_config(self):
@@ -264,6 +263,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         datasets = super().build()
         datasets[0].generate_user_path_dataset()
         datasets[0].tokenize_path_dataset()
+        if "conformal_risk_control" in self.config:
+            datasets[1].generate_user_path_dataset()
+            datasets[1].tokenize_path_dataset()
 
         return datasets
 
@@ -486,7 +488,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             max_paths_per_user=self.max_paths_per_user,
             collaborative_path=self.collaborative_path,
         )
-
         user_paths = _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwargs)
         paths = set.union(*user_paths)
         return paths
@@ -704,10 +705,10 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def __str__(self):
         info = [
             super().__str__(),
-            f"The number of hops used for path sampling: {self.path_hop_length}",
-            f"Maximum number of paths sampled per user: {self.max_paths_per_user}",
-            f"The path sampling strategy: {self.strategy}",
-            f"The tokenizer model: {self.tokenizer_model}",
+            set_color(f"The number of hops used for path sampling: {self.path_hop_length}", "yellow"),
+            set_color(f"Maximum number of paths sampled per user: {self.max_paths_per_user}", "yellow"),
+            set_color(f"The path sampling strategy: {self.strategy}", "yellow"),
+            set_color(f"The tokenizer model: {self.tokenizer_model}", "yellow"),
         ]
         return "\n".join(info)
 
@@ -931,14 +932,12 @@ def _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwa
 
     def process_user(u):
         user_paths = set()
-
         pos_iid = np.array(list(used_ids[u]))
         if temporal_matrix is not None:
             pos_iid = pos_iid[np.argsort(temporal_matrix[u, pos_iid])]
 
         # reindex item ids according to the igraph
         pos_iid += user_num
-
         for target_item in pos_iid:
             user_path_sample_size = 0
 

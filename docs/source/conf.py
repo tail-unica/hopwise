@@ -43,7 +43,7 @@ autoapi_dirs = ["../../hopwise"]
 autoapi_type = "python"
 autoapi_keep_files = True  # Keep generated files for debugging
 
-html_favicon = "static/favicon.ico"
+html_favicon = "_static/favicon.ico"
 html_theme = "furo"
 html_static_path = ["_static"]
 

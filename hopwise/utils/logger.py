@@ -45,8 +45,9 @@ class ProgressBar:
 
 
 def progress_bar(*args, **kwargs):
+    global _progress_bar  # noqa: PLW0603
     if _progress_bar is None:
-        return ProgressBar({"progress_bar_rich": True})(*args, **kwargs)
+        _progress_bar = ProgressBar(progress_bar_rich=not os.environ.get("DISABLE_RICH", False))  # noqa: PLW1508
     return _progress_bar(*args, **kwargs)
 
 
@@ -97,6 +98,11 @@ def init_logger(config):
         >>> logger.debug(train_state)
         >>> logger.info(train_result)
     """
+
+    # remove previous handlers, otherwise in case of multiple data/models, it continue writing to old files
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
     colorama.init(autoreset=True)
     LOGROOT = "./log/"
     dir_name = os.path.dirname(LOGROOT)
@@ -106,9 +112,26 @@ def init_logger(config):
     if config["proc_title"] is None:
         config_str = "".join([str(key) for key in config.final_config_dict.values()])
         md5 = hashlib.md5(config_str.encode(encoding="utf-8")).hexdigest()[:6]
-        logfilename = "{}/{}-{}-{}-{}.log".format(
-            config["model"], config["model"], config["dataset"], get_local_time(), md5
-        )
+        if config["model"] in ["Similarity", "SemanticMF"] and config["encoder_name"] is not None:
+            if "self_attention" in config and "loss_fn" in config:
+                logfilename = "{}/{}-{}-{}-{}-{}-{}-{}.log".format(
+                    config["model"],
+                    config["model"],
+                    config["encoder_name"],
+                    config["self_attention"],
+                    config["loss_fn"],
+                    config["dataset"],
+                    get_local_time(),
+                    md5,
+                )
+            else:
+                logfilename = "{}/{}-{}-{}-{}-{}.log".format(
+                    config["model"], config["model"], config["encoder_name"], config["dataset"], get_local_time(), md5
+                )
+        else:
+            logfilename = "{}/{}-{}-{}-{}.log".format(
+                config["model"], config["model"], config["dataset"], get_local_time(), md5
+            )
     else:
         logfilename = "{}/{}-{}.log".format(config["model"], config["proc_title"], get_local_time())
 

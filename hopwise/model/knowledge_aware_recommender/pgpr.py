@@ -21,6 +21,7 @@ from torch import nn
 from torch.distributions import Categorical
 
 from hopwise.model.abstract_recommender import ExplainableRecommender, KnowledgeRecommender
+from hopwise.model.layers import KGState
 from hopwise.utils import InputType
 
 
@@ -550,31 +551,3 @@ class PGPR(KnowledgeRecommender, ExplainableRecommender):
                 collect_results.append([user, item, score, path])
 
         return results, collect_results
-
-
-class KGState:
-    def __init__(self, embedding_size, history_len):
-        self.embedding_size = embedding_size
-        self.history_len = history_len  # mode: one of {full, current}
-        if history_len == 0:
-            self.dim = 2 * embedding_size
-        elif history_len == 1:
-            self.dim = 4 * embedding_size
-        elif history_len == 2:
-            self.dim = 6 * embedding_size
-        else:
-            raise Exception("history length should be one of {0, 1, 2}")
-
-    def __call__(
-        self, user_embed, node_embed, last_node_embed, last_relation_embed, older_node_embed, older_relation_embed
-    ):
-        if self.history_len == 0:
-            return np.concatenate([user_embed, node_embed])
-        elif self.history_len == 1:
-            return np.concatenate([user_embed, node_embed, last_node_embed, last_relation_embed])
-        elif self.history_len == 2:
-            return np.concatenate(
-                [user_embed, node_embed, last_node_embed, last_relation_embed, older_node_embed, older_relation_embed]
-            )
-        else:
-            raise ValueError("mode should be one of {full, current}")

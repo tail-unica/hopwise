@@ -244,10 +244,18 @@ def data_preparation(config, dataset):
     if dataloaders is not None:
         train_data, valid_data, test_data = dataloaders
         dataset._change_feat_format()
+
+        if train_data._split is None:
+            train_data._split = "train"
+
+        if valid_data._split is None:
+            valid_data._split = "valid"
+
+        if test_data._split is None:
+            test_data._split = "test"
     else:
         model_type = config["MODEL_TYPE"]
         model_input_type = config["MODEL_INPUT_TYPE"]
-        # model = config["model"]
         built_datasets = dataset.build()
 
         if model_type in [ModelType.KNOWLEDGE] and model_input_type not in [InputType.USERWISE]:
@@ -294,8 +302,16 @@ def data_preparation(config, dataset):
                         dataloaders=(train_data, valid_inter_data, valid_kg_data, test_inter_data, test_kg_data),
                     )
 
+                valid_inter_data._split = "valid interactions"
+                valid_kg_data._split = "valid knowledge graph"
+                test_inter_data._split = "test interactions"
+                test_kg_data._split = "test knowledge graph"
+
+                train_data._split = "train"
+
                 valid_data = [valid_inter_data, valid_kg_data]
                 test_data = [test_inter_data, test_kg_data]
+
             else:
                 # then we want to use the whole kg
                 kg_sampler = KGSampler(
@@ -314,6 +330,7 @@ def data_preparation(config, dataset):
 
                 if config["save_dataloaders"]:
                     save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
+
         else:
             train_dataset, valid_dataset, test_dataset = built_datasets
             train_sampler, valid_sampler, test_sampler = create_samplers(config, dataset, built_datasets)
@@ -323,6 +340,16 @@ def data_preparation(config, dataset):
             )
             valid_data = get_dataloader(config, "valid")(config, valid_dataset, valid_sampler, shuffle=False)
             test_data = get_dataloader(config, "test")(config, test_dataset, test_sampler, shuffle=False)
+
+            train_data._split = "train"
+            valid_data._split = "valid"
+            test_data._split = "test"
+
+            if "conformal_risk_control" in config and model_type == ModelType.PATH_LANGUAGE_MODELING:
+                from hopwise.utils.conformal_utils import get_tokenized_paths_dict
+
+                train_data.tokenized_path_dict = get_tokenized_paths_dict(train_data.dataset.tokenized_dataset)
+                valid_data.tokenized_path_dict = get_tokenized_paths_dict(valid_data.dataset.tokenized_dataset)
 
             if config["save_dataloaders"]:
                 save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
@@ -355,6 +382,7 @@ def data_preparation(config, dataset):
         + set_color(f"[{config['eval_args']}]", "yellow")
         + eval_lp_args_info
     )
+
     return train_data, valid_data, test_data
 
 
@@ -379,18 +407,35 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
             DeprecationWarning,
         )
 
-    if config["MODEL_INPUT_TYPE"] == InputType.USERWISE:
-        if config["model"] in ["TPRec"]:
-            if config["train_stage"] in ["policy"]:
-                return _get_user_dataloader(config, phase)
+    # Return Dataloader by InputType and Model name
+    input_type = config["MODEL_INPUT_TYPE"]
+    model = config["model"]
+    if input_type == InputType.USERWISE:
+        if phase == "train":
+            if model not in ["TPRec"] or config["train_stage"] in ["policy"]:
+                return UserDataLoader
         else:
-            return _get_user_dataloader(config, phase)
+            eval_mode = config["eval_args"]["mode"][phase]
 
+            if eval_mode == "full":
+                return FullSortRecEvalDataLoader
+            else:
+                return NegSampleEvalDataLoader
+
+    # Return Dataloader by ModelType
     model_type = config["MODEL_TYPE"]
     if phase == "train":
+        dataloader_module = importlib.import_module("hopwise.data.dataloader")
+        if hasattr(dataloader_module, config["model"] + "TrainDataloader"):
+            return getattr(dataloader_module, config["model"] + "TrainDataloader")
         # Return Dataloader based on the modeltype
         if model_type == ModelType.KNOWLEDGE:
             return KnowledgeBasedDataLoader
+        elif model_type == ModelType.SEQUENTIAL:
+            if config["AUGMENT_ITEM_SEQ"]:
+                return SequentialAugmentedDataloader
+            else:
+                return SequentialDataloader
         else:
             return TrainDataLoader
     else:
@@ -402,36 +447,6 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
                 if task is KnowledgeEvaluationType.LP:
                     return FullSortLPEvalDataLoader
                 return FullSortRecEvalDataLoader
-        else:
-            return NegSampleEvalDataLoader
-
-
-def _get_user_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"]):
-    """Customized function for models that needs only users
-
-    Args:
-        config (Config): An instance object of Config, used to record parameter information.
-        phase (str): The stage of dataloader. It can only take 4 values: 'train', 'valid', 'test' or 'evaluation'.
-            Notes: 'evaluation' has been deprecated, please use 'valid' or 'test' instead.
-
-    Returns:
-        type: The dataloader class that meets the requirements in :attr:`config` and :attr:`phase`.
-    """
-    if phase not in ["train", "valid", "test", "evaluation"]:
-        raise ValueError("`phase` can only be 'train', 'valid', 'test' or 'evaluation'.")
-    if phase == "evaluation":
-        phase = "test"
-        warnings.warn(
-            "'evaluation' has been deprecated, please use 'valid' or 'test' instead.",
-            DeprecationWarning,
-        )
-
-    if phase == "train":
-        return UserDataLoader
-    else:
-        eval_mode = config["eval_args"]["mode"][phase]
-        if eval_mode == "full":
-            return FullSortRecEvalDataLoader
         else:
             return NegSampleEvalDataLoader
 

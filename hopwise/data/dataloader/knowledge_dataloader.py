@@ -24,7 +24,7 @@ import numpy as np
 from hopwise.data.dataloader.abstract_dataloader import AbstractDataLoader
 from hopwise.data.dataloader.general_dataloader import FullSortRecEvalDataLoader, TrainDataLoader
 from hopwise.data.interaction import Interaction
-from hopwise.utils import KGDataLoaderState, PathLanguageModelingTokenType
+from hopwise.utils import KGDataLoaderState, PathLanguageModelingTokenType, set_color
 
 
 class KGDataLoader(AbstractDataLoader):
@@ -103,6 +103,7 @@ class KnowledgeBasedDataLoader:
     """  # noqa: E501
 
     def __init__(self, config, dataset, sampler, kg_sampler, shuffle=False):
+        self.config = config
         self.logger = getLogger()
         # using sampler
         self.general_dataloader = TrainDataLoader(config, dataset, sampler, shuffle=shuffle)
@@ -114,6 +115,7 @@ class KnowledgeBasedDataLoader:
         self.state = None
         self.dataset = self._dataset = dataset
         self.kg_iter, self.gen_iter = None, None
+        self._split = None
 
     def update_config(self, config):
         self.general_dataloader.update_config(config)
@@ -175,6 +177,90 @@ class KnowledgeBasedDataLoader:
 
         if self.general_dataloader.shuffle:
             self.general_dataloader.sampler.set_epoch(epoch_seed)
+
+    @property
+    def split(self):
+        return self._split
+
+    def __str__(self):
+        inter_feat = self._dataset.inter_feat
+        kg_feat = self._dataset.kg_feat
+        dataset = self.config["dataset"]
+        benchmark_item_file = self.config["benchmark_item_filename"]
+
+        info = [set_color(f"{self.split} {dataset}", "yellow")]
+        info.extend(
+            [
+                set_color("The number of interactions", "blue") + f": {len(inter_feat)}",
+                set_color("The number of users", "blue") + f": {len(inter_feat[self._dataset.uid_field].unique())}",
+                set_color("Average actions of users in inters", "blue") + f": {self._dataset.avg_actions_of_users}",
+                set_color("The number of items in inters", "blue") + f": {self._dataset.item_num}",
+                set_color("Average actions of items in inters", "blue") + f": {self._dataset.avg_actions_of_items}",
+                set_color("The sparsity of the dataset", "blue") + f": {self.sparsity_interaction_data_split * 100}%",
+            ]
+        )
+        # data about knowledge split
+        info.extend(
+            [
+                set_color("The number of triplets", "green") + f": {len(kg_feat)}",
+                set_color("The number of head entities", "green") + f": {len(kg_feat.head_id.unique())}",
+                set_color(f"Average actions of head entities in {self.split} knowledge graph", "green")
+                + f": {self.avg_actions(kg_feat, 'head_id')}",
+                set_color("The number of tail entities", "green") + f": {len(kg_feat.tail_id.unique())}",
+                set_color(f"Average actions of tail entities in {self.split} knowledge graph", "green")
+                + f": {self.avg_actions(kg_feat, 'tail_id')}",
+                set_color("The sparsity of the Knowledge Graph", "green")
+                + f": {self.sparsity_interaction_data_split * 100}%",
+            ]
+        )
+        if benchmark_item_file is not None:
+            import numpy as np
+
+            item_feat = getattr(self._dataset, f"item_feat_{self.split}")[self._dataset.iid_field].to_numpy()
+            info.extend(
+                [
+                    set_color(f"The number of valid items in {self.split} phase", "blue")
+                    + f": {len(np.unique(item_feat))}",
+                ]
+            )
+        return "\n".join(info)
+
+    @property
+    def sparsity_interaction_data_split(self):
+        """Get the sparsity of this dataset.
+
+        Returns:
+            float: Sparsity of this dataset.
+        """
+        user_num_split = len(self._dataset.inter_feat[self._dataset.uid_field].unique())
+        item_num_split = len(self._dataset.inter_feat[self._dataset.iid_field].unique())
+        return 1 - self._dataset.inter_num / user_num_split / item_num_split
+
+    @property
+    def sparsity_knowledge_data_split(self):
+        """Get the sparsity of this knowledge dataset.
+
+        Returns:
+            float: Sparsity of this knowledge dataset.
+        """
+        heads = len(self._dataset.kg_feat[self._dataset.kg_feat.head_id].unique())
+        tails = len(self._dataset.kg_feat[self._dataset.kg_feat.tail_id].unique())
+        return 1 - len(self._dataset.kg_feat) / heads / tails
+
+    def avg_actions(self, feat, group_field):
+        """Get the average number of entity heads in kg split.
+
+        Returns:
+            numpy.float64: Average number of entity heads in knowledge graph.
+        """
+        from collections import Counter
+
+        import pandas as pd
+
+        if isinstance(feat, pd.DataFrame):
+            return np.mean(feat.groupby(group_field).size())
+        else:
+            return np.mean(list(Counter(feat[group_field].numpy()).values()))
 
 
 class KnowledgePathEvalDataLoader(FullSortRecEvalDataLoader):
