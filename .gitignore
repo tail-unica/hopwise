@@ -116,3 +116,5 @@ bin/act
 # Sphinx documentation
 docs/_build/
 docs/build/
+!docs/autoapi/hopwise/*
+!docs/autoapi/hopwise/data/dataset

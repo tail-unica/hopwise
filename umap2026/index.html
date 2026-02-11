@@ -1,12 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-NQC3EZQZ0K"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-NQC3EZQZ0K');
+  </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
   <!-- Primary Meta Tags -->
   <!-- TODO: Replace with your paper title and author names -->
-  <meta name="title" content="Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise - Ludovico Boratto, Gianni Fenu, Francesca M. Mallocci, Mirko Marras, Giacomo Medda, Alessandro Soccol">
+  <meta name="title" content="How to Build Explainable Recommender Systems using Path Reasoning on Knowledge Graphs: A Tutorial with hopwise - Ludovico Boratto, Gianni Fenu, Francesca M. Mallocci, Mirko Marras, Giacomo Medda, Alessandro Soccol">
   <!-- TODO: Write a compelling 150-160 character description of your research -->
   <meta name="description" content="hopwise is a recommendation framework designed to promote the development of explainable-by-design models in a simple and effective manner. Its modular architecture enables flexible control over every component of the model while providing a rich set of functionalities that make it a comprehensive solution for training recommender systems across diverse application settings. In this tutorial we present hopwise, a state-of-the-art recommendation framework that implements state-of-the-art approaches in recommender system explainability. Specifically, this tutorial demonstrates how to leverage Knowledge Graph Embedding methods and state-of-the-art language-model-based approaches, while covering the full pipeline of training, evaluation, hyperparameter optimization, and the generation and management of explanations to be delivered to end users">
   <!-- TODO: Add 5-10 relevant keywords for your research area -->
@@ -21,7 +30,7 @@
   <!-- TODO: Replace with your institution or lab name -->
   <meta property="og:site_name" content="Trustworthy AI Lab - University of Cagliari">
   <!-- TODO: Same as paper title above -->
-  <meta property="og:title" content="Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise">
+  <meta property="og:title" content="How to Build Explainable Recommender Systems using Path Reasoning on Knowledge Graphs: A Tutorial with hopwise">
   <!-- TODO: Same as description above -->
   <meta property="og:description" content="hopwise is a recommendation framework designed to promote the development of explainable-by-design models in a simple and effective manner. Its modular architecture enables flexible control over every component of the model while providing a rich set of functionalities that make it a comprehensive solution for training recommender systems across diverse application settings. In this tutorial we present hopwise, a state-of-the-art recommendation framework that implements state-of-the-art approaches in recommender system explainability. Specifically, this tutorial demonstrates how to leverage Knowledge Graph Embedding methods and state-of-the-art language-model-based approaches, while covering the full pipeline of training, evaluation, hyperparameter optimization, and the generation and management of explanations to be delivered to end users">
   <!-- TODO: Replace with your actual website URL -->
@@ -30,7 +39,7 @@
   <meta property="og:image" content="https://tail-unica.github.io/umap2026/static/images/favicon.ico">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise - Research Preview">
+  <meta property="og:image:alt" content="How to Build Explainable Recommender Systems using Path Reasoning on Knowledge Graphs: A Tutorial with hopwise - Research Preview">
   <meta property="article:published_time" content="2024-01-01T00:00:00.000Z">
   <meta property="article:author" content="Boratto, et. al">
   <meta property="article:section" content="Research">
@@ -74,7 +83,7 @@
 
 
   <!-- TODO: Replace with your paper title and authors -->
-  <title>Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise</title>
+  <title>How to Build Explainable Recommender Systems using Path Reasoning on Knowledge Graphs: A Tutorial with hopwise</title>
   
   <!-- Favicon and App Icons -->
   <link rel="icon" type="image/x-icon" href="static/images/favicon.ico">
@@ -253,21 +262,21 @@
         <div class="columns is-centered">
           <div class="column has-text-centered">
             <!-- TODO: Replace with your paper title -->
-            <h1 class="title is-1 publication-title">Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise</h1>
+            <h1 class="title is-1 publication-title">How to Build Explainable Recommender Systems using Path Reasoning on Knowledge Graphs: A Tutorial with hopwise</h1>
             <div class="is-size-5 publication-authors">
               <!-- TODO: Replace with your paper authors and their personal links -->
               <span class="author-block">
-                <a href="https://www.ludovicoboratto.com" target="_blank">Ludovico Boratto</a><sup>*</sup>,</span>
+                <a href="https://www.ludovicoboratto.com" target="_blank">Ludovico Boratto</a>,</span>
                 <span class="author-block">
                   <a href="https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371" target="_blank">Gianni Fenu</a>,</span>
                   <span class="author-block">
                   <a href="https://francescamalloci.com" target="_blank">Francesca M. Mallocci</a>,</span>
                   <span class="author-block">
-                  <a href="https://www.mirkomarras.com" target="_blank">Mirko Marras</a><sup>*</sup>,</span>
+                  <a href="https://www.mirkomarras.com" target="_blank">Mirko Marras</a>,</span>
                   <span class="author-block">
-                  <a href="https://jackmedda.github.io" target="_blank">Giacomo Medda</a><sup>*</sup>,</span>
+                  <a href="https://jackmedda.github.io" target="_blank">Giacomo Medda</a>,</span>
                   <span class="author-block">
-                    <a href="https://alessandrosocc.github.io" target="_blank">Alessandro Soccol</a><sup>*</sup>
+                    <a href="https://alessandrosocc.github.io" target="_blank">Alessandro Soccol</a>
                   </span>
                   </div>
 
@@ -275,7 +284,7 @@
                     <!-- TODO: Replace with your institution and conference/journal info -->
                     <span class="author-block">University of Cagliari<br>UMAP 2026</span>
                     <!-- TODO: Remove this line if no equal contribution -->
-                    <span class="eql-cntrb"><small><br><sup>*</sup>Indicates Equal Contribution</small></span>
+                    <!-- <span class="eql-cntrb"><small><br><sup>*</sup>Indicates Equal Contribution</small></span> -->
                   </div>
 
                   <div class="column has-text-centered">
