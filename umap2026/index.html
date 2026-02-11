@@ -203,34 +203,45 @@
       </div>
       <div class="works-list">
         <!-- TODO: Replace with your lab's related works -->
-        <a href="https://arxiv.org/abs/PAPER_ID_1" class="work-item" target="_blank">
+        <a href="https://dl.acm.org/doi/10.1145/3640457.3691703" class="work-item" target="_blank">
           <div class="work-info">
             <!-- TODO: Replace with actual paper title -->
-            <h5>hopwise: A Python Library for Explainable Recommendation based on Path Reasoning over Knowledge Graphs</h5>
+            <h5>KGGLM: A Generative Language Model for Generalizable Knowledge Graph Representation Learning in Recommendation</h5>
             <!-- TODO: Replace with brief description -->
-            <p>Explainability is becoming central to the development of responsible recommender systems, especially as path reasoning over knowledge graphs saw increased adoption for extracting structured, semantic user-item connections. However, reproducible research in such field remains limited due to fragmented implementations, missing utilities, and the lack of standardized evaluation pipelines. In this paper, we propose hopwise, an open-source library that supports the full life-cycle of explainable path reasoning recommendation methods over knowledge graphs, from knowledge graph preparation to explanation path delivery and evaluation. Rather than creating a new library from scratch, hopwise builds upon the modular and widely adopted RecBole ecosystem, enriching it with more knowledge graphs, path sampling utilities, path reasoning methods, and metrics for evaluating explanation path utility, coverage, and diversity. We show the framework's utility by means of a benchmark including two knowledge graphs and several recommendation methods. Code and Data: https://github.com/tail-unica/hopwise.</p>
+            <p>Current recommendation methods based on knowledge graphs rely on entity and relation representations for several steps along the pipeline, with knowledge completion and path reasoning being the most influential. Despite their similarities, the most effective representation methods for these steps differ, leading to inefficiencies, limited representativeness, and reduced interpretability. In this paper, we introduce KGGLM, a decoder-only Transformer model designed for generalizable knowledge representation learning to support recommendation. The model is trained on generic paths sampled from the knowledge graph to capture foundational patterns, and then fine-tuned on paths specific of the downstream step (knowledge completion and path reasoning in our case). Experiments on ML1M and LFM1M show that KGGLM beats twenty-two baselines in effectiveness under both knowledge completion and recommendation. Source code and pre-processed data sets are available at https://github.com/mirkomarras/kgglm.</p>
             <!-- TODO: Replace with venue and year -->
-            <span class="work-venue">CIKM '25</span>
+            <span class="work-venue">RecSys '24</span>
+          </div>
+          <i class="fas fa-external-link-alt"></i>
+        </a>
+         <a href="https://dl.acm.org/doi/pdf/10.1145/3477495.3532041" class="work-item" target="_blank">
+          <div class="work-info">
+            <!-- TODO: Replace with actual paper title -->
+            <h5>Post Processing Recommender Systems with Knowledge Graphs for Recency, Popularity, and Diversity of Explanations</h5>
+            <!-- TODO: Replace with brief description -->
+            <p>Existing explainable recommender systems have mainly modeled relationships between recommended and already experienced prod- ucts, and shaped explanation types accordingly (e.g., movie “x” starred by actress “y” recommended to a user because that user watched other movies with “y” as an actress). However, none of these systems has investigated the extent to which properties of a single explanation (e.g., the recency of interaction with that ac- tress) and of a group of explanations for a recommended list (e.g., the diversity of the explanation types) can influence the perceived explaination quality. In this paper, we conceptualized three novel properties that model the quality of the explanations (linking inter- action recency, shared entity popularity, and explanation type diversity) and proposed re-ranking approaches able to optimize for these properties. Experiments on two public data sets showed that our approaches can increase explanation quality according to the proposed properties, fairly across demographic groups, while preserv- ing recommendation utility. The source code and data are available at https://github.com/giacoballoccu/explanation-quality-recsys.</p>
+            <!-- TODO: Replace with venue and year -->
+            <span class="work-venue">SIGIR '22</span>
           </div>
           <i class="fas fa-external-link-alt"></i>
         </a>
         <!-- TODO: Add more related works or remove extra items -->
-        <a href="https://arxiv.org/abs/PAPER_ID_2" class="work-item" target="_blank">
+        <!-- <a href="https://arxiv.org/abs/PAPER_ID_2" class="work-item" target="_blank">
           <div class="work-info">
             <h5>Paper Title 2</h5>
             <p>Brief description of the work and its main contribution.</p>
             <span class="work-venue">Conference/Journal 2023</span>
           </div>
           <i class="fas fa-external-link-alt"></i>
-        </a>
-        <a href="https://arxiv.org/abs/PAPER_ID_3" class="work-item" target="_blank">
+        </a> -->
+        <!-- <a href="https://arxiv.org/abs/PAPER_ID_3" class="work-item" target="_blank">
           <div class="work-info">
             <h5>Paper Title 3</h5>
             <p>Brief description of the work and its main contribution.</p>
             <span class="work-venue">Conference/Journal 2023</span>
           </div>
           <i class="fas fa-external-link-alt"></i>
-        </a>
+        </a> -->
       </div>
     </div>
   </div>
@@ -271,12 +282,12 @@
                     <div class="publication-links">
                          <!-- TODO: Update with your arXiv paper ID -->
                       <span class="link-block">
-                        <a href="https://arxiv.org/pdf/<ARXIV PAPER ID>.pdf" target="_blank"
+                        <a href="https://dl.acm.org/doi/10.1145/3746252.3761641" target="_blank"
                         class="external-link button is-normal is-rounded is-dark">
                         <span class="icon">
                           <i class="fas fa-file-pdf"></i>
                         </span>
-                        <span>Paper</span>
+                        <span><em>hopwise</em> paper (CIKM '25)</span>  
                       </a>
                     </span>
 
@@ -346,7 +357,8 @@
         <div class="content has-text-justified">
           <!-- TODO: Replace with your paper abstract -->
           <p>
-            <i>hopwise</i> is a recommendation framework designed to promote the development of explainable-by-design models in a simple and effective manner. Its modular architecture enables flexible control over every component of the model while providing a rich set of functionalities that make it a comprehensive solution for training recommender systems across diverse application settings. In this tutorial we present hopwise, a state-of-the-art recommendation framework that implements state-of-the-art approaches in recommender system explainability. Specifically, this tutorial demonstrates how to leverage Knowledge Graph Embedding methods and state-of-the-art language-model-based approaches, while covering the full pipeline of training, evaluation, hyperparameter optimization, and the generation and management of explanations to be delivered to end users.
+            Recommender systems are a core testbed for user modeling and personalization research in <b>UMAP</b>. As these systems increasingly rely on complex models, the need for transparency, user trust, and regulatory compliance has made explainability a core requirement. Path reasoning over knowledge graphs offers a viable foundation for generating human-understandable recommendations, yet its adoption remains limited due to fragmented tools and high coding complexity. This tutorial introduces <b>hopwise</b>, a unified and extensible framework for building explainable-by-design recommender systems through path reasoning on knowledge graphs. In line with <b>UMAP</b> principles, the tutorial treats knowledge graphs and learning over them as a form of user modeling, where structured representations of users, items, and their relations drive both personalization and explanation. Through a progressive, hands-on workflow, participants will move from standard recommendation datasets to knowledge-graph representations, run and compare reinforcement learning-based and language model-based path reasoning methods, generate natural-language explanations, and evaluate recommendation utility and explanation quality. The tutorial also guides participants on how to extend the framework to new domains, reasoning or evaluation perspectives, enabling direct reuse.
+
           </p>
         </div>
       </div>
@@ -361,13 +373,13 @@
       <div class="column is-four-fifths">
         <h2 class="title has-text-centered">Tutorial Outline</h2>
         <ul class="content">
-          <li><strong>Introduction to Explainable Recommender Systems (slides, 25min):</strong> Literature overview and current advancements in explainable recommender systems, including system user trust, and transparency.</li>
-          <li><strong>Data Requirements (slides, 10min):</strong> We'll see how datasets should be preprocessed to be used in an explainable pipeline, ranging from data cleaning to knowledge graph preparation.</li>
-          <li><strong>The Explainable Recommendation Pipeline (hands on, 5min):</strong> High-level overview of the explainable recommendation pipeline, showing how to run an easy pipeline via the <em>hopwise</em> API.</li>
-          <li><strong>The modular architecture of <em>hopwise</em> (notebook, 20min):</strong> Focus on the modular architecture of <em>hopwise</em>, detailing core components, their communication, and how to extend or replace modules.</li>
-          <li><strong>Path reasoning in Reinforcement Learning (notebook, 15min):</strong> Practical aspects of PGPR and CAFE in <em>hopwise</em>, leveraging RL and neural-symbolic reasoning for recommendations and top-k/textual explanations.</li>
-          <li><strong>Path Reasoning on Transformers (slides, 15min):</strong> Hands-on with notebooks covering path sampling, tokenization, and model training, highlighting RL vs. LM approaches, constrained generation, top-k, and explanation generation.</li>
-          <li><strong>Challenges and recent advancements (slides, 10min):</strong> Current challenges, recent advancements, and open issues in explainable recommendation using KGs and LMs.</li>
+          <li><strong>Explainable Recommendation in UMAP (Lecture, 10 minutes):</strong> We introduce explainability as a component of user modeling and adaptation, present the full explainable recommendation pipeline, and frame knowledge graphs and path reasoning as part of personalization. We contrast post-hoc vs. explainable-by-design approaches.</li>
+          <li><strong>From Data to Knowledge Graphs (Hands-on, 15 minutes):</strong> We show how users, items, and interactions are represented in standard recommendation datasets, and how they are systematically transformed into knowledge graphs that support path reasoning in <em>hopwise</em></li>
+          <li><strong>Path Reasoning Paradigms (Lecture, 10 minutes)</strong> We introduce the logic of the two main families of methods: reinforcement learning-based (e.g., PGPR, TPRec) and language model-based (e.g., PEARLM, KGGLM), with assumptions, strengths, and trade-offs</li>
+          <li><strong>Running Path Reasoning Methods (Hands-on, 15 minutes):</strong> We run one representative method for each family, compare their reasoning behavior, and visualize the generated explanation paths in <em>hopwise</em>.
+          <li><strong>Recommendation Utility and Explainability Evaluation (Hands-on, 15 minutes): </strong> We inspect the standardized path representation, translate reasoning paths into natural language explanations, and evaluate recommendation utility and explanation path quality in <em>hopwise</em>.</li>
+          <li><strong>Extension Showcase (Hands-on, 20 minutes):</strong> We engage participants at different levels of technical depth by let each of them choosing one of the following predefined guided exercises2: running methods on another knowledge graph from <em>hopwise</em>, experimenting with configuration parameters of a method included in <em>hopwise</em> to observe patterns, or coding a simple new evaluation metric perspective</li>
+          <li><strong>Open Research Directions(Lecture, 5 minutes):</strong> We conclude the tutorial with a brief discussion of current challenges in explainable recommender systems, grounded in recent literature, such as explanation faithfulness, scalability, and evaluation limitations, and highlight emerging research directions. This final segment is intended to motivate participants to further experiment with and extend <em>hopwise</em> toward these directions after the tutorial.</li>
         </ul>
       </div>
     </div>
@@ -381,27 +393,27 @@
         <h2 class="title ">Authors</h2>
         <div class="content has-text-justified">
           <p>
-            <strong>Ludovico Boratto</strong> (<a href="https://www.ludovicoboratto.com" target="_blank">webpage</a>) is an Assistant Professor at the Department of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on recommender systems and their impact on stakeholders. He has co-authored over 60 papers published in top-tier conference proceedings and journals. His research brought him to give talks and tutorials at top-tier research centres and conferences, including CIKM, UMAP, RecSys, ICDE, ECIR, WSDM, ICDM, DSAA, and ECAI. He is the editor of the book "Group Recommender Systems: An Introduction" by Springer. He is an editorial board member of the "Information Processing & Management" journal (Elsevier) and "Journal of Intelligent Information Systems" (Springer), and guest editor of several journals' special issues. He is part of the program committees of the main Web conferences, where he received four outstanding contribution awards. In 2012, he got his Ph.D. at the University of Cagliari. From May 2016 to April 2021, he joined Eurecat as a Senior Research Scientist in the Data Science and Big Data Analytics research group. In 2010 and 2014, he visited Yahoo! Research in Barcelona.
+            <strong>Ludovico Boratto</strong> (<a href="https://www.ludovicoboratto.com" target="_blank">webpage</a>) is Associate Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on recommender systems and their impact on stakeholders, with over 130 papers published in top-tier conference proceedings and journals. He has delivered tutorials and invited talks at major venues, including CIKM, UMAP, RecSys, ICDE, ECIR, WSDM, ICDM, DSAA, and ECAI. He is an editorial board member of Information Processing & Management (Elsevier) and Journal of Intelligent Information Systems (Springer). He regularly serves on the program committees of leading conferences, where he has received four outstanding contribution awards. In this tutorial, he will provide the core conceptual bridge, enabling participants to quickly build a solid foundation in responsible recommendation within the broader UMAP context
           </p>
           
           <p>
-            <strong>Gianni Fenu</strong> (<a href="https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371" target="_blank">webpage</a>) is Full Professor at the Department of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on responsible recommender systems, digital education, and personalization. He has authored more than 120 papers in conferences and journals. He has been the scientific responsible a wide range of projects, such as ILEARNTV MIUR-UE (2014-2017, 10 ME, 6 partners) and the European Research M-Commerce and Development.
+            <strong>Gianni Fenu</strong> (<a href="https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371" target="_blank">webpage</a>) is Full Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on responsible recommender systems, digital education, and personalization. He has authored more than 150 papers in conferences and journals, and has led several national and European projects, including ILEARNTV MIUR-UE (2014-2017, 10 Me, 6 partners) and the European Research M-Commerce and Development project. In this tutorial, he will contribute the application and impact-oriented perspective, facilitating the connection of ex- plainable recommender systems to real-world adaptive platforms in education and other user-facing domains relevant to UMAP.
           </p>
           
           <p>
-            <strong>Mirko Marras</strong> (<a href="https://www.mirkomarras.com" target="_blank">webpage</a>) is an Assistant Professor at the Department of Mathematics and Computer Science of the University of Cagliari (Italy). Before that, he was a postdoctoral researcher at EPFL (Switzerland) and a visiting scholar at Eurecat (Spain) and New York University (USA). His research ranges across various domains impacted by user modeling and personalization. He has co-authored more than 80 papers in top-tier conferences and journals and given tutorials at ECML-PKDD, RecSys, ICDE, ECIR, WSDM, ICDM, and UMAP. He has also co-chaired workshops on related themes at ECIR, WSDM, ICCV, EDM, and ECML-PKDD. He is part of the program committees of top-tier conferences, where he received three outstanding reviewer awards. He is an associate editor for Springer's Journal of Ambient Intelligence and Humanized Computing and Neural Processing Letters.
+            <strong>Mirko Marras</strong> (<a href="https://www.mirkomarras.com" target="_blank">webpage</a>) is Tenure-Track Assistant Professor at the Dept. of Mathematics and Computer Sci- ence of the University of Cagliari (Italy). His research ranges across various domains impacted by user modeling and personalization. He has co-authored more than 120 papers in top-tier conferences and journals, and given tutorials at ECML-PKDD, RecSys, ICDE, ECIR, WSDM, ICDM, and UMAP. He is part of the program committees of top-tier conferences, where he received four outstanding reviewer awards. He is an associate editor for Springer's Journal of Ambient Intelligence and Humanized Computing and Neural Processing Letters. In this tutorial, he will be responsible for introducing the main operative parts conceptually (knowledge graphs, path reasoning algorithms and evaluation metrics).
           </p>
           
           <p>
-            <strong>Francesca Maridina Malloci</strong> (<a href="https://francescamalloci.com" target="_blank">webpage</a>) is Assistant Professor at the Department of Mathematics and Computer Science of the University of Cagliari (Italy). Her research interests are focused on predictive analytics, with several papers published in international journal and conference proceedings. Current research activities delved into decision-making algorithms for multi-stakeholders contexts, with attention to recommender systems and education. She received the BSc (2016) and MSc (2018) degrees in Computer Science, both cum laude, from the University of Cagliari. In 2019, she has been visiting scientist at the EURECAT Technology Centre (Spain), collaborating with the Data Science and Big Data Analytics Unit.
+            <strong>Francesca Maridina Malloci</strong> (<a href="https://francescamalloci.com" target="_blank">webpage</a>)  Non-Tenure Track Assistant Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). Her research focuses on predictive analytics and decision-making algorithms in multi-stakeholder contexts, with particular attention to recommender systems. She has published extensively in inter- national journals and conference proceedings. She has delivered tutorials at ECML-PKDD and co-organized workshops on related themes at ECML-PKDD, UMAP, and SIGIR. She has also delivered course-level tutorials for doctoral students on <em>hopwise</em>, leading the preparation of the teaching materials that form the basis of the present proposal (most recently at Boise University, July 2025). In 2019, she was a visiting scientist at the Eurecat (Spain), collaborating with the Data Science and Big Data Analytics Unit.
           </p>
           
           <p>
-            <strong>Giacomo Medda</strong> (<a href="https://jackmedda.github.io" target="_blank">webpage</a>) is a Postdoctoral Researcher at the Department of Mathematics and Computer Science of the University of Cagliari, where he received his PhD in Mathematics and Computer Science with honors in 2024. His research spans recommender systems, responsible AI, graph modeling, and generative AI. He has published in top-tier conferences and journals across these areas. He co-edited the special issue "Knowledge Discovery from Graphs" in the Springer Data Mining and Knowledge Discovery journal. He served as an organizer and as a program committee member in several core venues in his field, including UMAP, RecSys, and SIGIR. He co-organized the IRonGraphs workshop at ECIR 2024.
+            <strong>Giacomo Medda</strong> (<a href="https://jackmedda.github.io" target="_blank">webpage</a>) is Postdoctoral Researcher at the Dept. of Mathematics and Computer Science of the University of Cagliari. His research spans recommender systems, responsible artificial intelligence, graph modeling, and generative artificial intelligence. He has authored over 25 publications in leading conferences and journals. He co-edited the special issue “Knowledge Discovery from Graphs” in Springer's Data Mining and Knowledge Discovery journal and regularly serves on the program committees of UMAP, RecSys, and SIGIR. He co-organized the IRonGraphs workshop at ECIR 2024. He is a core architect and lead developer of <em>hopwise</em>, and will directly support participants in understanding and extending its internal components.
           </p>
           
           <p>
-            <strong>Alessandro Soccol</strong> (<a href="https://alessandrosocc.github.io" target="_blank">webpage</a>) is a Research Associate at the Department of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on Explainable Recommender Systems, Personalization and Uncertainty Quantification in Recommender Systems. He has authored works in top-tier conferences such as CIKM and RecSys.
+            <strong>Alessandro Soccol</strong> (<a href="https://alessandrosocc.github.io" target="_blank">webpage</a>) is a Research Associate at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research focuses on explainable recommender systems, personalization, and uncertainty quantification. He has co-authored papers published in top-tier venues, such as CIKM and RecSys. He is a core developer of <em>hopwise</em> and is responsible for key path reasoning and explanability modules, which he will actively demonstrate and help participants play with.
           </p>
         </div>
       </div>
