@@ -33,7 +33,7 @@ extensions = [
     "sphinx_copybutton",
 ]
 
-templates_path = ["_templates"]
+templates_path = ["templates"]
 exclude_patterns = []
 
 
@@ -45,6 +45,6 @@ autoapi_keep_files = True  # Keep generated files for debugging
 
 html_favicon = "static/favicon.ico"
 html_theme = "furo"
-html_static_path = ["_static"]
+htmlstatic_path = ["static"]
 
 html_css_files = ["custom.css"]
