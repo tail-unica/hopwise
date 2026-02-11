@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <!-- Primary Meta Tags -->
+  <!-- TODO: Replace with your paper title and author names -->
+  <meta name="title" content="Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise - Ludovico Boratto, Gianni Fenu, Francesca M. Mallocci, Mirko Marras, Giacomo Medda, Alessandro Soccol">
+  <!-- TODO: Write a compelling 150-160 character description of your research -->
+  <meta name="description" content="hopwise is a recommendation framework designed to promote the development of explainable-by-design models in a simple and effective manner. Its modular architecture enables flexible control over every component of the model while providing a rich set of functionalities that make it a comprehensive solution for training recommender systems across diverse application settings. In this tutorial we present hopwise, a state-of-the-art recommendation framework that implements state-of-the-art approaches in recommender system explainability. Specifically, this tutorial demonstrates how to leverage Knowledge Graph Embedding methods and state-of-the-art language-model-based approaches, while covering the full pipeline of training, evaluation, hyperparameter optimization, and the generation and management of explanations to be delivered to end users">
+  <!-- TODO: Add 5-10 relevant keywords for your research area -->
+  <meta name="keywords" content="Explainability, Recommender Systems, Personalization, Information Retrieval, Deep Learning, AI, Artificial Intelligence, UMAP, UMAP2026">
+  <!-- TODO: List all authors -->
+  <meta name="author" content="Boratto et. al">
+  <meta name="robots" content="index, follow">
+  <meta name="language" content="English">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="article">
+  <!-- TODO: Replace with your institution or lab name -->
+  <meta property="og:site_name" content="Trustworthy AI Lab - University of Cagliari">
+  <!-- TODO: Same as paper title above -->
+  <meta property="og:title" content="Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise">
+  <!-- TODO: Same as description above -->
+  <meta property="og:description" content="hopwise is a recommendation framework designed to promote the development of explainable-by-design models in a simple and effective manner. Its modular architecture enables flexible control over every component of the model while providing a rich set of functionalities that make it a comprehensive solution for training recommender systems across diverse application settings. In this tutorial we present hopwise, a state-of-the-art recommendation framework that implements state-of-the-art approaches in recommender system explainability. Specifically, this tutorial demonstrates how to leverage Knowledge Graph Embedding methods and state-of-the-art language-model-based approaches, while covering the full pipeline of training, evaluation, hyperparameter optimization, and the generation and management of explanations to be delivered to end users">
+  <!-- TODO: Replace with your actual website URL -->
+  <meta property="og:url" content="https://tail-unica.github.io/umap2026/">
+  <!-- TODO: Create a 1200x630px preview image and update path -->
+  <meta property="og:image" content="https://tail-unica.github.io/umap2026/static/images/favicon.ico">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise - Research Preview">
+  <meta property="article:published_time" content="2024-01-01T00:00:00.000Z">
+  <meta property="article:author" content="Boratto, et. al">
+  <meta property="article:section" content="Research">
+  <meta property="article:tag" content="KEYWORD1">
+  <meta property="article:tag" content="KEYWORD2">
+
+  <!-- Twitter -->
+  <!-- <meta name="twitter:card" content="summary_large_image"> -->
+  <!-- TODO: Replace with your lab/institution Twitter handle -->
+  <!-- <meta name="twitter:site" content="@YOUR_TWITTER_HANDLE"> -->
+  <!-- TODO: Replace with first author's Twitter handle -->
+  <!-- <meta name="twitter:creator" content="@AUTHOR_TWITTER_HANDLE"> -->
+  <!-- TODO: Same as paper title above -->
+  <!-- <meta name="twitter:title" content="PAPER_TITLE"> -->
+  <!-- TODO: Same as description above -->
+  <!-- <meta name="twitter:description" content="BRIEF_DESCRIPTION_OF_YOUR_RESEARCH_CONTRIBUTION_AND_FINDINGS"> -->
+  <!-- TODO: Same as social preview image above -->
+  <!-- <meta name="twitter:image" content="https://YOUR_DOMAIN.com/static/images/social_preview.png"> -->
+  <!-- <meta name="twitter:image:alt" content="PAPER_TITLE - Research Preview"> -->
+
+  <!-- Academic/Research Specific -->
+  <!-- <meta name="citation_title" content="PAPER_TITLE">
+  <meta name="citation_author" content="FIRST_AUTHOR_LAST, FIRST_AUTHOR_FIRST">
+  <meta name="citation_author" content="SECOND_AUTHOR_LAST, SECOND_AUTHOR_FIRST">
+  <meta name="citation_publication_date" content="2024">
+  <meta name="citation_conference_title" content="CONFERENCE_NAME">
+  <meta name="citation_pdf_url" content="https://YOUR_DOMAIN.com/static/pdfs/paper.pdf">
+   -->
+  <!-- Additional SEO -->
+  <meta name="theme-color" content="#2563eb">
+  <meta name="msapplication-TileColor" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  
+  <!-- Preconnect for performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://ajax.googleapis.com">
+  <link rel="preconnect" href="https://documentcloud.adobe.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+
+
+  <!-- TODO: Replace with your paper title and authors -->
+  <title>Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise</title>
+  
+  <!-- Favicon and App Icons -->
+  <link rel="icon" type="image/x-icon" href="static/images/favicon.ico">
+  <link rel="apple-touch-icon" href="static/images/favicon.ico">
+  
+  <!-- Critical CSS - Load synchronously -->
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+  
+  <!-- Non-critical CSS - Load asynchronously -->
+  <link rel="preload" href="static/css/bulma-carousel.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="static/css/bulma-slider.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="static/css/fontawesome.all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  
+  <!-- Fallback for browsers that don't support preload -->
+  <noscript>
+    <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
+    <link rel="stylesheet" href="static/css/bulma-slider.min.css">
+    <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  </noscript>
+  
+  <!-- Fonts - Optimized loading -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Defer non-critical JavaScript -->
+  <script defer src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="https://documentcloud.adobe.com/view-sdk/main.js"></script>
+  <script defer src="static/js/fontawesome.all.min.js"></script>
+  <script defer src="static/js/bulma-carousel.min.js"></script>
+  <script defer src="static/js/bulma-slider.min.js"></script>
+  <script defer src="static/js/index.js"></script>
+  
+  <!-- Structured Data for Academic Papers -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ScholarlyArticle",
+    "headline": "Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise",
+    "description": "hopwise is a recommendation framework designed to promote the development of explainable-by-design models in a simple and effective manner. Its modular architecture enables flexible control over every component of the model while providing a rich set of functionalities that make it a comprehensive solution for training recommender systems across diverse application settings. In this tutorial we present hopwise, a state-of-the-art recommendation framework that implements state-of-the-art approaches in recommender system explainability. Specifically, this tutorial demonstrates how to leverage Knowledge Graph Embedding methods and state-of-the-art language-model-based approaches, while covering the full pipeline of training, evaluation, hyperparameter optimization, and the generation and management of explanations to be delivered to end users.",
+    "author": [
+      {
+        "@type": "Person",
+        "name": "Ludovico Boratto",
+        "affiliation": {
+          "@type": "University of Cagliari",
+          "name": "University of Cagliari"
+        }
+      },
+      {
+        "@type": "Person",
+        "name": "Mirko Marras",
+        "affiliation": {
+          "@type": "University of Cagliari",
+          "name": "University of Cagliari"
+        }
+      }
+    ],
+    "datePublished": "2024-01-01",
+    "publisher": {
+      "@type": "ACM",
+      "name": "34th ACM International Conference on User Modeling, Adaptation and Personalization
+"
+    },
+    "url": "https://YOUR_DOMAIN.com/YOUR_PROJECT_PAGE",
+    "image": "https://YOUR_DOMAIN.com/static/images/social_preview.png",
+    "keywords": ["KEYWORD1", "KEYWORD2", "KEYWORD3", "machine learning", "computer vision"],
+    "abstract": "FULL_ABSTRACT_TEXT_HERE",
+    "citation": "BIBTEX_CITATION_HERE",
+    "isAccessibleForFree": true,
+    "license": "https://creativecommons.org/licenses/by/4.0/",
+    "mainEntity": {
+      "@type": "WebPage",
+      "@id": "https://YOUR_DOMAIN.com/YOUR_PROJECT_PAGE"
+    },
+    "about": [
+      {
+        "@type": "Thing",
+        "name": "RESEARCH_AREA_1"
+      },
+      {
+        "@type": "Thing", 
+        "name": "RESEARCH_AREA_2"
+      }
+    ]
+  }
+  </script>
+  
+  <!-- Website/Organization Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "INSTITUTION_OR_LAB_NAME",
+    "url": "https://YOUR_INSTITUTION_WEBSITE.com",
+    "logo": "https://YOUR_DOMAIN.com/static/images/favicon.ico",
+    "sameAs": [
+      "https://twitter.com/YOUR_TWITTER_HANDLE",
+      "https://github.com/YOUR_GITHUB_USERNAME"
+    ]
+  }
+  </script>
+</head>
+<body>
+
+
+  <!-- Scroll to Top Button -->
+  <button class="scroll-to-top" onclick="scrollToTop()" title="Scroll to top" aria-label="Scroll to top">
+    <i class="fas fa-chevron-up"></i>
+  </button>
+
+  <!-- More Works Dropdown -->
+  <div class="more-works-container">
+    <button class="more-works-btn" onclick="toggleMoreWorks()" title="View More Works from Our Lab">
+      <i class="fas fa-flask"></i>
+      More Works
+      <i class="fas fa-chevron-down dropdown-arrow"></i>
+    </button>
+    <div class="more-works-dropdown" id="moreWorksDropdown">
+      <div class="dropdown-header">
+        <h4>More Works from Our Lab</h4>
+        <button class="close-btn" onclick="toggleMoreWorks()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="works-list">
+        <!-- TODO: Replace with your lab's related works -->
+        <a href="https://arxiv.org/abs/PAPER_ID_1" class="work-item" target="_blank">
+          <div class="work-info">
+            <!-- TODO: Replace with actual paper title -->
+            <h5>hopwise: A Python Library for Explainable Recommendation based on Path Reasoning over Knowledge Graphs</h5>
+            <!-- TODO: Replace with brief description -->
+            <p>Explainability is becoming central to the development of responsible recommender systems, especially as path reasoning over knowledge graphs saw increased adoption for extracting structured, semantic user-item connections. However, reproducible research in such field remains limited due to fragmented implementations, missing utilities, and the lack of standardized evaluation pipelines. In this paper, we propose hopwise, an open-source library that supports the full life-cycle of explainable path reasoning recommendation methods over knowledge graphs, from knowledge graph preparation to explanation path delivery and evaluation. Rather than creating a new library from scratch, hopwise builds upon the modular and widely adopted RecBole ecosystem, enriching it with more knowledge graphs, path sampling utilities, path reasoning methods, and metrics for evaluating explanation path utility, coverage, and diversity. We show the framework's utility by means of a benchmark including two knowledge graphs and several recommendation methods. Code and Data: https://github.com/tail-unica/hopwise.</p>
+            <!-- TODO: Replace with venue and year -->
+            <span class="work-venue">CIKM '25</span>
+          </div>
+          <i class="fas fa-external-link-alt"></i>
+        </a>
+        <!-- TODO: Add more related works or remove extra items -->
+        <a href="https://arxiv.org/abs/PAPER_ID_2" class="work-item" target="_blank">
+          <div class="work-info">
+            <h5>Paper Title 2</h5>
+            <p>Brief description of the work and its main contribution.</p>
+            <span class="work-venue">Conference/Journal 2023</span>
+          </div>
+          <i class="fas fa-external-link-alt"></i>
+        </a>
+        <a href="https://arxiv.org/abs/PAPER_ID_3" class="work-item" target="_blank">
+          <div class="work-info">
+            <h5>Paper Title 3</h5>
+            <p>Brief description of the work and its main contribution.</p>
+            <span class="work-venue">Conference/Journal 2023</span>
+          </div>
+          <i class="fas fa-external-link-alt"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <main id="main-content">
+  <section class="hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <!-- TODO: Replace with your paper title -->
+            <h1 class="title is-1 publication-title">Explainable Recommendations through Path Reasoning over Knowledge Graph with hopwise</h1>
+            <div class="is-size-5 publication-authors">
+              <!-- TODO: Replace with your paper authors and their personal links -->
+              <span class="author-block">
+                <a href="https://www.ludovicoboratto.com" target="_blank">Ludovico Boratto</a><sup>*</sup>,</span>
+                <span class="author-block">
+                  <a href="https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371" target="_blank">Gianni Fenu</a>,</span>
+                  <span class="author-block">
+                  <a href="https://francescamalloci.com" target="_blank">Francesca M. Mallocci</a>,</span>
+                  <span class="author-block">
+                  <a href="https://www.mirkomarras.com" target="_blank">Mirko Marras</a><sup>*</sup>,</span>
+                  <span class="author-block">
+                  <a href="https://jackmedda.github.io" target="_blank">Giacomo Medda</a><sup>*</sup>,</span>
+                  <span class="author-block">
+                    <a href="https://alessandrosocc.github.io" target="_blank">Alessandro Soccol</a><sup>*</sup>
+                  </span>
+                  </div>
+
+                  <div class="is-size-5 publication-authors">
+                    <!-- TODO: Replace with your institution and conference/journal info -->
+                    <span class="author-block">University of Cagliari<br>UMAP 2026</span>
+                    <!-- TODO: Remove this line if no equal contribution -->
+                    <span class="eql-cntrb"><small><br><sup>*</sup>Indicates Equal Contribution</small></span>
+                  </div>
+
+                  <div class="column has-text-centered">
+                    <div class="publication-links">
+                         <!-- TODO: Update with your arXiv paper ID -->
+                      <span class="link-block">
+                        <a href="https://arxiv.org/pdf/<ARXIV PAPER ID>.pdf" target="_blank"
+                        class="external-link button is-normal is-rounded is-dark">
+                        <span class="icon">
+                          <i class="fas fa-file-pdf"></i>
+                        </span>
+                        <span>Paper</span>
+                      </a>
+                    </span>
+
+                    <!-- TODO: Add your supplementary material PDF or remove this section -->
+                    <span class="link-block">
+                      <a href="static/pdfs/supplementary_material.pdf" target="_blank"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="fas fa-file-pdf"></i>
+                      </span>
+                      <span>Slides (Soon...)</span>
+                    </a>
+                  </span>
+
+                  <!-- TODO: Replace with your GitHub repository URL -->
+                  <span class="link-block">
+                    <a href="https://github.com/YOUR REPO HERE" target="_blank"
+                    class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fab fa-github"></i>
+                    </span>
+                    <span>Notebooks (Soon...)</span>
+                  </a>
+                </span>
+
+                <!-- TODO: Update with your arXiv paper ID -->
+                <!-- <span class="link-block">
+                  <a href="https://arxiv.org/abs/<ARXIV PAPER ID>" target="_blank"
+                  class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                    <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span> -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- Teaser video-->
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+      <!-- TODO: Replace with your teaser video -->
+      <!-- <video poster="" id="tree" autoplay controls muted loop height="100%" preload="metadata">
+        <source src="static/videos/banner_video.mp4" type="video/mp4">
+      </video> -->
+      <img src="static/images/pipeline.jpg" alt="Teaser Image"/>
+      <!-- TODO: Replace with your video description -->
+        <!-- Aliquam vitae elit ullamcorper tellus egestas pellentesque. Ut lacus tellus, maximus vel lectus at, placerat pretium mi. Maecenas dignissim tincidunt vestibulum. Sed consequat hendrerit nisl ut maximus.  -->
+    </div>
+  </div>
+</section>
+<!-- End teaser video -->
+
+<!-- Paper abstract -->
+<section class="section hero is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <!-- TODO: Replace with your paper abstract -->
+          <p>
+            <i>hopwise</i> is a recommendation framework designed to promote the development of explainable-by-design models in a simple and effective manner. Its modular architecture enables flexible control over every component of the model while providing a rich set of functionalities that make it a comprehensive solution for training recommender systems across diverse application settings. In this tutorial we present hopwise, a state-of-the-art recommendation framework that implements state-of-the-art approaches in recommender system explainability. Specifically, this tutorial demonstrates how to leverage Knowledge Graph Embedding methods and state-of-the-art language-model-based approaches, while covering the full pipeline of training, evaluation, hyperparameter optimization, and the generation and management of explanations to be delivered to end users.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End paper abstract -->
+
+  <section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title has-text-centered">Tutorial Outline</h2>
+        <ul class="content">
+          <li><strong>Introduction to Explainable Recommender Systems (slides, 25min):</strong> Literature overview and current advancements in explainable recommender systems, including system user trust, and transparency.</li>
+          <li><strong>Data Requirements (slides, 10min):</strong> We'll see how datasets should be preprocessed to be used in an explainable pipeline, ranging from data cleaning to knowledge graph preparation.</li>
+          <li><strong>The Explainable Recommendation Pipeline (hands on, 5min):</strong> High-level overview of the explainable recommendation pipeline, showing how to run an easy pipeline via the <em>hopwise</em> API.</li>
+          <li><strong>The modular architecture of <em>hopwise</em> (notebook, 20min):</strong> Focus on the modular architecture of <em>hopwise</em>, detailing core components, their communication, and how to extend or replace modules.</li>
+          <li><strong>Path reasoning in Reinforcement Learning (notebook, 15min):</strong> Practical aspects of PGPR and CAFE in <em>hopwise</em>, leveraging RL and neural-symbolic reasoning for recommendations and top-k/textual explanations.</li>
+          <li><strong>Path Reasoning on Transformers (slides, 15min):</strong> Hands-on with notebooks covering path sampling, tokenization, and model training, highlighting RL vs. LM approaches, constrained generation, top-k, and explanation generation.</li>
+          <li><strong>Challenges and recent advancements (slides, 10min):</strong> Current challenges, recent advancements, and open issues in explainable recommendation using KGs and LMs.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title ">Authors</h2>
+        <div class="content has-text-justified">
+          <p>
+            <strong>Ludovico Boratto</strong> (<a href="https://www.ludovicoboratto.com" target="_blank">webpage</a>) is an Assistant Professor at the Department of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on recommender systems and their impact on stakeholders. He has co-authored over 60 papers published in top-tier conference proceedings and journals. His research brought him to give talks and tutorials at top-tier research centres and conferences, including CIKM, UMAP, RecSys, ICDE, ECIR, WSDM, ICDM, DSAA, and ECAI. He is the editor of the book "Group Recommender Systems: An Introduction" by Springer. He is an editorial board member of the "Information Processing & Management" journal (Elsevier) and "Journal of Intelligent Information Systems" (Springer), and guest editor of several journals' special issues. He is part of the program committees of the main Web conferences, where he received four outstanding contribution awards. In 2012, he got his Ph.D. at the University of Cagliari. From May 2016 to April 2021, he joined Eurecat as a Senior Research Scientist in the Data Science and Big Data Analytics research group. In 2010 and 2014, he visited Yahoo! Research in Barcelona.
+          </p>
+          
+          <p>
+            <strong>Gianni Fenu</strong> (<a href="https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371" target="_blank">webpage</a>) is Full Professor at the Department of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on responsible recommender systems, digital education, and personalization. He has authored more than 120 papers in conferences and journals. He has been the scientific responsible a wide range of projects, such as ILEARNTV MIUR-UE (2014-2017, 10 ME, 6 partners) and the European Research M-Commerce and Development.
+          </p>
+          
+          <p>
+            <strong>Mirko Marras</strong> (<a href="https://www.mirkomarras.com" target="_blank">webpage</a>) is an Assistant Professor at the Department of Mathematics and Computer Science of the University of Cagliari (Italy). Before that, he was a postdoctoral researcher at EPFL (Switzerland) and a visiting scholar at Eurecat (Spain) and New York University (USA). His research ranges across various domains impacted by user modeling and personalization. He has co-authored more than 80 papers in top-tier conferences and journals and given tutorials at ECML-PKDD, RecSys, ICDE, ECIR, WSDM, ICDM, and UMAP. He has also co-chaired workshops on related themes at ECIR, WSDM, ICCV, EDM, and ECML-PKDD. He is part of the program committees of top-tier conferences, where he received three outstanding reviewer awards. He is an associate editor for Springer's Journal of Ambient Intelligence and Humanized Computing and Neural Processing Letters.
+          </p>
+          
+          <p>
+            <strong>Francesca Maridina Malloci</strong> (<a href="https://francescamalloci.com" target="_blank">webpage</a>) is Assistant Professor at the Department of Mathematics and Computer Science of the University of Cagliari (Italy). Her research interests are focused on predictive analytics, with several papers published in international journal and conference proceedings. Current research activities delved into decision-making algorithms for multi-stakeholders contexts, with attention to recommender systems and education. She received the BSc (2016) and MSc (2018) degrees in Computer Science, both cum laude, from the University of Cagliari. In 2019, she has been visiting scientist at the EURECAT Technology Centre (Spain), collaborating with the Data Science and Big Data Analytics Unit.
+          </p>
+          
+          <p>
+            <strong>Giacomo Medda</strong> (<a href="https://jackmedda.github.io" target="_blank">webpage</a>) is a Postdoctoral Researcher at the Department of Mathematics and Computer Science of the University of Cagliari, where he received his PhD in Mathematics and Computer Science with honors in 2024. His research spans recommender systems, responsible AI, graph modeling, and generative AI. He has published in top-tier conferences and journals across these areas. He co-edited the special issue "Knowledge Discovery from Graphs" in the Springer Data Mining and Knowledge Discovery journal. He served as an organizer and as a program committee member in several core venues in his field, including UMAP, RecSys, and SIGIR. He co-organized the IRonGraphs workshop at ECIR 2024.
+          </p>
+          
+          <p>
+            <strong>Alessandro Soccol</strong> (<a href="https://alessandrosocc.github.io" target="_blank">webpage</a>) is a Research Associate at the Department of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on Explainable Recommender Systems, Personalization and Uncertainty Quantification in Recommender Systems. He has authored works in top-tier conferences such as CIKM and RecSys.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Image carousel -->
+<!-- <section class="hero is-small">
+  <div class="hero-body">
+    <div class="container">
+      <div id="results-carousel" class="carousel results-carousel">
+       <div class="item">
+    
+        <img src="static/images/carousel1.jpg" alt="First research result visualization" loading="lazy"/>
+    
+        <h2 class="subtitle has-text-centered">
+          First image description.
+        </h2>
+      </div>
+      <div class="item">
+    
+        <img src="static/images/carousel2.jpg" alt="Second research result visualization" loading="lazy"/>
+        <h2 class="subtitle has-text-centered">
+          Second image description.
+        </h2>
+      </div>
+      <div class="item">
+    
+        <img src="static/images/carousel3.jpg" alt="Third research result visualization" loading="lazy"/>
+        <h2 class="subtitle has-text-centered">
+         Third image description.
+       </h2>
+     </div>
+     <div class="item">
+  
+      <img src="static/images/carousel4.jpg" alt="Fourth research result visualization" loading="lazy"/>
+      <h2 class="subtitle has-text-centered">
+        Fourth image description.
+      </h2>
+    </div>
+  </div>
+</div>
+</div>
+</section> -->
+<!-- End image carousel -->
+
+
+
+
+<!-- Youtube video -->
+<!-- <section class="hero is-small is-light">
+  <div class="hero-body">
+    <div class="container">
+      <h2 class="title is-3">Video Presentation</h2>
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths">
+          
+          <div class="publication-video">
+            <iframe src="https://www.youtube.com/embed/JkaxUblCGz0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section> -->
+<!-- End youtube video -->
+
+
+<!-- Video carousel -->
+<!-- <section class="hero is-small">
+  <div class="hero-body">
+    <div class="container">
+      <h2 class="title is-3">Another Carousel</h2>
+      <div id="results-carousel" class="carousel results-carousel">
+        <div class="item item-video1">
+          
+          <video poster="" id="video1" controls muted loop height="100%" preload="metadata">
+            
+            <source src="static/videos/carousel1.mp4" type="video/mp4">
+          </video>
+        </div>
+        <div class="item item-video2">
+          
+          <video poster="" id="video2" controls muted loop height="100%" preload="metadata">
+            
+            <source src="static/videos/carousel2.mp4" type="video/mp4">
+          </video>
+        </div>
+        <div class="item item-video3">
+          
+          <video poster="" id="video3" controls muted loop height="100%" preload="metadata">
+            
+            <source src="static/videos/carousel3.mp4" type="video/mp4">
+          </video>
+        </div>
+      </div>
+    </div>
+  </div>
+</section> -->
+<!-- End video carousel -->
+
+
+
+
+
+
+<!-- Paper poster -->
+<!-- <section class="hero is-small is-light">
+  <div class="hero-body">
+    <div class="container">
+      <h2 class="title">Poster</h2>
+      <iframe  src="static/pdfs/sample.pdf" width="100%" height="550">
+          </iframe>
+        
+      </div>
+    </div>
+  </section> -->
+<!--End paper poster -->
+
+
+
+<!--BibTex citation -->
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <div class="bibtex-header">
+        <h2 class="title">BibTeX</h2>
+        <button class="copy-bibtex-btn" onclick="copyBibTeX()" title="Copy BibTeX to clipboard">
+          <i class="fas fa-copy"></i>
+          <span class="copy-text">Copy</span>
+        </button>
+      </div>
+      <pre id="bibtex-code"><code>@inproceedings{10.1145/3746252.3761641,
+          author = {Boratto, Ludovico and Fenu, Gianni and Marras, Mirko and Medda, Giacomo and Soccol, Alessandro},
+          title = {hopwise: A Python Library for Explainable Recommendation based on Path Reasoning over Knowledge Graphs},
+          year = {2025},
+          isbn = {9798400720406},
+          publisher = {Association for Computing Machinery},
+          address = {New York, NY, USA},
+          url = {https://doi.org/10.1145/3746252.3761641},
+          doi = {10.1145/3746252.3761641},
+          abstract = {Explainability is becoming central to the development of responsible recommender systems, especially as path reasoning over knowledge graphs saw increased adoption for extracting structured, semantic user-item connections. However, reproducible research in such field remains limited due to fragmented implementations, missing utilities, and the lack of standardized evaluation pipelines. In this paper, we propose hopwise, an open-source library that supports the full life-cycle of explainable path reasoning recommendation methods over knowledge graphs, from knowledge graph preparation to explanation path delivery and evaluation. Rather than creating a new library from scratch, hopwise builds upon the modular and widely adopted RecBole ecosystem, enriching it with more knowledge graphs, path sampling utilities, path reasoning methods, and metrics for evaluating explanation path utility, coverage, and diversity. We show the framework's utility by means of a benchmark including two knowledge graphs and several recommendation methods. Code and Data: https://github.com/tail-unica/hopwise.},
+          booktitle = {Proceedings of the 34th ACM International Conference on Information and Knowledge Management},
+          pages = {6328–6333},
+          numpages = {6},
+          keywords = {language model, path reasoning, reproducibility, transparency},
+          location = {Seoul, Republic of Korea},
+          series = {CIKM '25}
+  }</code></pre>
+    </div>
+</section>
+<!--End BibTex citation -->
+
+
+  <footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+
+          <p>
+            This page was built using the <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank">Academic Project Page Template</a> which was adopted from the <a href="https://nerfies.github.io" target="_blank">Nerfies</a> project page.
+            You are free to borrow the source code of this website, we just ask that you link back to this page in the footer. <br> This website is licensed under a <a rel="license"  href="http://creativecommons.org/licenses/by-sa/4.0/" target="_blank">Creative
+            Commons Attribution-ShareAlike 4.0 International License</a>.
+          </p>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Statcounter tracking code -->
+  
+<!-- You can add a tracker to track page visits by creating an account at statcounter.com -->
+
+    <!-- End of Statcounter Code -->
+
+  </body>
+  </html>
