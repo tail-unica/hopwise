@@ -1408,7 +1408,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             tids = self.tail_entities
 
             uids = self.inter_feat[self.uid_field].numpy()
-            iids = self.inter_feat[self.iid_field].numpy()  # + user_num
+            iids = self.inter_feat[self.iid_field].numpy() + self.user_num
 
             src = np.concatenate([uids, iids, hids])
             tgt = np.concatenate([iids, uids, tids])
@@ -1420,7 +1420,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             tids = kg_tensor[self.tail_entity_field]
 
             uids = inter_tensor[self.uid_field]
-            iids = inter_tensor[self.iid_field]  # + user_num
+            iids = inter_tensor[self.iid_field] + self.user_num
 
             src = torch.cat([uids, iids, hids])
             tgt = torch.cat([iids, uids, tids])
@@ -1476,7 +1476,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
             tids = self.tail_entities
 
             uids = self.inter_feat[self.uid_field].numpy()
-            iids = self.inter_feat[self.iid_field].numpy()  # + self.user_num
+            iids = self.inter_feat[self.iid_field].numpy() + self.user_num
 
             src = np.concatenate([uids, hids])
             tgt = np.concatenate([iids, tids])
@@ -1500,7 +1500,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
         kg_tensor = self.kg_feat
 
         uids = inter_tensor[self.uid_field]
-        iids = inter_tensor[self.iid_field] - user_num
+        iids = inter_tensor[self.iid_field]
 
         graph_data = {(self.uid_field, self.ui_relation, self.iid_field): (uids, iids)}
         if not directed:
