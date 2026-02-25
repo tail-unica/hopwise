@@ -262,9 +262,8 @@ If you find **hopwise** useful for your research or development, please cite wit
 
 [Ludovico Boratto](https://www.ludovicoboratto.com/), [Gianni Fenu](https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371), [Mirko Marras](https://www.mirkomarras.com/), [Giacomo Medda](https://jackmedda.github.io/), [Alessandro Soccol](https://alessandrosocc.github.io)
 
-
-
-
 ## License
 This project is licensed under the MIT License. See the LICENSE file for details.
 
+## Acknowledgments
+This project was supported by the project PHaSE - Promoting Healthy and Sustainable Eating through Interactive and Explainable AI Methods, funded by MUR under the PRIN 2022 program (CUP H53D23003530006).
