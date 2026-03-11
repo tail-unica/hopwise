@@ -5,7 +5,7 @@
   <b>RecBole extension with a focus on Knowledge Graphs (KGs) and explainability.</b>
 </p>
 <p align="center">
-  <a href="http://tail-unica.github.io/hopwise/"><img alt="Static Badge" src="https://img.shields.io/badge/docs-hopwise-purple?logo=sphinx&link=http%3A%2F%2Ftail-unica.github.io%2Fhopwise%2F"></a>
+  <a href="https://tail-unica.github.io/hopwise/docs/"><img alt="Static Badge" src="https://img.shields.io/badge/docs-hopwise-purple?logo=sphinx&link=http%3A%2F%2Ftail-unica.github.io%2Fhopwise%2F"></a>
   <img src="https://img.shields.io/badge/Python-3.9%7C3.10%7C3.11-green" />
   <img src="https://img.shields.io/github/license/tail-unica/hopwise" />
   <img src="https://img.shields.io/github/repo-size/tail-unica/hopwise">
