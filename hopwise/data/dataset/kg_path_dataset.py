@@ -246,6 +246,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             padding=True,
             max_length=self.context_length,
             add_special_tokens=True,
+            return_token_type_ids=True,
         )
 
     def tokenize_path_dataset(self):

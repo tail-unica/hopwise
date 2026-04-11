@@ -100,8 +100,8 @@ class PEARLM(ExplainablePathLanguageModelingRecommender, GPT2LMHeadModel):
         **kwargs,  # Additional arguments for compatibility with HuggingFace Trainer
     ) -> Union[tuple, CausalLMOutputWithCrossAttentions]:
         if isinstance(input_ids, Interaction):
-            token_type_ids = input_ids["token_type_ids"]
-            attention_mask = input_ids["attention_mask"]
+            token_type_ids = input_ids.get("token_type_ids", None)
+            attention_mask = input_ids.get("attention_mask", None)
             input_ids = input_ids["input_ids"]
 
         if self.use_kg_token_types:
