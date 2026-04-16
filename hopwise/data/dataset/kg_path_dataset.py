@@ -165,9 +165,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             mask_token=self.mask_token,
         )
 
-    def _igraph_triple_to_tokenizer_triple(self, vertex_metadata, igraph_head, igraph_relation, igraph_tail):
+    def _igraph_triple_to_tokenizer_triple(
+        self, vertex_metadata, igraph_head, igraph_relation, igraph_tail, token_vocab=None
+    ):
         """Convert igraph ids to tokenizer ids."""
-        token_vocab = self.tokenizer.get_vocab()
+        if token_vocab is None:
+            token_vocab = self.tokenizer.get_vocab()
 
         ret = []
         triple = [igraph_head, igraph_relation, igraph_tail]
@@ -205,6 +208,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         """
         graph = self._create_ckg_igraph(show_relation=True, directed=False)
         vertex_metadata, edge_metadata = graph.to_dict_list()
+        token_vocab = self.tokenizer.get_vocab()
 
         tokenized_kg = {}
         for edge in edge_metadata:
@@ -214,7 +218,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             relation_id = self.field2token_id[self.relation_field][relation]
 
             head_token, relation_token, tail_token = self._igraph_triple_to_tokenizer_triple(
-                vertex_metadata, head, relation_id, tail
+                vertex_metadata, head, relation_id, tail, token_vocab=token_vocab
             )
 
             # head is always the user in user-item relations. The check to add the reverse path is done later
