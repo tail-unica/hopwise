@@ -168,7 +168,12 @@ def load_split_dataloaders(config):
     #     # used if you want to load a specific dataloader
     #     dataloaders_save_path = config["dataloaders_save_path"] or default_file
 
-    dataloaders_save_path = config["dataloaders_save_path"]
+    default_file = os.path.join(
+        'saved',
+        f"{config['dataset']}-for-{config['model']}-dataloader.pth",
+    )
+
+    dataloaders_save_path = config["dataloaders_save_path"] or default_file
 
     if not os.path.exists(dataloaders_save_path):
         return None
