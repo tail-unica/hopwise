@@ -112,6 +112,7 @@ def get_trainer(model_type, model_name):
         "PEARLMGPT2": "PEARLMfromscratchTrainer",
         "PEARLMLlama2": "PEARLMfromscratchTrainer",
         "PEARLMLlama3": "PEARLMfromscratchTrainer",
+        "RandomPathModel": "PEARLMfromscratchTrainer",
     }
 
     try:
