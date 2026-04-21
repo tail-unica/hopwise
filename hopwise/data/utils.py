@@ -155,18 +155,20 @@ def load_split_dataloaders(config):
     Returns:
         dataloaders (tuple of AbstractDataLoader or None): The split dataloaders.
     """
+    # if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
+    #     if config["dataloaders_save_path"]
+    #     dataloaders_folder = f"{config['model']} - {config['dataset']} - dataloaders"
+    #     dataloaders_save_path = _get_dataloader_name(config, dataloaders_folder)
 
-    if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
-        dataloaders_folder = f"{config['model']} - {config['dataset']} - dataloaders"
-        dataloaders_save_path = _get_dataloader_name(config, dataloaders_folder)
+    # else:
+    #     default_file = os.path.join(
+    #         config["checkpoint_dir"],
+    #         f"{config['dataset']}-for-{config['model']}-dataloader.pth",
+    #     )
+    #     # used if you want to load a specific dataloader
+    #     dataloaders_save_path = config["dataloaders_save_path"] or default_file
 
-    else:
-        default_file = os.path.join(
-            config["checkpoint_dir"],
-            f"{config['dataset']}-for-{config['model']}-dataloader.pth",
-        )
-        # used if you want to load a specific dataloader
-        dataloaders_save_path = config["dataloaders_save_path"] or default_file
+    dataloaders_save_path = config["dataloaders_save_path"]
 
     if not os.path.exists(dataloaders_save_path):
         return None
