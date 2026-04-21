@@ -199,14 +199,14 @@ def load_split_dataloaders(config):
             train_data, valid_inter_data, valid_kg_data, test_inter_data, test_kg_data = dataloaders
         else:
             train_data, valid_data, test_data = dataloaders
-    for arg in dataset_arguments + ["seed", "repeatable", "eval_args"]:
-        if isinstance(train_data, KnowledgeBasedDataLoader):
-            general_config = train_data.general_dataloader.config
-            kg_config = train_data.kg_dataloader.config
-            if config[arg] != general_config[arg] and config[arg] != kg_config[arg]:
-                return None
-        elif config[arg] != train_data.config[arg]:
-            return None
+    # for arg in dataset_arguments + ["seed", "repeatable", "eval_args"]:
+    #     if isinstance(train_data, KnowledgeBasedDataLoader):
+    #         general_config = train_data.general_dataloader.config
+    #         kg_config = train_data.kg_dataloader.config
+            # if config[arg] != general_config[arg] and config[arg] != kg_config[arg]:
+            #     return None
+    #     elif config[arg] != train_data.config[arg]:
+    #         return None
     train_data.update_config(config)
     if eval_lp_args is not None and eval_lp_args["knowledge_split"] is not None:
         valid_inter_data.update_config(config)
