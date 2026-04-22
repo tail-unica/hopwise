@@ -11,8 +11,7 @@ hopwise is compatible with the following operating systems:
 * Windows 10 (partially supported due to some issues with `dgl`) ⚠️
 * macOS X (untested) ⚠️
 
-Python 3.9, 3.10, 3.11, 3.12 are supported. Specific dependencies are solely reported in the [pyproject.toml](https://github.com/tail-unica/hopwise/blob/main/pyproject.toml) file.
-
+Python 3.9, 3.10, 3.11, and 3.12 are supported. Specific dependencies are listed only in the `pyproject.toml <https://github.com/tail-unica/hopwise/blob/main/pyproject.toml>`_ file.
 
 Install with uv from PyPI
 -------------------------
