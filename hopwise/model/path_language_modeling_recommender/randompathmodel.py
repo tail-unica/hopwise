@@ -1,32 +1,41 @@
-from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 import torch
+from torch import nn
+
 from hopwise.data import Interaction
-from hopwise.model.abstract_recommender import ExplainablePathLanguageModelingRecommender
+from hopwise.model.abstract_recommender import \
+    ExplainablePathLanguageModelingRecommender
+from hopwise.utils import GenerationOutputs
+
 
 class RandomPathModel(ExplainablePathLanguageModelingRecommender):
     def __init__(self, config, dataset):
-        super().__init__(config, dataset)
-        self.to(config["device"])
+        super().__init__(config, dataset, _skip_nn_module_init=False)
+        self.fake_parameters = torch.nn.Parameter(torch.zeros(1))
+        self.loss = nn.CrossEntropyLoss()
 
-    def forward(self, input_ids=None, return_dict=True, **kwargs):
+    def calculate_loss(self, interaction):
+        if isinstance(interaction, Interaction):
+            input_ids = interaction["input_ids"]
+        else:
+            input_ids = interaction["input_ids"]
+
+        labels = input_ids[:, 1:].contiguous()
+        logits = self.forward(input_ids)
+        logits = logits[:, :-1, :].contiguous()
+
+        return self.loss(logits.view(-1, logits.size(-1)), labels.view(-1))
+
+    def forward(self, input_ids):
         if isinstance(input_ids, Interaction):
+            input_ids = input_ids["input_ids"]
+        elif isinstance(input_ids, dict):
             input_ids = input_ids["input_ids"]
         batch_size, seq_len = input_ids.shape
         logits = torch.randn(batch_size, seq_len, self.n_tokens, device=input_ids.device)
-        if not return_dict:
-            return (logits,)
+        return logits + self.fake_parameters
 
-        return CausalLMOutputWithCrossAttentions(
-            loss=None,
-            logits=logits,
-            past_key_values=None,
-            hidden_states=None,
-            attentions=None,
-            cross_attentions=None,
-        )
-
-    def predict(self, input_ids, **kwargs):
-        return self.forward(input_ids, **kwargs)
+    def predict(self, inputs, **kwargs):
+        return self.forward(inputs)
 
     @torch.no_grad()
     def generate(self, inputs, paths_per_user=1, max_length=None, **kwargs):
@@ -36,11 +45,15 @@ class RandomPathModel(ExplainablePathLanguageModelingRecommender):
         if max_length is None:
             max_length = cur_len
         extra_len = max_length - cur_len
+
         random_tokens = torch.randint(
             0,
             self.n_tokens,
             (input_ids.shape[0], extra_len),
             device=input_ids.device,
         )
+        sequences = torch.cat([input_ids, random_tokens], dim=1)
+        scores = torch.rand((input_ids.shape[0], extra_len, self.n_tokens), device=input_ids.device)
+        scores = torch.softmax(scores, dim=-1)
 
-        return torch.cat([input_ids, random_tokens], dim=1)
+        return GenerationOutputs(sequences=sequences, scores=torch.unbind(scores, dim=1))
