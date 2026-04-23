@@ -802,9 +802,12 @@ class UserItemKnowledgePathDataset(KnowledgePathDataset, UserItemKnowledgeBasedD
             mask_token=self.mask_token,
         )
 
-    def _igraph_triple_to_tokenizer_triple(self, vertex_metadata, igraph_head, igraph_relation, igraph_tail):
+    def _igraph_triple_to_tokenizer_triple(
+        self, vertex_metadata, igraph_head, igraph_relation, igraph_tail, token_vocab=None
+    ):
         """Convert igraph ids to tokenizer ids."""
-        token_vocab = self.tokenizer.get_vocab()
+        if token_vocab is None:
+            token_vocab = self.tokenizer.get_vocab()
 
         ret = []
         triple = [igraph_head, igraph_relation, igraph_tail]
