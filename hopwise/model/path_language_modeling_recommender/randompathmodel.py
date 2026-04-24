@@ -10,7 +10,7 @@ from hopwise.utils import GenerationOutputs
 class RandomPathModel(ExplainablePathLanguageModelingRecommender):
     def __init__(self, config, dataset):
         super().__init__(config, dataset, _skip_nn_module_init=False)
-        self.fake_parameters = torch.nn.Parameter(torch.zeros(1))
+        self.fake_parameters = torch.nn.Parameter(torch.zeros(1, device = self.device))
         self.loss = nn.CrossEntropyLoss()
 
     def calculate_loss(self, interaction):
