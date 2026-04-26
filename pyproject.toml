@@ -75,6 +75,7 @@ dependencies = [
   "scikit-learn",
   "rich",
   "cachetools",
+  "setproctitle"
 ]
 
 [project.optional-dependencies]
