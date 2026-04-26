@@ -42,18 +42,16 @@ class RandomPathModel(ExplainablePathLanguageModelingRecommender):
         input_ids = inputs["input_ids"]
         _, cur_len = input_ids.shape
         input_ids = input_ids.repeat_interleave(paths_per_user, dim=0)
-        if max_length is None:
-            max_length = cur_len
         extra_len = max_length - cur_len
+        
+        scores = torch.full((input_ids.shape[0], extra_len, self.n_tokens), -torch.inf, device=input_ids.device)
 
-        random_tokens = torch.randint(
-            0,
-            self.n_tokens,
-            (input_ids.shape[0], extra_len),
-            device=input_ids.device,
-        )
-        sequences = torch.cat([input_ids, random_tokens], dim=1)
-        scores = torch.rand((input_ids.shape[0], extra_len, self.n_tokens), device=input_ids.device)
-        scores = torch.softmax(scores, dim=-1)
+        for i in range(extra_len):
+            logits = torch.randn((input_ids.shape[0], self.n_tokens), device=input_ids.device)
+            logits = self.logits_processor_list(input_ids, logits)
+            probs = torch.softmax(logits, dim=-1)
+            scores[:, i] = probs
+            next_token = torch.multinomial(probs, num_samples=1)
+            input_ids = torch.cat((input_ids, next_token), dim=1)
 
-        return GenerationOutputs(sequences=sequences, scores=torch.unbind(scores, dim=1))
+        return GenerationOutputs(sequences=input_ids, scores=torch.unbind(scores, dim=1))
