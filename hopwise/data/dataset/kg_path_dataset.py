@@ -263,7 +263,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         datasets = super().build()
         datasets[0].generate_user_path_dataset()
         datasets[0].tokenize_path_dataset()
-        if "conformal_risk_control" in self.config:
+        if "calibration" in self.config:
             datasets[1].generate_user_path_dataset()
             datasets[1].tokenize_path_dataset()
 

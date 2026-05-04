@@ -86,6 +86,8 @@ class Collector:
             train_data (AbstractDataLoader): the training dataloader which contains the training data.
 
         """
+        if self.register.need("data.unwanted_items"):
+            self.data_struct.set("data.unwanted_items", self._build_unwanted_items_map(train_data.dataset))
         if self.register.need("data.num_items"):
             item_id = self.config["ITEM_ID_FIELD"]
             self.data_struct.set("data.num_items", train_data.dataset.num(item_id))
@@ -103,6 +105,41 @@ class Collector:
         if self.register.need("data.timestamp"):
             temporal_matrix = train_data.dataset.inter_matrix(value_field=train_data.dataset.time_field).toarray()
             self.data_struct.set("data.timestamp", temporal_matrix)
+
+    def _build_unwanted_items_map(self, dataset):
+        """Build a dict of internal user id -> list(internal unwanted item ids)."""
+        unwanted_feat = getattr(dataset, "unwanted_feat", None)
+        if unwanted_feat is None:
+            raise ValueError(
+                "Metric requires `unwanted_feat` but it is missing. Set `additional_feat_suffix: unwanted` and load user/item columns."  # noqa: E501
+            )
+
+        uid_field = dataset.uid_field
+        iid_field = dataset.iid_field
+        if uid_field not in unwanted_feat or iid_field not in unwanted_feat:
+            raise ValueError(f"`unwanted_feat` must contain both [{uid_field}] and [{iid_field}] fields.")
+
+        users = unwanted_feat[uid_field]
+        items = unwanted_feat[iid_field]
+
+        if isinstance(users, torch.Tensor):
+            users = users.cpu().tolist()
+        else:
+            users = users.tolist()
+        if isinstance(items, torch.Tensor):
+            items = items.cpu().tolist()
+        else:
+            items = items.tolist()
+
+        unwanted_items = {}
+        for uid, iid in zip(users, items):
+            uid = int(uid)  # noqa: PLW2901
+            iid = int(iid)  # noqa: PLW2901
+            if uid not in unwanted_items:
+                unwanted_items[uid] = set()
+            unwanted_items[uid].add(iid)
+
+        return unwanted_items
 
     def eval_data_collect(self, eval_data):
         """Collect the evaluation resource from evaluation data, such as user and item features.
@@ -149,13 +186,7 @@ class Collector:
 
         return avg_rank
 
-    def eval_batch_collect(
-        self,
-        scores,
-        interaction,
-        positive_u: torch.Tensor,
-        positive_i: torch.Tensor,
-    ):
+    def eval_batch_collect(self, scores, interaction, positive_u: torch.Tensor, positive_i: torch.Tensor, **kwargs):
         """Collect the evaluation resource from batched eval data and batched model output.
 
         Args:
@@ -164,12 +195,32 @@ class Collector:
             positive_u (Torch.Tensor): the row index of positive items for each user.
             positive_i (Torch.Tensor): the positive item id for each user.
         """
+        if kwargs.get("threshold", None) is not None:
+            calibration_config = self.config["calibration"]
+            if calibration_config["calibrator"] in ["ConformalRiskControlTopMargin"]:
+                conformal_delta = kwargs["threshold"]
+
+                finite_scores = torch.isfinite(scores)
+
+                row_max = torch.where(finite_scores, scores, -torch.inf).max(dim=1, keepdim=True).values
+                keep_mask = scores >= (row_max - conformal_delta)
+
+                scores = scores.masked_fill(~keep_mask, float("-inf"))
+            else:
+                conformal_threshold = kwargs["threshold"]
+                mask = scores < conformal_threshold
+                scores = scores.masked_fill(mask, float("-inf"))
+
+        # if self.register.need("users.topk"):
+        #     # each user has a different topk size, and the topk size is stored in `users_topk`
+        #     users_variable_topk_size = kwargs.get("users_topk_size", False)
+        #     self.data_struct.update_tensor("users.topk", users_variable_topk_size)
+
         if self.register.need("rec.users"):
             uid_field = self.config["USER_ID_FIELD"]
             self.data_struct.update_tensor("rec.users", interaction[uid_field])
 
         if self.register.need("rec.items"):
-            # get topk
             _, topk_idx = torch.topk(scores, max(self.topk), dim=-1)  # n_users x k
             self.data_struct.update_tensor("rec.items", topk_idx)
 
@@ -181,6 +232,10 @@ class Collector:
             pos_idx = torch.gather(pos_matrix, dim=1, index=topk_idx)
             result = torch.cat((pos_idx, pos_len_list), dim=1)
             self.data_struct.update_tensor("rec.topk", result)
+
+        if self.register.need("rec.topk.score"):
+            topk_scores, _ = torch.topk(scores, max(self.topk), dim=-1)  # n_users x k
+            self.data_struct.update_tensor("rec.topk.score", topk_scores)
 
         if self.register.need("rec.meanrank"):
             desc_scores, desc_index = torch.sort(scores, dim=-1, descending=True)
@@ -232,6 +287,7 @@ class Collector:
         """
 
         if self.config["tsne"] is not None:
+            # available only on some KGE methods
             train_tsne(model, self.config["tsne"], load_best_model)
 
     def eval_collect(self, eval_pred: torch.Tensor, data_label: torch.Tensor):
@@ -258,7 +314,20 @@ class Collector:
                 self.data_struct._data_dict[key] = self.data_struct._data_dict[key].cpu()
 
         returned_struct = copy.deepcopy(self.data_struct)
-        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label", "rec.paths"]:
+        for key in [
+            "rec.topk",
+            "rec.topk.score",
+            "rec.meanrank",
+            "rec.score",
+            "rec.items",
+            "rec.users",
+            "data.label",
+            "rec.paths",
+            "rec.conformal.topk",
+            "rec.conformal.items",
+            "conformal.topk",
+            "users.topk",
+        ]:
             if key in self.data_struct:
                 del self.data_struct[key]
 

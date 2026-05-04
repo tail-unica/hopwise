@@ -389,8 +389,12 @@ class Config:
                 "please set `repeatable` as `True`."
             )
 
-        valid_metric = self.final_config_dict["valid_metric"].split("@")[0]
-        self.final_config_dict["valid_metric_bigger"] = False if valid_metric.lower() in smaller_metrics else True
+        if self.final_config_dict["valid_metric"] is None:
+            valid_metric = "none"
+            self.final_config_dict["valid_metric_bigger"] = False
+        else:
+            valid_metric = self.final_config_dict["valid_metric"].split("@")[0]
+            self.final_config_dict["valid_metric_bigger"] = False if valid_metric.lower() in smaller_metrics else True
 
         topk = self.final_config_dict["topk"]
         if isinstance(topk, (int, list)):
@@ -488,7 +492,6 @@ class Config:
         }
         if not isinstance(self.final_config_dict["eval_args"], dict):
             raise ValueError(f"eval_args:[{self.final_config_dict['eval_args']}] should be a dict.")
-
         deep_dict_update(default_eval_args, self.final_config_dict["eval_args"])
 
         mode = default_eval_args["mode"]
@@ -498,11 +501,19 @@ class Config:
 
         # in case there is only one key in `mode`, e.g., mode: {'valid': 'uni100'} or mode: {'test': 'full'}
         if isinstance(mode, dict):
-            default_mode = mode.get("valid", mode.get("test", "full"))
-            default_eval_args["mode"] = {
-                "valid": mode.get("valid", default_mode),
-                "test": mode.get("test", default_mode),
-            }
+            if "calibration" not in self.final_config_dict:
+                default_mode = mode.get("valid", mode.get("test", "full"))
+                default_eval_args["mode"] = {
+                    "valid": mode.get("valid", default_mode),
+                    "test": mode.get("test", default_mode),
+                }
+            else:
+                default_eval_args["mode"] = {
+                    "valid": mode.get("valid", mode.get("valid", mode.get("test", "full"))),
+                    "calib": mode.get("calib", mode.get("calib", mode.get("test", "full"))),
+                    "test": mode.get("test", mode.get("test", mode.get("test", "full"))),
+                    "full_test_data": mode.get("full_test_data", mode.get("full_test_data", mode.get("test", "full"))),
+                }
 
         self.final_config_dict["eval_args"] = default_eval_args
         if (

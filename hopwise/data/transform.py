@@ -32,7 +32,7 @@ def construct_transform(config):
 
 class Equal:
     def __init__(self, config):
-        pass
+        self.config = config
 
     def __call__(self, dataset, interaction):
         return interaction

@@ -36,7 +36,7 @@ coverage.xml
 *.cover
 .pytest_cache/
 cover/
-
+.codex
 # Environments
 .env
 .venv
@@ -48,7 +48,7 @@ ENV/
 # Machine Learning & Data Science
 # =============================================================================
 # Model files
-*.pth
+#*.pth
 *.pt
 *.pkl
 *.pickle
@@ -116,3 +116,5 @@ bin/act
 # Sphinx documentation
 docs/_build/
 docs/build/
+
+

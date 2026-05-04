@@ -292,10 +292,53 @@ class PathLanguageModelingRecommender(KnowledgeRecommender):
             topk=config["topk"],
         )
 
+    @torch.no_grad()
+    def generate(self, inputs, top_k=None, paths_per_user=1, **kwargs):
+        """
+        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
+        the sequence max_new_tokens times, feeding the predictions back into the model each time.
+        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
 
-class ConformalRecommender:
+        Args:
+            inputs (dict): A dictionary containing the input_ids tensor with shape (b, t).
+            top_k (int, optional): If specified, only the top k logits will be considered
+                for sampling at each step. Defaults to None.
+            paths_per_user (int, optional): How many paths to return for each user.
+            **kwargs: Additional keyword arguments for the model. In future, it can be used to pass
+                other generation parameters such as temperature, repetition penalty, etc.
+        """
+        max_new_tokens = self.token_sequence_length - inputs["input_ids"].size(1)
+
+        # How many paths to return?
+        inputs["input_ids"] = inputs["input_ids"].repeat_interleave(paths_per_user, dim=0)
+        scores = torch.full((inputs["input_ids"].size(0), max_new_tokens, self.n_tokens), -torch.inf).to(self.device)
+        for i in range(max_new_tokens):
+            # forward the model to get the logits for the index in the sequence
+            logits = self.predict(inputs)
+            # pluck the logits at the final step and scale by desired temperature
+            logits = logits[:, -1, :] / self.temperature
+
+            # KGCD
+            logits = self.logits_processor_list(inputs["input_ids"], logits)
+
+            # optionally crop the logits to only the top k options
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -torch.inf
+            # apply softmax to convert logits to (normalized) probabilities
+            probs = torch.nn.functional.softmax(logits, dim=-1)
+            scores[:, i] = probs
+            # sample from the distribution
+            path_next = torch.multinomial(probs, num_samples=1)
+            # append sampled index to the running sequence and continue
+            inputs["input_ids"] = torch.cat((inputs["input_ids"], path_next), dim=1)
+
+        return GenerationOutputs(sequences=inputs["input_ids"], scores=torch.unbind(scores, dim=1))
+
+
+class ConformalPathRecommender:
     def __init__(self, config, dataset):
-        self.crc_config = config["conformal_risk_control"]
+        self.crc_config = config["calibration"]
         self.lambdas = [torch.linspace(0, 1, self.crc_config["n_lambdas"]) for _ in range(5)]  # 5 max new tokes
 
         n_paths_tokenized_dataset = dataset.tokenized_dataset.input_ids.size(0)
@@ -356,7 +399,7 @@ class ExplainablePathLanguageModelingRecommender(PathLanguageModelingRecommender
         return new_path
 
 
-class ConformalPathLanguageModelingRecommender(ExplainablePathLanguageModelingRecommender, ConformalRecommender):
+class ConformalPathLanguageModelingRecommender(ExplainablePathLanguageModelingRecommender, ConformalPathRecommender):
     """
     This module applies conformal risk control using LTT at each generation step of the
     path language modeling recommender. The conformal risk control is applied on the validation set,
@@ -367,7 +410,9 @@ class ConformalPathLanguageModelingRecommender(ExplainablePathLanguageModelingRe
         ExplainablePathLanguageModelingRecommender.__init__(
             self, config, dataset, _skip_nn_module_init=_skip_nn_module_init
         )
-        ConformalRecommender.__init__(self, config, dataset)
+        ConformalPathRecommender.__init__(self, config, dataset)
+
+        self.reasoning = True if config["reasoning"] else False
 
     @torch.no_grad()
     def generate(self, inputs, top_k=None, paths_per_user=1, **kwargs):

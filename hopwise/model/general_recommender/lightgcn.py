@@ -77,13 +77,18 @@ class LightGCN(GeneralRecommender):
 
     def forward(self):
         all_embeddings = self.get_ego_embeddings()
-        embeddings_list = [all_embeddings]
-
-        for layer_idx in range(self.n_layers):
-            all_embeddings = torch.sparse.mm(self.norm_adj_matrix, all_embeddings)
-            embeddings_list.append(all_embeddings)
+        out_dtype = all_embeddings.dtype
+        with torch.amp.autocast("cuda", enabled=False):
+            adj_matrix = self.norm_adj_matrix.float()
+            all_embeddings = all_embeddings.float()
+            embeddings_list = [all_embeddings]
+            for layer_idx in range(self.n_layers):
+                all_embeddings = torch.sparse.mm(adj_matrix, all_embeddings)
+                embeddings_list.append(all_embeddings)
         lightgcn_all_embeddings = torch.stack(embeddings_list, dim=1)
         lightgcn_all_embeddings = torch.mean(lightgcn_all_embeddings, dim=1)
+        if lightgcn_all_embeddings.dtype != out_dtype:
+            lightgcn_all_embeddings = lightgcn_all_embeddings.to(out_dtype)
 
         user_all_embeddings, item_all_embeddings = torch.split(lightgcn_all_embeddings, [self.n_users, self.n_items])
         return user_all_embeddings, item_all_embeddings

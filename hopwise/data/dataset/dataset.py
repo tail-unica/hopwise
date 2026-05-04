@@ -20,6 +20,7 @@ from logging import getLogger
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import torch
 import torch.distributed as dist
 import torch.nn.utils.rnn as rnn_utils
@@ -95,6 +96,7 @@ class Dataset(torch.utils.data.Dataset):
         super().__init__()
         self.config = config
         self.dataset_name = config["dataset"]
+        self.calibrate_model = True if "calibration" in config else False
         self.logger = getLogger()
         self._from_scratch()
 
@@ -152,14 +154,44 @@ class Dataset(torch.utils.data.Dataset):
         self.feat_name_list = self._build_feat_name_list()
         if self.benchmark_filename_list is None:
             self._data_filtering()
-
         self._remap_ID_all()
+        self._map_additional_alias_ids_to_internal()  # custom 16 aprile 2026
         self._user_item_feat_preparation()
         self._fill_nan()
         self._set_label_by_threshold()
         self._normalize()
         self._discretization()
         self._preload_weight_matrix()
+
+    def _map_additional_alias_ids_to_internal(self):
+        """Map uid/iid in additional features (e.g. `.unwanted`) to internal ids."""
+        if self.config["additional_feat_suffix"] is None:
+            return
+
+        alias_fields = [self.uid_field, self.iid_field]
+        for suf in self.config["additional_feat_suffix"]:
+            feat_name = f"{suf}_feat"
+            feat = getattr(self, feat_name, None)
+            if feat is None:
+                continue
+
+            for field in alias_fields:
+                if field is None or field not in feat.columns:
+                    continue
+                if field not in self.field2token_id:
+                    continue
+
+                mapped = feat[field].map(self.field2token_id[field])
+                valid = mapped.notna()
+                dropped = len(valid) - int(valid.sum())
+                if dropped > 0:
+                    self.logger.warning(
+                        f"[{feat_name}] dropped {dropped} rows with unknown [{field}] while mapping to internal ids."
+                    )
+                feat = feat.loc[valid].copy()
+                feat[field] = mapped.loc[valid].astype(np.int64)
+
+            setattr(self, feat_name, feat)
 
     def _data_filtering(self):
         """Data filtering
@@ -468,15 +500,27 @@ class Dataset(torch.utils.data.Dataset):
             self.logger.warning(f"No columns has been loaded from [{source}]")
             return None
 
-        df = pd.read_csv(
+        schema_overrides = {
+            field_type: (pl.Float64 if dtype[field_type] == np.float64 else pl.Utf8) for field_type in usecols
+        }
+        df = pl.read_csv(
             filepath,
-            delimiter=field_separator,
-            usecols=usecols,
-            dtype=dtype,
-            encoding=encoding,
-            engine="python",
+            separator=field_separator,
+            columns=usecols,
+            schema_overrides=schema_overrides,
         )
-        df.columns = columns
+        df = df.rename(dict(zip(usecols, columns))).to_pandas()
+        # else:
+        #     self.logger.warning("`polars` is not installed. Falling back to pandas CSV loader.")
+        #     df = pd.read_csv(
+        #         filepath,
+        #         delimiter=field_separator,
+        #         usecols=usecols,
+        #         dtype=dtype,
+        #         encoding=encoding,
+        #         engine="python",
+        #     )
+        #     df.columns = columns
 
         seq_separator = self.config["seq_separator"]
         for field in columns:
@@ -1516,7 +1560,6 @@ class Dataset(torch.utils.data.Dataset):
         self.logger.debug(f"split by ratios [{ratios}], group_by=[{group_by}]")
         tot_ratio = sum(ratios)
         ratios = [_ / tot_ratio for _ in ratios]
-
         if group_by is None:
             tot_cnt = self.__len__()
             split_ids = self._calcu_split_ids(tot=tot_cnt, ratios=ratios)
@@ -1532,8 +1575,26 @@ class Dataset(torch.utils.data.Dataset):
 
         self._drop_unused_col()
         next_df = [self.inter_feat[index] for index in next_index]
+        if self.calibrate_model:
+            next_df = self._build_conformal_full_test_data(next_df, next_index)
         next_ds = [self.copy(_) for _ in next_df]
         return next_ds
+
+    def _build_conformal_full_test_data(self, next_df, next_index):
+        """Build the full test data for conformal risk control as the concatenation of the calibration and test set.
+
+        Args:
+            next_df (list of Interaction): List of interaction features after splitting by ratio.
+            next_index (list of list of int): List of index after splitting by ratio.
+        Returns:
+            list of Interaction: List of interaction features after building the full test data for conformal risk control.
+        """  # noqa: E501
+        # append the union of the calibration and test set
+        idx_calib_inters = next_index[-2]
+        idx_test_inters = next_index[-1]
+        next_df.append(self.inter_feat[idx_calib_inters + idx_test_inters])
+
+        return next_df
 
     def _split_index_by_leave_one_out(self, grouped_index, leave_one_num):
         """Split indexes by strategy leave one out.
@@ -1579,6 +1640,8 @@ class Dataset(torch.utils.data.Dataset):
 
         if leave_one_mode == "valid_and_test":
             next_index = self._split_index_by_leave_one_out(grouped_inter_feat_index, leave_one_num=2)
+        elif leave_one_mode == "valid_calib_and_test":
+            next_index = self._split_index_by_leave_one_out(grouped_inter_feat_index, leave_one_num=3)
         elif leave_one_mode == "valid_only":
             next_index = self._split_index_by_leave_one_out(grouped_inter_feat_index, leave_one_num=1)
             next_index.append([])
@@ -1590,6 +1653,8 @@ class Dataset(torch.utils.data.Dataset):
 
         self._drop_unused_col()
         next_df = [self.inter_feat[index] for index in next_index]
+        if self.calibrate_model:
+            next_df = self._build_conformal_full_test_data(next_df, next_index)
         next_ds = [self.copy(_) for _ in next_df]
         return next_ds
 
@@ -1615,22 +1680,31 @@ class Dataset(torch.utils.data.Dataset):
             list: List of built :class:`Dataset`.
         """
         self._change_feat_format()
-        if self.benchmark_filename_list is not None and self.config["MODEL_TYPE"] not in [ModelType.SEQUENTIAL]:
-            # if model is sequential, is better to directly format the .inter file without making any split because
-            #  sequential recommenders works with leave one out, so you would have in any case to format
-            # the split to have only one interaction for each user in the test set
-            self._drop_unused_col()
-            cumsum = list(np.cumsum(self.file_size_list))
-            datasets = [self.copy(self.inter_feat[start:end]) for start, end in zip([0] + cumsum[:-1], cumsum)]
-            if len(datasets) == DatasetSets.TEST_ONLY.value:  # noqa: PLR2004
-                self.logger.info(
-                    set_color(
-                        "Benchmark dataset has two part. The Evaluation on the validation will be done on the Test Set.",  # noqa: E501
-                        "red",
+
+        if self.benchmark_filename_list is not None:
+            if self.config["MODEL_TYPE"] not in [ModelType.SEQUENTIAL]:
+                # if model is sequential, is better to directly format the .inter file without making any split because
+                #  sequential recommenders works with leave one out, so you would have in any case to format
+                # the split to have only one interaction for each user in the test set
+                self._drop_unused_col()
+                cumsum = list(np.cumsum(self.file_size_list))
+                datasets = [self.copy(self.inter_feat[start:end]) for start, end in zip([0] + cumsum[:-1], cumsum)]
+                if len(datasets) == DatasetSets.TEST_ONLY.value:  # noqa: PLR2004
+                    self.logger.info(
+                        set_color(
+                            "Benchmark dataset has two part. The Evaluation on the validation will be done on the Test Set.",  # noqa: E501
+                            "red",
+                        )
                     )
-                )
-                datasets = [datasets[0], datasets[1], datasets[1]]
-            return datasets
+                    datasets = [datasets[0], datasets[1], datasets[1]]
+                return datasets
+            else:
+                """make sure the dataset has only 1 interaction per user in the validation, calib (if necessary) and test. Otherwise this procedure don't make sense"""  # noqa: E501
+                pass
+            #     pass
+            #     # cumsum = list(np.cumsum(self.file_size_list))
+            #     # datasets = [self.copy(self.inter_feat[start:end]) for start, end in zip([0] + cumsum[:-1], cumsum)]
+            #     # return [self.copy(_) for _ in datasets]
 
         # ordering
         ordering_args = self.config["eval_args"]["order"]
@@ -1665,6 +1739,7 @@ class Dataset(torch.utils.data.Dataset):
                 group_by = None
             else:
                 group_by = self.uid_field
+
             datasets = self.leave_one_out(group_by=group_by, leave_one_mode=split_args["LS"])
         else:
             raise NotImplementedError(f"The splitting_method [{split_mode}] has not been implemented.")
@@ -1673,12 +1748,12 @@ class Dataset(torch.utils.data.Dataset):
 
     def save(self):
         """Saving this :class:`Dataset` object to :attr:`config['checkpoint_dir']`."""
-        save_dir = self.config["checkpoint_dir"]
+        save_dir = self.config["dataset_save_path"]
         ensure_dir(save_dir)
         file = os.path.join(save_dir, f"{self.config['dataset']}-{self.__class__.__name__}.pth")
         self.logger.info(set_color("Saving filtered dataset into ", "magenta") + f"[{file}]")
         with open(file, "wb") as f:
-            pickle.dump(self, f)
+            pickle.dump(self, f, protocol=-1)
 
     def get_user_feature(self):
         """Returns:

@@ -15,6 +15,7 @@
 ########################
 """
 
+import importlib
 import logging
 import sys
 from collections.abc import MutableMapping
@@ -131,14 +132,18 @@ def run_hopwise(
         config_file_list=config_file_list,
         config_dict=config_dict,
     )
+    transform = construct_transform(config)
+    config = transform.config
 
-    if "conformal_risk_control" in config:
-        config["model"] = "Conformal" + config["model"]
-
+    calibrate_model = True if "calibration" in config else False
+    calib_data, full_test_data = None, None
     if checkpoint is not None:
         config, model, dataset, train_data, valid_data, test_data = load_data_and_model(
             model_file=checkpoint, updating_config=config
         )
+        if isinstance(test_data, list):
+            # in case of conformal risk control
+            calib_data, test_data, full_test_data = test_data
 
         logger = get_logger(config)
         logger.info(set_color(f"A checkpoint is provided from which to resume training {checkpoint}", "red"))
@@ -150,6 +155,10 @@ def run_hopwise(
 
         # dataset splitting
         train_data, valid_data, test_data = data_preparation(config, dataset)
+
+        if isinstance(test_data, list):
+            # in case of conformal risk control
+            calib_data, test_data, full_test_data = test_data
         # visualize split data
         if config["show_split_data"] is not None:
             logger.info(train_data)
@@ -175,9 +184,6 @@ def run_hopwise(
             model = model.to(device=config["device"], dtype=config["weight_precision"])
 
     logger.info(model)
-
-    transform = construct_transform(config)
-
     flops = get_flops(model, dataset, config["device"], logger, transform)
     logger.info(set_color("FLOPs", "blue") + f": {flops}")
     # trainer loading and initialization
@@ -204,33 +210,52 @@ def run_hopwise(
         )
 
         best_valid_score = calculate_valid_score(best_valid_result, trainer.valid_metric)
+
     else:
         raise ValueError(f"Invalid run mode: {run}")
 
-    if best_valid_result is not None:
-        if KnowledgeEvaluationType.REC in best_valid_result or KnowledgeEvaluationType.LP in best_valid_result:
-            for task, result in best_valid_result.items():
-                logger.info(set_color(f"[{task}] best valid ", "yellow") + f": {format_metrics(result)}")
-        else:
-            logger.info(set_color("best valid result", "yellow") + f": {format_metrics(best_valid_result)}")
+    show_results(logger, best_valid_result, prefix="Best validation set")
 
-    # model evaluation
-    test_result = trainer.evaluate(
-        test_data,
-        load_best_model=saved and run != "evaluate",
-        model_file=checkpoint,
-        show_progress=config["show_progress"],
-    )
+    if calibrate_model:
+        # model evaluation
+        test_result, _, _, _ = trainer.evaluate(
+            test_data,
+            load_best_model=saved and run != "evaluate",
+            model_file=checkpoint,
+            show_progress=config["show_progress"],
+        )
+        crc_config = config["calibration"]
+
+        eval_config = {"load_best_model": True, "model_file": checkpoint, "show_progress": config["show_progress"]}
+        data = {"train": train_data, "calibration": calib_data, "test": test_data, "full_test": full_test_data}
+
+        calibration_loss = getattr(importlib.import_module("hopwise.evaluator.conformal_metrics"), crc_config["loss"])(
+            config
+        )
+        calibrator = getattr(importlib.import_module("hopwise.model.conformal_calibration"), crc_config["calibrator"])(
+            config, calibration_loss, trainer, logger, eval_config, data
+        )
+
+        # execute calibration and return results on the test and calibration set
+        results, calib_results = calibrator.calibrate()
+
+        show_results(logger, results, prefix="Calibration set")
+        show_results(logger, test_result, prefix="Original test set")
+        show_results(logger, calib_results, prefix="Calibrated test set")
+
+        if crc_config["prove_expectation"]:
+            calibrator.prove_expectation()
+    else:
+        test_result = trainer.evaluate(
+            test_data,
+            load_best_model=saved and run != "evaluate",
+            model_file=checkpoint,
+            show_progress=config["show_progress"],
+        )
+        show_results(logger, test_result, prefix="Test set")
 
     environment_tb = get_environment(config)
     logger.info("The running environment of this training is as follows:\n" + environment_tb.draw())
-
-    if test_result is not None:
-        if KnowledgeEvaluationType.REC in test_result or KnowledgeEvaluationType.LP in test_result:
-            for task, result in test_result.items():
-                logger.info(set_color(f"[{task}] test result ", "yellow") + f": {format_metrics(result)}")
-        else:
-            logger.info(set_color("test result", "yellow") + f": {format_metrics(test_result)}")
 
     # In the case of KG-aware tasks, we don't care about the final "best_valid_score"
     # format because it is not used anywhere.
@@ -254,13 +279,24 @@ def run_hopwise(
             "best validation result": best_valid_result,
             "test result": test_result,
         }
+        if "calib_results" in locals():
+            results["calibrated test result"] = calib_results
 
-        display_metrics_table(results, config)
+        display_metrics_table(logger, results, config)
 
     return result  # for the single process
 
 
-def display_metrics_table(results_dict, config):
+def show_results(logger, result, prefix="test"):
+    if result is not None:
+        if KnowledgeEvaluationType.REC in result or KnowledgeEvaluationType.LP in result:
+            for task, result in result.items():  # noqa: PLR1704
+                logger.info(set_color(f"[{task}] {prefix} result ", "yellow") + f": {format_metrics(result)}")
+        else:
+            logger.info(set_color(f"{prefix} result", "yellow") + f": {format_metrics(result)}")
+
+
+def display_metrics_table(logger, results_dict, config):
     """
     Display evaluation metrics in a table format with @k values as rows and metrics as columns.
     """
@@ -288,7 +324,10 @@ def display_metrics_table(results_dict, config):
                     row = [f"{result[f'{metric.lower()}@{k}']:.4f}" for metric in metrics_name]
                     table_rich.add_row(f"@{k}", *row)
 
-                console.print(table_rich)
+                with console.capture() as capture:
+                    console.print(table_rich)
+                capture_text = Text.from_ansi(capture.get())  # noqa: F821
+                logger.info(capture_text)
         else:
             table_rich = Table(title=set_color(f"{split}", "yellow"))
 
@@ -296,10 +335,15 @@ def display_metrics_table(results_dict, config):
             for metric in metrics_name:
                 table_rich.add_column(metric.upper(), justify="center")
             for k in topk_sizes:
-                row = [f"{results[f'{metric.lower()}@{k}']:.4f}" for metric in metrics_name]
+                row = [f"{results[f'{metric.lower()}@{k}']}" for metric in metrics_name]
                 table_rich.add_row(f"@{k}", *row)
 
-            console.print(table_rich)
+            from rich.text import Text
+
+            with console.capture() as capture:
+                console.print(table_rich)
+            capture_text = Text.from_ansi(capture.get())
+            logger.info(capture_text)
 
 
 def get_logger(config):
@@ -447,4 +491,42 @@ def load_data_and_model(model_file, load_only_data=False, updating_config=None):
         else:
             model.load_state_dict(checkpoint["state_dict"])
             model.load_other_parameter(checkpoint.get("other_parameter"))
+    return config, model, dataset, train_data, valid_data, test_data
+
+
+def load_minimal_data_and_model(model_file, load_only_data=False, updating_config=None):
+    r"""Load filtered dataset, split dataloaders and saved model.
+
+    Args:
+        model_file (str): The path of saved model file.
+        load_only_data (bool, optional): Whether to load only the dataset and dataloaders without the model.
+            Defaults to ``False``.
+        updating_config (Config, optional): A Config object to update the config parameters loaded from checkpoint.
+            Defaults to ``None``.
+
+    Returns:
+        tuple:
+            - config (Config): An instance object of Config, which record parameter information in :attr:`model_file`.
+            - model (AbstractRecommender): The model load from :attr:`model_file`.
+            - dataset (Dataset): The filtered dataset.
+            - train_data (AbstractDataLoader): The dataloader for training.
+            - valid_data (AbstractDataLoader): The dataloader for validation.
+            - test_data (AbstractDataLoader): The dataloader for testing.
+    """
+    checkpoint = torch.load(model_file, weights_only=False)
+    config = checkpoint["config"]
+
+    config["show_progress"] = False
+
+    init_seed(config["seed"], config["reproducibility"])
+    dataset = create_dataset(config)
+    train_data, valid_data, test_data = data_preparation(config, dataset)
+
+    init_seed(config["seed"], config["reproducibility"])
+    model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
+
+    if not load_only_data:
+        model.load_state_dict(checkpoint["state_dict"])
+        model.load_other_parameter(checkpoint.get("other_parameter"))
+
     return config, model, dataset, train_data, valid_data, test_data

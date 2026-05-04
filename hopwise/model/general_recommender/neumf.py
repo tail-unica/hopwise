@@ -110,6 +110,12 @@ class NeuMF(GeneralRecommender):
         item_mf_e = self.item_mf_embedding(item)
         user_mlp_e = self.user_mlp_embedding(user)
         item_mlp_e = self.item_mlp_embedding(item)
+
+        # Support both point-wise ([B]) and full-sort ([B, n_items]) inputs.
+        if item_mf_e.dim() > user_mf_e.dim():
+            user_mf_e = user_mf_e.unsqueeze(1)
+            user_mlp_e = user_mlp_e.unsqueeze(1).expand_as(item_mlp_e)
+
         if self.mf_train:
             mf_output = torch.mul(user_mf_e, item_mf_e)  # [batch_size, embedding_size]
         if self.mlp_train:
@@ -122,6 +128,7 @@ class NeuMF(GeneralRecommender):
             output = self.predict_layer(mlp_output)
         else:
             raise RuntimeError("mf_train and mlp_train can not be False at the same time")
+
         return output.squeeze(-1)
 
     def calculate_loss(self, interaction):
@@ -136,6 +143,14 @@ class NeuMF(GeneralRecommender):
         user = interaction[self.USER_ID]
         item = interaction[self.ITEM_ID]
         predict = self.sigmoid(self.forward(user, item))
+        return predict
+
+    def full_sort_predict(self, interaction):
+        user = interaction[self.USER_ID]
+        batch_size = user.shape[0]
+        item = torch.arange(self.n_items, device=user.device).unsqueeze(0).expand(batch_size, -1)
+        predict = self.sigmoid(self.forward(user, item))
+
         return predict
 
     def dump_parameters(self):

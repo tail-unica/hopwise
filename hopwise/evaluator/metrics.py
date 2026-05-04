@@ -31,6 +31,7 @@ from collections import Counter
 from logging import getLogger
 
 import numpy as np
+import torch
 from sklearn.metrics import auc as sk_auc
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
@@ -59,13 +60,18 @@ class Hit(TopkMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        pos_index, _ = self.used_info(dataobject)
+        pos_index, pos_len = self.used_info(dataobject)
         result = self.metric_info(pos_index)
         metric_dict = self.topk_result("hit", result)
         return metric_dict
 
-    def metric_info(self, pos_index):
-        result = np.cumsum(pos_index, axis=1)
+    def metric_info(self, pos_index, pos_len=None):
+        if pos_len is not None:
+            result = np.cumsum(pos_index, axis=1)
+            for row, lens in enumerate(pos_len):
+                result[row, lens:] = result[row, lens - 1]
+        else:
+            result = np.cumsum(pos_index, axis=1)
         return (result > 0).astype(int)
 
 
@@ -85,19 +91,27 @@ class MRR(TopkMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        pos_index, _ = self.used_info(dataobject)
+        pos_index, pos_len = self.used_info(dataobject)
         result = self.metric_info(pos_index)
         metric_dict = self.topk_result("mrr", result)
         return metric_dict
 
-    def metric_info(self, pos_index):
-        idxs = pos_index.argmax(axis=1)
+    def metric_info(self, pos_index, pos_len=None):
+        if pos_len is not None:
+            idxs = np.zeros(pos_index.shape[0], dtype=np.int64)
+            for row, lens in enumerate(pos_len):
+                if lens > 0:
+                    idxs[row] = pos_index[row, :lens].argmax()
+                else:
+                    idxs[row] = 0
+        else:
+            idxs = pos_index.argmax(axis=1)
         result = np.zeros_like(pos_index, dtype=np.float64)
-        for row, idx in enumerate(idxs):
-            if pos_index[row, idx] > 0:
-                result[row, idx:] = 1 / (idx + 1)
+        for user, idx in enumerate(idxs):
+            if pos_index[user, idx] > 0:
+                result[user, idx:] = 1 / (idx + 1)
             else:
-                result[row, idx:] = 0
+                result[user, idx:] = 0
         return result
 
 
@@ -165,6 +179,115 @@ class Recall(TopkMetric):
         return np.cumsum(pos_index, axis=1) / pos_len.reshape(-1, 1)
 
 
+class UnwantedRecall(AbstractMetric):
+    r"""Recall computed against user-specific unwanted items.
+
+    .. math::
+       \mathrm {UnwantedRecall@K} = \frac{1}{|U|}\sum_{u \in U} \frac{|\hat{R}(u) \cap U_w(u)|}{|U_w(u)|}
+
+    :math:`U_w(u)` denotes the unwanted-item set of user :math:`u`.
+    """
+
+    metric_type = EvaluatorType.RANKING
+    metric_need = ["rec.items", "rec.users", "data.unwanted_items"]
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.topk = config["topk"]
+
+    def used_info(self, dataobject):
+        # index of best items
+        rec_items = dataobject.get("rec.items").numpy()
+        users = dataobject.get("rec.users").numpy()
+        unwanted_items = dataobject.get("data.unwanted_items")
+        return rec_items, users, unwanted_items
+
+    def calculate_metric(self, dataobject):
+        rec_items, users, unwanted_items = self.used_info(dataobject)
+        result = self.metric_info(rec_items, users, unwanted_items)
+        return self.topk_result("unwantedrecall", result)
+
+    def metric_info(self, rec_items, users, unwanted_items):
+        n_users, max_k = rec_items.shape
+        result = np.zeros((n_users, max_k), dtype=np.float64)
+        for row_idx, uid in enumerate(users):
+            uid = int(uid)  # noqa: PLW2901
+            user_unwanted = unwanted_items.get(uid, [])
+            if not user_unwanted:
+                continue
+
+            user_unwanted_set = set(user_unwanted)
+            denom = len(user_unwanted_set)
+            recommended_set = set()
+            for k_idx, iid in enumerate(rec_items[row_idx]):
+                recommended_set.add(int(iid))
+                hits = len(recommended_set & user_unwanted_set)
+                result[row_idx, k_idx] = hits / denom
+
+        return result
+
+    def topk_result(self, metric, value):
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result[k - 1], self.decimal_place)
+        return metric_dict
+
+
+class FNR(Recall):
+    r"""RNR is a measure equal to 1-Recall.
+
+    .. math::
+       \mathrm {FNR@K} = 1- \frac{1}{|U|}\sum_{u \in U} \frac{|\hat{R}(u) \cap R(u)|}{|R(u)|}
+
+    :math:`|R(u)|` represents the item count of :math:`R(u)`.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        pos_index, pos_len = self.used_info(dataobject)
+        result = self.metric_info(pos_index, pos_len)
+        metric_dict = self.topk_result("fnr", result)
+        return metric_dict
+
+    def metric_info(self, pos_index, pos_len):
+        return 1 - (np.cumsum(pos_index, axis=1) / pos_len.reshape(-1, 1))
+
+
+class FPR(TopkMetric):
+    r"""FPR is a measure for computing the fraction of irrelevant items that are recommended.
+
+    .. math::
+       \mathrm {FPR@K} = \frac{1}{|U|}\sum_{u \in U} \frac{|\hat{R}(u) \cap \bar{R}(u)|}{|\bar{R}(u)|}
+
+    :math:`|\bar{R}(u)|` represents the item count of :math:`\bar{R}(u)`.
+    """
+
+    metric_need = ["data.num_items"]
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        pos_index, pos_len = self.used_info(dataobject)
+        num_items = dataobject.get("data.num_items")
+        result = self.metric_info(pos_index, pos_len, num_items)
+        metric_dict = self.topk_result("fpr", result)
+        return metric_dict
+
+    def metric_info(self, pos_index, pos_len, num_items):
+        true_pos_cum = np.cumsum(pos_index, axis=1)
+        k_range = np.arange(1, pos_index.shape[1] + 1)
+        false_pos_cum = k_range - true_pos_cum
+        neg_total = num_items - pos_len
+        denom = neg_total.reshape(-1, 1)
+
+        return false_pos_cum / denom
+
+
 class NDCG(TopkMetric):
     r"""NDCG_ (also known as normalized discounted cumulative gain) is a measure of ranking quality,
     where positions are discounted logarithmically. It accounts for the position of the hit by assigning
@@ -223,12 +346,15 @@ class Precision(TopkMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
-        pos_index, _ = self.used_info(dataobject)
+        pos_index, pos_len = self.used_info(dataobject)
         result = self.metric_info(pos_index)
         metric_dict = self.topk_result("precision", result)
         return metric_dict
 
-    def metric_info(self, pos_index):
+    def metric_info(self, pos_index, pos_len=None):
+        if pos_len is not None:
+            return np.cumsum(pos_index, axis=1) / pos_len
+
         return pos_index.cumsum(axis=1) / np.arange(1, pos_index.shape[1] + 1)
 
 
@@ -372,6 +498,162 @@ class AUC(LossMetric):
 
         result = sk_auc(fpr, tpr)
         return result
+
+
+class cp_avg_inefficiency(TopkMetric):
+    r"""Average number of non -inf scores per user.
+
+    .. math::
+        \mathrm{AvgTopKSize} = \frac{1}{|U|} \sum_{u \in U} |\{ i : s_{ui} > -\infty \}|
+    """
+
+    metric_need = ["rec.topk.score"]
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        scores = dataobject.get("rec.topk.score")
+        per_user_topk_size = torch.isfinite(scores).cumsum(1).to(torch.float32)
+        return self.topk_result("cp_avg_inefficiency", per_user_topk_size)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result[k - 1].item(), self.decimal_place)
+        return metric_dict
+
+
+class cp_min_inefficiency(TopkMetric):
+    r"""Minimum number of non -inf scores per user.
+
+    .. math::
+        \mathrm{AvgTopKSize} = \frac{1}{|U|} \sum_{u \in U} |\{ i : s_{ui} > -\infty \}|
+    """
+
+    metric_need = ["rec.topk.score"]
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        scores = dataobject.get("rec.topk.score")
+        per_user_topk_size = torch.isfinite(scores).cumsum(1).to(torch.float32)
+        return self.topk_result("cp_min_inefficiency", per_user_topk_size)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.min(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            min_value = avg_result.values[k - 1].item()
+            count = (value[:, k - 1] == min_value).sum().item()
+            metric_dict[key] = (round(min_value, self.decimal_place), f"#{count}")
+        return metric_dict
+
+
+class cp_max_inefficiency(TopkMetric):
+    r"""Maximum number of non -inf scores per user.
+
+    .. math::
+        \mathrm{AvgTopKSize} = \frac{1}{|U|} \sum_{u \in U} |\{ i : s_{ui} > -\infty \}|
+    """
+
+    metric_need = ["rec.topk.score"]
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        scores = dataobject.get("rec.topk.score")
+        per_user_topk_size = torch.isfinite(scores).cumsum(1).to(torch.float32)
+        return self.topk_result("cp_max_inefficiency", per_user_topk_size)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        max_user_result = value.max(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            max_value = max_user_result.values[k - 1].item()
+            count = (value[:, k - 1] == max_value).sum().item()
+            metric_dict[key] = (round(max_value, self.decimal_place), f"#{count}")
+        return metric_dict
+
+
+class cp_user_topk_collapse(TopkMetric):
+    r"""Percentage of users with top-k size less or equal to the k.
+
+    .. math::
+        \mathrm{cp_collapse} = \frac{1}{|U|} \sum_{u \in U} |\{ i : |c_{u}|<k\}|
+    """
+
+    metric_need = ["rec.topk.score"]
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        scores = dataobject.get("rec.topk.score")
+        per_user_topk_size = torch.isfinite(scores).cumsum(1).to(torch.float32)
+        return self.topk_result("cp_user_topk_collapse", per_user_topk_size)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            user_topk_size = value[:, k - 1]
+            percentage = (user_topk_size < k).sum().item() / value.shape[0]
+            metric_dict[key] = round(percentage, self.decimal_place)
+        return metric_dict
+
+
+class cp_coverage(Recall):
+    def __init__(self, config):
+        super().__init__(config)
+
+    def calculate_metric(self, dataobject):
+        pos_index, pos_len = self.used_info(dataobject)
+        result = self.metric_info(pos_index, pos_len)
+        metric_dict = self.topk_result("cp_coverage", result)
+        return metric_dict
 
 
 # Loss-based Metrics
@@ -728,12 +1010,14 @@ class TailPercentage(AbstractMetric):
             cut = max(int(len(count_items) * self.tail), 1)
             count_items = count_items[:cut]
             tail_items = [item for item, cnt in count_items]
-        value = np.zeros_like(item_matrix)
-        for i in range(item_matrix.shape[0]):
-            row = item_matrix[i, :]
-            for j in range(row.shape[0]):
-                value[i][j] = 1 if row[j] in tail_items else 0
-        return value
+        # value = np.zeros_like(item_matrix)
+        # for i in range(item_matrix.shape[0]):
+        #     row = item_matrix[i, :]
+        #     for j in range(row.shape[0]):
+        #         value[i][j] = 1 if row[j] in tail_items else 0
+        # return value
+        tail_items = np.asarray(tail_items)
+        return np.isin(item_matrix, tail_items).astype(item_matrix.dtype)
 
     def calculate_metric(self, dataobject):
         item_matrix, count_items = self.used_info(dataobject)
@@ -756,6 +1040,77 @@ class TailPercentage(AbstractMetric):
         """
         metric_dict = {}
         avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result[k - 1], self.decimal_place)
+        return metric_dict
+
+
+class TailPercentageLoss(AbstractMetric):
+    metric_type = EvaluatorType.RANKING
+    metric_need = ["rec.items", "data.count_items"]
+    smaller = True
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.topk = config["topk"]
+        self.tail = config["tail_ratio"]
+        if self.tail is None or self.tail <= 0:
+            self.tail = 0.1
+
+    def used_info(self, dataobject):
+        """Get the matrix of recommendation items and number of items in total item set."""
+        item_matrix = dataobject.get("rec.items")
+        count_items = dataobject.get("data.count_items")
+        return item_matrix.numpy(), dict(count_items)
+
+    def get_tail(self, item_matrix, count_items):
+        """Get long-tail percentage through the top-k recommendation list.
+
+        Args:
+            item_matrix(numpy.ndarray): matrix of items recommended to users.
+            count_items(dict): the number of interaction of items in training data.
+
+        Returns:
+            float: long-tail percentage.
+        """
+        if self.tail > 1:
+            tail_items = [item for item, cnt in count_items.items() if cnt <= self.tail]
+        else:
+            count_items = sorted(count_items.items(), key=lambda kv: (kv[1], kv[0]))
+            cut = max(int(len(count_items) * self.tail), 1)
+            count_items = count_items[:cut]
+            tail_items = [item for item, cnt in count_items]
+        value = np.zeros_like(item_matrix)
+        for i in range(item_matrix.shape[0]):
+            row = item_matrix[i, :]
+            for j in range(row.shape[0]):
+                value[i][j] = 1 if row[j] in tail_items else 0
+        return value
+
+    def metric_info(self, values):
+        tailpercentage = values.cumsum(axis=1) / np.arange(1, values.shape[1] + 1)
+        return 1 - tailpercentage
+
+    def calculate_metric(self, dataobject):
+        item_matrix, count_items = self.used_info(dataobject)
+        result = self.metric_info(self.get_tail(item_matrix, count_items))
+        metric_dict = self.topk_result("tailpercentageloss", result)
+        return metric_dict
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+
         for k in self.topk:
             key = f"{metric}@{k}"
             metric_dict[key] = round(avg_result[k - 1], self.decimal_place)

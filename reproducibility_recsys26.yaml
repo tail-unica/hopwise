@@ -1,0 +1,62 @@
+worker: 48
+show_progress: True
+show_configuration: True
+save_dataset: True
+save_dataloaders: True
+verbose: True
+show_split_data: valid_and_test
+repeatable: True
+
+# 5-core
+user_inter_num_interval: [5,100000000]
+item_inter_num_interval: [5,100000000]
+
+enable_amp: True
+enable_scaler: True
+
+data_path: /home/recsysdatasets
+dataset_save_path: saved_dataset/            # (str) The path of saved dataset.
+dataloaders_save_path: saved_dataloaders/        # (str) The path of saved dataloaders.
+checkpoint_dir: checkpoints/         # (str) The path to save checkpoint file.
+load_col:
+    inter: [user_id, item_id, timestamp]
+#     unwanted: [user_id, item_id, timestamp]
+
+# additional_feat_suffix: unwanted
+
+epochs: 100
+eval_step: 100
+gpu_id: 1
+
+metrics: ['ndcg', 'recall', 'cp_avg_inefficiency', 'cp_min_inefficiency', 'cp_max_inefficiency', 'cp_coverage','precision', 'FNR', 'ItemCoverage','AveragePopularity','ShannonEntropy', 'TailPercentage','Serendipity','Novelty']
+valid_metric: 'recall@30'
+valid_metric_bigger: False
+topk: [30, 500]
+
+train_batch_size: 16384
+eval_batch_size: 32768
+
+eval_args:                      # (dict) 4 keys: group_by, order, split, and mode
+  split: {'LS': 'valid_calib_and_test'} #{'RS': [0.7, 0.1, 0.1, 0.1]}   # (dict) The splitting strategy ranging in ['RS','LS'].
+  group_by: user                # (str) The grouping strategy ranging in ['user', 'none'].
+  order: TO                     # (str) The ordering strategy ranging in ['RO', 'TO'].
+  mode: {"valid": "full", "calib": "full", "test": "full"} # (str) The evaluation mode ranging in ['full','unixxx','popxxx','labeled'].
+
+calibration:
+  calibrator: ConformalRiskControl #ConformalRiskControlTopMargin #ConformalRiskControl # the class name of the conformal calibrator to use for calibration (e.g., ConformalRiskControl, etc) present in hopwise.model.conformal_calibration.py
+  alpha: 0.60 # 1 - confidence level (e.g., 0.80 means we want to control the risk at 20%)
+  maximum_metric_score: 1.0 # maximum possible value of the metric (e.g., 1.0 for novelty, 1 for recall, etc..)
+  n_lambdas: 3000 # the number of lambda thresholds to consider when calibrating the model (e.g., 50000 means we will consider 50000 different lambda thresholds between 0 and the maximum possible metric score when calibrating the model)
+  loss: FNR # should the class name of the loss to use for calibration (e.g., FNR, FPR, etc..) present in hopwise.evaluator.conformal.metrics.py
+
+  # EXPECTATION CHECK
+  prove_expectation: False
+  n_calibration_users: 0.4 # the proportion of users to use for calibration (the rest will be used for testing)
+  n_trials: 500 # to verify the expectation of the conformal risk control
+
+  # CONFORMAL RISK TRAINING
+  train_crt_weight: 1.0
+  train_crt_temperature: 0.4 # temperature for scaling the scores when using the CRT loss
+  train_crt_size_weight: 1.0  # weight for size-penalty term (higher -> smaller prediction sets)
+  train_crt_calib_ratio: 0.3
+  training: False

@@ -66,7 +66,7 @@ class TopkMetric(AbstractMetric):
     """
 
     metric_type = EvaluatorType.RANKING
-    metric_need = ["rec.topk"]
+    metric_need = ["rec.topk", "rec.conformal.topk", "users.topk"]
 
     def __init__(self, config):
         super().__init__(config)

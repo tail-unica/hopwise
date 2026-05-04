@@ -54,8 +54,8 @@ def create_dataset(config):
         }
         dataset_class = getattr(dataset_module, type2class[model_type])
 
-    default_file = os.path.join(config["checkpoint_dir"], f"{config['dataset']}-{dataset_class.__name__}.pth")
-    file = config["dataset_save_path"] or default_file
+    default_file = os.path.join(config["dataset_save_path"], f"{config['dataset']}-{dataset_class.__name__}.pth")
+    file = config["load_dataset_ckpt"] or default_file
     if os.path.exists(file):
         with open(file, "rb") as f:
             dataset = pickle.load(f)
@@ -112,15 +112,17 @@ def save_split_dataloaders(config, dataloaders):
         config (Config): An instance object of Config, used to record parameter information.
         dataloaders (tuple of AbstractDataLoader): The split dataloaders.
     """
-    ensure_dir(config["checkpoint_dir"])
+    ensure_dir(config["dataloaders_save_path"])
     if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
         dataloaders_folder = f"{config['model']} - {config['dataset']} - dataloaders"
-        ensure_dir(os.path.join(config["checkpoint_dir"], dataloaders_folder))
+        ensure_dir(os.path.join(config["dataloaders_save_path"], dataloaders_folder))
         file_path = _get_dataloader_name(config, dataloaders_folder)
     else:
+        is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
+        infix = "-neg-" if config["train_neg_sample_args"]["distribution"] != "none" and is_sequential else "-"
         file_path = os.path.join(
-            config["checkpoint_dir"],
-            f"{config['dataset']}-for-{config['model']}-dataloader.pth",
+            config["dataloaders_save_path"],
+            f"{config['dataset']}-for-{config['model']}{infix}dataloader.pth",
         )
 
     logger = getLogger()
@@ -142,7 +144,7 @@ def save_split_dataloaders(config, dataloaders):
             serialization_dataloaders += [(dataloader, generator_state)]
 
     with open(file_path, "wb") as f:
-        pickle.dump(serialization_dataloaders, f)
+        pickle.dump(serialization_dataloaders, f, protocol=-1)
 
 
 def load_split_dataloaders(config):
@@ -155,18 +157,20 @@ def load_split_dataloaders(config):
     Returns:
         dataloaders (tuple of AbstractDataLoader or None): The split dataloaders.
     """
-
+    calibrate_model = True if "calibration" in config else False
     if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
         dataloaders_folder = f"{config['model']} - {config['dataset']} - dataloaders"
         dataloaders_save_path = _get_dataloader_name(config, dataloaders_folder)
 
     else:
+        is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
+        infix = "-neg-" if config["train_neg_sample_args"]["distribution"] != "none" and is_sequential else "-"
         default_file = os.path.join(
-            config["checkpoint_dir"],
-            f"{config['dataset']}-for-{config['model']}-dataloader.pth",
+            config["dataloaders_save_path"],
+            f"{config['dataset']}-for-{config['model']}{infix}dataloader.pth",
         )
         # used if you want to load a specific dataloader
-        dataloaders_save_path = config["dataloaders_save_path"] or default_file
+        dataloaders_save_path = config["load_dataloader_ckpt"] or default_file
 
     if not os.path.exists(dataloaders_save_path):
         return None
@@ -197,6 +201,8 @@ def load_split_dataloaders(config):
         eval_lp_args = config["eval_lp_args"]
         if eval_lp_args is not None and eval_lp_args["knowledge_split"] is not None:
             train_data, valid_inter_data, valid_kg_data, test_inter_data, test_kg_data = dataloaders
+        elif calibrate_model:
+            train_data, valid_data, calib_data, test_data, full_test_data = dataloaders
         else:
             train_data, valid_data, test_data = dataloaders
     for arg in dataset_arguments + ["seed", "repeatable", "eval_args"]:
@@ -221,7 +227,7 @@ def load_split_dataloaders(config):
         test_data.update_config(config)
     logger = getLogger()
     logger.info(set_color("Load split dataloaders from", "magenta") + f": [{dataloaders_save_path}]")
-    return train_data, valid_data, test_data
+    return dataloaders
 
 
 def data_preparation(config, dataset):
@@ -240,10 +246,19 @@ def data_preparation(config, dataset):
             - valid_data (AbstractDataLoader): The dataloader for validation.
             - test_data (AbstractDataLoader): The dataloader for testing.
     """  # noqa: E501
+    calibrate_model = True if "calibration" in config else False
     dataloaders = load_split_dataloaders(config)
     if dataloaders is not None:
-        train_data, valid_data, test_data = dataloaders
-        dataset._change_feat_format()
+        calib_data, full_test_data = None, None
+        if calibrate_model:
+            train_data, valid_data, calib_data, test_data, full_test_data = dataloaders
+            if calib_data._split is None:
+                calib_data._split = "calib"
+            if full_test_data._split is None:
+                full_test_data._split = "full_test_data"
+
+        else:
+            train_data, valid_data, test_data = dataloaders
 
         if train_data._split is None:
             train_data._split = "train"
@@ -253,6 +268,11 @@ def data_preparation(config, dataset):
 
         if test_data._split is None:
             test_data._split = "test"
+
+        if calib_data is not None and full_test_data is not None:
+            test_data = [calib_data, test_data, full_test_data]
+
+        dataset._change_feat_format()
     else:
         model_type = config["MODEL_TYPE"]
         model_input_type = config["MODEL_INPUT_TYPE"]
@@ -331,6 +351,35 @@ def data_preparation(config, dataset):
                 if config["save_dataloaders"]:
                     save_split_dataloaders(config, dataloaders=(train_data, valid_data, test_data))
 
+        elif calibrate_model:
+            # full test_dataset contains both the calibration and test interactions
+            train_dataset, valid_dataset, calib_dataset, test_dataset, full_test_dataset = built_datasets
+            train_sampler, valid_sampler, calib_sampler, test_sampler, full_test_sampler = create_samplers(
+                config, dataset, built_datasets
+            )
+
+            train_data = get_dataloader(config, "train")(
+                config, train_dataset, train_sampler, shuffle=config["shuffle"]
+            )
+            valid_data = get_dataloader(config, "valid")(config, valid_dataset, valid_sampler, shuffle=False)
+            calib_data = get_dataloader(config, "calib")(config, calib_dataset, calib_sampler, shuffle=False)
+            test_data = get_dataloader(config, "test")(config, test_dataset, test_sampler, shuffle=False)
+            full_test_data = get_dataloader(config, "full_test_data")(
+                config, full_test_dataset, full_test_sampler, shuffle=False
+            )
+
+            train_data._split = "train"
+            valid_data._split = "valid"
+            calib_data._split = "calib"
+            test_data._split = "test"
+            full_test_data._split = "full_test_data"
+
+            if config["save_dataloaders"]:
+                save_split_dataloaders(
+                    config, dataloaders=(train_data, valid_data, calib_data, test_data, full_test_data)
+                )
+
+            test_data = [calib_data, test_data, full_test_data]
         else:
             train_dataset, valid_dataset, test_dataset = built_datasets
             train_sampler, valid_sampler, test_sampler = create_samplers(config, dataset, built_datasets)
@@ -345,7 +394,7 @@ def data_preparation(config, dataset):
             valid_data._split = "valid"
             test_data._split = "test"
 
-            if "conformal_risk_control" in config and model_type == ModelType.PATH_LANGUAGE_MODELING:
+            if "calibration" in config and model_type == ModelType.PATH_LANGUAGE_MODELING:
                 from hopwise.utils.conformal_utils import get_tokenized_paths_dict
 
                 train_data.tokenized_path_dict = get_tokenized_paths_dict(train_data.dataset.tokenized_dataset)
@@ -398,8 +447,8 @@ def get_dataloader(config, phase: Literal["train", "valid", "test", "evaluation"
         type: The dataloader class that meets the requirements in :attr:`config` and :attr:`phase`.
     """
 
-    if phase not in ["train", "valid", "test", "evaluation"]:
-        raise ValueError("`phase` can only be 'train', 'valid', 'test' or 'evaluation'.")
+    if phase not in ["train", "valid", "calib", "test", "full_test_data", "evaluation"]:
+        raise ValueError("`phase` can only be 'train', 'valid', 'calib', 'test', 'full_test' or 'evaluation'.")
     if phase == "evaluation":
         phase = "test"
         warnings.warn(
@@ -459,7 +508,11 @@ def _create_sampler(
     alpha: float = 1.0,
     base_sampler=None,
 ):
-    phases = ["train", "valid", "test"]
+    # Determine phases based on number of datasets
+    if len(built_datasets) == 5:  # noqa: PLR2004
+        phases = ["train", "valid", "calib", "test", "full_test_data"]
+    else:  # len(built_datasets) == 3
+        phases = ["train", "valid", "test"]
     sampler = None
     if distribution != "none":
         if base_sampler is not None:
@@ -527,6 +580,26 @@ def create_samplers(config, dataset, built_datasets):
         base_sampler=base_sampler,
     )
     test_sampler = test_sampler.set_phase("test") if test_sampler else None
+    if len(built_datasets) == 5:  # noqa: PLR2004
+        calib_sampler = _create_sampler(
+            dataset,
+            built_datasets,
+            test_neg_sample_args["distribution"],
+            repeatable,
+            base_sampler=base_sampler,
+        )
+        calib_sampler = calib_sampler.set_phase("calib") if calib_sampler else None
+
+        full_test_sampler = _create_sampler(
+            dataset,
+            built_datasets,
+            test_neg_sample_args["distribution"],
+            repeatable,
+            base_sampler=base_sampler,
+        )
+        full_test_sampler = full_test_sampler.set_phase("full_test_data") if full_test_sampler else None
+
+        return train_sampler, valid_sampler, calib_sampler, test_sampler, full_test_sampler
     return train_sampler, valid_sampler, test_sampler
 
 

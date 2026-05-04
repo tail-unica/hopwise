@@ -137,9 +137,10 @@ class Trainer(AbstractTrainer):
         self.learning_rate = config["learning_rate"]
         self.epochs = config["epochs"]
         self.eval_step = min(config["eval_step"], self.epochs)
+        self.calibrate_model = True if "calibration" in config else False
         self.stopping_step = config["stopping_step"]
         self.clip_grad_norm = config["clip_grad_norm"]
-        self.valid_metric = config["valid_metric"].lower()
+        self.valid_metric = config["valid_metric"].lower() if config["valid_metric"] is not None else None
         self.valid_metric_bigger = config["valid_metric_bigger"]
         self.test_batch_size = config["eval_batch_size"]
         self.gpu_available = torch.cuda.is_available() and config["use_gpu"]
@@ -162,6 +163,9 @@ class Trainer(AbstractTrainer):
         self.eval_type = config["eval_type"]
         self.eval_collector = Collector(config)
         self.evaluator = Evaluator(config)
+
+        if self.calibrate_model:
+            self.crc_config = config["conformal_risk_control"]
 
     def _build_optimizer(self, **kwargs):
         r"""Init the Optimizer
@@ -422,7 +426,6 @@ class Trainer(AbstractTrainer):
                 if saved:
                     self._save_checkpoint(epoch_idx, verbose=verbose)
                 continue
-
             if (epoch_idx + 1) % self.eval_step == 0:
                 valid_start_time = time()
                 valid_score, valid_result = self._valid_epoch(valid_data, show_progress=show_progress)
@@ -472,6 +475,10 @@ class Trainer(AbstractTrainer):
 
                 valid_step += 1
 
+        if self.valid_metric is not None and self.eval_step == self.epochs:
+            valid_result = self.evaluate(valid_data, load_best_model=False, show_progress=show_progress)
+            self.best_valid_result = valid_result
+
         self._add_hparam_to_tensorboard(self.best_valid_score)
         return self.best_valid_score, self.best_valid_result
 
@@ -519,7 +526,7 @@ class Trainer(AbstractTrainer):
             return interaction, scores, positive_u, positive_i
 
     @torch.no_grad()
-    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
+    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False, **kwargs):
         r"""Evaluate the model based on the eval data.
 
         Args:
@@ -569,6 +576,9 @@ class Trainer(AbstractTrainer):
             else eval_data
         )
         num_sample = 0
+        conformal_scores = []
+        positive_u_list, positive_i_list = list(), list()
+        row_offset = 0
         for batch_idx, batched_data in enumerate(iter_data):
             num_sample += len(batched_data)
             interaction, scores, positive_u, positive_i = self._batch_eval(
@@ -581,13 +591,32 @@ class Trainer(AbstractTrainer):
                     # use test set split as item filter if validation is not present
                     eval_data._split = "test"
                 scores = self.eval_collector.filter_test_items(eval_data, scores)
-            self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
+
+            if self.calibrate_model:
+                self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i, **kwargs)
+                if eval_data.split in ["calib", "test", "full_test_data"]:
+                    conformal_scores.append(scores)
+                    positive_u_list.append(positive_u + row_offset)
+                    positive_i_list.append(positive_i)
+                    row_offset += scores.size(0)
+                else:
+                    self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i, **kwargs)
+            else:
+                self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
+
         self.eval_collector.model_collect(self.model)
         struct = self.eval_collector.get_data_struct()
         result = self.evaluator.evaluate(struct)
         if not self.config["single_spec"]:
             result = self._map_reduce(result, num_sample)
         self.wandblogger.log_eval_metrics(result, head="eval")
+
+        if self.calibrate_model and eval_data.split in ["calib", "test", "full_test_data"]:
+            all_scores = torch.cat(conformal_scores, dim=0)
+            all_positive_u = torch.cat(positive_u_list, dim=0)
+            all_positive_i = torch.cat(positive_i_list, dim=0)
+            return result, all_scores, all_positive_u, all_positive_i
+
         return result
 
     def _map_reduce(self, result, num_sample):

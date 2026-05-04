@@ -1,0 +1,9 @@
+train_neg_sample_args:          # (dict) Negative sampling configuration for model training.
+  distribution: popularity         # (str) The distribution of negative items.
+  sample_num: 5                 # (int) The sampled num of negative items.
+  alpha: 1.0                    # (float) The power of sampling probability for popularity distribution.
+  dynamic: False                # (bool) Whether to use dynamic negative sampling.
+  candidate_num: 0              # (int) The number of candidate negative items when dynamic negative sampling.
+
+# for SASRec e BERT4Rec
+loss_type: 'BPR'                 # (str) The type of loss function. Range in ['BPR', 'CE'].
