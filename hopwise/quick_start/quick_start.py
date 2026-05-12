@@ -307,7 +307,7 @@ def objective_function(config_dict=None, config_file_list=None, saved=True, show
     }
 
 
-def load_data_and_model(model_file, load_only_data=False, updating_config=None):
+def load_data_and_model(model_file, load_only_data=False, updating_config=None, device = None):
     r"""Load filtered dataset, split dataloaders and saved model.
 
     Args:
@@ -326,7 +326,11 @@ def load_data_and_model(model_file, load_only_data=False, updating_config=None):
             - valid_data (AbstractDataLoader): The dataloader for validation.
             - test_data (AbstractDataLoader): The dataloader for testing.
     """
-    checkpoint = torch.load(model_file, weights_only=False)
+    if device is not None:
+        checkpoint = torch.load(model_file, weights_only=False, map_location=device)
+    else:
+        checkpoint = torch.load(model_file, weights_only=False)
+
     config = checkpoint["config"]
 
     if updating_config is not None:

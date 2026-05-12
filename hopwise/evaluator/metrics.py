@@ -1251,23 +1251,6 @@ class SED(PathQualityMetric):
 
         return np.array(list(sed))
 
-    def topk_result(self, metric, value):
-        """Match the metric value to the `k` and put them in `dictionary` form.
-
-        Args:
-            metric(str): the name of calculated metric.
-            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
-
-        Returns:
-            dict: metric values required in the configuration.
-        """
-        metric_dict = {}
-        avg_result = value.mean(axis=0)
-        for k in self.topk:
-            key = f"{metric}@{k}"
-            metric_dict[key] = round(avg_result, self.decimal_place)
-        return metric_dict
-
 
 class PTD(PathQualityMetric):
     """
@@ -1312,22 +1295,6 @@ class PTD(PathQualityMetric):
 
         return np.array(ptd)
 
-    def topk_result(self, metric, value):
-        """Match the metric value to the `k` and put them in `dictionary` form.
-
-        Args:
-            metric(str): the name of calculated metric.
-            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
-
-        Returns:
-            dict: metric values required in the configuration.
-        """
-        metric_dict = {}
-        avg_result = value.mean(axis=0)
-        for k in self.topk:
-            key = f"{metric}@{k}"
-            metric_dict[key] = round(avg_result, self.decimal_place)
-        return metric_dict
 
 
 class PTC(PathQualityMetric):
@@ -1380,22 +1347,6 @@ class PTC(PathQualityMetric):
 
         return np.array(ptc)
 
-    def topk_result(self, metric, value):
-        """Match the metric value to the `k` and put them in `dictionary` form.
-
-        Args:
-            metric(str): the name of calculated metric.
-            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
-
-        Returns:
-            dict: metric values required in the configuration.
-        """
-        metric_dict = {}
-        avg_result = value.mean(axis=0)
-        for k in self.topk:
-            key = f"{metric}@{k}"
-            metric_dict[key] = round(avg_result, self.decimal_place)
-        return metric_dict
 
 
 class PPT(PathQualityMetric):
@@ -1434,22 +1385,6 @@ class PPT(PathQualityMetric):
 
         return np.array(ppt)
 
-    def topk_result(self, metric, value):
-        """Match the metric value to the `k` and put them in `dictionary` form.
-
-        Args:
-            metric(str): the name of calculated metric.
-            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
-
-        Returns:
-            dict: metric values required in the configuration.
-        """
-        metric_dict = {}
-        avg_result = value.mean(axis=0)
-        for k in self.topk:
-            key = f"{metric}@{k}"
-            metric_dict[key] = round(avg_result, self.decimal_place)
-        return metric_dict
 
 
 class LITD(PathQualityMetric):
@@ -1482,22 +1417,6 @@ class LITD(PathQualityMetric):
             litd.append(n_linked_interaction_types / n_paths)
         return np.array(litd)
 
-    def topk_result(self, metric, value):
-        """Match the metric value to the `k` and put them in `dictionary` form.
-
-        Args:
-            metric(str): the name of calculated metric.
-            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
-
-        Returns:
-            dict: metric values required in the configuration.
-        """
-        metric_dict = {}
-        avg_result = value.mean(axis=0)
-        for k in self.topk:
-            key = f"{metric}@{k}"
-            metric_dict[key] = round(avg_result, self.decimal_place)
-        return metric_dict
 
 
 class SETD(PathQualityMetric):
@@ -1530,19 +1449,3 @@ class SETD(PathQualityMetric):
             setd.append(n_shared_entity_types / n_paths)
         return np.array(setd)
 
-    def topk_result(self, metric, value):
-        """Match the metric value to the `k` and put them in `dictionary` form.
-
-        Args:
-            metric(str): the name of calculated metric.
-            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
-
-        Returns:
-            dict: metric values required in the configuration.
-        """
-        metric_dict = {}
-        avg_result = value.mean(axis=0)
-        for k in self.topk:
-            key = f"{metric}@{k}"
-            metric_dict[key] = round(avg_result, self.decimal_place)
-        return metric_dict

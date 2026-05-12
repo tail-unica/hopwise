@@ -256,3 +256,20 @@ class PathQualityMetric(TopkMetric):
         ema_vals = values.ewm(span=len(values)).mean()
         normalized_ema_vals = (ema_vals - ema_vals.min()) / (ema_vals.max() - ema_vals.min())
         return normalized_ema_vals.to_numpy()
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
