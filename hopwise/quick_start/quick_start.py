@@ -135,7 +135,7 @@ def run_hopwise(
 
     if checkpoint is not None:
         config, model, dataset, train_data, valid_data, test_data = load_data_and_model(
-            model_file=checkpoint, updating_config=config
+            model_file=checkpoint, updating_config=config, device=config["device"]
         )
 
         logger = get_logger(config)
