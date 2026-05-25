@@ -808,8 +808,49 @@ DeltaRecall = create_consumer_metric_class("Recall")
 
 
 class Serendipity(AbstractMetric):
-    r"""Serendipity is a measure of how surprising the recommended items are to the user.
-    It is defined as the fraction of recommended items that are not popular in the training data.
+    r"""Serendipity is a ranking-based metric that measures how *unexpected* the recommended
+    items are to a user with respect to item popularity in the training data.
+
+    The intuition behind serendipity is that recommendations are more serendipitous
+    when they avoid globally popular items and instead promote items that the user
+    is unlikely to encounter by chance.
+
+    Note:
+        This implementation defines serendipity as a *popularity-based unexpectedness*
+        measure. For each user, it compares the recommended top-k items with the most
+        popular items in the training data (excluding items already interacted with
+        by the user).
+
+        The metric is computed per user and per rank position, then averaged across
+        users. It is explicitly dependent on `k`, and different values of `k` may
+        produce different serendipity scores.
+
+        In particular:
+        - Item popularity is derived from the training interaction counts.
+        - Items appearing in the user history are excluded from the popularity ranking.
+        - A recommendation is considered *non-serendipitous* if it belongs to the
+          top-k most popular items.
+
+    Formally, for a user :math:`u`, let:
+        - :math:`R_u = (r_{u,1}, \dots, r_{u,k})` be the ranked list of recommended items,
+        - :math:`P_u^k` be the set of the top-k most popular items after removing items
+          already interacted with by user :math:`u`.
+
+    The serendipity at cutoff :math:`k` is defined as:
+
+    .. math::
+        \mathrm{Serendipity@k}(u) =
+        1 - \frac{1}{k} \sum_{i=1}^{k} \mathbb{I}\left[r_{u,i} \in P_u^k\right]
+
+    where :math:`\mathbb{I}[\cdot]` is the indicator function.
+
+    The final metric value is obtained by averaging over all users:
+
+    .. math::
+        \mathrm{Serendipity@k} = \frac{1}{|U|} \sum_{u \in U} \mathrm{Serendipity@k}(u)
+
+    Higher values indicate more serendipitous recommendations, while lower values
+    indicate recommendations dominated by popular items.
     """
 
     metric_type = EvaluatorType.RANKING
@@ -869,10 +910,57 @@ class Serendipity(AbstractMetric):
 
 
 class Novelty(AbstractMetric):
+    r"""Novelty is a ranking-based metric that measures how *unpopular* the recommended
+    items are with respect to their popularity in the training data.
+
+    The intuition behind novelty is that recommendations are more novel when they
+    promote items that are rarely interacted with, rather than frequently consumed
+    popular items.
+
+    Note:
+        This implementation defines novelty as the inverse of normalized item popularity.
+        Item popularity is computed from the interaction counts observed in the training
+        data and then normalized using min-max normalization.
+
+        The metric is computed at different cutoffs `k`, and the final value for each
+        `k` is obtained by averaging the novelty scores across users.
+
+        In particular:
+        - Item popularity is derived from training interaction frequencies.
+        - Popularity values are normalized globally using min-max normalization.
+        - Novelty is computed as the inverse of normalized popularity.
+        - The metric is explicitly dependent on `k`.
+
+    Formally, let:
+        - :math:`R_u^k = (r_{u,1}, \dots, r_{u,k})` be the top-k items recommended to user :math:`u`,
+        - :math:`c(i)` be the interaction count of item :math:`i` in the training data,
+        - :math:`c_{\min}` and :math:`c_{\max}` be the minimum and maximum item popularity,
+        respectively.
+
+    The normalized popularity of an item :math:`i` is defined as:
+
+    .. math::
+        \hat{c}(i) = \frac{c(i) - c_{\min}}{c_{\max} - c_{\min}}
+
+    The novelty of an item :math:`i` is then:
+
+    .. math::
+        \mathrm{novelty}(i) = 1 - \hat{c}(i)
+
+    The novelty score for a user at cutoff :math:`k` is computed as:
+
+    .. math::
+        \mathrm{Novelty@k}(u) = \frac{1}{k} \sum_{i \in R_u^k} \left(1 - \hat{c}(i)\right)
+
+    Finally, the overall novelty is obtained by averaging across all users:
+
+    .. math::
+        \mathrm{Novelty@k} = \frac{1}{|U|} \sum_{u \in U} \mathrm{Novelty@k}(u)
+
+    Higher values indicate more novel recommendations, favoring items with lower
+    training popularity.
     """
-    Paper:
-    Novelty: Inverse of popularity of the items recommended to the user
-    """
+
 
     metric_type = EvaluatorType.RANKING
     metric_need = ["rec.items", "data.count_items", "data.num_items"]
@@ -1028,8 +1116,36 @@ class LIR(PathQualityMetric):
 
 
 class Fidelity(PathQualityMetric):
-    """
-    Fidelity
+    r"""Fidelity (FID) is an explanation quality metric that measures the proportion of
+    recommended items that can be explained by at least one explanation path.
+
+    Note:
+        In this implementation, an item is considered *explainable* for a user if there exists
+        at least one explanation path connecting the user to that item.
+        Fidelity is computed at cutoff :math:`k` and averaged across users.
+
+        This definition follows the hopwise paper, where fidelity is described as the
+        *percentage of recommended items that are explainable*.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`E_u^k` be the set of top-k recommended items for user :math:`u` that admit
+        at least one explanation path.
+
+    The fidelity at cutoff :math:`k` is defined as:
+
+    .. math::
+        \mathrm{FID@k}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \min\!\left(
+            \frac{|E_u^k|}{k},
+            1
+        \right)
+
+    Higher values indicate that a larger fraction of the recommended items is covered
+    by explanations.
     """
 
     def __init__(self, config):
@@ -1162,9 +1278,36 @@ class SEP(PathQualityMetric):
 
 
 class LID(PathQualityMetric):
-    """
-    Diversity of Linked Interaction (LID)
+    r"""LID (Linked Interaction Diversity) is a path quality metric that measures the
+    diversity of linking interactions used to generate explanations for recommendations.
 
+    Note:
+        In this implementation, LID evaluates how many *distinct linking interactions*
+        (i.e., intermediate items or entities) are involved in a user’s explanation paths.
+        The metric is computed per user as the ratio between the number of distinct
+        linking interaction identifiers and the total number of explanation paths,
+        and then averaged across users.
+
+        LID is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`LI_u` be the set of distinct linking interaction identifiers appearing
+        as the second node of the paths in :math:`P_u`.
+
+    The LID metric is defined as:
+
+    .. math::
+        \mathrm{LID}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \frac{|LI_u|}{|P_u|}
+
+    Higher values indicate that a larger variety of linking interactions is used to
+    explain the recommendations, reflecting more diverse explanatory structures.
     """
 
     def __init__(self, config):
@@ -1215,9 +1358,37 @@ class LID(PathQualityMetric):
 
 
 class SED(PathQualityMetric):
-    """
-    Diversity of Shared Entities
+    r"""SED (Shared Entity Diversity) is a path quality metric that measures the
+    diversity of shared entities involved in explanation paths.
 
+    Note:
+        In this implementation, SED evaluates how many *distinct shared entities*
+        are used to explain recommendations for each user. The shared entity is
+        defined as the penultimate node of an explanation path.
+        The metric is computed per user as the ratio between the number of distinct
+        shared entity identifiers and the total number of explanation paths, and then
+        averaged across users.
+
+        SED is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`SE_u` be the set of distinct shared entity identifiers appearing
+        as the penultimate node of the paths in :math:`P_u`.
+
+    The SED metric is defined as:
+
+    .. math::
+        \mathrm{SED}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \frac{|SE_u|}{|P_u|}
+
+    Higher values indicate that explanations rely on a more diverse set of shared
+    entities, reflecting richer and less repetitive explanatory structures.
     """
 
     def __init__(self, config):
@@ -1270,9 +1441,40 @@ class SED(PathQualityMetric):
 
 
 class PTD(PathQualityMetric):
-    """
-    Path Type Diversity
-    """
+    r"""PTD (Path Type Diversity) is a path quality metric that measures the
+    diversity of path types used in explanation paths.
+
+    Note:
+        In this implementation, PTD evaluates how many *distinct path types* are
+        involved in a user’s explanation paths. The path type is identified by the
+        first element of the last node in the path; if the last node corresponds to
+        a self-loop, the path type is taken from the penultimate node.
+
+        The metric is computed per user as the ratio between the number of distinct
+        path types and the minimum between the number of explanation paths and the
+        total number of possible path types. The final score is obtained by averaging
+        across users.
+
+        PTD is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`T_u` be the set of distinct path types appearing in :math:`P_u`,
+        - :math:`T` be the set of all possible path types.
+
+    The PTD metric is defined as:
+
+    .. math::
+        \mathrm{PTD}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \frac{|T_u|}{\min\left(|P_u|,\;|T|\right)}
+
+    Higher values indicate that explanations exploit a wider variety of path
+    types, reflecting more structurally diverse explanation patterns."""
 
     metric_need = ["data.max_path_type"]
 
@@ -1331,8 +1533,41 @@ class PTD(PathQualityMetric):
 
 
 class PTC(PathQualityMetric):
-    """
-    Path Type Concentration (PTC)
+    r"""PTC (Path Type Concentration) is a path quality metric that measures how
+    concentrated explanation paths are with respect to their path types.
+
+    Note:
+        In this implementation, PTC quantifies the concentration (i.e., lack of
+        diversity) of path types used in a user’s explanation paths by adopting a
+        Simpson-style concentration index.
+        The path type is identified by the first element of the last node in the path;
+        if the last node corresponds to a self-loop, the path type is taken from the
+        penultimate node.
+
+        The metric is computed per user and then averaged across users.
+        PTC is independent of the cutoff :math:`k`; the same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`N_u = |P_u|` be the number of paths for user :math:`u`,
+        - :math:`n_{u,t}` be the number of paths of type :math:`t` for user :math:`u`.
+
+    The PTC metric is defined as:
+
+    .. math::
+        \mathrm{PTC}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \left(
+            1 - \frac{\sum_{t} n_{u,t}(n_{u,t}-1)}{N_u(N_u-1)}
+        \right)
+
+    Higher values indicate that explanation paths are distributed across multiple
+    path types (lower concentration), while lower values indicate that explanations
+    are dominated by a small number of path types.
     """
 
     metric_need = ["data.max_path_type"]
@@ -1399,9 +1634,46 @@ class PTC(PathQualityMetric):
 
 
 class PPT(PathQualityMetric):
+    r"""PPT (Path Pattern Type) is a path quality metric that measures the diversity
+    of relational path patterns used in explanation paths.
+
+    Note:
+        In this implementation, a path pattern is defined as the ordered sequence of
+        relation names associated with the nodes of an explanation path, excluding the
+        user node. Relation identifiers are mapped to relation names via `rid2relation`.
+        The metric evaluates how many *distinct path patterns* are used per user.
+
+        The score is computed per user as the ratio between the number of distinct path
+        patterns and the minimum between the number of explanation paths and the maximum
+        allowed path length, capped at 1.0. The final value is obtained by averaging
+        across users.
+
+        PPT is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`\\Pi_u` be the set of distinct relational path patterns derived from
+        :math:`P_u`,
+        - :math:`L` be the maximum path length.
+
+    The PPT metric is defined as:
+
+    .. math::
+        \mathrm{PPT}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \min\!\left(
+            \frac{|\Pi_u|}{\min\!\left(|P_u|,\; L\right)},
+            1
+        \right)
+
+    Higher values indicate a greater variety of relational explanation patterns,
+    reflecting richer and less repetitive explanation structures.
     """
-    Path Pattern Type
-    """
+
 
     metric_need = ["data.max_path_length", "data.rid2relation"]
 
@@ -1453,8 +1725,39 @@ class PPT(PathQualityMetric):
 
 
 class LITD(PathQualityMetric):
-    """
-    Linked Interaction Type Diversity
+    r"""LITD (Linked Interaction Type Diversity) is a path quality metric that measures
+    the diversity of *types* of linking interactions used in explanation paths.
+
+    Note:
+        In this implementation, LITD evaluates how many distinct *linking interaction
+        types* (e.g., item, entity, brand) are involved in a user’s explanation paths.
+        The linking interaction type is identified as the type of the second node in
+        each explanation path.
+
+        The metric is computed per user as the ratio between the number of distinct
+        linking interaction types and the total number of explanation paths, and then
+        averaged across users.
+
+        LITD is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`LT_u` be the set of distinct linking interaction types appearing
+        as the second node of the paths in :math:`P_u`.
+
+    The LITD metric is defined as:
+
+    .. math::
+        \mathrm{LITD}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \frac{|LT_u|}{|P_u|}
+
+    Higher values indicate that explanations rely on a wider variety of linking
+    interaction types, reflecting more heterogeneous explanatory mechanisms.
     """
 
     def __init__(self, config):
@@ -1501,8 +1804,39 @@ class LITD(PathQualityMetric):
 
 
 class SETD(PathQualityMetric):
-    """
-    Shared Entities Type Diversity
+    r"""SETD (Shared Entity Type Diversity) is a path quality metric that measures
+    the diversity of *types* of shared entities involved in explanation paths.
+
+    Note:
+        In this implementation, SETD evaluates how many distinct *shared entity types*
+        (e.g., entity, brand, category) are used in a user’s explanation paths.
+        The shared entity type is identified as the type of the penultimate node in
+        each explanation path.
+
+        The metric is computed per user as the ratio between the number of distinct
+        shared entity types and the total number of explanation paths, and then
+        averaged across users.
+
+        SETD is independent of the cutoff :math:`k`. The same value is reported for all
+        configured values of `k`, consistently with the current HopWise implementation.
+
+    Formally, let:
+        - :math:`U` be the set of users,
+        - :math:`P_u` be the set of explanation paths associated with user :math:`u`,
+        - :math:`ST_u` be the set of distinct shared entity types appearing as the
+        penultimate node of the paths in :math:`P_u`.
+
+    The SETD metric is defined as:
+
+    .. math::
+        \mathrm{SETD}
+        =
+        \frac{1}{|U|}
+        \sum_{u \in U}
+        \frac{|ST_u|}{|P_u|}
+
+    Higher values indicate that explanations rely on a wider variety of shared
+    entity types, reflecting more heterogeneous explanatory structures.
     """
 
     def __init__(self, config):
