@@ -39,18 +39,39 @@ def create_dataset(config):
         Dataset: Constructed dataset.
     """
     dataset_module = importlib.import_module("hopwise.data.dataset")
-    if hasattr(dataset_module, config["model"] + "Dataset"):
-        dataset_class = getattr(dataset_module, config["model"] + "Dataset")
+
+    # Check if user-item knowledge graph links are available
+    has_user_item_kg = os.path.isfile(
+        os.path.join(config["data_path"], f'{config["dataset"]}.user_link')
+    ) and os.path.isfile(os.path.join(config["data_path"], f'{config["dataset"]}.item_link'))
+
+    # Check for model-specific dataset class
+    model_dataset_name = config["model"] + "Dataset"
+    user_item_model_dataset_name = "UserItem" + model_dataset_name
+
+    if has_user_item_kg and hasattr(dataset_module, user_item_model_dataset_name):
+        # Prefer UserItem variant when link files exist
+        dataset_class = getattr(dataset_module, user_item_model_dataset_name)
+    elif hasattr(dataset_module, model_dataset_name):
+        dataset_class = getattr(dataset_module, model_dataset_name)
     else:
         model_type = config["MODEL_TYPE"]
+
+        if has_user_item_kg:
+            kg_dataset_classname = "UserItemKnowledgeBasedDataset"
+            path_language_model_dataset_classname = "UserItemKnowledgePathDataset"
+        else:
+            kg_dataset_classname = "KnowledgeBasedDataset"
+            path_language_model_dataset_classname = "KnowledgePathDataset"
+
         type2class = {
             ModelType.GENERAL: "Dataset",
             ModelType.SEQUENTIAL: "SequentialDataset",
             ModelType.CONTEXT: "Dataset",
-            ModelType.KNOWLEDGE: "KnowledgeBasedDataset",
+            ModelType.KNOWLEDGE: kg_dataset_classname,
             ModelType.TRADITIONAL: "Dataset",
             ModelType.DECISIONTREE: "Dataset",
-            ModelType.PATH_LANGUAGE_MODELING: "KnowledgePathDataset",
+            ModelType.PATH_LANGUAGE_MODELING: path_language_model_dataset_classname,
         }
         dataset_class = getattr(dataset_module, type2class[model_type])
 

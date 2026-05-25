@@ -13,3 +13,4 @@ from hopwise.model.knowledge_aware_recommender.mkr import MKR
 from hopwise.model.knowledge_aware_recommender.pgpr import PGPR
 from hopwise.model.knowledge_aware_recommender.ripplenet import RippleNet
 from hopwise.model.knowledge_aware_recommender.tprec import TPRec
+from hopwise.model.knowledge_aware_recommender.userkgat import UserKGAT
