@@ -83,7 +83,7 @@ pathlm = [
   "transformers",
   "accelerate>=0.26.0",
   "datasets",
-  "igraph",
+  "igraph==0.11.8",
   "joblib",
 ]
 ldiffrec = [
