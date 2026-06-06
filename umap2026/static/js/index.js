@@ -119,6 +119,56 @@ function setupVideoCarouselAutoplay() {
     });
 }
 
+// Activate links at the ISO 8601 timestamp configured in index.html.
+function setupTimedLinks() {
+    document.querySelectorAll('[data-timed-link]').forEach(function(link) {
+        const activationTime = Date.parse(link.dataset.activateAt);
+        const targetUrl = link.dataset.url;
+        const label = link.querySelector('[data-timed-link-label]');
+        const labelBefore = link.dataset.labelBefore || (label && label.textContent);
+        const labelAfter = link.dataset.labelAfter || labelBefore;
+
+        if (Number.isNaN(activationTime) || !targetUrl) {
+            console.error('Invalid timed link configuration:', link);
+            link.href = '#';
+            link.setAttribute('aria-disabled', 'true');
+            link.style.pointerEvents = 'none';
+            link.style.opacity = '0.65';
+            return;
+        }
+
+        function updateLink() {
+            const isActive = Date.now() >= activationTime;
+
+            link.href = isActive ? targetUrl : '#';
+            link.setAttribute('aria-disabled', String(!isActive));
+            link.style.pointerEvents = isActive ? '' : 'none';
+            link.style.opacity = isActive ? '' : '0.65';
+
+            if (label) {
+                label.textContent = isActive ? labelAfter : labelBefore;
+            }
+        }
+
+        function scheduleUpdate() {
+            updateLink();
+
+            const remainingTime = activationTime - Date.now();
+            if (remainingTime > 0) {
+                setTimeout(scheduleUpdate, Math.min(remainingTime, 2147483647));
+            }
+        }
+
+        link.addEventListener('click', function(event) {
+            if (Date.now() < activationTime) {
+                event.preventDefault();
+            }
+        });
+
+        scheduleUpdate();
+    });
+}
+
 $(document).ready(function() {
     // Check for click events on the navbar burger icon
 
@@ -138,5 +188,8 @@ $(document).ready(function() {
     
     // Setup video autoplay for carousel
     setupVideoCarouselAutoplay();
+
+    // Setup links that activate at a configured date and time
+    setupTimedLinks();
 
 })
