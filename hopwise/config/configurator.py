@@ -514,6 +514,12 @@ class Config:
                     metapaths[i] = list(map(tuple, metapaths[i]))
 
         if self.final_config_dict.get("context_length") is None:
+            if (
+                self.final_config_dict["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING
+                and self.final_config_dict.get("path_hop_length") is None
+            ):
+                raise ValueError("Path language modeling requires path_hop_length to be specified.")
+
             # 2 * path_hop_length + 1(U) + BOS + EOS
             self.final_config_dict["context_length"] = (self.final_config_dict["path_hop_length"] * 2) + 3
 
