@@ -622,7 +622,7 @@ class HyperTuning:
 
             def ray_objective(params):
                 result_dict = self.trial(params)
-                ray.train.report({"hyper_score": result_dict["hyper_score"]})
+                tune.report({"hyper_score": result_dict["hyper_score"]})
 
                 return result_dict
 
