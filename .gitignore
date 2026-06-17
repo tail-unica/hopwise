@@ -66,6 +66,7 @@ dataset/
 !hopwise/data/dataset
 !hopwise/properties/dataset
 !tests/test_data/  # Keep test data
+!tests/data/  # Keep data for dataset tests
 *.*emb
 !tests/test_data/test/*.*emb
 
