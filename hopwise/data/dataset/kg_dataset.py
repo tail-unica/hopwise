@@ -1288,7 +1288,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
         item_id_map = np.zeros_like(item_order)
         item_id_map[item_order] = np.arange(item_num)
         new_item_id2token = item_token[item_order]
-        new_item_token2id = {t: i + self.user_num for i, t in enumerate(new_item_id2token)}
+        new_item_token2id = {t: i for i, t in enumerate(new_item_id2token)}
         for field in self.alias["item_id"]:
             self._reset_ent_remapID(field, item_id_map, new_item_id2token, new_item_token2id)
 
@@ -1304,8 +1304,9 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
         entity_id_map = np.zeros_like(entity_order)
         for i in entity_order[1 : user_link_num + 1]:
             entity_id_map[i] = new_user_token2id[self.entity2user[entity_token[i]]]
+        new_item_entity_token2id = {t: i + self.user_num for i, t in enumerate(new_item_id2token)}
         for i in entity_order[user_link_num + 1 : user_link_num + item_link_num + 1]:
-            entity_id_map[i] = new_item_token2id[self.entity2item[entity_token[i]]]
+            entity_id_map[i] = new_item_entity_token2id[self.entity2item[entity_token[i]]]
         entity_id_map[entity_order[user_link_num + item_link_num + 1 :]] = np.arange(
             user_num + item_num, user_num + item_num + entity_num - user_link_num - item_link_num - 1
         )
