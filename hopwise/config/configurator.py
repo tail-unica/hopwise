@@ -533,13 +533,13 @@ class Config:
             "MAX_RW_TRIES_PER_IID": 1,
             "MAX_RW_PATHS_PER_HOP": 1,
         }
-        if not isinstance(self.final_config_dict["path_sample_args"], dict):
+        if not isinstance(self.final_config_dict.get("path_sample_args", {}), dict):
             raise ValueError(f"path_sample_args:[{self.final_config_dict['path_sample_args']}] should be a dict.")
 
-        deep_dict_update(default_path_sample_args, self.final_config_dict["path_sample_args"])
+        deep_dict_update(default_path_sample_args, self.final_config_dict.get("path_sample_args", {}))
         if default_path_sample_args["temporal_causality"] and not default_path_sample_args["restrict_by_phase"]:
             default_path_sample_args["restrict_by_phase"] = True
-            logger.warning("temporal_causality is set to True, restrict_by_phase is automatically set to True.")
+            logger.warning("Since temporal_causality is True so restrict_by_phase has been automatically set to True.")
 
         self.final_config_dict["path_sample_args"] = default_path_sample_args
 
