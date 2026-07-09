@@ -95,6 +95,7 @@ hyper/
 # Cache directories
 .cache/
 .ruff_cache/
+.python-version
 
 # General temporary files
 *.tmp
