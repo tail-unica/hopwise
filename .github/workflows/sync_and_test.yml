@@ -31,7 +31,7 @@ jobs:
       # Sync pipeline
       - name: Install the project
         run: |
-          uv sync
+          uv sync --locked
 
       - if: ${{ inputs.env == 'cuda' }}
         run: |

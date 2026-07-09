@@ -135,6 +135,7 @@ all-models = [
 ]
 cli = [
   "click>=8.0.0",
+  "proctitle",
 ]
 
 [dependency-groups]
