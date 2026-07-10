@@ -601,9 +601,7 @@ class Dataset(torch.utils.data.Dataset):
                     feat[field] = feat[field].fillna(value=feat[field].mean())
                 else:
                     dtype = np.int64 if ftype == FeatureType.TOKEN_SEQ else float
-                    feat[field] = feat[field].apply(
-                        lambda x: (np.array([], dtype=dtype) if isinstance(x, float) else x)
-                    )
+                    feat[field] = feat[field].apply(lambda x: np.array([], dtype=dtype) if isinstance(x, float) else x)
 
     def _normalize(self):
         """Normalization if ``config['normalize_field']`` or ``config['normalize_all']`` is set.

@@ -42,8 +42,8 @@ def create_dataset(config):
 
     # Check if user-item knowledge graph links are available
     has_user_item_kg = os.path.isfile(
-        os.path.join(config["data_path"], f'{config["dataset"]}.user_link')
-    ) and os.path.isfile(os.path.join(config["data_path"], f'{config["dataset"]}.item_link'))
+        os.path.join(config["data_path"], f"{config['dataset']}.user_link")
+    ) and os.path.isfile(os.path.join(config["data_path"], f"{config['dataset']}.item_link"))
 
     # Check for model-specific dataset class
     model_dataset_name = config["model"] + "Dataset"
