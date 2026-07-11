@@ -26,7 +26,7 @@ wheels/
 *.egg
 
 # Unit test / coverage reports
-*.html
+#*.html
 htmlcov/
 .tox/
 .coverage
@@ -118,3 +118,5 @@ bin/act
 # Sphinx documentation
 docs/_build/
 docs/build/
+!docs/autoapi/hopwise/*
+!docs/autoapi/hopwise/data/dataset
