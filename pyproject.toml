@@ -80,7 +80,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pathlm = [
-  "transformers",
+  "transformers<5.0.0",
   "accelerate>=0.26.0",
   "datasets",
   "igraph==0.11.8",
@@ -103,7 +103,7 @@ xgboost = [
   "xgboost"
 ]
 kgat = [
-  "dgl>=2.4.0"
+  "dgl>=2.4.0, <2.5.0",
 ]
 # kgin = [
 #   "torch-scatter",
@@ -115,7 +115,8 @@ kgat = [
 hyper = [
   "hyperopt==0.2.5",
   "optuna",
-  "ray[tune]",
+  "ray[tune]>=2.54,<2.55; python_version >= '3.10'",
+  "ray[tune]>=2.49,<2.50; python_version < '3.10'",
   "plotly"
 ]
 tsne = [
@@ -135,6 +136,7 @@ all-models = [
 ]
 cli = [
   "click>=8.0.0",
+  "proctitle",
 ]
 
 [dependency-groups]

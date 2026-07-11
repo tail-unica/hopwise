@@ -56,7 +56,6 @@ ENV/
 # Data files
 *.csv
 *.tsv
-*.json
 *.jsonl
 *.parquet
 *.feather
@@ -66,6 +65,7 @@ dataset/
 !hopwise/data/dataset
 !hopwise/properties/dataset
 !tests/test_data/  # Keep test data
+!tests/data/  # Keep data for dataset tests
 *.*emb
 !tests/test_data/test/*.*emb
 
@@ -95,6 +95,7 @@ hyper/
 # Cache directories
 .cache/
 .ruff_cache/
+.python-version
 
 # General temporary files
 *.tmp
@@ -102,6 +103,7 @@ tmp/
 
 # Tools
 .aider*
+.claude/
 
 # Deployment
 deploy/

@@ -622,12 +622,17 @@ class HyperTuning:
 
             def ray_objective(params):
                 result_dict = self.trial(params)
-                ray.train.report({"hyper_score": result_dict["hyper_score"]})
+                tune.report({"hyper_score": result_dict["hyper_score"]})
 
                 return result_dict
 
             if not ray.is_initialized():
-                ray.init()
+                # Don't let Ray snapshot the cwd into a working_dir: its packager applies
+                # .gitignore excludes (e.g. `dataset/`) but drops the `!` re-includes, so
+                # hopwise/properties/dataset/*.yaml is missing from the copy and trial workers
+                # load an incomplete config (numerical_features=None -> crash). With no
+                # working_dir, workers import the installed hopwise instead.
+                ray.init(runtime_env={"working_dir": None})
             tune.register_trainable("ray-trial", ray_objective)
             if self.algo["scheduler"] is not None:
                 scheduler = tune.create_scheduler(

@@ -1,0 +1,14 @@
+{
+  "name": "hopwise",
+  "image": "mcr.microsoft.com/devcontainers/python:3.10",
+  "runArgs": ["--gpus", "all"], // optional, for GPU dev, comment out if not needed
+  "postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && ~/.local/bin/uv sync --locked && ~/.local/bin/uv run pre-commit install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff"
+      ]
+    }
+  }
+}

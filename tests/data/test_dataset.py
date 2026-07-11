@@ -1029,6 +1029,54 @@ class TestKGDataset:
             assert dataset.relationemb_feat is not None
 
 
+class TestUserKGDataset:
+    def test_user_item_kg_dataset_class_selection(self):
+        config_dict = {
+            "model": "KGAT",
+            "dataset": "user_item_kg_remap_id",
+            "data_path": current_path,
+            "load_col": None,
+        }
+        dataset = new_dataset(config_dict=config_dict)
+
+        assert dataset.__class__.__name__ == "UserItemKnowledgeBasedDataset"
+        assert hasattr(dataset, "user2entity")
+        assert hasattr(dataset, "item2entity")
+
+    def test_user_item_kg_remap_id(self):
+        config_dict = {
+            "model": "KGAT",
+            "dataset": "user_item_kg_remap_id",
+            "data_path": current_path,
+            "load_col": None,
+        }
+        dataset = new_dataset(config_dict=config_dict)
+
+        assert (dataset.token2id("user_id", ["ub", "uc", "ud"]) == [1, 2, 3]).all()
+        assert (dataset.token2id("item_id", ["ib", "ic", "id"]) == [1, 2, 3]).all()
+
+        assert (dataset.token2id("entity_id", ["eu_b", "eu_c", "eu_d"]) == [1, 2, 3]).all()
+        assert (dataset.token2id("entity_id", ["ei_b", "ei_c", "ei_d"]) == [5, 6, 7]).all()
+
+        assert (dataset.inter_feat["user_id"] == [1, 2, 3]).all()
+        assert (dataset.inter_feat["item_id"] == [1, 2, 3]).all()
+
+    def test_user_item_kg_filters_unlinked_interactions(self):
+        config_dict = {
+            "model": "KGAT",
+            "dataset": "user_item_kg_remap_id",
+            "data_path": current_path,
+            "load_col": None,
+        }
+        dataset = new_dataset(config_dict=config_dict)
+
+        assert dataset.user_num == 4  # [PAD] + ub, uc, ud
+        assert dataset.item_num == 4  # [PAD] + ib, ic, id
+        assert len(dataset.inter_feat) == 3
+        assert "ua" not in dataset.field2token_id["user_id"]
+        assert "ia" not in dataset.field2token_id["item_id"]
+
+
 class TestKGPathDataset(unittest.TestCase):
     def test_kg_valid_path(self):
         config_dict = {
@@ -1617,6 +1665,37 @@ class TestKGPathDataset(unittest.TestCase):
         assert tokenized_path_string[0] == train_dataset.tokenizer(split_path_string[0])["input_ids"]
         assert tokenized_path_string[1] == train_dataset.tokenizer(split_path_string[1])["input_ids"]
         assert tokenized_path_string[2] == train_dataset.tokenizer(split_path_string[2])["input_ids"]
+
+
+class TestUserKGPathDataset(unittest.TestCase):
+    def test_user_item_kg_path_dataset_class_selection(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "user_kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_sample_args": {"parallel_max_workers": 0},
+        }
+        dataset = new_dataset(config_dict=config_dict)
+
+        assert dataset.__class__.__name__ == "UserItemKnowledgePathDataset"
+
+    def test_user_item_kg_path_tokenizer_uses_user_item_entity_ranges(self):
+        config_dict = {
+            "model": "PEARLM",
+            "dataset": "user_kg_generate_path",
+            "data_path": current_path,
+            "load_col": None,
+            "path_sample_args": {"parallel_max_workers": 0},
+        }
+        dataset = new_dataset(config_dict=config_dict)
+
+        vocab = dataset.tokenizer.get_vocab()
+
+        assert "U1" in vocab
+        assert "I1" in vocab
+        assert f"E{dataset.user_num + dataset.item_num}" in vocab
+        assert "E1" not in vocab  # linked users are represented as users, not auxiliary entities
 
 
 if __name__ == "__main__":

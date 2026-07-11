@@ -23,7 +23,13 @@ import pandas as pd
 import torch
 from sklearn.mixture import GaussianMixture as GMM
 
-from hopwise.data.dataset import KGSeqDataset, KnowledgeBasedDataset, KnowledgePathDataset, SequentialDataset
+from hopwise.data.dataset import (
+    KGSeqDataset,
+    KnowledgeBasedDataset,
+    KnowledgePathDataset,
+    SequentialDataset,
+    UserItemKnowledgePathDataset,
+)
 from hopwise.data.interaction import Interaction
 from hopwise.sampler import SeqSampler
 from hopwise.utils import FeatureType, progress_bar, set_color
@@ -142,7 +148,13 @@ class DIENDataset(SequentialDataset):
         self.inter_feat = new_data
 
 
-class KGGLMDataset(KnowledgePathDataset):
+class KGGLMDatasetMixin:
+    """Mixin class containing KGGLM-specific dataset logic.
+
+    This mixin should be used with KnowledgePathDataset or UserItemKnowledgePathDataset
+    to create the appropriate KGGLM dataset class.
+    """
+
     def _get_field_from_config(self):
         super()._get_field_from_config()
         self.train_stage = self.config["train_stage"]
@@ -202,6 +214,21 @@ class KGGLMDataset(KnowledgePathDataset):
                 path_string += self._format_path(path) + "\n"
 
             self._path_dataset = path_string
+
+
+class KGGLMDataset(KGGLMDatasetMixin, KnowledgePathDataset):
+    """KGGLM dataset inheriting from KnowledgePathDataset."""
+
+    pass
+
+
+class UserItemKGGLMDataset(KGGLMDatasetMixin, UserItemKnowledgePathDataset):
+    """KGGLM dataset inheriting from UserItemKnowledgePathDataset.
+
+    Used when both user and item knowledge graph links are available.
+    """
+
+    pass
 
 
 def _generate_paths_random_walks(start_node, **kwargs):
