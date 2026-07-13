@@ -17,6 +17,7 @@
 """
 
 import os
+import sys
 from ast import literal_eval
 from datetime import datetime
 from enum import Enum
@@ -221,6 +222,15 @@ class HyperTuning:
                 elif algo == "bayes":
                     self.algo = tpe.suggest
                 elif algo == "anneal":
+                    if sys.version_info >= (3, 12):
+                        raise RuntimeError(
+                            "hyperopt's `anneal` algorithm is not supported on Python >= 3.12: its "
+                            "sampler calls int() on a 1-d numpy array, which numpy>=2 (bundled with "
+                            "Python 3.12) rejects with 'TypeError: only 0-dimensional arrays can be "
+                            "converted to Python scalars'. This is an upstream hyperopt bug present in "
+                            "all current releases. Use a different algo (e.g. 'bayes', 'random', "
+                            "'exhaustive'), or run on Python < 3.12 with numpy < 2."
+                        )
                     self.algo = anneal.suggest
                 else:
                     raise ValueError(f"Illegal algo [{algo}]")

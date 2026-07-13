@@ -110,7 +110,7 @@ xgboost = [
 #   "torch-geometric",
 # ]
 hyper = [
-  "hyperopt==0.2.5",
+  "hyperopt==0.2.5",  # anneal doesn't work on python >=3.12
   "optuna",
   "ray[tune]>=2.54,<2.55; python_version >= '3.10'",
   "ray[tune]>=2.49,<2.50; python_version < '3.10'",
