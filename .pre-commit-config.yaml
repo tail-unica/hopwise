@@ -4,12 +4,12 @@ default_stages: [
 ]
 
 default_language_version:
-    python: python3.8
+    python: python3
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.7.3
+    rev: v0.15.21
     hooks:
       # Run the linter.
       - id: ruff
@@ -24,7 +24,7 @@ repos:
         types_or: [ python, pyi ]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0  # Use the ref you want to point at
+    rev: v6.0.0  # Use the ref you want to point at
     hooks:
       - id: check-added-large-files
         args: [ --maxkb=2048 ]
@@ -36,6 +36,6 @@ repos:
       - id: check-yaml
 
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.4
+    rev: v1.7.12
     hooks:
     - id: actionlint

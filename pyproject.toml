@@ -75,14 +75,15 @@ dependencies = [
   "scikit-learn",
   "rich",
   "cachetools",
+  "setproctitle"
 ]
 
 [project.optional-dependencies]
 pathlm = [
-  "transformers",
+  "transformers<5.0.0",
   "accelerate>=0.26.0",
   "datasets",
-  "igraph",
+  "igraph==0.11.8",
   "joblib",
 ]
 ldiffrec = [
@@ -101,16 +102,18 @@ lightgbm = [
 xgboost = [
   "xgboost"
 ]
-kgat = [
-  "dgl>=2.4.0"
-]
-# scatter = [
+# kgin = [
 #   "torch-scatter",
 # ]
+# kgrec = [
+#   "torch-scatter",
+#   "torch-geometric",
+# ]
 hyper = [
-  "hyperopt==0.2.5",
+  "hyperopt==0.2.5",  # anneal doesn't work on python >=3.12
   "optuna",
-  "ray[tune]",
+  "ray[tune]>=2.54,<2.55; python_version >= '3.10'",
+  "ray[tune]>=2.49,<2.50; python_version < '3.10'",
   "plotly"
 ]
 tsne = [
@@ -124,11 +127,12 @@ all-models = [
   "hopwise[nncf]",
   "hopwise[lightgbm]",
   "hopwise[xgboost]",
-  "hopwise[kgat]",
-  # "hopwise[scatter]",
+  # "hopwise[kgin]",
+  # "hopwise[kgrec]",
 ]
 cli = [
   "click>=8.0.0",
+  "proctitle",
 ]
 
 [dependency-groups]
@@ -168,14 +172,7 @@ commands = [
 
 [tool.uv]
 find-links = [
-  "https://data.pyg.org/whl/torch-2.4.0+cu124.html",
-  "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html",
-  "https://data.dgl.ai/wheels/torch-2.4/repo.html",
-  "https://data.dgl.ai/wheels/cu121/repo.html",
-  "https://data.dgl.ai/wheels/repo.html"
-]
-dependency-metadata = [
-    { name = "dgl", requires-dist = [], requires-python = ">=3.9,<=3.12" },
+  "https://data.pyg.org/whl/torch-2.4.0+cu124.html"
 ]
 
 no-build-isolation-package = ["torch-scatter"]

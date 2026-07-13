@@ -438,7 +438,7 @@ class Dataset(torch.utils.data.Dataset):
                 continue
             if unload_col is not None and field in unload_col:
                 continue
-            if isinstance(source, FeatureSource) or source != "link":
+            if isinstance(source, FeatureSource) or source not in ["link", "user_link", "item_link"]:
                 self.field2source[field] = source
                 self.field2type[field] = ftype
                 if not ftype.value.endswith("seq"):
@@ -601,9 +601,7 @@ class Dataset(torch.utils.data.Dataset):
                     feat[field] = feat[field].fillna(value=feat[field].mean())
                 else:
                     dtype = np.int64 if ftype == FeatureType.TOKEN_SEQ else float
-                    feat[field] = feat[field].apply(
-                        lambda x: (np.array([], dtype=dtype) if isinstance(x, float) else x)
-                    )
+                    feat[field] = feat[field].apply(lambda x: np.array([], dtype=dtype) if isinstance(x, float) else x)
 
     def _normalize(self):
         """Normalization if ``config['normalize_field']`` or ``config['normalize_all']`` is set.
@@ -1022,12 +1020,9 @@ class Dataset(torch.utils.data.Dataset):
             field_list (numpy.ndarray): List of fields in the same remapping space.
 
         Returns:
-            list:
-            - feat (pandas.DataFrame)
-            - field (str)
-            - ftype (FeatureType)
-
-            They will be concatenated in order, and remapped together.
+            list: List of tuples (feat, field, ftype) where feat is a pandas.DataFrame,
+                field is a str, and ftype is a FeatureType. They will be concatenated
+                in order, and remapped together.
         """
         remap_list = []
         for field in field_list:
@@ -1053,9 +1048,8 @@ class Dataset(torch.utils.data.Dataset):
             remap_list (list): See :meth:`_get_remap_list` for detail.
 
         Returns:
-            tuple: tuple of:
-            - tokens after concatenation.
-            - split points that can be used to restore the concatenated tokens.
+            tuple: A tuple of (tokens, split_point) where tokens is the concatenated
+                array and split_point contains indices to restore the original tokens.
         """
         tokens = []
         for feat, field, ftype in remap_list:
@@ -1708,7 +1702,7 @@ class Dataset(torch.utils.data.Dataset):
         else:
             raise NotImplementedError(f"Sparse matrix format [{form}] has not been implemented.")
 
-    def _create_graph(self, tensor_feat, source_field, target_field, form="dgl", value_field=None):
+    def _create_graph(self, tensor_feat, source_field, target_field, form="pyg", value_field=None):
         """Get graph that describe relations between two fields.
 
         Source and target should be token-like fields.
@@ -1716,21 +1710,18 @@ class Dataset(torch.utils.data.Dataset):
         For an edge of <src, tgt>, ``graph[src, tgt] = 1`` if ``value_field`` is ``None``,
         else ``graph[src, tgt] = df_feat[value_field][src, tgt]``.
 
-        Currently, we support graph in `DGL`_ and `PyG`_.
+        Currently, we support graph in `PyG`_.
 
         Args:
             tensor_feat (Interaction): Feature where src and tgt exist.
             source_field (str): Source field
             target_field (str): Target field
-            form (str, optional): Library of graph data structure. Defaults to ``dgl``.
+            form (str, optional): Library of graph data structure. Defaults to ``pyg``.
             value_field (str, optional): edge attributes of graph, which should exist in ``df_feat``.
                 Defaults to ``None``.
 
         Returns:
             Graph of relations.
-
-        .. _DGL:
-            https://www.dgl.ai/
 
         .. _PyG:
             https://github.com/rusty1s/pytorch_geometric
@@ -1738,17 +1729,7 @@ class Dataset(torch.utils.data.Dataset):
         src = tensor_feat[source_field]
         tgt = tensor_feat[target_field]
 
-        if form == "dgl":
-            import dgl
-
-            graph = dgl.graph((src, tgt))
-            if value_field is not None:
-                if isinstance(value_field, str):
-                    value_field = {value_field}
-                for k in value_field:
-                    graph.edata[k] = tensor_feat[k]
-            return graph
-        elif form == "pyg":
+        if form == "pyg":
             from torch_geometric.data import Data
 
             edge_attr = tensor_feat[value_field] if value_field else None
@@ -1787,13 +1768,9 @@ class Dataset(torch.utils.data.Dataset):
             size (int, optional): Size of the normalized interaction matrix. Defaults to ``None``.
                 If ``None``, the size is set to ``self.user_num + self.item_num``.
             symmetric (bool, optional): Whether to use symmetric normalization. Defaults to ``True``.
-                If ``True``, the normalized interaction matrix is calculated as:
-                .. math::
-                    A_{hat} = D^{-0.5} \times A \times D^{-0.5}
-                If ``False``, the normalized interaction matrix is calculated as:
-                .. math::
-                    A_{hat} = D^{-1} \times A
-                where :math:`A` is the adjacency matrix, and :math:`D` is the diagonal degree matrix.
+                If ``True``, uses symmetric normalization: ``A_hat = D^{-0.5} * A * D^{-0.5}``.
+                If ``False``, uses left normalization: ``A_hat = D^{-1} * A``.
+                Here ``A`` is the adjacency matrix and ``D`` is the diagonal degree matrix.
 
         Returns:
             Sparse tensor of the normalized interaction matrix.

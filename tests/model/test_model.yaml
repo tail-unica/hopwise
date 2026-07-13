@@ -50,7 +50,6 @@ normalize_all: True
 path_hop_length: 3
 MAX_PATHS_PER_USER: 5
 context_length: 24
-metapaths: ~
 path_sample_args:
     temporal_causality: False
     collaborative_path: True

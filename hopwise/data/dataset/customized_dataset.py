@@ -23,7 +23,13 @@ import pandas as pd
 import torch
 from sklearn.mixture import GaussianMixture as GMM
 
-from hopwise.data.dataset import KGSeqDataset, KnowledgeBasedDataset, KnowledgePathDataset, SequentialDataset
+from hopwise.data.dataset import (
+    KGSeqDataset,
+    KnowledgeBasedDataset,
+    KnowledgePathDataset,
+    SequentialDataset,
+    UserItemKnowledgePathDataset,
+)
 from hopwise.data.dataset.kg_path_dataset import CSRGraph
 from hopwise.data.interaction import Interaction
 from hopwise.sampler import SeqSampler
@@ -143,7 +149,13 @@ class DIENDataset(SequentialDataset):
         self.inter_feat = new_data
 
 
-class KGGLMDataset(KnowledgePathDataset):
+class KGGLMDatasetMixin:
+    """Mixin class containing KGGLM-specific dataset logic.
+
+    This mixin should be used with KnowledgePathDataset or UserItemKnowledgePathDataset
+    to create the appropriate KGGLM dataset class.
+    """
+
     def _get_field_from_config(self):
         super()._get_field_from_config()
         self.train_stage = self.config["train_stage"]
@@ -164,19 +176,18 @@ class KGGLMDataset(KnowledgePathDataset):
         """Generate pretrain dataset for KGGLM model using CSR-based parallel random walks."""
 
         if self._path_dataset is None:
-            # Build CSRGraph with UI relations excluded (weight=0)
             csr_matrix = self._create_ckg_sparse_matrix(form="csr", show_relation=True)
-            ui_rel_id = self.relation_num - 1
-            csr_graph = CSRGraph.from_sparse_matrix(csr_matrix, ui_rel_id, exclude_ui=True)
-            indptr, indices, relations, weights = csr_graph.unpack()
+            csr_graph = CSRGraph.from_sparse_matrix(csr_matrix)
+            indptr, indices, relations = csr_graph.unpack()
 
-            graph_min_iid = 1 + self.user_num
-            num_entities = self.entity_num + self.item_num
+            # UI relations excluded (weight=0)
+            ui_rel_id = self.relation_num - 1
+            weights = np.where(relations == ui_rel_id, 0.0, 1.0).astype(np.float32)
+
             min_hop, max_hop = self.pretrain_hop_length
             max_tries_per_entity = self.config["path_sample_args"]["MAX_RW_TRIES_PER_IID"]
 
-            # Prepare all start nodes and hop lengths for batch processing
-            entity_ids = np.arange(graph_min_iid, graph_min_iid + num_entities, dtype=np.int64)
+            entity_ids = self._get_entity_ids_range()
 
             # Generate start nodes: each entity gets pretrain_paths * max_tries samples
             samples_per_entity = self.pretrain_paths * max_tries_per_entity
@@ -300,6 +311,41 @@ def _kgglm_csr_parallel_random_walks(indptr, indices, relations, weights, start_
             path_relations[i, step] = relations[neighbor_idx]
 
     return paths, path_relations
+
+
+class KGGLMDataset(KGGLMDatasetMixin, KnowledgePathDataset):
+    """KGGLM dataset inheriting from KnowledgePathDataset."""
+
+    def _get_entity_ids_range(self):
+        """Get the range of entity IDs in the graph, which is used as the starting point for random walks.
+        In this case, we only consider item entities, so the minimum ID is 1 + number of users.
+        """
+        graph_min_iid = 1 + self.user_num
+        num_entities = self.entity_num
+        return np.arange(graph_min_iid, self.user_num + num_entities, dtype=np.int64)
+
+
+class UserItemKGGLMDataset(KGGLMDatasetMixin, UserItemKnowledgePathDataset):
+    """KGGLM dataset inheriting from UserItemKnowledgePathDataset.
+
+    Used when both user and item knowledge graph links are available.
+    """
+
+    def _get_entity_ids_range(self):
+        """Get the range of entity IDs in the graph, which is used as the starting point for random walks.
+        In this case, we consider both user and item entities, so the minimum ID is 1 (skipping ID 0) and ignore
+        the padding item with ID 0 as well.
+        """
+        graph_min_iid = 1
+        item_min_iid = 1 + self.user_num
+        num_entities = self.entity_num
+        entity_ids = np.concatenate(
+            [
+                np.arange(graph_min_iid, self.user_num, dtype=np.int64),
+                np.arange(item_min_iid, num_entities, dtype=np.int64),
+            ]
+        )
+        return entity_ids
 
 
 class TPRecTimestampDataset:

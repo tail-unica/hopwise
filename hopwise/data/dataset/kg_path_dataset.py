@@ -9,7 +9,7 @@ import numba
 import numpy as np
 
 from hopwise.data import Interaction
-from hopwise.data.dataset import KnowledgeBasedDataset
+from hopwise.data.dataset import KnowledgeBasedDataset, UserItemKnowledgeBasedDataset
 from hopwise.utils import PathLanguageModelingTokenType, PathSamplingStrategy, progress_bar, set_color
 
 
@@ -137,7 +137,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         temporal_causality (bool): The same as ``config["path_sample_args"]["temporal_causality"]``.
 
         collaborative_path (bool): The same as ``config["path_sample_args"]["collaborative_path"]``.
-        Not used when :attr:`strategy` = `metapaths` as collaborative metapaths must be explicitly defined.
 
         strategy (str): The same as ``config["path_sample_args"]["strategy"]``.
 
@@ -162,6 +161,13 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         self._tokenizer = None
         self.used_ids = None
 
+        # The starting index for auxiliary entity tokens.
+        # If None, it defaults to the number of items, meaning that all entities are considered.
+        # When KG includes user entities, this is set to `self.user_num + self.item_num`.
+        if self.config["tokenizer"].get("auxiliary_entity_start_id") is None:
+            # only entities that are not items are considered
+            self.config["tokenizer"]["auxiliary_entity_start_id"] = self.item_num
+
         self._init_tokenizer()
 
     def _get_field_from_config(self):
@@ -180,7 +186,13 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         path_sample_args = self.config["path_sample_args"]
         self.temporal_causality = path_sample_args["temporal_causality"]
         self.collaborative_path = path_sample_args["collaborative_path"]
-        self.strategy = PathSamplingStrategy(path_sample_args["strategy"])
+        try:
+            self.strategy = PathSamplingStrategy(path_sample_args["strategy"])
+        except ValueError:
+            raise ValueError(
+                f"Invalid path sampling strategy [{path_sample_args['strategy']}]. "
+                f"Valid strategies are: {[s.value for s in PathSamplingStrategy]}"
+            )
         self.path_token_separator = path_sample_args["path_token_separator"]
         self.restrict_by_phase = path_sample_args["restrict_by_phase"]
         self.max_consecutive_invalid = path_sample_args["MAX_CONSECUTIVE_INVALID"]
@@ -230,7 +242,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return self.tokenized_dataset[idx]
 
     def _init_tokenizer(self):
-        """Initialize the HuggingFace tokenizer."""
+        """Initialize the HuggingFace tokenizer.
+
+        Args:
+            auxiliary_entity_start_id (int, optional):
+
+        """
         from tokenizers import Tokenizer, pre_tokenizers
         from tokenizers import models as token_models
         from tokenizers import processors as token_processors
@@ -244,7 +261,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         # Pre-tokenizer definition based on :attr:`path_token_separator`
         tokenizer_object.pre_tokenizer = pre_tokenizers.Split(self.path_token_separator, "removed")
 
-        entity_range = np.arange(self.item_num, self.entity_num)  # only entities that are not items are considered
+        auxiliary_entity_start_id = self.config["tokenizer"]["auxiliary_entity_start_id"]
+        entity_range = np.arange(auxiliary_entity_start_id, self.entity_num)
         token_vocab = np.concatenate(
             [
                 np.char.add(PathLanguageModelingTokenType.USER.token, np.arange(self.user_num).astype(str)),
@@ -268,7 +286,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                 for spec_token in [self.bos_token, self.eos_token]
             ],
         )
-
         self._tokenizer = PreTrainedTokenizerFast(
             tokenizer_object=tokenizer_object,
             model_max_length=self.context_length,
@@ -279,6 +296,43 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             mask_token=self.mask_token,
         )
 
+    def _igraph_triple_to_tokenizer_triple(
+        self, vertex_metadata, igraph_head, igraph_relation, igraph_tail, token_vocab=None
+    ):
+        """Convert igraph ids to tokenizer ids."""
+        if token_vocab is None:
+            token_vocab = self.tokenizer.get_vocab()
+
+        ret = []
+        triple = [igraph_head, igraph_relation, igraph_tail]
+        for term, term_type in zip(triple, ["node", "relation", "node"]):
+            term_id = term
+            if term_type == "node":
+                if vertex_metadata[term_id]["type"] == self.uid_field:
+                    prefix = PathLanguageModelingTokenType.USER.token
+                elif vertex_metadata[term_id]["type"] == self.iid_field:
+                    term_id -= self.user_num
+                    prefix = PathLanguageModelingTokenType.ITEM.token
+                elif vertex_metadata[term_id]["type"] == self.entity_field:
+                    prefix = PathLanguageModelingTokenType.ENTITY.token
+                    if self.config["tokenizer"]["auxiliary_entity_num"] == self.item_num:
+                        # it means the KG does not have user nodes, but the igraph graph
+                        # is a CKG with users so entity ids are shifted by user_num and
+                        # we need to shift them back to match the tokenizer vocab
+                        term_id -= self.user_num
+                else:
+                    raise ValueError(
+                        f"Unknown vertex type [{vertex_metadata[term_id]['type']}] "
+                        "in igraph during tokenized_kg generation."
+                    )
+            else:
+                prefix = PathLanguageModelingTokenType.RELATION.token
+
+            token_id = token_vocab[prefix + str(term_id)]
+            ret.append(token_id)
+
+        return ret
+
     def get_tokenized_ckg(self):
         """Return the tokenized collaborative knowledge graph.
 
@@ -287,36 +341,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         Returns:
             dict[dict[set]]: The tokenized collaborative knowledge graph.
         """
-        token_vocab = self.tokenizer.get_vocab()
         graph = self._create_ckg_igraph(show_relation=True, directed=False)
         vertex_metadata, edge_metadata = graph.to_dict_list()
-
-        def igraph_id_to_tokenizer_id(igraph_head, igraph_relation, igraph_tail):
-            ret = []
-            triple = [igraph_head, igraph_relation, igraph_tail]
-            for term, term_type in zip(triple, ["node", "relation", "node"]):
-                term_id = term
-                if term_type == "node":
-                    if vertex_metadata[term_id]["type"] == self.uid_field:
-                        prefix = PathLanguageModelingTokenType.USER.token
-                    elif vertex_metadata[term_id]["type"] == self.iid_field:
-                        term_id -= self.user_num
-                        prefix = PathLanguageModelingTokenType.ITEM.token
-                    elif vertex_metadata[term_id]["type"] == self.entity_field:
-                        prefix = PathLanguageModelingTokenType.ENTITY.token
-                        term_id -= self.user_num
-                    else:
-                        raise ValueError(
-                            f"Unknown vertex type [{vertex_metadata[term_id]['type']}] "
-                            "in igraph during tokenized_kg generation."
-                        )
-                else:
-                    prefix = PathLanguageModelingTokenType.RELATION.token
-
-                token_id = token_vocab[prefix + str(term_id)]
-                ret.append(token_id)
-
-            return ret
+        token_vocab = self.tokenizer.get_vocab()
 
         tokenized_kg = {}
         for edge in edge_metadata:
@@ -325,7 +352,9 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             relation = edge["type"]
             relation_id = self.field2token_id[self.relation_field][relation]
 
-            head_token, relation_token, tail_token = igraph_id_to_tokenizer_id(head, relation_id, tail)
+            head_token, relation_token, tail_token = self._igraph_triple_to_tokenizer_triple(
+                vertex_metadata, head, relation_id, tail, token_vocab=token_vocab
+            )
 
             # head is always the user in user-item relations. The check to add the reverse path is done later
             if relation == self.ui_relation and vertex_metadata[head]["type"] != self.uid_field:
@@ -356,6 +385,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             padding=True,
             max_length=self.context_length,
             add_special_tokens=True,
+            return_token_type_ids=True,
         )
 
     def tokenize_path_dataset(self):
@@ -435,8 +465,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         - simple-ui: extract all simple paths from users to all their positive items using BFS.
 
-        - metapath: random walk constrained by pre-defined metapaths.
-
         Returns:
             list: List of paths with relations.
         """
@@ -452,37 +480,23 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         used_ids = self.get_user_used_ids()
 
-        if self.strategy in [
-            PathSamplingStrategy.WEIGHTED_RW,
-            PathSamplingStrategy.CONSTRAINED_RW,
-            PathSamplingStrategy.SIMPLE_UI,
-        ]:
-            # Build CSRGraph for efficient traversal
-            csr_matrix = self._create_ckg_sparse_matrix(form="csr", show_relation=True)
-            csr_graph = CSRGraph.from_sparse_matrix(csr_matrix)
+        csr_matrix = self._create_ckg_sparse_matrix(form="csr", show_relation=True)
+        csr_graph = CSRGraph.from_sparse_matrix(csr_matrix)
 
-            if self.strategy == PathSamplingStrategy.WEIGHTED_RW:
-                max_tries_per_iid = self.config["path_sample_args"]["MAX_RW_TRIES_PER_IID"]
-                paths_with_relations = self._generate_user_paths_weighted_random_walk(
-                    csr_graph, used_ids, temporal_matrix=temporal_matrix, max_tries_per_iid=max_tries_per_iid
-                )
-            elif self.strategy == PathSamplingStrategy.CONSTRAINED_RW:
-                max_paths_per_hop = self.config["path_sample_args"]["MAX_RW_PATHS_PER_HOP"]
-                paths_with_relations = self._generate_user_paths_constrained_random_walk(
-                    csr_graph, used_ids, temporal_matrix=temporal_matrix, paths_per_hop=max_paths_per_hop
-                )
-            elif self.strategy == PathSamplingStrategy.SIMPLE_UI:
-                paths_with_relations = self._generate_user_paths_all_simple_ui(
-                    csr_graph, used_ids, temporal_matrix=temporal_matrix
-                )
-
-        elif self.strategy == PathSamplingStrategy.METAPATH:
-            graph = self.ckg_hetero_graph(form="dgl", directed=not self.collaborative_path)
-            generated_paths = self._generate_user_paths_from_metapaths(
-                graph, used_ids, temporal_matrix=temporal_matrix
+        if self.strategy == PathSamplingStrategy.WEIGHTED_RW:
+            max_tries_per_iid = self.config["path_sample_args"]["MAX_RW_TRIES_PER_IID"]
+            paths_with_relations = self._generate_user_paths_weighted_random_walk(
+                csr_graph, used_ids, temporal_matrix=temporal_matrix, max_tries_per_iid=max_tries_per_iid
             )
-            padded_generated_paths = list(zip_longest(*generated_paths, fillvalue=self.PATH_PADDING))
-            paths_with_relations = np.array(padded_generated_paths).T
+        elif self.strategy == PathSamplingStrategy.CONSTRAINED_RW:
+            max_paths_per_hop = self.config["path_sample_args"]["MAX_RW_PATHS_PER_HOP"]
+            paths_with_relations = self._generate_user_paths_constrained_random_walk(
+                csr_graph, used_ids, temporal_matrix=temporal_matrix, paths_per_hop=max_paths_per_hop
+            )
+        elif self.strategy == PathSamplingStrategy.SIMPLE_UI:
+            paths_with_relations = self._generate_user_paths_all_simple_ui(
+                csr_graph, used_ids, temporal_matrix=temporal_matrix
+            )
         else:
             raise NotImplementedError(f"Path generation method [{self.strategy}] has not been implemented.")
 
@@ -1096,148 +1110,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         return paths_array
 
-    def _generate_user_paths_from_metapaths(self, graph, used_ids, temporal_matrix=None):
-        """Generate paths from pre-defined metapaths. Refer to DGL's random walk based on metapaths
-        https://docs.dgl.ai/en/1.1.x/generated/dgl.sampling.random_walk.html for more details.
-        """
-        import dgl
-        import torch
-
-        final_paths = set()
-
-        iter_users = progress_bar(
-            range(1, self.user_num),
-            total=self.user_num - 1,
-            ncols=100,
-            desc=set_color("KG Path Sampling", "red", progress=True),
-        )
-
-        if temporal_matrix is not None:
-            temporal_matrix = torch.from_numpy(temporal_matrix)
-
-        # Filter metapaths that do not match the hop length
-        base_metapaths = self.config["metapaths"]
-        # metapaths = list(filter(lambda mp: len(mp) == path_hop_length, metapaths))
-        metapaths = np.empty(len(base_metapaths), dtype=object)
-        metapaths[:] = base_metapaths
-        for u in iter_users:
-            pos_iid = torch.tensor(list(used_ids[u]))
-            if temporal_matrix is not None:
-                pos_iid = pos_iid[torch.argsort(temporal_matrix[u, pos_iid])]
-
-            user_path_sample_size = 0
-            user_invalid_paths = self.max_consecutive_invalid
-            while True:
-                # select new starting node. If temporal last pos item can only be at the end of the path
-                start_nodes = pos_iid if temporal_matrix is None else pos_iid[:-1]
-
-                generated_path_nodes, relations, node_types = [], [], []
-                # First hop is the relation user-item already addressed
-                for mp in metapaths[np.random.permutation(len(metapaths))]:
-                    try:
-                        mp_nodes, mp_types = dgl.sampling.random_walk(graph, start_nodes, metapath=mp)
-                    except dgl._ffi.base.DGLError as error:
-                        error.args = (f"The metapath {mp} raised the error [{error.args[0].lower()}]",)
-                        raise (error)
-
-                    generated_path_nodes.append(mp_nodes)
-                    mp_types = mp_types.unsqueeze(0)
-                    mp_types = mp_types.expand(mp_nodes.shape[0], -1)
-                    node_types.append(mp_types)
-
-                    relation_map = self.field2token_id[self.relation_field]
-                    if isinstance(mp[0], tuple):
-                        mp_with_ui_rel = [(self.uid_field, self.ui_relation, self.iid_field), *mp]
-                        mp_relations = torch.Tensor([relation_map[mp_tuple[1]] for mp_tuple in mp_with_ui_rel])
-                    else:
-                        mp_with_ui_rel = [self.ui_relation, *mp]
-                        mp_relations = torch.Tensor([relation_map[rel] for rel in mp_with_ui_rel])
-                    mp_relations = mp_relations.unsqueeze(0)
-                    mp_relations = mp_relations.expand(mp_nodes.shape[0], -1)
-                    relations.append(mp_relations)
-
-                def filter_and_validate_metapaths(pnodes, rels, ntypes):
-                    nonlocal user_path_sample_size
-                    nonlocal user_invalid_paths
-
-                    pnodes = torch.vstack(pnodes)
-                    rels = torch.vstack(rels)
-                    ntypes = torch.vstack(ntypes)
-                    path_hop_length = pnodes.shape[1]
-
-                    # filter valid random walks
-                    valid_path_node_mask = ~(pnodes == -1).any(dim=1)
-                    pnodes = pnodes[valid_path_node_mask]
-                    rels = rels[valid_path_node_mask]
-                    ntypes = ntypes[valid_path_node_mask]
-
-                    if self.restrict_by_phase:
-                        # filter paths that do not end in a positive item
-                        pos_iid_mask = torch.full((self.item_num,), fill_value=-1, dtype=int)
-                        pos_iid_mask[pos_iid] = torch.arange(pos_iid.shape[0])
-                        start_end_nodes = pnodes[:, [0, -1]]
-                        start_end_nodes_pos_idxs = pos_iid_mask[start_end_nodes]
-                        valid_path_node_mask = ~(start_end_nodes_pos_idxs == -1).any(dim=1)
-                        if temporal_matrix is not None:
-                            pos_idxs_check = start_end_nodes_pos_idxs[:, 1] > start_end_nodes_pos_idxs[:, 0]
-                            valid_path_node_mask = torch.logical_and(valid_path_node_mask, pos_idxs_check)
-                        else:
-                            pos_idxs_check = start_end_nodes_pos_idxs[:, 0] != start_end_nodes_pos_idxs[:, 1]
-                            valid_path_node_mask = torch.logical_and(valid_path_node_mask, pos_idxs_check)
-                    else:
-                        valid_path_node_mask = pnodes[:, 0] != pnodes[:, -1]
-                    valid_path_nodes = pnodes[valid_path_node_mask]
-                    valid_relations = rels[valid_path_node_mask]
-                    valid_node_types = ntypes[valid_path_node_mask]
-
-                    if valid_path_nodes.shape[0] > 0:
-                        # remap entities to dataset ids
-                        entity_idx = graph.ntypes.index(self.entity_field)
-                        paths_entities_map = valid_node_types == entity_idx
-                        valid_path_nodes[paths_entities_map] += self.item_num
-
-                        # remap non-user entities ids to homogeneous ids (entity ids after item ids after user ids)
-                        non_user_idx = graph.ntypes.index(self.uid_field)
-                        paths_non_users_map = valid_node_types != non_user_idx
-                        valid_path_nodes[paths_non_users_map] += self.user_num
-
-                        paths_with_relations = torch.zeros(
-                            (valid_path_nodes.shape[0], path_hop_length * 2 + 1), dtype=int
-                        )
-                        paths_with_relations[:, 0] = u
-                        paths_with_relations[:, 1::2] = valid_relations
-                        paths_with_relations[:, 2::2] = valid_path_nodes
-                        paths_with_relations = paths_with_relations.unique(dim=0)
-
-                        n_paths = min(self.max_paths_per_user - user_path_sample_size, paths_with_relations.shape[0])
-                        paths_with_relations = paths_with_relations[:n_paths]
-
-                        user_path_sample_size += paths_with_relations.shape[0]
-                        final_paths.update(map(tuple, paths_with_relations.numpy().tolist()))
-
-                        user_invalid_paths = self.max_consecutive_invalid
-                    else:
-                        user_invalid_paths -= 1
-
-                # Group a list of torch tensors based on the second dimension to speed-up path filtering and validation
-                path_length_groups = {}
-                for paths_mp_i in range(len(generated_path_nodes)):
-                    path_length = generated_path_nodes[paths_mp_i].shape[1]
-                    if path_length not in path_length_groups:
-                        path_length_groups[path_length] = {"path_nodes": [], "relations": [], "node_types": []}
-                    path_length_groups[path_length]["path_nodes"].append(generated_path_nodes[paths_mp_i])
-                    path_length_groups[path_length]["relations"].append(relations[paths_mp_i])
-                    path_length_groups[path_length]["node_types"].append(node_types[paths_mp_i])
-
-                for path_length_gr in path_length_groups.values():
-                    filter_and_validate_metapaths(
-                        path_length_gr["path_nodes"], path_length_gr["relations"], path_length_gr["node_types"]
-                    )
-
-                if user_path_sample_size == self.max_paths_per_user or user_invalid_paths == 0:
-                    break
-        return final_paths
-
     @staticmethod
     def _check_kg_path(path, user_num, item_num, check_last_node=False, collaborative_path=False):
         """Check if the path is valid. The first node must be an item node and it assumes the user node is omitted.
@@ -1298,11 +1170,127 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return "\n".join(info)
 
 
+class UserItemKnowledgePathDataset(KnowledgePathDataset, UserItemKnowledgeBasedDataset):
+    """:class:`UserItemKnowledgePathDataset` is based on :class:`~hopwise.data.dataset.KnowledgePathDataset`,
+    and :class:`~hopwise.data.dataset.UserItemKnowledgeBasedDataset` to be used with user-side KG too.
+    It provides an interface to prepare tokenized knowledge graph path for path language modeling.
+
+    Attributes:
+        path_hop_length (int): The same as ``config["path_hop_length"]``.
+
+        max_paths_per_user (int): The same as ``config["max_paths_per_user"]``.
+
+        temporal_causality (bool): The same as ``config["path_sample_args"]["temporal_causality"]``.
+
+        collaborative_path (bool): The same as ``config["path_sample_args"]["collaborative_path"]``.
+
+        strategy (str): The same as ``config["path_sample_args"]["strategy"]``.
+
+        reasoning_template (str): The same as ``config["path_sample_args"]["reasoning_template"]``.
+
+        restrict_by_phase (bool): The same as ``config["path_sample_args"]["restrict_by_phase"]``.
+
+        max_consecutive_invalid (int): The same as ``config["MAX_CONSECUTIVE_INVALID"]``.
+
+        tokenizer (PreTrainedTokenizerFast): Tokenizer to process the sample paths.
+    """
+
+    def __init__(self, config):
+        self._path_dataset = None
+        self._tokenized_dataset = None
+        self._tokenizer = None
+        UserItemKnowledgeBasedDataset.__init__(self, config)
+
+        config["tokenizer"]["auxiliary_entity_num"] = self.user_num + self.item_num
+        KnowledgePathDataset.__init__(self, config)
+        KnowledgePathDataset._get_field_from_config(self)
+
+    # def _init_tokenizer(self):
+    #     """Initialize the HuggingFace tokenizer."""
+    #     from tokenizers import Tokenizer, pre_tokenizers
+    #     from tokenizers import models as token_models
+    #     from tokenizers import processors as token_processors
+    #     from tokenizers import trainers as token_trainers
+    #     from transformers import PreTrainedTokenizerFast
+
+    #     tokenizer_model_class = getattr(token_models, self.tokenizer_model)
+
+    #     tokenizer_object = Tokenizer(tokenizer_model_class(unk_token=self.unk_token))
+
+    #     # Pre-tokenizer definition based on :attr:`path_token_separator`
+    #     tokenizer_object.pre_tokenizer = pre_tokenizers.Split(self.path_token_separator, "removed")
+
+    #     # only entities that are not users nor items are considered
+    #     entity_range = np.arange(self.user_num + self.item_num, self.entity_num)
+    #     token_vocab = np.concatenate(
+    #         [
+    #             np.char.add(PathLanguageModelingTokenType.USER.token, np.arange(self.user_num).astype(str)),
+    #             np.char.add(PathLanguageModelingTokenType.ITEM.token, np.arange(self.item_num).astype(str)),
+    #             np.char.add(PathLanguageModelingTokenType.ENTITY.token, entity_range.astype(str)),
+    #             np.char.add(PathLanguageModelingTokenType.RELATION.token, np.arange(self.relation_num).astype(str)),
+    #         ]
+    #     )
+
+    #     tokenizer_trainer_class = getattr(token_trainers, self.tokenizer_model + "Trainer")
+    #     tokenizer_trainer = tokenizer_trainer_class(
+    #         vocab_size=len(token_vocab) + len(self.special_tokens), special_tokens=self.special_tokens
+    #     )
+
+    #     tokenizer_object.train_from_iterator(token_vocab, trainer=tokenizer_trainer)
+
+    #     tokenizer_object.post_processor = token_processors.TemplateProcessing(
+    #         single=f"{self.bos_token} $A {self.eos_token}",
+    #         special_tokens=[
+    #             (spec_token, tokenizer_object.token_to_id(spec_token))
+    #             for spec_token in [self.bos_token, self.eos_token]
+    #         ],
+    #     )
+    #     self._tokenizer = PreTrainedTokenizerFast(
+    #         tokenizer_object=tokenizer_object,
+    #         model_max_length=self.context_length,
+    #         eos_token=self.eos_token,
+    #         bos_token=self.bos_token,
+    #         pad_token=self.pad_token,
+    #         unk_token=self.unk_token,
+    #         mask_token=self.mask_token,
+    #     )
+
+    # def _igraph_triple_to_tokenizer_triple(
+    #     self, vertex_metadata, igraph_head, igraph_relation, igraph_tail, token_vocab=None
+    # ):
+    #     """Convert igraph ids to tokenizer ids."""
+    #     if token_vocab is None:
+    #         token_vocab = self.tokenizer.get_vocab()
+
+    #     ret = []
+    #     triple = [igraph_head, igraph_relation, igraph_tail]
+    #     for term, term_type in zip(triple, ["node", "relation", "node"]):
+    #         term_id = term
+    #         if term_type == "node":
+    #             if vertex_metadata[term_id]["type"] == self.uid_field:
+    #                 prefix = PathLanguageModelingTokenType.USER.token
+    #             elif vertex_metadata[term_id]["type"] == self.iid_field:
+    #                 term_id -= self.user_num
+    #                 prefix = PathLanguageModelingTokenType.ITEM.token
+    #             elif vertex_metadata[term_id]["type"] == self.entity_field:
+    #                 prefix = PathLanguageModelingTokenType.ENTITY.token
+    #             else:
+    #                 raise ValueError(
+    #                     f"Unknown vertex type [{vertex_metadata[term_id]['type']}] "
+    #                     "in igraph during tokenized_kg generation."
+    #                 )
+    #         else:
+    #             prefix = PathLanguageModelingTokenType.RELATION.token
+
+    #         token_id = token_vocab[prefix + str(term_id)]
+    #         ret.append(token_id)
+
+    #     return ret
+
+
 # ============================================================================
 # Numba-accelerated helper functions for CSR-based random walks
 # ============================================================================
-
-
 @numba.njit(parallel=True)
 def _csr_parallel_random_walks(indptr, indices, relations, start_nodes, num_steps, graph_min_iid, collaborative_path):
     """Parallel random walks on CSR graph.
