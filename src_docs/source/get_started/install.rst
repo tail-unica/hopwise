@@ -8,7 +8,7 @@ System requirements
 hopwise is compatible with the following operating systems:
 
 * Linux ✅
-* Windows 10 (partially supported due to some issues with `dgl`) ⚠️
+* Windows 10 ✅
 * macOS X (untested) ⚠️
 
 Python 3.9, 3.10, 3.11, and 3.12 are supported. Specific dependencies are listed only in the `pyproject.toml <https://github.com/tail-unica/hopwise/blob/main/pyproject.toml>`_ file.
@@ -67,14 +67,6 @@ Here we list and describe the available optional dependencies (a.k.a. "extras") 
     uv pip install hopwise[xgboost]
 
   This will install `xgboost` as well, which is required for the `XGBoost` model.
-- `kgat`: for the `KGAT` model, installation with `hopwise[kgat]` is not supported, as `dgl` causes some issues with `torch`.
-    It must be then installed separately preventing the installation of additional dependencies (which unnecessarily overwrite the `torch` version) with the following command:
-
-  .. code:: bash
-
-    uv pip install dgl>=2.4.0 -f https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html --no-deps
-
-  Please check out the `DGL installation guide <https://www.dgl.ai/pages/start.html>`__ for more details and for the URLs of other flat indexes for different CUDA/CPU versions.
 - `scatter`: for the `KGIN` and `MCCLK` models, installation with `hopwise[scatter]` is not supported, as `torch-scatter` needs to be installed separately.
   You can install it with the following command (assuming you have PyTorch 2.7.* and CUDA 12.8 installed):
 
@@ -104,7 +96,6 @@ Here we list and describe the available optional dependencies (a.k.a. "extras") 
     uv pip install hopwise[all-models]
 
   This will install all the optional dependencies listed above, except `kgin`, which must be installed separately as described above.
-  Be aware that this is mainly intended for development purposes, as the `dgl` dependency of `kgat` will probably conflict with the `torch` version installed by `hopwise`.
 
 
 Install from Source (Development)

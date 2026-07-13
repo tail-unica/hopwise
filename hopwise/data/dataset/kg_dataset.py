@@ -45,7 +45,7 @@ class KnowledgeBasedDataset(Dataset):
     - entities only exist in kg triplets.
 
     It also provides several interfaces to transfer ``.kg`` features into coo sparse matrix,
-    csr sparse matrix, :class:`DGL.Graph` or :class:`PyG.Data`.
+    csr sparse matrix or :class:`PyG.Data`.
 
     Attributes:
         head_entity_field (str): The same as ``config['HEAD_ENTITY_ID_FIELD']``.
@@ -747,7 +747,7 @@ class KnowledgeBasedDataset(Dataset):
         For an edge of <src, tgt>, ``graph[src, tgt] = 1`` if ``value_field`` is ``None``,
         else ``graph[src, tgt] = self.kg_feat[value_field][src, tgt]``.
 
-        Currently, we support graph in `DGL`_ and `PyG`_,
+        Currently, we support graph in `PyG`_,
         and two type of sparse matrices, ``coo`` and ``csr``.
 
         Args:
@@ -758,9 +758,6 @@ class KnowledgeBasedDataset(Dataset):
 
         Returns:
             Graph / Sparse matrix of kg triplets.
-
-        .. _DGL:
-            https://www.dgl.ai/
 
         .. _PyG:
             https://github.com/rusty1s/pytorch_geometric
@@ -774,7 +771,7 @@ class KnowledgeBasedDataset(Dataset):
         ]
         if form in ["coo", "csr"]:
             return self._create_sparse_matrix(*args)
-        elif form in ["dgl", "pyg"]:
+        elif form in ["pyg"]:
             return self._create_graph(*args)
         else:
             raise NotImplementedError("kg graph format [{}] has not been implemented.")
@@ -835,7 +832,7 @@ class KnowledgeBasedDataset(Dataset):
         else:
             raise NotImplementedError(f"Sparse matrix format [{form}] has not been implemented.")
 
-    def _create_ckg_graph(self, form="dgl", show_relation=False):
+    def _create_ckg_graph(self, form="pyg", show_relation=False):
         src, tgt = self._create_ckg_source_target(form="torch")
 
         if show_relation:
@@ -847,14 +844,7 @@ class KnowledgeBasedDataset(Dataset):
             ui_rel = torch.full((2 * ui_rel_num,), ui_rel_id, dtype=kg_rel.dtype)
             edge = torch.cat([ui_rel, kg_rel])
 
-        if form == "dgl":
-            import dgl
-
-            graph = dgl.graph((src, tgt))
-            if show_relation:
-                graph.edata[self.relation_field] = edge
-            return graph
-        elif form == "pyg":
+        if form == "pyg":
             from torch_geometric.data import Data
 
             edge_attr = edge if show_relation else None
@@ -915,7 +905,7 @@ class KnowledgeBasedDataset(Dataset):
         else ``graph[src, tgt] = self.kg_feat[self.relation_field][src, tgt]``
         or ``graph[src, tgt] = self.ui_relation``.
 
-        Currently, we support graph in `DGL`_, `PyG`_, and `igraph`_,
+        Currently, we support graph in `PyG`_ and `igraph`_,
         two type of sparse matrices, ``coo`` and ``csr``.
 
         Args:
@@ -926,9 +916,6 @@ class KnowledgeBasedDataset(Dataset):
 
         Returns:
             Graph / Sparse matrix of kg triplets.
-
-        .. _DGL:
-            https://www.dgl.ai/
 
         .. _PyG:
             https://github.com/rusty1s/pytorch_geometric
@@ -942,109 +929,12 @@ class KnowledgeBasedDataset(Dataset):
 
         if form in ["coo", "csr"]:
             return self._create_ckg_sparse_matrix(form, show_relation)
-        elif form in ["dgl", "pyg"]:
+        elif form in ["pyg"]:
             return self._create_ckg_graph(form, show_relation)
         elif form == "igraph":
             return self._create_ckg_igraph(show_relation)
         else:
             raise NotImplementedError("ckg graph format [{}] has not been implemented.")
-
-    def _create_hetero_ckg_graph(self, form="dgl", directed=False):
-        """DGL expects each node type to be in the range [0, num_nodes_dict[ntype])."""
-        import dgl
-
-        item_num = self.item_num
-        inter_tensor = self.inter_feat
-        kg_tensor = self.kg_feat
-
-        uids = inter_tensor[self.uid_field]
-        iids = inter_tensor[self.iid_field]
-
-        graph_data = {(self.uid_field, self.ui_relation, self.iid_field): (uids, iids)}
-        if not directed:
-            graph_data[(self.iid_field, self.ui_relation, self.uid_field)] = (iids, uids)
-
-        hids = kg_tensor[self.head_entity_field]
-        tids = kg_tensor[self.tail_entity_field]
-        kg_rel = kg_tensor[self.relation_field]
-        entity_token = self.field2id_token[self.entity_field]
-        entities_not_items_mask = np.array(
-            [token != "[PAD]" and token not in self.entity2item for token in entity_token]
-        )
-        for rel, rel_id in self.field2token_id[self.relation_field].items():
-            if rel in ["[PAD]", self.ui_relation]:
-                continue
-
-            rel_mask = kg_rel == rel_id
-            rel_hids = hids[rel_mask]
-            rel_tids = tids[rel_mask]
-
-            rel_hids_ents = np.take(entities_not_items_mask, rel_hids)
-            rel_tids_ents = np.take(entities_not_items_mask, rel_tids)
-
-            # Entity-entity links
-            entity_entity_links = np.logical_and(rel_hids_ents, rel_tids_ents)
-            if entity_entity_links.any():
-                ee_hids = rel_hids[entity_entity_links] - item_num
-                ee_tids = rel_tids[entity_entity_links] - item_num
-                graph_data[(self.entity_field, rel, self.entity_field)] = (ee_hids, ee_tids)
-
-            # Entity-item links
-            entity_item_links = np.logical_and(rel_hids_ents, ~rel_tids_ents)
-            if entity_item_links.any():
-                ei_hids = rel_hids[entity_item_links] - item_num
-                ei_tids = rel_tids[entity_item_links]
-                graph_data[(self.entity_field, rel, self.iid_field)] = (ei_hids, ei_tids)
-
-            # Item-entity links
-            item_entity_links = np.logical_and(~rel_hids_ents, rel_tids_ents)
-            if item_entity_links.any():
-                ie_hids = rel_hids[item_entity_links]
-                ie_tids = rel_tids[item_entity_links] - item_num
-                graph_data[(self.iid_field, rel, self.entity_field)] = (ie_hids, ie_tids)
-
-            # Item-item links
-            item_item_links = np.logical_and(~rel_hids_ents, ~rel_tids_ents)
-            if item_item_links.any():
-                ii_hids = rel_hids[item_item_links]
-                ii_tids = rel_tids[item_item_links]
-                graph_data[(self.iid_field, rel, self.iid_field)] = (ii_hids, ii_tids)
-
-        num_nodes_dict = {
-            self.uid_field: self.user_num,
-            self.iid_field: item_num,
-            self.entity_field: self.entity_num - item_num,
-        }
-        graph = dgl.heterograph(graph_data, num_nodes_dict=num_nodes_dict)
-
-        return graph
-
-    def ckg_hetero_graph(self, form="dgl", directed=False):
-        """Get heterogeneous graph that describes relations of CKG,
-        which does not only combine interactions and kg triplets into the same graph,
-        but it also enable metapath-based random walks.
-
-        Item ids and entity ids are added by ``user_num`` temporally.
-
-        Currently, we support graph in `DGL`_.
-
-        Args:
-            form (str, optional): Format of sparse matrix, or library of graph data structure.
-                Defaults to ``dgl``.
-            directed (bool, optional): Whether the graph is directed or not.
-                Defaults to ``False``.
-
-        Returns:
-            Heterogeneous graph.
-
-        .. _DGL:
-            https://www.dgl.ai/
-        """
-
-        if form in ["dgl"]:
-            return self._create_hetero_ckg_graph(form, directed=directed)
-        else:
-            raise NotImplementedError("ckg hetero graph format [{}] has not been implemented.")
 
     def ckg_dict_graph(self, ui_bidirectional=True):
         """Get a dictionary representation of the collaborative knowledge graph.
@@ -1111,7 +1001,7 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
     - entities only exist in kg triplets.
 
     It also provides several interfaces to transfer ``.kg`` features into coo sparse matrix,
-    csr sparse matrix, :class:`DGL.Graph` or :class:`PyG.Data`.
+    csr sparse matrix or :class:`PyG.Data`.
 
     Attributes:
         head_entity_field (str): The same as ``config['HEAD_ENTITY_ID_FIELD']``.
@@ -1491,117 +1381,3 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
         )
 
         return ig_graph
-
-    def _create_hetero_ckg_graph(self, form="dgl", directed=False):
-        """DGL expects each node type to be in the range [0, num_nodes_dict[ntype])."""
-        import dgl
-
-        user_num, item_num = self.user_num, self.item_num
-        inter_tensor = self.inter_feat
-        kg_tensor = self.kg_feat
-
-        uids = inter_tensor[self.uid_field]
-        iids = inter_tensor[self.iid_field]
-
-        graph_data = {(self.uid_field, self.ui_relation, self.iid_field): (uids, iids)}
-        if not directed:
-            graph_data[(self.iid_field, self.ui_relation, self.uid_field)] = (iids, uids)
-
-        hids = kg_tensor[self.head_entity_field]
-        tids = kg_tensor[self.tail_entity_field]
-        kg_rel = kg_tensor[self.relation_field]
-        entity_token = self.field2id_token[self.entity_field]
-        item_entities_mask = np.array([token != "[PAD]" and token in self.entity2item for token in entity_token])
-        user_entities_mask = np.array([token != "[PAD]" and token in self.entity2user for token in entity_token])
-        entities_not_items_and_users_mask = np.array(
-            [
-                token != "[PAD]" and token not in self.entity2item and token not in self.entity2user
-                for token in entity_token
-            ]
-        )
-        for rel, rel_id in self.field2token_id[self.relation_field].items():
-            if rel in ["[PAD]", self.ui_relation]:
-                continue
-
-            rel_mask = kg_rel == rel_id
-            rel_hids = hids[rel_mask]
-            rel_tids = tids[rel_mask]
-
-            rel_hids_items = np.take(item_entities_mask, rel_hids)
-            rel_tids_items = np.take(item_entities_mask, rel_tids)
-            rel_hids_users = np.take(user_entities_mask, rel_hids)
-            rel_tids_users = np.take(user_entities_mask, rel_tids)
-            rel_hids_ents = np.take(entities_not_items_and_users_mask, rel_hids)
-            rel_tids_ents = np.take(entities_not_items_and_users_mask, rel_tids)
-
-            # Entity-entity links
-            entity_entity_links = np.logical_and(rel_hids_ents, rel_tids_ents)
-            if entity_entity_links.any():
-                ee_hids = rel_hids[entity_entity_links] - user_num - item_num
-                ee_tids = rel_tids[entity_entity_links] - user_num - item_num
-                graph_data[(self.entity_field, rel, self.entity_field)] = (ee_hids, ee_tids)
-
-            # Item-item links
-            item_item_links = np.logical_and(rel_hids_items, rel_tids_items)
-            if item_item_links.any():
-                ii_hids = rel_hids[item_item_links] - user_num
-                ii_tids = rel_tids[item_item_links] - user_num
-                graph_data[(self.iid_field, rel, self.iid_field)] = (ii_hids, ii_tids)
-
-            # User-user links
-            user_user_links = np.logical_and(rel_hids_users, rel_tids_users)
-            if user_user_links.any():
-                uu_hids = rel_hids[user_user_links]
-                uu_tids = rel_tids[user_user_links]
-                graph_data[(self.uid_field, rel, self.uid_field)] = (uu_hids, uu_tids)
-
-            # Entity-item links
-            entity_item_links = np.logical_and(rel_hids_ents, rel_tids_items)
-            if entity_item_links.any():
-                ei_hids = rel_hids[entity_item_links] - user_num - item_num
-                ei_tids = rel_tids[entity_item_links] - user_num
-                graph_data[(self.entity_field, rel, self.iid_field)] = (ei_hids, ei_tids)
-
-            # Item-entity links
-            item_entity_links = np.logical_and(rel_hids_items, rel_tids_ents)
-            if item_entity_links.any():
-                ie_hids = rel_hids[item_entity_links] - user_num
-                ie_tids = rel_tids[item_entity_links] - user_num - item_num
-                graph_data[(self.iid_field, rel, self.entity_field)] = (ie_hids, ie_tids)
-
-            # User-entity links
-            user_entity_links = np.logical_and(rel_hids_users, rel_tids_ents)
-            if user_entity_links.any():
-                ue_hids = rel_hids[user_entity_links]
-                ue_tids = rel_tids[user_entity_links] - user_num - item_num
-                graph_data[(self.uid_field, rel, self.entity_field)] = (ue_hids, ue_tids)
-
-            # Entity-user links
-            entity_user_links = np.logical_and(rel_hids_ents, rel_tids_users)
-            if entity_user_links.any():
-                eu_hids = rel_hids[entity_user_links] - user_num - item_num
-                eu_tids = rel_tids[entity_user_links]
-                graph_data[(self.entity_field, rel, self.uid_field)] = (eu_hids, eu_tids)
-
-            # Item-user links
-            item_user_links = np.logical_and(rel_hids_items, rel_tids_users)
-            if item_user_links.any():
-                iu_hids = rel_hids[item_user_links] - user_num
-                iu_tids = rel_tids[item_user_links]
-                graph_data[(self.iid_field, rel, self.uid_field)] = (iu_hids, iu_tids)
-
-            # User-item links
-            user_item_links = np.logical_and(rel_hids_users, rel_tids_items)
-            if user_item_links.any():
-                ui_hids = rel_hids[user_item_links]
-                ui_tids = rel_tids[user_item_links] - user_num
-                graph_data[(self.uid_field, rel, self.iid_field)] = (ui_hids, ui_tids)
-
-        num_nodes_dict = {
-            self.uid_field: user_num,
-            self.iid_field: item_num,
-            self.entity_field: self.auxiliary_entity_num,
-        }
-        graph = dgl.heterograph(graph_data, num_nodes_dict=num_nodes_dict)
-
-        return graph

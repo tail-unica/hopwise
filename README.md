@@ -153,8 +153,6 @@ cd hopwise
 uv sync
 ```
 
-> 📢 **Windows:** For proper DGL installation, please follow the [official DGL installation guide](https://www.dgl.ai/pages/start.html). Windows builds may encounter DLL linking issues with standard installation methods. Pre-built packages from the official source are recommended. Otherwise, using the Windows Subsystem for Linux (WSL) might be feasible as a solution.
-
 **🎉 Done 🎉**
 
 ## 🚀 Usage
