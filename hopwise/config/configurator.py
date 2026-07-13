@@ -506,13 +506,6 @@ class Config:
         ):
             raise NotImplementedError("Full sort evaluation do not match value-based metrics!")
 
-        # metapath format check
-        metapaths = self.final_config_dict.get("metapaths")
-        if metapaths is not None:
-            for i in range(len(metapaths)):
-                if isinstance(metapaths[i][0], list):
-                    metapaths[i] = list(map(tuple, metapaths[i]))
-
         if (
             self.final_config_dict["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING
             and self.final_config_dict.get("context_length") is None

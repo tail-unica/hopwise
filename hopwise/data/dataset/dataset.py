@@ -1702,7 +1702,7 @@ class Dataset(torch.utils.data.Dataset):
         else:
             raise NotImplementedError(f"Sparse matrix format [{form}] has not been implemented.")
 
-    def _create_graph(self, tensor_feat, source_field, target_field, form="dgl", value_field=None):
+    def _create_graph(self, tensor_feat, source_field, target_field, form="pyg", value_field=None):
         """Get graph that describe relations between two fields.
 
         Source and target should be token-like fields.
@@ -1710,21 +1710,18 @@ class Dataset(torch.utils.data.Dataset):
         For an edge of <src, tgt>, ``graph[src, tgt] = 1`` if ``value_field`` is ``None``,
         else ``graph[src, tgt] = df_feat[value_field][src, tgt]``.
 
-        Currently, we support graph in `DGL`_ and `PyG`_.
+        Currently, we support graph in `PyG`_.
 
         Args:
             tensor_feat (Interaction): Feature where src and tgt exist.
             source_field (str): Source field
             target_field (str): Target field
-            form (str, optional): Library of graph data structure. Defaults to ``dgl``.
+            form (str, optional): Library of graph data structure. Defaults to ``pyg``.
             value_field (str, optional): edge attributes of graph, which should exist in ``df_feat``.
                 Defaults to ``None``.
 
         Returns:
             Graph of relations.
-
-        .. _DGL:
-            https://www.dgl.ai/
 
         .. _PyG:
             https://github.com/rusty1s/pytorch_geometric
@@ -1732,17 +1729,7 @@ class Dataset(torch.utils.data.Dataset):
         src = tensor_feat[source_field]
         tgt = tensor_feat[target_field]
 
-        if form == "dgl":
-            import dgl
-
-            graph = dgl.graph((src, tgt))
-            if value_field is not None:
-                if isinstance(value_field, str):
-                    value_field = {value_field}
-                for k in value_field:
-                    graph.edata[k] = tensor_feat[k]
-            return graph
-        elif form == "pyg":
+        if form == "pyg":
             from torch_geometric.data import Data
 
             edge_attr = tensor_feat[value_field] if value_field else None
