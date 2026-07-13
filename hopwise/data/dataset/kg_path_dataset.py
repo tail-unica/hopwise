@@ -407,10 +407,11 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return paths
 
     def _generate_user_paths_constrained_random_walk(self, graph, used_ids, temporal_matrix=None, paths_per_hop=1):
-        """Generate paths from the knowledge graph using constrained random walks based on metapaths.
+        """Generate paths from the knowledge graph using constrained random walks based on predefined rules.
 
-        This strategy is constrained to the knowledge graph relations, but not to pre-defined
-        metapaths. Then, the resulting paths may not be semantically sound, but they are still valid.
+        This strategy is constrained to the knowledge graph relations and to the predefined rule that the last item
+        must be an item node. Not relying on metapaths, the resulting paths may not be semantically sound,
+        but they are still valid. Differently from weighted random walk, multiple paths can be sampled at each hop.
 
         Args:
             paths_per_hop (int, optional): The number of paths sampled at each hop to continue the random walk.
