@@ -12,7 +12,7 @@ import numpy as np
 from hopwise.data import Interaction
 from hopwise.data.dataset import KnowledgeBasedDataset, UserItemKnowledgeBasedDataset
 from hopwise.data.utils import user_parallel_sampling
-from hopwise.utils import PathLanguageModelingTokenType, progress_bar, set_color
+from hopwise.utils import PathLanguageModelingTokenType, set_color
 
 
 class KnowledgePathDataset(KnowledgeBasedDataset):
@@ -27,7 +27,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         temporal_causality (bool): The same as ``config["path_sample_args"]["temporal_causality"]``.
 
         collaborative_path (bool): The same as ``config["path_sample_args"]["collaborative_path"]``.
-        Not used when :attr:`strategy` = `metapaths` as collaborative metapaths must be explicitly defined.
 
         strategy (str): The same as ``config["path_sample_args"]["strategy"]``.
 
@@ -333,15 +332,11 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         - simple-ui: randomly sample a positive item for each user and extract all simple paths to all positive items.
 
-        - metapath: random walk constrained by pre-defined metapaths.
-
         Returns:
             list: List of paths with relations.
         """
         if self.strategy in ["weighted-rw", "constrained-rw", "simple", "simple-ui"]:
             graph = self._create_ckg_igraph(show_relation=True, directed=False)
-        elif self.strategy in ["metapath"]:
-            graph = self.ckg_hetero_graph(form="dgl", directed=not self.collaborative_path)
         else:
             raise NotImplementedError(f"Path generation method [{self.strategy}] has not been implemented.")
 
@@ -378,18 +373,10 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             generated_paths = self._generate_user_paths_all_simple(graph, used_ids, temporal_matrix=temporal_matrix)
         elif self.strategy == "simple-ui":
             generated_paths = self._generate_user_paths_all_simple_ui(graph, used_ids, temporal_matrix=temporal_matrix)
-        elif self.strategy == "metapath":
-            generated_paths = self._generate_user_paths_from_metapaths(
-                graph, used_ids, temporal_matrix=temporal_matrix
-            )
         else:
             raise NotImplementedError(f"Path generation method [{self.strategy}] has not been implemented.")
 
-        if self.strategy != "metapath":
-            paths_with_relations = self._add_paths_relations(graph, generated_paths)
-        else:
-            padded_generated_paths = list(zip_longest(*generated_paths, fillvalue=self.PATH_PADDING))
-            paths_with_relations = np.array(padded_generated_paths).T
+        paths_with_relations = self._add_paths_relations(graph, generated_paths)
 
         return paths_with_relations
 
@@ -420,11 +407,11 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return paths
 
     def _generate_user_paths_constrained_random_walk(self, graph, used_ids, temporal_matrix=None, paths_per_hop=1):
-        """Generate paths from the knowledge graph using constrained random walks, similar to DGL random walk based on
-        metapaths (https://docs.dgl.ai/en/1.1.x/generated/dgl.sampling.random_walk.html).
+        """Generate paths from the knowledge graph using constrained random walks based on predefined rules.
 
-        The difference is that this strategy is constrained to the knowledge graph relations, but not to pre-defined
-        metapahts. Then, the resulting paths may not be semantically sound, but they are still valid.
+        This strategy is constrained to the knowledge graph relations and to the predefined rule that the last item
+        must be an item node. Not relying on metapaths, the resulting paths may not be semantically sound,
+        but they are still valid. Differently from weighted random walk, multiple paths can be sampled at each hop.
 
         Args:
             paths_per_hop (int, optional): The number of paths sampled at each hop to continue the random walk.
@@ -497,147 +484,6 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         user_paths = _generate_user_paths_all_simple_per_user_and_positive(graph, used_ids, **kwargs)
         paths = set.union(*user_paths)
         return paths
-
-    def _generate_user_paths_from_metapaths(self, graph, used_ids, temporal_matrix=None):
-        """Generate paths from pre-defined metapaths. Refer to DGL's random walk based on metapaths
-        https://docs.dgl.ai/en/1.1.x/generated/dgl.sampling.random_walk.html for more details.
-        """
-        import dgl
-        import torch
-
-        final_paths = set()
-
-        iter_users = progress_bar(
-            range(1, self.user_num),
-            total=self.user_num - 1,
-            ncols=100,
-            desc=set_color("KG Path Sampling", "red", progress=True),
-        )
-
-        if temporal_matrix is not None:
-            temporal_matrix = torch.from_numpy(temporal_matrix)
-
-        # Filter metapaths that do not match the hop length
-        base_metapaths = self.config["metapaths"]
-        # metapaths = list(filter(lambda mp: len(mp) == path_hop_length, metapaths))
-        metapaths = np.empty(len(base_metapaths), dtype=object)
-        metapaths[:] = base_metapaths
-        for u in iter_users:
-            pos_iid = torch.tensor(list(used_ids[u]))
-            if temporal_matrix is not None:
-                pos_iid = pos_iid[torch.argsort(temporal_matrix[u, pos_iid])]
-
-            user_path_sample_size = 0
-            user_invalid_paths = self.max_consecutive_invalid
-            while True:
-                # select new starting node. If temporal last pos item can only be at the end of the path
-                start_nodes = pos_iid if temporal_matrix is None else pos_iid[:-1]
-
-                generated_path_nodes, relations, node_types = [], [], []
-                # First hop is the relation user-item already addressed
-                for mp in metapaths[np.random.permutation(len(metapaths))]:
-                    try:
-                        mp_nodes, mp_types = dgl.sampling.random_walk(graph, start_nodes, metapath=mp)
-                    except dgl._ffi.base.DGLError as error:
-                        error.args = (f"The metapath {mp} raised the error [{error.args[0].lower()}]",)
-                        raise (error)
-
-                    generated_path_nodes.append(mp_nodes)
-                    mp_types = mp_types.unsqueeze(0)
-                    mp_types = mp_types.expand(mp_nodes.shape[0], -1)
-                    node_types.append(mp_types)
-
-                    relation_map = self.field2token_id[self.relation_field]
-                    if isinstance(mp[0], tuple):
-                        mp_with_ui_rel = [(self.uid_field, self.ui_relation, self.iid_field), *mp]
-                        mp_relations = torch.Tensor([relation_map[mp_tuple[1]] for mp_tuple in mp_with_ui_rel])
-                    else:
-                        mp_with_ui_rel = [self.ui_relation, *mp]
-                        mp_relations = torch.Tensor([relation_map[rel] for rel in mp_with_ui_rel])
-                    mp_relations = mp_relations.unsqueeze(0)
-                    mp_relations = mp_relations.expand(mp_nodes.shape[0], -1)
-                    relations.append(mp_relations)
-
-                def filter_and_validate_metapaths(pnodes, rels, ntypes):
-                    nonlocal user_path_sample_size
-                    nonlocal user_invalid_paths
-
-                    pnodes = torch.vstack(pnodes)
-                    rels = torch.vstack(rels)
-                    ntypes = torch.vstack(ntypes)
-                    path_hop_length = pnodes.shape[1]
-
-                    # filter valid random walks
-                    valid_path_node_mask = ~(pnodes == -1).any(dim=1)
-                    pnodes = pnodes[valid_path_node_mask]
-                    rels = rels[valid_path_node_mask]
-                    ntypes = ntypes[valid_path_node_mask]
-
-                    if self.restrict_by_phase:
-                        # filter paths that do not end in a positive item
-                        pos_iid_mask = torch.full((self.item_num,), fill_value=-1, dtype=int)
-                        pos_iid_mask[pos_iid] = torch.arange(pos_iid.shape[0])
-                        start_end_nodes = pnodes[:, [0, -1]]
-                        start_end_nodes_pos_idxs = pos_iid_mask[start_end_nodes]
-                        valid_path_node_mask = ~(start_end_nodes_pos_idxs == -1).any(dim=1)
-                        if temporal_matrix is not None:
-                            pos_idxs_check = start_end_nodes_pos_idxs[:, 1] > start_end_nodes_pos_idxs[:, 0]
-                            valid_path_node_mask = torch.logical_and(valid_path_node_mask, pos_idxs_check)
-                        else:
-                            pos_idxs_check = start_end_nodes_pos_idxs[:, 0] != start_end_nodes_pos_idxs[:, 1]
-                            valid_path_node_mask = torch.logical_and(valid_path_node_mask, pos_idxs_check)
-                    else:
-                        valid_path_node_mask = pnodes[:, 0] != pnodes[:, -1]
-                    valid_path_nodes = pnodes[valid_path_node_mask]
-                    valid_relations = rels[valid_path_node_mask]
-                    valid_node_types = ntypes[valid_path_node_mask]
-
-                    if valid_path_nodes.shape[0] > 0:
-                        # remap entities to dataset ids
-                        entity_idx = graph.ntypes.index(self.entity_field)
-                        paths_entities_map = valid_node_types == entity_idx
-                        valid_path_nodes[paths_entities_map] += self.item_num
-
-                        # remap non-user entities ids to homogeneous ids (entity ids after item ids after user ids)
-                        non_user_idx = graph.ntypes.index(self.uid_field)
-                        paths_non_users_map = valid_node_types != non_user_idx
-                        valid_path_nodes[paths_non_users_map] += self.user_num
-
-                        paths_with_relations = torch.zeros(
-                            (valid_path_nodes.shape[0], path_hop_length * 2 + 1), dtype=int
-                        )
-                        paths_with_relations[:, 0] = u
-                        paths_with_relations[:, 1::2] = valid_relations
-                        paths_with_relations[:, 2::2] = valid_path_nodes
-                        paths_with_relations = paths_with_relations.unique(dim=0)
-                        n_paths = min(self.max_paths_per_user - user_path_sample_size, paths_with_relations.shape[0])
-                        paths_with_relations = paths_with_relations[:n_paths]
-
-                        user_path_sample_size += paths_with_relations.shape[0]
-                        final_paths.update(map(tuple, paths_with_relations.numpy().tolist()))
-
-                        user_invalid_paths = self.max_consecutive_invalid
-                    else:
-                        user_invalid_paths -= 1
-
-                # Group a list of torch tensors based on the second dimension to speed-up path filtering and validation
-                path_length_groups = {}
-                for paths_mp_i in range(len(generated_path_nodes)):
-                    path_length = generated_path_nodes[paths_mp_i].shape[1]
-                    if path_length not in path_length_groups:
-                        path_length_groups[path_length] = {"path_nodes": [], "relations": [], "node_types": []}
-                    path_length_groups[path_length]["path_nodes"].append(generated_path_nodes[paths_mp_i])
-                    path_length_groups[path_length]["relations"].append(relations[paths_mp_i])
-                    path_length_groups[path_length]["node_types"].append(node_types[paths_mp_i])
-
-                for path_length_gr in path_length_groups.values():
-                    filter_and_validate_metapaths(
-                        path_length_gr["path_nodes"], path_length_gr["relations"], path_length_gr["node_types"]
-                    )
-
-                if user_path_sample_size == self.max_paths_per_user or user_invalid_paths == 0:
-                    break
-        return final_paths
 
     @staticmethod
     def _check_kg_path(path, user_num, item_num, check_last_node=False, collaborative_path=False):
@@ -731,7 +577,6 @@ class UserItemKnowledgePathDataset(KnowledgePathDataset, UserItemKnowledgeBasedD
         temporal_causality (bool): The same as ``config["path_sample_args"]["temporal_causality"]``.
 
         collaborative_path (bool): The same as ``config["path_sample_args"]["collaborative_path"]``.
-        Not used when :attr:`strategy` = `metapaths` as collaborative metapaths must be explicitly defined.
 
         strategy (str): The same as ``config["path_sample_args"]["strategy"]``.
 
@@ -833,147 +678,6 @@ class UserItemKnowledgePathDataset(KnowledgePathDataset, UserItemKnowledgeBasedD
             ret.append(token_id)
 
         return ret
-
-    def _generate_user_paths_from_metapaths(self, graph, used_ids, temporal_matrix=None):
-        """Generate paths from pre-defined metapaths. Refer to DGL's random walk based on metapaths
-        https://docs.dgl.ai/en/1.1.x/generated/dgl.sampling.random_walk.html for more details.
-        """
-        import dgl
-        import torch
-
-        final_paths = set()
-
-        iter_users = progress_bar(
-            range(1, self.user_num),
-            total=self.user_num - 1,
-            ncols=100,
-            desc=set_color("KG Path Sampling", "red", progress=True),
-        )
-
-        if temporal_matrix is not None:
-            temporal_matrix = torch.from_numpy(temporal_matrix)
-
-        # Filter metapaths that do not match the hop length
-        base_metapaths = self.config["metapaths"]
-        # metapaths = list(filter(lambda mp: len(mp) == path_hop_length, metapaths))
-        metapaths = np.empty(len(base_metapaths), dtype=object)
-        metapaths[:] = base_metapaths
-        for u in iter_users:
-            pos_iid = torch.tensor(list(used_ids[u]))
-            if temporal_matrix is not None:
-                pos_iid = pos_iid[torch.argsort(temporal_matrix[u, pos_iid])]
-
-            user_path_sample_size = 0
-            user_invalid_paths = self.max_consecutive_invalid
-            while True:
-                # select new starting node. If temporal last pos item can only be at the end of the path
-                start_nodes = pos_iid if temporal_matrix is None else pos_iid[:-1]
-
-                generated_path_nodes, relations, node_types = [], [], []
-                # First hop is the relation user-item already addressed
-                for mp in metapaths[np.random.permutation(len(metapaths))]:
-                    try:
-                        mp_nodes, mp_types = dgl.sampling.random_walk(graph, start_nodes, metapath=mp)
-                    except dgl._ffi.base.DGLError as error:
-                        error.args = (f"The metapath {mp} raised the error [{error.args[0].lower()}]",)
-                        raise (error)
-
-                    generated_path_nodes.append(mp_nodes)
-                    mp_types = mp_types.unsqueeze(0)
-                    mp_types = mp_types.expand(mp_nodes.shape[0], -1)
-                    node_types.append(mp_types)
-
-                    relation_map = self.field2token_id[self.relation_field]
-                    if isinstance(mp[0], tuple):
-                        mp_with_ui_rel = [(self.uid_field, self.ui_relation, self.iid_field), *mp]
-                        mp_relations = torch.Tensor([relation_map[mp_tuple[1]] for mp_tuple in mp_with_ui_rel])
-                    else:
-                        mp_with_ui_rel = [self.ui_relation, *mp]
-                        mp_relations = torch.Tensor([relation_map[rel] for rel in mp_with_ui_rel])
-                    mp_relations = mp_relations.unsqueeze(0)
-                    mp_relations = mp_relations.expand(mp_nodes.shape[0], -1)
-                    relations.append(mp_relations)
-
-                def filter_and_validate_metapaths(pnodes, rels, ntypes):
-                    nonlocal user_path_sample_size
-                    nonlocal user_invalid_paths
-
-                    pnodes = torch.vstack(pnodes)
-                    rels = torch.vstack(rels)
-                    ntypes = torch.vstack(ntypes)
-                    path_hop_length = pnodes.shape[1]
-
-                    # filter valid random walks
-                    valid_path_node_mask = ~(pnodes == -1).any(dim=1)
-                    pnodes = pnodes[valid_path_node_mask]
-                    rels = rels[valid_path_node_mask]
-                    ntypes = ntypes[valid_path_node_mask]
-
-                    if self.restrict_by_phase:
-                        # filter paths that do not end in a positive item
-                        pos_iid_mask = torch.full((self.item_num,), fill_value=-1, dtype=int)
-                        pos_iid_mask[pos_iid] = torch.arange(pos_iid.shape[0])
-                        start_end_nodes = pnodes[:, [0, -1]]
-                        start_end_nodes_pos_idxs = pos_iid_mask[start_end_nodes]
-                        valid_path_node_mask = ~(start_end_nodes_pos_idxs == -1).any(dim=1)
-                        if temporal_matrix is not None:
-                            pos_idxs_check = start_end_nodes_pos_idxs[:, 1] > start_end_nodes_pos_idxs[:, 0]
-                            valid_path_node_mask = torch.logical_and(valid_path_node_mask, pos_idxs_check)
-                        else:
-                            pos_idxs_check = start_end_nodes_pos_idxs[:, 0] != start_end_nodes_pos_idxs[:, 1]
-                            valid_path_node_mask = torch.logical_and(valid_path_node_mask, pos_idxs_check)
-                    else:
-                        valid_path_node_mask = pnodes[:, 0] != pnodes[:, -1]
-                    valid_path_nodes = pnodes[valid_path_node_mask]
-                    valid_relations = rels[valid_path_node_mask]
-                    valid_node_types = ntypes[valid_path_node_mask]
-
-                    if valid_path_nodes.shape[0] > 0:
-                        # remap entities to dataset ids
-                        entity_idx = graph.ntypes.index(self.entity_field)
-                        paths_entities_map = valid_node_types == entity_idx
-                        valid_path_nodes[paths_entities_map] += self.user_num + self.item_num
-
-                        # remap non-user entities ids to homogeneous ids (entity ids after item ids after user ids)
-                        non_user_idx = graph.ntypes.index(self.uid_field)
-                        paths_non_users_map = valid_node_types != non_user_idx
-                        valid_path_nodes[paths_non_users_map] += self.user_num
-
-                        paths_with_relations = torch.zeros(
-                            (valid_path_nodes.shape[0], path_hop_length * 2 + 1), dtype=int
-                        )
-                        paths_with_relations[:, 0] = u
-                        paths_with_relations[:, 1::2] = valid_relations
-                        paths_with_relations[:, 2::2] = valid_path_nodes
-                        paths_with_relations = paths_with_relations.unique(dim=0)
-                        n_paths = min(self.max_paths_per_user - user_path_sample_size, paths_with_relations.shape[0])
-                        paths_with_relations = paths_with_relations[:n_paths]
-
-                        user_path_sample_size += paths_with_relations.shape[0]
-                        final_paths.update(map(tuple, paths_with_relations.numpy().tolist()))
-
-                        user_invalid_paths = self.max_consecutive_invalid
-                    else:
-                        user_invalid_paths -= 1
-
-                # Group a list of torch tensors based on the second dimension to speed-up path filtering and validation
-                path_length_groups = {}
-                for paths_mp_i in range(len(generated_path_nodes)):
-                    path_length = generated_path_nodes[paths_mp_i].shape[1]
-                    if path_length not in path_length_groups:
-                        path_length_groups[path_length] = {"path_nodes": [], "relations": [], "node_types": []}
-                    path_length_groups[path_length]["path_nodes"].append(generated_path_nodes[paths_mp_i])
-                    path_length_groups[path_length]["relations"].append(relations[paths_mp_i])
-                    path_length_groups[path_length]["node_types"].append(node_types[paths_mp_i])
-
-                for path_length_gr in path_length_groups.values():
-                    filter_and_validate_metapaths(
-                        path_length_gr["path_nodes"], path_length_gr["relations"], path_length_gr["node_types"]
-                    )
-
-                if user_path_sample_size == self.max_paths_per_user or user_invalid_paths == 0:
-                    break
-        return final_paths
 
 
 def _check_temporal_causality_feasibility(temporal_matrix, pos_iid):

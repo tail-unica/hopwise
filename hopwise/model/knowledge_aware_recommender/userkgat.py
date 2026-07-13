@@ -81,10 +81,10 @@ class UserKGAT(KnowledgeRecommender):
         super().__init__(config, dataset)
 
         # load dataset info
-        self.ckg = dataset.ckg_graph(form="dgl", value_field="relation_id")
-        self.all_hs = torch.LongTensor(dataset.ckg_graph(form="coo", value_field="relation_id").row).to(self.device)
-        self.all_ts = torch.LongTensor(dataset.ckg_graph(form="coo", value_field="relation_id").col).to(self.device)
-        self.all_rs = torch.LongTensor(dataset.ckg_graph(form="coo", value_field="relation_id").data).to(self.device)
+        ckg_coo = dataset.ckg_graph(form="coo", value_field="relation_id")
+        self.all_hs = torch.LongTensor(ckg_coo.row).to(self.device)
+        self.all_ts = torch.LongTensor(ckg_coo.col).to(self.device)
+        self.all_rs = torch.LongTensor(ckg_coo.data).to(self.device)
         self.matrix_size = torch.Size([self.n_entities, self.n_entities])
 
         # load parameters info
@@ -96,7 +96,7 @@ class UserKGAT(KnowledgeRecommender):
         self.reg_weight = config["reg_weight"]
 
         # generate intermediate data
-        self.A_in = self.init_graph()  # init the attention matrix by the structure of ckg
+        self.A_in = self.init_graph(ckg_coo)  # init the attention matrix by the structure of ckg
 
         if config["preload_weight"] is not None and config["preload_weight"]["recipeemb_id"] is not None:
             self.item_entity_embedding_matrix = dataset.get_preload_weight("recipeemb_id")
@@ -117,22 +117,25 @@ class UserKGAT(KnowledgeRecommender):
         self.apply(xavier_normal_initialization)
         self.other_parameter_name = ["restore_entity_e"]
 
-    def init_graph(self):
+    def init_graph(self, ckg_coo):
         r"""Get the initial attention matrix through the collaborative knowledge graph
+
+        Args:
+            ckg_coo (scipy.sparse.coo_matrix): COO adjacency of the CKG whose ``data`` holds
+                the relation id of each edge.
 
         Returns:
             torch.sparse.FloatTensor: Sparse tensor of the attention matrix
         """
-        import dgl
+        node_num = ckg_coo.shape[0]
 
         adj_list = []
         for rel_type in range(1, self.n_relations, 1):
-            edge_idxs = self.ckg.filter_edges(lambda edge: edge.data["relation_id"] == rel_type)
-            sub_graph = (
-                dgl.edge_subgraph(self.ckg, edge_idxs, relabel_nodes=False)
-                .adj_external(transpose=False, scipy_fmt="coo")
-                .astype("float")
-            )
+            rel_mask = ckg_coo.data == rel_type
+            sub_graph = sp.coo_matrix(
+                (np.ones(rel_mask.sum()), (ckg_coo.row[rel_mask], ckg_coo.col[rel_mask])),
+                shape=(node_num, node_num),
+            ).astype("float")
             rowsum = np.array(sub_graph.sum(1))
             d_inv = np.power(rowsum, -1).flatten()
             d_inv[np.isinf(d_inv)] = 0.0

@@ -16,12 +16,6 @@ resolution-markers = [
     "python_full_version < '3.10' and sys_platform != 'linux'",
 ]
 
-[manifest]
-
-[[manifest.dependency-metadata]]
-name = "dgl"
-requires-python = ">=3.9, <=3.12"
-
 [[package]]
 name = "absl-py"
 version = "2.3.1"
@@ -799,17 +793,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dgl"
-version = "2.4.0+cu124"
-source = { registry = "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html" }
-wheels = [
-    { url = "https://data.dgl.ai/wheels/torch-2.4/cu124/dgl-2.4.0%2Bcu124-cp39-cp39-manylinux1_x86_64.whl" },
-    { url = "https://data.dgl.ai/wheels/torch-2.4/cu124/dgl-2.4.0%2Bcu124-cp310-cp310-manylinux1_x86_64.whl" },
-    { url = "https://data.dgl.ai/wheels/torch-2.4/cu124/dgl-2.4.0%2Bcu124-cp311-cp311-manylinux1_x86_64.whl" },
-    { url = "https://data.dgl.ai/wheels/torch-2.4/cu124/dgl-2.4.0%2Bcu124-cp312-cp312-manylinux1_x86_64.whl" },
-]
-
-[[package]]
 name = "dill"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1392,7 +1375,6 @@ all-models = [
     { name = "accelerate", version = "1.13.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "datasets", version = "4.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "datasets", version = "4.8.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "dgl" },
     { name = "faiss-cpu", version = "1.8.0.post1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "faiss-cpu", version = "1.13.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "igraph" },
@@ -1418,9 +1400,6 @@ hyper = [
     { name = "plotly" },
     { name = "ray", version = "2.49.2", source = { registry = "https://pypi.org/simple" }, extra = ["tune"], marker = "python_full_version < '3.10'" },
     { name = "ray", version = "2.54.1", source = { registry = "https://pypi.org/simple" }, extra = ["tune"], marker = "python_full_version >= '3.10'" },
-]
-kgat = [
-    { name = "dgl" },
 ]
 ldiffrec = [
     { name = "kmeans-pytorch" },
@@ -1501,8 +1480,6 @@ requires-dist = [
     { name = "colorlog", specifier = ">=4.7.2" },
     { name = "datasets", marker = "extra == 'all-models'" },
     { name = "datasets", marker = "extra == 'pathlm'" },
-    { name = "dgl", marker = "extra == 'all-models'", specifier = ">=2.4.0,<2.5.0" },
-    { name = "dgl", marker = "extra == 'kgat'", specifier = ">=2.4.0,<2.5.0" },
     { name = "faiss-cpu", marker = "extra == 'all-models'" },
     { name = "faiss-cpu", marker = "extra == 'ncl'" },
     { name = "hyperopt", marker = "extra == 'hyper'", specifier = "==0.2.5" },
@@ -1548,7 +1525,7 @@ requires-dist = [
     { name = "xgboost", marker = "extra == 'all-models'" },
     { name = "xgboost", marker = "extra == 'xgboost'" },
 ]
-provides-extras = ["all-models", "cli", "hyper", "kgat", "ldiffrec", "lightgbm", "ncl", "nncf", "pathlm", "tsne", "xgboost"]
+provides-extras = ["all-models", "cli", "hyper", "ldiffrec", "lightgbm", "ncl", "nncf", "pathlm", "tsne", "xgboost"]
 
 [package.metadata.requires-dev]
 dev = [
