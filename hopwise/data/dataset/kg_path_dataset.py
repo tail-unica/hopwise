@@ -1141,6 +1141,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             path (list): The path to be formatted.
         """
         path = path[path != self.PATH_PADDING]  # remove padding for shorter paths
+        print
         path_nodes = path[::2]
         path_relations = path[1::2]
 
