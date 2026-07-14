@@ -93,7 +93,7 @@ class AttnHGCN(nn.Module):
         self.n_heads = 2
         self.d_k = self.embedding_size // self.n_heads
 
-        # nn.init.xavier_uniform_(self.W_Q)
+        nn.init.xavier_uniform_(self.W_Q)
         self.mess_dropout = nn.Dropout(p=self.mess_dropout_rate)  # mess dropout
 
         # parameters initialization
