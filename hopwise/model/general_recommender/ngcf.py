@@ -62,8 +62,8 @@ class NGCF(GeneralRecommender):
         self.restore_item_e = None
 
         # generate intermediate data
-        self.norm_adj_matrix = dataset.norm_adjacency_matrix(form="torch_sparse").to(self.device)
-        self.eye_matrix = dataset.eye_matrix(form="torch_sparse").to(self.device)
+        self.norm_adj_matrix = dataset.norm_adjacency_matrix(form="torch.sparse").to(self.device)
+        self.eye_matrix = dataset.eye_matrix(form="torch.sparse").to(self.device)
 
         # parameters initialization
         self.apply(xavier_normal_initialization)

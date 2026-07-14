@@ -102,13 +102,9 @@ lightgbm = [
 xgboost = [
   "xgboost"
 ]
-# kgin = [
-#   "torch-scatter",
-# ]
-# kgrec = [
-#   "torch-scatter",
-#   "torch-geometric",
-# ]
+pyg = [
+  "torch-geometric",  # for KGIN, KGRec, MCCLK
+]
 hyper = [
   "hyperopt==0.2.5",  # anneal doesn't work on python >=3.12
   "optuna",
@@ -127,8 +123,7 @@ all-models = [
   "hopwise[nncf]",
   "hopwise[lightgbm]",
   "hopwise[xgboost]",
-  # "hopwise[kgin]",
-  # "hopwise[kgrec]",
+  "hopwise[pyg]",
 ]
 cli = [
   "click>=8.0.0",
@@ -169,13 +164,6 @@ commands = [
   ["uv", "run", "--active", "hopwise", "train", "--model", "LightGCN", "--epochs=2"],
   ["uv", "run", "--active", "hopwise", "train", "--model", "KGAT", "--epochs=2"]
 ]
-
-[tool.uv]
-find-links = [
-  "https://data.pyg.org/whl/torch-2.4.0+cu124.html"
-]
-
-no-build-isolation-package = ["torch-scatter"]
 
 [[tool.uv.index]]
 name = "testpypi"

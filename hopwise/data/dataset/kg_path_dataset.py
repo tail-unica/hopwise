@@ -315,7 +315,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
                     prefix = PathLanguageModelingTokenType.ITEM.token
                 elif vertex_metadata[term_id]["type"] == self.entity_field:
                     prefix = PathLanguageModelingTokenType.ENTITY.token
-                    if self.config["tokenizer"]["auxiliary_entity_num"] == self.item_num:
+                    if self.config["tokenizer"]["auxiliary_entity_start_id"] == self.item_num:
                         # it means the KG does not have user nodes, but the igraph graph
                         # is a CKG with users so entity ids are shifted by user_num and
                         # we need to shift them back to match the tokenizer vocab
@@ -463,7 +463,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         - constrained-rw: faithful random walk with constraints based on expected path output.
 
-        - simple-ui: extract all simple paths from users to all their positive items using BFS.
+        - simple-ui: per-interaction random-walk sampling. For every user-item interaction it samples up to
+        MAX_PATHS_PER_USER paths ending at other positive items, iteratively re-sampling uncovered interactions.
 
         Returns:
             list: List of paths with relations.
@@ -665,8 +666,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             if len(all_final_paths) >= target_total_paths:
                 break
 
-        # Deduplicate and convert to array
-        unique_paths = list(set(all_final_paths))
+        # Deduplicate and convert to array. Sort for consistency.
+        unique_paths = sorted(list(set(all_final_paths)))
 
         if len(unique_paths) == 0:
             return np.array([], dtype=np.int64).reshape(0, self.path_hop_length * 2 + 1)
@@ -846,8 +847,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
             if len(all_final_paths) >= target_total_paths:
                 break
 
-        # Deduplicate and convert to array
-        unique_paths = list(set(all_final_paths))
+        # Deduplicate and convert to array. Sort for consistency.
+        unique_paths = sorted(list(set(all_final_paths)))
 
         if len(unique_paths) == 0:
             return np.array([], dtype=np.int64).reshape(0, self.path_hop_length * 2 + 1)
@@ -860,7 +861,7 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
         return paths_array
 
     def _generate_user_paths_all_simple_ui(self, csr_graph, used_ids, temporal_matrix=None):
-        """Generate simple paths from users to their positive items using parallel random walks.
+        """Generate paths from users to their positive items using parallel random walks.
 
         This method uses parallel random walks with iterative re-sampling to find paths
         connecting positive items. It keeps retrying until all paths are found or
@@ -1097,6 +1098,8 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
 
         # Collect all paths - each pair is already limited to max_paths_per_user during sampling
         all_final_paths = [path_tuple for paths_set in user_item_paths.values() for path_tuple in paths_set]
+        # Sort for consistency.
+        all_final_paths = sorted(all_final_paths)
 
         if len(all_final_paths) == 0:
             return np.array([], dtype=np.int64).reshape(0, self.path_hop_length * 2 + 1)
@@ -1201,91 +1204,9 @@ class UserItemKnowledgePathDataset(KnowledgePathDataset, UserItemKnowledgeBasedD
         self._tokenizer = None
         UserItemKnowledgeBasedDataset.__init__(self, config)
 
-        config["tokenizer"]["auxiliary_entity_num"] = self.user_num + self.item_num
+        config["tokenizer"]["auxiliary_entity_start_id"] = self.user_num + self.item_num
         KnowledgePathDataset.__init__(self, config)
         KnowledgePathDataset._get_field_from_config(self)
-
-    # def _init_tokenizer(self):
-    #     """Initialize the HuggingFace tokenizer."""
-    #     from tokenizers import Tokenizer, pre_tokenizers
-    #     from tokenizers import models as token_models
-    #     from tokenizers import processors as token_processors
-    #     from tokenizers import trainers as token_trainers
-    #     from transformers import PreTrainedTokenizerFast
-
-    #     tokenizer_model_class = getattr(token_models, self.tokenizer_model)
-
-    #     tokenizer_object = Tokenizer(tokenizer_model_class(unk_token=self.unk_token))
-
-    #     # Pre-tokenizer definition based on :attr:`path_token_separator`
-    #     tokenizer_object.pre_tokenizer = pre_tokenizers.Split(self.path_token_separator, "removed")
-
-    #     # only entities that are not users nor items are considered
-    #     entity_range = np.arange(self.user_num + self.item_num, self.entity_num)
-    #     token_vocab = np.concatenate(
-    #         [
-    #             np.char.add(PathLanguageModelingTokenType.USER.token, np.arange(self.user_num).astype(str)),
-    #             np.char.add(PathLanguageModelingTokenType.ITEM.token, np.arange(self.item_num).astype(str)),
-    #             np.char.add(PathLanguageModelingTokenType.ENTITY.token, entity_range.astype(str)),
-    #             np.char.add(PathLanguageModelingTokenType.RELATION.token, np.arange(self.relation_num).astype(str)),
-    #         ]
-    #     )
-
-    #     tokenizer_trainer_class = getattr(token_trainers, self.tokenizer_model + "Trainer")
-    #     tokenizer_trainer = tokenizer_trainer_class(
-    #         vocab_size=len(token_vocab) + len(self.special_tokens), special_tokens=self.special_tokens
-    #     )
-
-    #     tokenizer_object.train_from_iterator(token_vocab, trainer=tokenizer_trainer)
-
-    #     tokenizer_object.post_processor = token_processors.TemplateProcessing(
-    #         single=f"{self.bos_token} $A {self.eos_token}",
-    #         special_tokens=[
-    #             (spec_token, tokenizer_object.token_to_id(spec_token))
-    #             for spec_token in [self.bos_token, self.eos_token]
-    #         ],
-    #     )
-    #     self._tokenizer = PreTrainedTokenizerFast(
-    #         tokenizer_object=tokenizer_object,
-    #         model_max_length=self.context_length,
-    #         eos_token=self.eos_token,
-    #         bos_token=self.bos_token,
-    #         pad_token=self.pad_token,
-    #         unk_token=self.unk_token,
-    #         mask_token=self.mask_token,
-    #     )
-
-    # def _igraph_triple_to_tokenizer_triple(
-    #     self, vertex_metadata, igraph_head, igraph_relation, igraph_tail, token_vocab=None
-    # ):
-    #     """Convert igraph ids to tokenizer ids."""
-    #     if token_vocab is None:
-    #         token_vocab = self.tokenizer.get_vocab()
-
-    #     ret = []
-    #     triple = [igraph_head, igraph_relation, igraph_tail]
-    #     for term, term_type in zip(triple, ["node", "relation", "node"]):
-    #         term_id = term
-    #         if term_type == "node":
-    #             if vertex_metadata[term_id]["type"] == self.uid_field:
-    #                 prefix = PathLanguageModelingTokenType.USER.token
-    #             elif vertex_metadata[term_id]["type"] == self.iid_field:
-    #                 term_id -= self.user_num
-    #                 prefix = PathLanguageModelingTokenType.ITEM.token
-    #             elif vertex_metadata[term_id]["type"] == self.entity_field:
-    #                 prefix = PathLanguageModelingTokenType.ENTITY.token
-    #             else:
-    #                 raise ValueError(
-    #                     f"Unknown vertex type [{vertex_metadata[term_id]['type']}] "
-    #                     "in igraph during tokenized_kg generation."
-    #                 )
-    #         else:
-    #             prefix = PathLanguageModelingTokenType.RELATION.token
-
-    #         token_id = token_vocab[prefix + str(term_id)]
-    #         ret.append(token_id)
-
-    #     return ret
 
 
 # ============================================================================

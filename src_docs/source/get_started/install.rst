@@ -21,7 +21,7 @@ To install hopwise with pip, run the following command:
 
     uv pip install hopwise
 
-Some models and functionalities require additional dependencies, such as `torch-scatter` for `KGIN` or `faiss-cpu` for `NCL`.
+Some models and functionalities require additional dependencies, such as `torch-geometric` for `KGIN` or `faiss-cpu` for `NCL`.
 Here we list and describe the available optional dependencies (a.k.a. "extras") and suggested procedures to install them:
 
 - `pathlm`: for all the language models for KG path reasoning, you can install it with the following command:
@@ -67,14 +67,14 @@ Here we list and describe the available optional dependencies (a.k.a. "extras") 
     uv pip install hopwise[xgboost]
 
   This will install `xgboost` as well, which is required for the `XGBoost` model.
-- `scatter`: for the `KGIN` and `MCCLK` models, installation with `hopwise[scatter]` is not supported, as `torch-scatter` needs to be installed separately.
-  You can install it with the following command (assuming you have PyTorch 2.7.* and CUDA 12.8 installed):
+- `pyg`: for the `KGIN`, `KGRec` and `MCCLK` models, you can install it with the following command:
 
   .. code:: bash
 
-    uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
+    uv pip install hopwise[pyg]
 
-  Please check out the `torch-scatter` `GitHub webpage <https://github.com/rusty1s/pytorch_geometric>`__ for more details on how to install it correctly for your system.
+  This will install `torch-geometric` as well, which is required for these models. It is a pure-Python package
+  available on PyPI, so no special wheel index is needed.
 - `hyper`: to tune the parameters of the models, you can install it with the following command:
 
   .. code:: bash

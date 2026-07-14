@@ -246,9 +246,10 @@ class KGGLMDatasetMixin:
                     entity_path_counts[entity] = entity_path_counts.get(entity, 0) + 1
 
             # Format paths to string
-            path_string = ""
-            for path in unique_paths:
-                path_string += self._format_path(np.array(path)) + "\n"
+
+            unique_paths = sorted(list(unique_paths))  # Sort for consistency
+            formatted_paths = [self._format_path(path) for path in unique_paths]
+            path_string = "\n".join(formatted_paths)
 
             self._path_dataset = path_string
 
