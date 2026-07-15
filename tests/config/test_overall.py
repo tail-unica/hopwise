@@ -9,11 +9,15 @@
 
 import logging
 import os
+import shutil
 import tempfile
 import unittest
 import warnings
 
+import hopwise
 from hopwise.quick_start import run_hopwise
+
+EXAMPLE_DATASET_PATH = os.path.join(os.path.dirname(hopwise.__file__), "dataset_example")
 
 
 def run_params(parm_dict, extra_dict=None):
@@ -51,7 +55,13 @@ class TestOverallConfig(unittest.TestCase):
         self.assertTrue(run_params({"seed": [2021, 1024]}))
 
     def test_data_path(self):
-        self.assertTrue(run_params({"data_path": ["dataset/", "./dataset"]}))
+        with tempfile.TemporaryDirectory() as tempdir:
+            dataset_dir = os.path.join(tempdir, "dataset")
+            ml_100k_dir = os.path.join(dataset_dir, "ml-100k")
+            shutil.copytree(os.path.join(EXAMPLE_DATASET_PATH, "ml-100k"), ml_100k_dir)
+            self.assertTrue(
+                run_params({"data_path": [os.path.join(os.path.curdir, dataset_dir), dataset_dir + os.sep]})
+            )
 
     def test_epochs(self):
         self.assertTrue(run_params({"epochs": [0, 1, 2]}))
