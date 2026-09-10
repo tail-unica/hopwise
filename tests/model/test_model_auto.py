@@ -932,21 +932,20 @@ class TestKnowledgeRecommender(unittest.TestCase):
         quick_test(config_dict)
 
     def test_mcclk(self):
-        pytest.importorskip("torch_scatter", reason="MCCLK requires the optional torch-scatter dependency")
+        pytest.importorskip("torch_geometric", reason="MCCLK requires the optional torch-geometric dependency")
         config_dict = {
             "model": "MCCLK",
         }
         quick_test(config_dict)
 
     def test_kgin(self):
-        pytest.importorskip("torch_scatter", reason="KGIN requires the optional torch-scatter dependency")
+        pytest.importorskip("torch_geometric", reason="KGIN requires the optional torch-geometric dependency")
         config_dict = {
             "model": "KGIN",
         }
         quick_test(config_dict)
 
     def test_kgrec(self):
-        pytest.importorskip("torch_scatter", reason="KGRec requires the optional torch-scatter dependency")
         pytest.importorskip("torch_geometric", reason="KGRec requires the optional torch-geometric dependency")
         config_dict = {
             "model": "KGRec",

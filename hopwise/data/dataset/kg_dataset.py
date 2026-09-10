@@ -679,7 +679,7 @@ class KnowledgeBasedDataset(Dataset):
         """
         return self.kg_feat[self.relation_field].numpy()
 
-    def norm_ckg_adjacency_matrix(self, form="torch_sparse"):
+    def norm_ckg_adjacency_matrix(self, form="torch.sparse"):
         """Get the collaborative normalized adjacency matrix of users and items.
 
         Construct the square matrix from the training data and normalize it
@@ -689,7 +689,7 @@ class KnowledgeBasedDataset(Dataset):
             A_{hat} = D^{-0.5} \times A \times D^{-0.5}
 
         Args:
-            form (str, optional): Format of the normalized adjacency matrix. Defaults to ``torch_sparse``.
+            form (str, optional): Format of the normalized adjacency matrix. Defaults to ``torch.sparse``.
 
         Returns:
             torch.sparse.FloatTensor: Normalized adjacency matrix.
@@ -697,7 +697,7 @@ class KnowledgeBasedDataset(Dataset):
         Raises:
             NotImplementedError: If the format of the normalized adjacency matrix is not implemented.
         """
-        if form == "torch_sparse":
+        if form == "torch.sparse":
             return self._create_norm_ckg_adjacency_matrix()
         else:
             raise NotImplementedError(f"Normalized adjacency matrix format [{form}] has not been implemented.")

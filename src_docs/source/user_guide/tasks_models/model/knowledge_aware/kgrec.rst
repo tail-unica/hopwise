@@ -65,7 +65,7 @@ And then:
 
 **Notes:**
 
-- KGRec requires ``torch-scatter`` for efficient scatter operations on GPU. Please install it separately following the `PyTorch Geometric installation guide <https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html>`_.
+- KGRec requires ``torch-geometric`` for its scatter operations. Install it with the ``pyg`` extra: ``uv pip install hopwise[pyg]``.
 
 Tuning Hyper Parameters
 -------------------------

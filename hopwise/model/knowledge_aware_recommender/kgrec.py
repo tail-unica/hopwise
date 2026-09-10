@@ -100,8 +100,8 @@ class AttnHGCN(nn.Module):
         self.apply(xavier_uniform_initialization)
 
     def shared_layer_agg(self, user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w):
+        from torch_geometric.utils import scatter
         from torch_geometric.utils import softmax as scatter_softmax
-        from torch_scatter import scatter_sum
 
         n_entities = entity_emb.shape[0]
         head, tail = edge_index
@@ -120,22 +120,24 @@ class AttnHGCN(nn.Module):
         entity_agg = value * edge_attn_score.view(-1, self.n_heads, 1)
         entity_agg = entity_agg.view(-1, self.n_heads * self.d_k)
         # attn weight makes mean to sum
-        entity_agg = scatter_sum(src=entity_agg, index=head, dim_size=n_entities, dim=0)
+        entity_agg = scatter(src=entity_agg, index=head, dim_size=n_entities, dim=0, reduce="sum")
 
         item_agg = inter_edge_w.unsqueeze(-1) * entity_emb[inter_edge[1, :]]
         # w_attn = self.ui_weighting(user_emb, entity_emb, inter_edge)
         # item_agg += w_attn.unsqueeze(-1) * entity_emb[inter_edge[1, :]]
-        user_agg = scatter_sum(src=item_agg, index=inter_edge[0, :], dim_size=user_emb.shape[0], dim=0)
+        user_agg = scatter(src=item_agg, index=inter_edge[0, :], dim_size=user_emb.shape[0], dim=0, reduce="sum")
         return entity_agg, user_agg
 
     def forward(self, user_emb, entity_emb, edge_index, edge_type, inter_edge, inter_edge_w, item_attn=None):
+        from torch_geometric.utils import scatter
         from torch_geometric.utils import softmax as scatter_softmax
-        from torch_scatter import scatter_sum
 
         if item_attn is not None:
             item_attn = item_attn[inter_edge[1, :]]
             item_attn = scatter_softmax(item_attn, inter_edge[0, :])
-            norm = scatter_sum(torch.ones_like(inter_edge[0, :]), inter_edge[0, :], dim=0, dim_size=user_emb.shape[0])
+            norm = scatter(
+                torch.ones_like(inter_edge[0, :]), inter_edge[0, :], dim=0, dim_size=user_emb.shape[0], reduce="sum"
+            )
             norm = torch.index_select(norm, 0, inter_edge[0, :])
             item_attn = item_attn * norm
             inter_edge_w = inter_edge_w * item_attn
@@ -189,29 +191,29 @@ class AttnHGCN(nn.Module):
         return entity_res_emb
 
     def ui_agg(self, user_emb, item_emb, inter_edge, inter_edge_w):
-        from torch_scatter import scatter_sum
+        from torch_geometric.utils import scatter
 
         num_items = item_emb.shape[0]
         item_emb = inter_edge_w.unsqueeze(-1) * item_emb[inter_edge[1, :]]
-        user_agg = scatter_sum(src=item_emb, index=inter_edge[0, :], dim_size=user_emb.shape[0], dim=0)
+        user_agg = scatter(src=item_emb, index=inter_edge[0, :], dim_size=user_emb.shape[0], dim=0, reduce="sum")
         user_emb = inter_edge_w.unsqueeze(-1) * user_emb[inter_edge[0, :]]
-        item_agg = scatter_sum(src=user_emb, index=inter_edge[1, :], dim_size=num_items, dim=0)
+        item_agg = scatter(src=user_emb, index=inter_edge[1, :], dim_size=num_items, dim=0, reduce="sum")
         return user_agg, item_agg
 
     def kg_agg(self, entity_emb, edge_index, edge_type):
-        from torch_scatter import scatter_mean
+        from torch_geometric.utils import scatter
 
         n_entities = entity_emb.shape[0]
         head, tail = edge_index
         edge_relation_emb = self.relation_embedding(edge_type)
         neigh_relation_emb = entity_emb[tail] * edge_relation_emb  # [-1, embedding_size]
-        entity_agg = scatter_mean(src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0)
+        entity_agg = scatter(src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0, reduce="mean")
         return entity_agg
 
     @torch.no_grad()
     def norm_attn_computer(self, entity_emb, edge_index, edge_type=None, return_logits=False):
+        from torch_geometric.utils import scatter
         from torch_geometric.utils import softmax as scatter_softmax
-        from torch_scatter import scatter_sum
 
         head, tail = edge_index
 
@@ -226,7 +228,7 @@ class AttnHGCN(nn.Module):
         # softmax by head_node
         edge_attn_score = scatter_softmax(edge_attn_logits, head)
         # normalization by head_node degree
-        norm = scatter_sum(torch.ones_like(head), head, dim=0, dim_size=entity_emb.shape[0])
+        norm = scatter(torch.ones_like(head), head, dim=0, dim_size=entity_emb.shape[0], reduce="sum")
         norm = torch.index_select(norm, 0, head)
         edge_attn_score = edge_attn_score * norm
 
@@ -295,7 +297,7 @@ class KGRec(KnowledgeRecommender):
         return index.to(self.device), type.to(self.device)
 
     def forward(self):
-        from torch_scatter import scatter_mean
+        from torch_geometric.utils import scatter
 
         user_emb = self.user_embedding.weight
         entity_emb = self.entity_embedding.weight
@@ -314,9 +316,9 @@ class KGRec(KnowledgeRecommender):
         edge_attn_score, _ = self.gcn.norm_attn_computer(entity_emb, edge_index, edge_type, return_logits=True)
 
         # for adaptive UI MAE
-        item_attn_mean_1 = scatter_mean(edge_attn_score, edge_index[0], dim=0, dim_size=self.n_entities)
+        item_attn_mean_1 = scatter(edge_attn_score, edge_index[0], dim=0, dim_size=self.n_entities, reduce="mean")
         item_attn_mean_1[item_attn_mean_1 == 0.0] = 1.0
-        item_attn_mean_2 = scatter_mean(edge_attn_score, edge_index[1], dim=0, dim_size=self.n_entities)
+        item_attn_mean_2 = scatter(edge_attn_score, edge_index[1], dim=0, dim_size=self.n_entities, reduce="mean")
         item_attn_mean_2[item_attn_mean_2 == 0.0] = 1.0
         item_attn_mean = (0.5 * item_attn_mean_1 + 0.5 * item_attn_mean_2)[: self.n_items]
 

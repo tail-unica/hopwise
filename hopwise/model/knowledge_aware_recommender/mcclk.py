@@ -33,7 +33,8 @@ class Aggregator(nn.Module):
         self.attention = attention
 
     def forward(self, entity_emb, user_emb, relation_emb, edge_index, edge_type, inter_matrix):
-        from torch_scatter import scatter_mean, scatter_softmax
+        from torch_geometric.utils import scatter
+        from torch_geometric.utils import softmax as scatter_softmax
 
         n_entities = entity_emb.shape[0]
 
@@ -54,8 +55,8 @@ class Aggregator(nn.Module):
             )  # [-1, embedding_size]
             neigh_relation_emb = torch.mul(neigh_relation_emb_weight, neigh_relation_emb)
 
-        entity_agg = scatter_mean(
-            src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0
+        entity_agg = scatter(
+            src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0, reduce="mean"
         )  # [n_entities, embedding_size]
 
         # Only aggregate item embedding

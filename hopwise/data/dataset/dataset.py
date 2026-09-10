@@ -1825,7 +1825,7 @@ class Dataset(torch.utils.data.Dataset):
         val = torch.FloatTensor([1] * num)
         return torch.sparse.FloatTensor(i, val)
 
-    def norm_adjacency_matrix(self, form="torch_sparse"):
+    def norm_adjacency_matrix(self, form="torch.sparse"):
         """Get the normalized adjacency matrix of users and items.
 
         Construct the square matrix from the training data and normalize it
@@ -1835,7 +1835,7 @@ class Dataset(torch.utils.data.Dataset):
             A_{hat} = D^{-0.5} \times A \times D^{-0.5}
 
         Args:
-            form (str, optional): Format of the normalized adjacency matrix. Defaults to ``torch_sparse``.
+            form (str, optional): Format of the normalized adjacency matrix. Defaults to ``torch.sparse``.
 
         Returns:
             torch.sparse.FloatTensor: Normalized adjacency matrix.
@@ -1843,22 +1843,22 @@ class Dataset(torch.utils.data.Dataset):
         Raises:
             NotImplementedError: If the format of the normalized adjacency matrix is not implemented.
         """
-        if form == "torch_sparse":
+        if form == "torch.sparse":
             return self._create_norm_adjacency_matrix()
         else:
             raise NotImplementedError(f"Normalized adjacency matrix format [{form}] has not been implemented.")
 
-    def eye_matrix(self, form="torch_sparse"):
+    def eye_matrix(self, form="torch.sparse"):
         """Construct the identity matrix with the size of item_num + user_num.
 
         Args:
             form (str, optional): Format of the identity matrix. Defaults
-                to ``torch_sparse``.
+                to ``torch.sparse``.
 
         Returns:
             torch.sparse.FloatTensor: Identity matrix.
         """
-        if form == "torch_sparse":
+        if form == "torch.sparse":
             return self._create_eye_matrix()
         else:
             raise NotImplementedError(f"Identity matrix format [{form}] has not been implemented.")
