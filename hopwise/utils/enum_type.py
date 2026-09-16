@@ -148,3 +148,21 @@ class PathLanguageModelingTokenType(Enum):
 
     def __str__(self):
         return self.token
+
+
+class PathSamplingStrategy(Enum):
+    """Strategy for sampling paths from the knowledge graph.
+
+    - ``WEIGHTED_RW``: Weighted random walk with sampling-and-discarding approach.
+    - ``CONSTRAINED_RW``: Constrained random walk with type constraints.
+    - ``SIMPLE_UI``: Per-interaction coverage sampling; random walks anchored at each user-item interaction, ending at
+        another positive item, re-sampled until each interaction reaches its path quota (MAX_PATHS_PER_USER per pair).
+
+    """
+
+    WEIGHTED_RW = "weighted-rw"
+    CONSTRAINED_RW = "constrained-rw"
+    SIMPLE_UI = "simple-ui"
+
+    def __str__(self):
+        return self.value

@@ -17,6 +17,7 @@
 """
 
 import os
+import sys
 from ast import literal_eval
 from datetime import datetime
 from enum import Enum
@@ -221,6 +222,15 @@ class HyperTuning:
                 elif algo == "bayes":
                     self.algo = tpe.suggest
                 elif algo == "anneal":
+                    if sys.version_info >= (3, 12):
+                        raise RuntimeError(
+                            "hyperopt's `anneal` algorithm is not supported on Python >= 3.12: its "
+                            "sampler calls int() on a 1-d numpy array, which numpy>=2 (bundled with "
+                            "Python 3.12) rejects with 'TypeError: only 0-dimensional arrays can be "
+                            "converted to Python scalars'. This is an upstream hyperopt bug present in "
+                            "all current releases. Use a different algo (e.g. 'bayes', 'random', "
+                            "'exhaustive'), or run on Python < 3.12 with numpy < 2."
+                        )
                     self.algo = anneal.suggest
                 else:
                     raise ValueError(f"Illegal algo [{algo}]")
@@ -622,12 +632,17 @@ class HyperTuning:
 
             def ray_objective(params):
                 result_dict = self.trial(params)
-                ray.train.report({"hyper_score": result_dict["hyper_score"]})
+                tune.report({"hyper_score": result_dict["hyper_score"]})
 
                 return result_dict
 
             if not ray.is_initialized():
-                ray.init()
+                # Don't let Ray snapshot the cwd into a working_dir: its packager applies
+                # .gitignore excludes (e.g. `dataset/`) but drops the `!` re-includes, so
+                # hopwise/properties/dataset/*.yaml is missing from the copy and trial workers
+                # load an incomplete config (numerical_features=None -> crash). With no
+                # working_dir, workers import the installed hopwise instead.
+                ray.init(runtime_env={"working_dir": None})
             tune.register_trainable("ray-trial", ray_objective)
             if self.algo["scheduler"] is not None:
                 scheduler = tune.create_scheduler(

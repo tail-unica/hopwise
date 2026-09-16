@@ -13,7 +13,6 @@
 
 # ruff: noqa: F403, F405
 
-import gc
 import importlib
 import os
 import pickle
@@ -22,7 +21,7 @@ from typing import Literal
 
 from hopwise.data.dataloader import *
 from hopwise.sampler import KGSampler, RepeatableSampler, Sampler
-from hopwise.utils import KnowledgeEvaluationType, ModelType, ensure_dir, progress_bar, set_color
+from hopwise.utils import KnowledgeEvaluationType, ModelType, ensure_dir, set_color
 from hopwise.utils.argument_list import dataset_arguments
 
 
@@ -39,18 +38,39 @@ def create_dataset(config):
         Dataset: Constructed dataset.
     """
     dataset_module = importlib.import_module("hopwise.data.dataset")
-    if hasattr(dataset_module, config["model"] + "Dataset"):
-        dataset_class = getattr(dataset_module, config["model"] + "Dataset")
+
+    # Check if user-item knowledge graph links are available
+    has_user_item_kg = os.path.isfile(
+        os.path.join(config["data_path"], f"{config['dataset']}.user_link")
+    ) and os.path.isfile(os.path.join(config["data_path"], f"{config['dataset']}.item_link"))
+
+    # Check for model-specific dataset class
+    model_dataset_name = config["model"] + "Dataset"
+    user_item_model_dataset_name = "UserItem" + model_dataset_name
+
+    if has_user_item_kg and hasattr(dataset_module, user_item_model_dataset_name):
+        # Prefer UserItem variant when link files exist
+        dataset_class = getattr(dataset_module, user_item_model_dataset_name)
+    elif hasattr(dataset_module, model_dataset_name):
+        dataset_class = getattr(dataset_module, model_dataset_name)
     else:
         model_type = config["MODEL_TYPE"]
+
+        if has_user_item_kg:
+            kg_dataset_classname = "UserItemKnowledgeBasedDataset"
+            path_language_model_dataset_classname = "UserItemKnowledgePathDataset"
+        else:
+            kg_dataset_classname = "KnowledgeBasedDataset"
+            path_language_model_dataset_classname = "KnowledgePathDataset"
+
         type2class = {
             ModelType.GENERAL: "Dataset",
             ModelType.SEQUENTIAL: "SequentialDataset",
             ModelType.CONTEXT: "Dataset",
-            ModelType.KNOWLEDGE: "KnowledgeBasedDataset",
+            ModelType.KNOWLEDGE: kg_dataset_classname,
             ModelType.TRADITIONAL: "Dataset",
             ModelType.DECISIONTREE: "Dataset",
-            ModelType.PATH_LANGUAGE_MODELING: "KnowledgePathDataset",
+            ModelType.PATH_LANGUAGE_MODELING: path_language_model_dataset_classname,
         }
         dataset_class = getattr(dataset_module, type2class[model_type])
 
@@ -158,15 +178,15 @@ def load_split_dataloaders(config):
 
     if config["MODEL_TYPE"] == ModelType.PATH_LANGUAGE_MODELING:
         dataloaders_folder = f"{config['model']} - {config['dataset']} - dataloaders"
-        dataloaders_save_path = _get_dataloader_name(config, dataloaders_folder)
-
+        default_file = _get_dataloader_name(config, dataloaders_folder)
     else:
         default_file = os.path.join(
             config["checkpoint_dir"],
             f"{config['dataset']}-for-{config['model']}-dataloader.pth",
         )
-        # used if you want to load a specific dataloader
-        dataloaders_save_path = config["dataloaders_save_path"] or default_file
+
+    # used if you want to load a specific dataloader
+    dataloaders_save_path = config["dataloaders_save_path"] or default_file
 
     if not os.path.exists(dataloaders_save_path):
         return None
@@ -513,44 +533,3 @@ def create_samplers(config, dataset, built_datasets):
     )
     test_sampler = test_sampler.set_phase("test") if test_sampler else None
     return train_sampler, valid_sampler, test_sampler
-
-
-def user_parallel_sampling(sampling_func_factory):
-    """Decorator to parallelize path sampling functions."""
-
-    import joblib
-
-    # https://github.com/DLR-RM/stable-baselines3/issues/1645#issuecomment-2194345304
-    tqdm_objects = [obj for obj in gc.get_objects() if "tqdm" in type(obj).__name__]
-    for tqdm_object in tqdm_objects:
-        if "tqdm_rich" in type(tqdm_object).__name__:
-            tqdm_object.close()
-
-    def wrapper(*args, **kwargs):
-        user_num = kwargs.get("user_num", None)
-        tqdm_kws = dict(
-            total=user_num - 1,
-            ncols=100,
-            desc="[red]KG Path Sampling",
-        )
-
-        sampling_func = sampling_func_factory(*args, **kwargs)
-
-        parallel_max_workers = kwargs.pop("parallel_max_workers", "")
-        if not parallel_max_workers:
-            iter_users = map(sampling_func, range(1, user_num))
-        else:
-            iter_users = joblib.Parallel(n_jobs=parallel_max_workers, prefer="processes", return_as="generator")(
-                joblib.delayed(sampling_func)(u) for u in range(1, user_num)
-            )
-
-        try:
-            iter_users = progress_bar(iter_users, **tqdm_kws)
-            return [p for p in iter_users]
-        except Exception:
-            if hasattr(iter_users, "close"):
-                iter_users.close()
-
-            raise
-
-    return wrapper

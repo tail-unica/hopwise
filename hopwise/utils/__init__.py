@@ -40,6 +40,7 @@ __all__ = [
     "FeatureType",
     "FeatureSource",
     "PathLanguageModelingTokenType",
+    "PathSamplingStrategy",
     "init_seed",
     "general_arguments",
     "training_arguments",

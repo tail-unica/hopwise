@@ -438,7 +438,7 @@ class Dataset(torch.utils.data.Dataset):
                 continue
             if unload_col is not None and field in unload_col:
                 continue
-            if isinstance(source, FeatureSource) or source != "link":
+            if isinstance(source, FeatureSource) or source not in ["link", "user_link", "item_link"]:
                 self.field2source[field] = source
                 self.field2type[field] = ftype
                 if not ftype.value.endswith("seq"):
@@ -601,9 +601,7 @@ class Dataset(torch.utils.data.Dataset):
                     feat[field] = feat[field].fillna(value=feat[field].mean())
                 else:
                     dtype = np.int64 if ftype == FeatureType.TOKEN_SEQ else float
-                    feat[field] = feat[field].apply(
-                        lambda x: (np.array([], dtype=dtype) if isinstance(x, float) else x)
-                    )
+                    feat[field] = feat[field].apply(lambda x: np.array([], dtype=dtype) if isinstance(x, float) else x)
 
     def _normalize(self):
         """Normalization if ``config['normalize_field']`` or ``config['normalize_all']`` is set.
@@ -1704,7 +1702,7 @@ class Dataset(torch.utils.data.Dataset):
         else:
             raise NotImplementedError(f"Sparse matrix format [{form}] has not been implemented.")
 
-    def _create_graph(self, tensor_feat, source_field, target_field, form="dgl", value_field=None):
+    def _create_graph(self, tensor_feat, source_field, target_field, form="pyg", value_field=None):
         """Get graph that describe relations between two fields.
 
         Source and target should be token-like fields.
@@ -1712,21 +1710,18 @@ class Dataset(torch.utils.data.Dataset):
         For an edge of <src, tgt>, ``graph[src, tgt] = 1`` if ``value_field`` is ``None``,
         else ``graph[src, tgt] = df_feat[value_field][src, tgt]``.
 
-        Currently, we support graph in `DGL`_ and `PyG`_.
+        Currently, we support graph in `PyG`_.
 
         Args:
             tensor_feat (Interaction): Feature where src and tgt exist.
             source_field (str): Source field
             target_field (str): Target field
-            form (str, optional): Library of graph data structure. Defaults to ``dgl``.
+            form (str, optional): Library of graph data structure. Defaults to ``pyg``.
             value_field (str, optional): edge attributes of graph, which should exist in ``df_feat``.
                 Defaults to ``None``.
 
         Returns:
             Graph of relations.
-
-        .. _DGL:
-            https://www.dgl.ai/
 
         .. _PyG:
             https://github.com/rusty1s/pytorch_geometric
@@ -1734,17 +1729,7 @@ class Dataset(torch.utils.data.Dataset):
         src = tensor_feat[source_field]
         tgt = tensor_feat[target_field]
 
-        if form == "dgl":
-            import dgl
-
-            graph = dgl.graph((src, tgt))
-            if value_field is not None:
-                if isinstance(value_field, str):
-                    value_field = {value_field}
-                for k in value_field:
-                    graph.edata[k] = tensor_feat[k]
-            return graph
-        elif form == "pyg":
+        if form == "pyg":
             from torch_geometric.data import Data
 
             edge_attr = tensor_feat[value_field] if value_field else None
@@ -1840,7 +1825,7 @@ class Dataset(torch.utils.data.Dataset):
         val = torch.FloatTensor([1] * num)
         return torch.sparse.FloatTensor(i, val)
 
-    def norm_adjacency_matrix(self, form="torch_sparse"):
+    def norm_adjacency_matrix(self, form="torch.sparse"):
         """Get the normalized adjacency matrix of users and items.
 
         Construct the square matrix from the training data and normalize it
@@ -1850,7 +1835,7 @@ class Dataset(torch.utils.data.Dataset):
             A_{hat} = D^{-0.5} \times A \times D^{-0.5}
 
         Args:
-            form (str, optional): Format of the normalized adjacency matrix. Defaults to ``torch_sparse``.
+            form (str, optional): Format of the normalized adjacency matrix. Defaults to ``torch.sparse``.
 
         Returns:
             torch.sparse.FloatTensor: Normalized adjacency matrix.
@@ -1858,22 +1843,22 @@ class Dataset(torch.utils.data.Dataset):
         Raises:
             NotImplementedError: If the format of the normalized adjacency matrix is not implemented.
         """
-        if form == "torch_sparse":
+        if form == "torch.sparse":
             return self._create_norm_adjacency_matrix()
         else:
             raise NotImplementedError(f"Normalized adjacency matrix format [{form}] has not been implemented.")
 
-    def eye_matrix(self, form="torch_sparse"):
+    def eye_matrix(self, form="torch.sparse"):
         """Construct the identity matrix with the size of item_num + user_num.
 
         Args:
             form (str, optional): Format of the identity matrix. Defaults
-                to ``torch_sparse``.
+                to ``torch.sparse``.
 
         Returns:
             torch.sparse.FloatTensor: Identity matrix.
         """
-        if form == "torch_sparse":
+        if form == "torch.sparse":
             return self._create_eye_matrix()
         else:
             raise NotImplementedError(f"Identity matrix format [{form}] has not been implemented.")

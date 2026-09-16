@@ -64,7 +64,7 @@ class GCMC(GeneralRecommender):
 
         # generate node feature
         if self.sparse_feature:
-            features = dataset.eye_matrix(form="torch_sparse")
+            features = dataset.eye_matrix(form="torch.sparse")
             i = features._indices()
             v = features._values()
             self.user_features = torch.sparse.FloatTensor(
@@ -83,7 +83,7 @@ class GCMC(GeneralRecommender):
         self.input_dim = self.user_features.shape[1]
 
         # adj matrices for each relation are stored in self.support
-        self.Graph = dataset.norm_adjacency_matrix(form="torch_sparse").to(self.device)
+        self.Graph = dataset.norm_adjacency_matrix(form="torch.sparse").to(self.device)
         self.support = [self.Graph]
 
         # accumulation operation

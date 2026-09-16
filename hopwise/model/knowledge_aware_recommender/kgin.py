@@ -46,7 +46,7 @@ class Aggregator(nn.Module):
         interact_mat,
         disen_weight_att,
     ):
-        from torch_scatter import scatter_mean
+        from torch_geometric.utils import scatter
 
         n_entities = entity_emb.shape[0]
 
@@ -54,7 +54,7 @@ class Aggregator(nn.Module):
         head, tail = edge_index
         edge_relation_emb = relation_emb[edge_type]
         neigh_relation_emb = entity_emb[tail] * edge_relation_emb  # [-1, embedding_size]
-        entity_agg = scatter_mean(src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0)
+        entity_agg = scatter(src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0, reduce="mean")
 
         """cul user->latent factor attention"""
         score_ = torch.mm(user_emb, latent_emb.t())

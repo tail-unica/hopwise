@@ -2,6 +2,7 @@
 # @Author : Gaowei Zhang
 # @Email  : zgw15630559577@163.com
 import os
+import sys
 import tempfile
 import unittest
 
@@ -12,16 +13,19 @@ current_path = os.path.dirname(os.path.realpath(__file__))
 config_file_list = [os.path.join(current_path, "test_hyper_tuning_config.yaml")]
 params_file = os.path.join(current_path, "test_hyper_tuning_params.test")
 
+# avoids distributed tuning (e.g., Ray) from cleaning up temporary directories (Python >= 3.10)
+_TMPDIR_KWARGS = {"ignore_cleanup_errors": True} if sys.version_info >= (3, 10) else {}
+
 
 def quick_test(tuner, algo):
-    with tempfile.TemporaryDirectory() as tmpdirname:
+    with tempfile.TemporaryDirectory(**_TMPDIR_KWARGS) as tmpdirname:
         if tuner == "ray":
             test_data_path = os.path.join(current_path, os.pardir, "test_data")
-            ray_config_file = tempfile.NamedTemporaryFile(mode="w", delete=True)
-            ray_config_file.write(f"data_path: {test_data_path}")
-            ray_config_file.flush()
+            ray_config_file = os.path.join(tmpdirname, "ray_data_path.yaml")
+            with open(ray_config_file, "w") as f:
+                f.write(f"data_path: {test_data_path}")
 
-            test_config_file_list = [*config_file_list, ray_config_file.name]
+            test_config_file_list = [*config_file_list, ray_config_file]
         else:
             test_config_file_list = config_file_list
 
@@ -37,9 +41,6 @@ def quick_test(tuner, algo):
         )
         hp.run()
 
-        if tuner == "ray":
-            ray_config_file.close()
-
 
 class TestHyperTuning(unittest.TestCase):
     def test_hyperopt_exhaustive(self):
@@ -51,6 +52,10 @@ class TestHyperTuning(unittest.TestCase):
     def test_hyperopt_bayes(self):
         quick_test(tuner="hyperopt", algo="bayes")
 
+    @unittest.skipIf(
+        sys.version_info >= (3, 12),
+        "hyperopt anneal is unsupported on Python >= 3.12 (numpy>=2 incompatibility; see HyperTuning.select_algo)",
+    )
     def test_hyperopt_anneal(self):
         quick_test(tuner="hyperopt", algo="anneal")
 

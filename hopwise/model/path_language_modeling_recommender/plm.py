@@ -196,4 +196,7 @@ class PLM(ExplainablePathLanguageModelingRecommender, GPT2LMHeadModel):
     def generate(self, inputs, **kwargs):
         kwargs["logits_processor"] = self.logits_processor_list
         kwargs["num_return_sequences"] = kwargs.pop("paths_per_user")
+        # Diverse/group beam search was moved to a `custom_generate` repo in transformers >=4.57.
+        # We trust the transformers-community repositories, so allow loading the remote generation code.
+        kwargs.setdefault("trust_remote_code", True)
         return super(GPT2LMHeadModel, self).generate(**inputs, **kwargs)
