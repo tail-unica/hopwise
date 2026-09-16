@@ -44,7 +44,7 @@ from hopwise.utils import (
 class Config:
     """Configurator module that load the defined parameters.
 
-    Configurator module will first load the default parameters from the fixed properties in Hopwise and then
+    Configurator module will first load the default parameters from the fixed properties in hopwise and then
     load parameters from the external input.
 
     External input supports three kind of forms: config file, command line and parameter dictionaries.

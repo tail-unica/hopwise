@@ -10,7 +10,7 @@ Classes
 .. autoapisummary::
 
    hopwise.trainer.hf_path_trainer.HFPathTrainer
-   hopwise.trainer.hf_path_trainer.HopwiseCallback
+   hopwise.trainer.hf_path_trainer.hopwiseCallback
 
 
 Module Contents
@@ -21,13 +21,13 @@ Module Contents
    Bases: :py:obj:`transformers.Trainer`
 
 
-   A HuggingFace Trainer that integrates with Hopwise for training and evaluation.
+   A HuggingFace Trainer that integrates with hopwise for training and evaluation.
 
 
    .. py:method:: evaluate(**kwargs)
 
 
-.. py:class:: HopwiseCallback(hopwise_trainer, train_data=None, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, model=None, model_name=None)
+.. py:class:: hopwiseCallback(hopwise_trainer, train_data=None, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None, model=None, model_name=None)
 
    Bases: :py:obj:`transformers.TrainerCallback`
 

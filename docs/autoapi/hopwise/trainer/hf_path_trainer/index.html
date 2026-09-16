@@ -13,37 +13,37 @@
     <link rel="stylesheet" type="text/css" href="../../../../static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../../static/styles/furo-extensions.css?v=8dab3a3b" />
     <link rel="stylesheet" type="text/css" href="../../../../static/custom.css" />
-    
-    
+
+
 
 
 <style>
   body {
     --color-code-background: #f2f2f2;
   --color-code-foreground: #1e1e1e;
-  
+
   }
   @media not print {
     body[data-theme="dark"] {
       --color-code-background: #202020;
   --color-code-foreground: #d0d0d0;
-  
+
     }
     @media (prefers-color-scheme: dark) {
       body:not([data-theme="light"]) {
         --color-code-background: #202020;
   --color-code-foreground: #d0d0d0;
-  
+
       }
     }
   }
 </style></head>
   <body>
-    
+
     <script>
       document.body.dataset.theme = localStorage.getItem("theme") || "auto";
     </script>
-    
+
 
 <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
   <symbol id="svg-toc" viewBox="0 0 24 24">
@@ -182,11 +182,11 @@
   </header>
   <aside class="sidebar-drawer">
     <div class="sidebar-container">
-      
+
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
-  
+
   <span class="sidebar-brand-text">hopwise  documentation</span>
-  
+
 </a><form class="sidebar-search-container" method="get" action="../../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
@@ -195,12 +195,12 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../../get_started/install.html">Install Hopwise</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../get_started/install.html">Install hopwise</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../get_started/distributed_training.html">Distributed Training</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../../tutorial/00_introduction.html">Introduction to Hopwise</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tutorial/00_introduction.html">Introduction to hopwise</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
 <ul>
@@ -620,7 +620,7 @@
 </div>
 
       </div>
-      
+
     </div>
   </aside>
   <div class="main">
@@ -660,9 +660,9 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HFPathTrainer" title="hopwise.trainer.hf_path_trainer.HFPathTrainer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HFPathTrainer</span></code></a></p></td>
-<td><p>A HuggingFace Trainer that integrates with Hopwise for training and evaluation.</p></td>
+<td><p>A HuggingFace Trainer that integrates with hopwise for training and evaluation.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback" title="hopwise.trainer.hf_path_trainer.HopwiseCallback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HopwiseCallback</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback" title="hopwise.trainer.hf_path_trainer.hopwiseCallback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hopwiseCallback</span></code></a></p></td>
 <td><p>It handles the training and evaluation communication with the hopwise and HuggingFace trainers.</p></td>
 </tr>
 </tbody>
@@ -675,7 +675,7 @@
 <dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HFPathTrainer">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">hopwise.trainer.hf_path_trainer.</span></span><span class="sig-name descname"><span class="pre">HFPathTrainer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">callbacks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tokenizer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HFPathTrainer" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">transformers.Trainer</span></code></p>
-<p>A HuggingFace Trainer that integrates with Hopwise for training and evaluation.</p>
+<p>A HuggingFace Trainer that integrates with hopwise for training and evaluation.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HFPathTrainer.evaluate">
 <span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HFPathTrainer.evaluate" title="Link to this definition">¶</a></dt>
@@ -684,83 +684,83 @@
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">hopwise.trainer.hf_path_trainer.</span></span><span class="sig-name descname"><span class="pre">HopwiseCallback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hopwise_trainer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">valid_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">saved</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">callback_fn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">hopwise.trainer.hf_path_trainer.</span></span><span class="sig-name descname"><span class="pre">hopwiseCallback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hopwise_trainer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">valid_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">saved</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">callback_fn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">transformers.TrainerCallback</span></code></p>
 <p>It handles the training and evaluation communication with the hopwise and HuggingFace trainers.</p>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.model">
-<span class="sig-name descname"><span class="pre">model</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.model" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.model">
+<span class="sig-name descname"><span class="pre">model</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.model" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.model_name">
-<span class="sig-name descname"><span class="pre">model_name</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.model_name" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.model_name">
+<span class="sig-name descname"><span class="pre">model_name</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.model_name" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.hopwise_trainer">
-<span class="sig-name descname"><span class="pre">hopwise_trainer</span></span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.hopwise_trainer" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.hopwise_trainer">
+<span class="sig-name descname"><span class="pre">hopwise_trainer</span></span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.hopwise_trainer" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.train_data">
-<span class="sig-name descname"><span class="pre">train_data</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.train_data" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.train_data">
+<span class="sig-name descname"><span class="pre">train_data</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.train_data" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.valid_data">
-<span class="sig-name descname"><span class="pre">valid_data</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.valid_data" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.valid_data">
+<span class="sig-name descname"><span class="pre">valid_data</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.valid_data" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.verbose">
-<span class="sig-name descname"><span class="pre">verbose</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.verbose" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.verbose">
+<span class="sig-name descname"><span class="pre">verbose</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.verbose" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.saved">
-<span class="sig-name descname"><span class="pre">saved</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.saved" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.saved">
+<span class="sig-name descname"><span class="pre">saved</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.saved" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.show_progress">
-<span class="sig-name descname"><span class="pre">show_progress</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.show_progress" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.show_progress">
+<span class="sig-name descname"><span class="pre">show_progress</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.show_progress" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.callback_fn">
-<span class="sig-name descname"><span class="pre">callback_fn</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.callback_fn" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.callback_fn">
+<span class="sig-name descname"><span class="pre">callback_fn</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.callback_fn" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.on_train_begin">
-<span class="sig-name descname"><span class="pre">on_train_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_train_begin" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.on_train_begin">
+<span class="sig-name descname"><span class="pre">on_train_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_train_begin" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.on_train_end">
-<span class="sig-name descname"><span class="pre">on_train_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_train_end" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.on_train_end">
+<span class="sig-name descname"><span class="pre">on_train_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_train_end" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.on_epoch_begin">
-<span class="sig-name descname"><span class="pre">on_epoch_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_epoch_begin" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.on_epoch_begin">
+<span class="sig-name descname"><span class="pre">on_epoch_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_epoch_begin" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.on_epoch_end">
-<span class="sig-name descname"><span class="pre">on_epoch_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_epoch_end" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.on_epoch_end">
+<span class="sig-name descname"><span class="pre">on_epoch_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_epoch_end" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.on_step_end">
-<span class="sig-name descname"><span class="pre">on_step_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_step_end" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.on_step_end">
+<span class="sig-name descname"><span class="pre">on_step_end</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_step_end" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.HopwiseCallback.on_evaluate">
-<span class="sig-name descname"><span class="pre">on_evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_evaluate" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="hopwise.trainer.hf_path_trainer.hopwiseCallback.on_evaluate">
+<span class="sig-name descname"><span class="pre">on_evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">control</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_evaluate" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -771,7 +771,7 @@
         </article>
       </div>
       <footer>
-        
+
         <div class="related-pages">
           <a class="next-page" href="../hyper_tuning/index.html">
               <div class="page-info">
@@ -788,9 +788,9 @@
                 <div class="context">
                   <span>Previous</span>
                 </div>
-                
+
                 <div class="title">hopwise.trainer</div>
-                
+
               </div>
             </a>
         </div>
@@ -800,20 +800,20 @@
                 Copyright &#169; 2025, Ludovico Boratto, Mirko Marras, Giacomo Medda, Alessandro Soccol
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
-            
+
             <a href="https://github.com/pradyunsg/furo">Furo</a>
-            
+
           </div>
           <div class="right-details">
-            
+
           </div>
         </div>
-        
+
       </footer>
     </div>
     <aside class="toc-drawer">
-      
-      
+
+
       <div class="toc-sticky toc-scroll">
         <div class="toc-title-container">
           <span class="toc-title">
@@ -830,22 +830,22 @@
 <li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HFPathTrainer.evaluate"><code class="docutils literal notranslate"><span class="pre">HFPathTrainer.evaluate()</span></code></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback</span></code></a><ul>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.model"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.model</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.model_name"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.model_name</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.hopwise_trainer"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.hopwise_trainer</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.train_data"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.train_data</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.valid_data"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.valid_data</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.verbose"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.verbose</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.saved"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.saved</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.show_progress"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.show_progress</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.callback_fn"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.callback_fn</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_train_begin"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.on_train_begin()</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_train_end"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.on_train_end()</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_epoch_begin"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.on_epoch_begin()</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_epoch_end"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.on_epoch_end()</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_step_end"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.on_step_end()</span></code></a></li>
-<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.HopwiseCallback.on_evaluate"><code class="docutils literal notranslate"><span class="pre">HopwiseCallback.on_evaluate()</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback</span></code></a><ul>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.model"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.model</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.model_name"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.model_name</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.hopwise_trainer"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.hopwise_trainer</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.train_data"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.train_data</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.valid_data"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.valid_data</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.verbose"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.verbose</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.saved"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.saved</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.show_progress"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.show_progress</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.callback_fn"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.callback_fn</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_train_begin"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.on_train_begin()</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_train_end"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.on_train_end()</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_epoch_begin"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.on_epoch_begin()</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_epoch_end"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.on_epoch_end()</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_step_end"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.on_step_end()</span></code></a></li>
+<li><a class="reference internal" href="#hopwise.trainer.hf_path_trainer.hopwiseCallback.on_evaluate"><code class="docutils literal notranslate"><span class="pre">hopwiseCallback.on_evaluate()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -857,8 +857,8 @@
           </div>
         </div>
       </div>
-      
-      
+
+
     </aside>
   </div>
 </div><script src="../../../../static/documentation_options.js?v=5929fcd5"></script>

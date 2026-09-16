@@ -1,7 +1,7 @@
 Training in FP16 and BF16
 =========================
 
-Hopwise supports mixed-precision training using FP16 (float16) and BF16 (bfloat16) to reduce
+hopwise supports mixed-precision training using FP16 (float16) and BF16 (bfloat16) to reduce
 memory usage and speed up training on compatible hardware.
 
 Overview

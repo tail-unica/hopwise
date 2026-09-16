@@ -54,7 +54,7 @@ Package Contents
           - hyperopt (https://github.com/hyperopt/hyperopt)
           - ray (https://docs.ray.io/en/latest/tune/index.html)
           - optuna (https://optuna.org/)
-      
+
       Thanks to sbrodeur for the exhaustive search code.
       https://github.com/hyperopt/hyperopt/issues/200
 
@@ -1255,7 +1255,7 @@ Package Contents
 
       Load the model parameters and training information based on the directory name,
       and navigate into subdirectories if necessary.
-      Also handles both HuggingFace and Hopwise formats by reading corresponding files.
+      Also handles both HuggingFace and hopwise formats by reading corresponding files.
 
       :param resume_file: the path to the directory containing the checkpoint files or subdirectories
       :type resume_file: str

@@ -192,10 +192,11 @@ select = [
   # "PD"  Not working well. Confuses torch.values as df.values and suggests using .to_numpy()
 ]
 ignore = [
-    "PLR0913", # Too many arguments in function definition
     "UP031", # TEMPORARY: Use format specifiers instead of percent format
-    "PLR0915", # TEMPORARY: Too many statements
     "PLR0912", # TEMPORARY: Too many branches
+    "PLR0913", # Too many arguments in function definition
+    "PLR0915", # TEMPORARY: Too many statements
+    "PLR0917", # TEMPORARY: Too many positional arguments
     "PLC0415", # import should be at the top-level of a file
 ]
 fixable = ["ALL"]

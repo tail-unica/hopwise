@@ -22,7 +22,7 @@ from hopwise.utils import (
 
 
 class HFPathTrainer(Trainer):
-    """A HuggingFace Trainer that integrates with Hopwise for training and evaluation."""
+    """A HuggingFace Trainer that integrates with hopwise for training and evaluation."""
 
     def __init__(self, model, callbacks, train_data=None, args=None, tokenizer=None):
         tokenizer = tokenizer or train_data.dataset.tokenizer
@@ -36,7 +36,7 @@ class HFPathTrainer(Trainer):
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
         )
 
-        # Overwrite the callbacks to only use the HopwiseCallback
+        # Overwrite the callbacks to only use the hopwiseCallback
         self.callback_handler.callbacks = callbacks
 
     def evaluate(self, **kwargs):
@@ -45,7 +45,7 @@ class HFPathTrainer(Trainer):
         return self.control.metrics
 
 
-class HopwiseCallback(TrainerCallback):
+class hopwiseCallback(TrainerCallback):
     """It handles the training and evaluation communication with the hopwise and HuggingFace trainers."""
 
     def __init__(

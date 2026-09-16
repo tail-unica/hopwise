@@ -16,7 +16,7 @@ from hopwise.trainer import HyperTuning
 from hopwise.utils import list_to_latex
 
 
-class HopwiseClickCommand(click.Command):
+class hopwiseClickCommand(click.Command):
     def parse_args(self, ctx, args):
         """Override to filter out HopWise parameters before Click's validation"""
 
@@ -69,7 +69,7 @@ def cli(ctx, debug, rich_traceback):
 
 
 @cli.command(
-    cls=HopwiseClickCommand,
+    cls=hopwiseClickCommand,
     context_settings=dict(
         allow_interspersed_args=True,
     ),
@@ -128,7 +128,7 @@ def train(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_
 
 
 @cli.command(
-    cls=HopwiseClickCommand,
+    cls=hopwiseClickCommand,
     context_settings=dict(
         allow_interspersed_args=True,
     ),
@@ -187,7 +187,7 @@ def evaluate(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, wor
 
 
 @cli.command(
-    cls=HopwiseClickCommand,
+    cls=hopwiseClickCommand,
     context_settings=dict(
         allow_interspersed_args=True,
     ),
@@ -292,7 +292,7 @@ def benchmark(
 
 
 @cli.command(
-    cls=HopwiseClickCommand,
+    cls=hopwiseClickCommand,
     context_settings=dict(
         allow_interspersed_args=True,
     ),

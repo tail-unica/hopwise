@@ -1977,7 +1977,7 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
         callback_fn=None,
         training_args=None,
     ):
-        from hopwise.trainer.hf_path_trainer import HFPathTrainer, HopwiseCallback
+        from hopwise.trainer.hf_path_trainer import HFPathTrainer, hopwiseCallback
 
         training_args = training_args or {}
 
@@ -1985,7 +1985,7 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
         hf_args = self.prepare_hf_args(**training_args)
 
         callbacks = [
-            HopwiseCallback(
+            hopwiseCallback(
                 self,
                 train_data,
                 valid_data=valid_data,
@@ -2033,7 +2033,7 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
         """
         Load the model parameters and training information based on the directory name,
         and navigate into subdirectories if necessary.
-        Also handles both HuggingFace and Hopwise formats by reading corresponding files.
+        Also handles both HuggingFace and hopwise formats by reading corresponding files.
 
         Args:
             resume_file (str): the path to the directory containing the checkpoint files or subdirectories
@@ -2051,7 +2051,7 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
             hopwise_resume_file = resume_file
             hf_resume_file = resume_file.replace(self.HOPWISE_SAVE_PATH_SUFFIX, self.HUGGINGFACE_SAVE_PATH_SUFFIX)
         else:
-            raise ValueError(f"The directory name [{resume_file}] does not indicate a HuggingFace or Hopwise model.")
+            raise ValueError(f"The directory name [{resume_file}] does not indicate a HuggingFace or hopwise model.")
 
         checkpoint = torch.load(hopwise_resume_file, map_location=self.device, weights_only=False)
         self.start_epoch = checkpoint["epoch"] + 1

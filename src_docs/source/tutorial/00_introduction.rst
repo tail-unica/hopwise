@@ -1,13 +1,13 @@
-Introduction to Hopwise
+Introduction to hopwise
 ===================
 
 Welcome to **hopwise**, an advanced extension of the RecBole library designed to enhance
 recommendation systems with the power of **knowledge graphs**.
 
-What is Hopwise?
+What is hopwise?
 ----------------
 
-Hopwise integrates knowledge embedding models, path-based reasoning methods, and path language
+hopwise integrates knowledge embedding models, path-based reasoning methods, and path language
 modeling approaches to support both recommendation and link prediction tasks with a focus on
 **explainability**.
 
@@ -18,7 +18,7 @@ modeling approaches to support both recommendation and link prediction tasks wit
 Key Features
 ------------
 
-Hopwise extends the popular RecBole framework with several unique capabilities:
+hopwise extends the popular RecBole framework with several unique capabilities:
 
 1. **Path Reasoning Methods**: Novel recommendation models that leverage knowledge graph paths
    to provide explainable recommendations (KGGLM, PEARLM, PLM).
@@ -37,7 +37,7 @@ Hopwise extends the popular RecBole framework with several unique capabilities:
 Model Categories
 ----------------
 
-Hopwise supports six categories of recommendation models:
+hopwise supports six categories of recommendation models:
 
 - **General Recommendation**: Collaborative filtering models (BPR, NeuMF, LightGCN, etc.)
 - **Sequential Recommendation**: Models that consider interaction sequences (SASRec, BERT4Rec, etc.)
@@ -70,7 +70,7 @@ For path-based models with language modeling:
 Command Line Interface
 ----------------------
 
-Hopwise provides a convenient CLI for common tasks:
+hopwise provides a convenient CLI for common tasks:
 
 .. code:: bash
 

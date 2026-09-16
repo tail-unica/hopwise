@@ -1,8 +1,8 @@
-# RecBole → Hopwise Model Comparison Report
+# RecBole → hopwise Model Comparison Report
 
 ## Summary
 
-| Category | Hopwise | RecBole | Missing | Extra in Hopwise |
+| Category | hopwise | RecBole | Missing | Extra in hopwise |
 |----------|---------|---------|---------|------------------|
 | context_aware_recommender | 18 | 18 | 0 | 0 |
 | exlib_recommender | 0 | 0 | 0 | 0 |

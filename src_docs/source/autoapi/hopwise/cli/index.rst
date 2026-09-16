@@ -18,7 +18,7 @@ Classes
 
 .. autoapisummary::
 
-   hopwise.cli.HopwiseClickCommand
+   hopwise.cli.hopwiseClickCommand
 
 
 Functions
@@ -37,7 +37,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:class:: HopwiseClickCommand
+.. py:class:: hopwiseClickCommand
 
    Bases: :py:obj:`click.Command`
 
