@@ -13,6 +13,7 @@ import unittest
 
 sys.path.append(os.getcwd())
 import numpy as np
+import pytest
 
 from hopwise.config import Config
 from hopwise.evaluator.register import metrics_dict
@@ -170,218 +171,135 @@ class TestTopKMetrics(unittest.TestCase):
             ).tolist(),
         )
 
-    def test_serendipity(self):
-        name = "serendipity"
 
-        # Use a small k to keep the test compact and deterministic.
-        local_parameters = {"topk": [5], "metric_decimal_place": 4}
-        local_config = Config("BPR", "ml-1m", config_dict=local_parameters)
+# -------------------------------------------------------------------------
+# Beyond-utility metrics
+# -------------------------------------------------------------------------
 
-        Metric = metrics_dict[name](local_config)
-        k = local_config["topk"][0]
-        key = f"serendipity@{k}"
-        dp = local_config["metric_decimal_place"]
+BEYOND_UTILITY_TOL = 1e-4
+BEYOND_UTILITY_NUM_ITEMS = 10
+NO_HISTORY = np.empty((2, 0), dtype=int)
 
-        class _RecWrap:
-            def __init__(self, arr):
-                self._arr = np.array(arr, dtype=int)
 
-            def numpy(self):
-                return self._arr
+def _beyond_utility_config(topk):
+    return Config("BPR", "ml-1m", config_dict={"topk": topk, "metric_decimal_place": 4})
 
-        class _MinimalDataObject:
-            def __init__(self, rec_items, count_items, num_items, num_users, history_index):
-                self._store = {
-                    "rec.items": _RecWrap(rec_items),
-                    "data.count_items": count_items,
-                    "data.num_items": num_items,
-                    "data.num_users": num_users,
-                    "data.history_index": history_index,
-                }
 
-            def get(self, key):
-                return self._store[key]
+@pytest.fixture(scope="module")
+def beyond_utility_config():
+    return _beyond_utility_config([5])
 
-        num_items = 10
-        # item 0 most popular, item 9 least popular
-        count_items = {i: (num_items - i) for i in range(num_items)}
 
-        cases = [
-            {
-                "name": "all_recs_are_popular_for_both_users",
-                # Recommend top popular items -> intersection@k = k -> serendipity = 0
-                "rec_items": [
-                    [0, 1, 2, 3, 4],
-                    [0, 1, 2, 3, 4],
-                ],
-                "history_index": np.empty((2, 0), dtype=int),
-                "expected": 0.0,
-            },
-            {
-                "name": "no_recs_are_popular_for_both_users",
-                # Recommend least popular items -> intersection@k = 0 -> serendipity = 1
-                "rec_items": [
-                    [9, 8, 7, 6, 5],
-                    [9, 8, 7, 6, 5],
-                ],
-                "history_index": np.empty((2, 0), dtype=int),
-                "expected": 1.0,
-            },
-            {
-                "name": "mixed_popularity_intersection_three_out_of_five",
-                # 3 popular items in user's popularity-topk -> serendipity = 1 - 3/5 = 0.4
-                "rec_items": [
-                    [0, 1, 2, 9, 8],
-                    [0, 1, 2, 9, 8],
-                ],
-                "history_index": np.empty((2, 0), dtype=int),
-                "expected": 1 - (3 / 5),
-            },
-            {
-                "name": "history_removal_increases_serendipity",
-                # Remove {0,1} from popularity list for both users via history.
-                # history_index must be shaped as (2, N): [user_ids; item_ids]
-                # After removal, only item 2 remains in the popularity-topk intersection -> 1 - 1/5 = 0.8
-                "rec_items": [
-                    [0, 1, 2, 9, 8],
-                    [0, 1, 2, 9, 8],
-                ],
-                "history_index": np.array(
-                    [
-                        [1, 1, 2, 2],  # user ids (1-indexed due to padding)
-                        [0, 1, 0, 1],  # item ids
-                    ],
-                    dtype=int,
-                ),
-                "expected": 1 - (1 / 5),
-            },
-            {
-                "name": "two_users_opposite_lists_average",
-                # user0: all popular -> 0
-                # user1: none popular -> 1
-                # mean -> 0.5
-                "rec_items": [
-                    [0, 1, 2, 3, 4],
-                    [9, 8, 7, 6, 5],
-                ],
-                "history_index": np.empty((2, 0), dtype=int),
-                "expected": 0.5,
-            },
-        ]
+class _NumpyWrap:
+    """Mimics the tensor stored under ``rec.items``."""
 
-        got = []
-        expected = []
+    def __init__(self, arr):
+        self._arr = np.array(arr, dtype=int)
 
-        for c in cases:
-            rec_items = c["rec_items"]
-            num_users = len(rec_items) + 1  # padding row 0
+    def numpy(self):
+        return self._arr
 
-            dataobject = _MinimalDataObject(
-                rec_items=rec_items,
-                count_items=count_items,
-                num_items=num_items,
-                num_users=num_users,
-                history_index=c["history_index"],
-            )
 
-            metric_value = float(Metric.calculate_metric(dataobject)[key])
-            got.append(round(metric_value, dp))
-            expected.append(round(float(c["expected"]), dp))
+class _DataObject:
+    """Minimal stand-in for the evaluator data struct, exposing only the keys a metric reads."""
 
-        self.assertEqual(got, expected)
+    def __init__(self, store):
+        self._store = store
 
-    def test_novelty(self):
-        name = "novelty"
+    def get(self, key):
+        return self._store[key]
 
-        local_parameters = {"topk": [5], "metric_decimal_place": 4}
-        local_config = Config("BPR", "ml-1m", config_dict=local_parameters)
 
-        Metric = metrics_dict[name](local_config)
-        k = local_config["topk"][0]
-        key = f"novelty@{k}"
-        dp = local_config["metric_decimal_place"]
+# item 0 is the most popular, item 9 the least popular
+SERENDIPITY_COUNT_ITEMS = {i: BEYOND_UTILITY_NUM_ITEMS - i for i in range(BEYOND_UTILITY_NUM_ITEMS)}
 
-        class _RecWrap:
-            def __init__(self, arr):
-                self._arr = np.array(arr, dtype=int)
+SERENDIPITY_CASES = [
+    pytest.param([[0, 1, 2, 3, 4], [0, 1, 2, 3, 4]], NO_HISTORY, 0.0, id="all_recs_popular"),
+    pytest.param([[9, 8, 7, 6, 5], [9, 8, 7, 6, 5]], NO_HISTORY, 1.0, id="no_recs_popular"),
+    pytest.param([[0, 1, 2, 9, 8], [0, 1, 2, 9, 8]], NO_HISTORY, 1 - 3 / 5, id="three_of_five_popular"),
+    pytest.param(
+        # history_index is (user_ids; item_ids), users 1-indexed due to padding.
+        # Items {0, 1} are removed from both users' popularity ranking, so only item 2 stays popular.
+        [[0, 1, 2, 9, 8], [0, 1, 2, 9, 8]],
+        np.array([[1, 1, 2, 2], [0, 1, 0, 1]], dtype=int),
+        1 - 1 / 5,
+        id="history_items_are_not_popular",
+    ),
+    pytest.param([[0, 1, 2, 3, 4], [9, 8, 7, 6, 5]], NO_HISTORY, (0.0 + 1.0) / 2, id="two_users_mean_over_users"),
+]
 
-            def numpy(self):
-                return self._arr
 
-        class _MinimalDataObject:
-            def __init__(self, rec_items, count_items, num_items):
-                self._store = {
-                    "rec.items": _RecWrap(rec_items),
-                    "data.count_items": count_items,
-                    "data.num_items": num_items,
-                }
+def _serendipity(config, rec_items, history_index):
+    store = {
+        "rec.items": _NumpyWrap(rec_items),
+        "data.count_items": SERENDIPITY_COUNT_ITEMS,
+        "data.num_items": BEYOND_UTILITY_NUM_ITEMS,
+        "data.num_users": len(rec_items) + 1,  # padding row 0
+        "data.history_index": history_index,
+    }
+    return metrics_dict["serendipity"](config).calculate_metric(_DataObject(store))
 
-            def get(self, key):
-                return self._store[key]
 
-        num_items = 10
-        # item 0 -> count=1 (least popular), item 9 -> count=10 (most popular)
-        count_items = {i: (i + 1) for i in range(num_items)}
+@pytest.mark.parametrize(("rec_items", "history_index", "expected"), SERENDIPITY_CASES)
+def test_serendipity(beyond_utility_config, rec_items, history_index, expected):
+    """Serendipity@k(u) = 1 - |top-k recs of u in the k most popular non-history items| / k, averaged."""
+    result = _serendipity(beyond_utility_config, rec_items, history_index)
+    assert float(result["serendipity@5"]) == pytest.approx(expected, abs=BEYOND_UTILITY_TOL)
 
-        # With min_pop=1, max_pop=10:
-        # normalized_pop(i) = (count(i)-1)/9 = i/9
-        # novelty(i) = 1 - i/9
-        def nov(i: int) -> float:
-            return 1.0 - (i / 9.0)
 
-        cases = [
-            {
-                "name": "all_low_pop_items_high_novelty",
-                "rec_items": [
-                    [0, 1, 2, 3, 4],
-                    [0, 1, 2, 3, 4],
-                ],
-                "expected": sum(nov(i) for i in [0, 1, 2, 3, 4]) / 5,
-            },
-            {
-                "name": "all_high_pop_items_low_novelty",
-                "rec_items": [
-                    [5, 6, 7, 8, 9],
-                    [5, 6, 7, 8, 9],
-                ],
-                "expected": sum(nov(i) for i in [5, 6, 7, 8, 9]) / 5,
-            },
-            {
-                "name": "two_users_different_lists_mean_over_users",
-                "rec_items": [
-                    [0, 1, 2, 3, 4],
-                    [3, 4, 5, 6, 7],
-                ],
-                "expected": (
-                    (sum(nov(i) for i in [0, 1, 2, 3, 4]) / 5)
-                    + (sum(nov(i) for i in [3, 4, 5, 6, 7]) / 5)
-                )
-                / 2,
-            },
-            {
-                "name": "uniform_mid_pop_items",
-                "rec_items": [
-                    [2, 3, 4, 5, 6],
-                    [2, 3, 4, 5, 6],
-                ],
-                "expected": sum(nov(i) for i in [2, 3, 4, 5, 6]) / 5,
-            },
-        ]
+def test_serendipity_depends_on_k():
+    result = _serendipity(_beyond_utility_config([2, 5]), [[3, 4, 9, 8, 7]], NO_HISTORY)
+    # @2: popular {0, 1}, no overlap -> 1.0; @5: popular {0..4}, overlap {3, 4} -> 1 - 2/5
+    got = {k: float(result[f"serendipity@{k}"]) for k in (2, 5)}
+    assert got == pytest.approx({2: 1.0, 5: 1 - 2 / 5}, abs=BEYOND_UTILITY_TOL)
 
-        got = []
-        expected = []
 
-        for c in cases:
-            dataobject = _MinimalDataObject(
-                rec_items=c["rec_items"],
-                count_items=count_items,
-                num_items=num_items,
-            )
-            metric_value = float(Metric.calculate_metric(dataobject)[key])
-            got.append(round(metric_value, dp))
-            expected.append(round(float(c["expected"]), dp))
+# item 0 is the least popular (count 1), item 9 the most popular (count 10)
+NOVELTY_COUNT_ITEMS = {i: i + 1 for i in range(BEYOND_UTILITY_NUM_ITEMS)}
 
-        self.assertEqual(got, expected)
+
+def _item_novelty(i):
+    # min-max normalized popularity is (count - 1) / (10 - 1) = i / 9
+    return 1.0 - i / 9
+
+
+def _mean_novelty(items):
+    return sum(_item_novelty(i) for i in items) / len(items)
+
+
+NOVELTY_CASES = [
+    pytest.param([[0, 1, 2, 3, 4], [0, 1, 2, 3, 4]], _mean_novelty([0, 1, 2, 3, 4]), id="low_popularity_items"),
+    pytest.param([[5, 6, 7, 8, 9], [5, 6, 7, 8, 9]], _mean_novelty([5, 6, 7, 8, 9]), id="high_popularity_items"),
+    pytest.param([[2, 3, 4, 5, 6], [2, 3, 4, 5, 6]], _mean_novelty([2, 3, 4, 5, 6]), id="mid_popularity_items"),
+    pytest.param(
+        [[0, 1, 2, 3, 4], [3, 4, 5, 6, 7]],
+        (_mean_novelty([0, 1, 2, 3, 4]) + _mean_novelty([3, 4, 5, 6, 7])) / 2,
+        id="two_users_mean_over_users",
+    ),
+]
+
+
+def _novelty(config, rec_items):
+    store = {
+        "rec.items": _NumpyWrap(rec_items),
+        "data.count_items": NOVELTY_COUNT_ITEMS,
+        "data.num_items": BEYOND_UTILITY_NUM_ITEMS,
+    }
+    return metrics_dict["novelty"](config).calculate_metric(_DataObject(store))
+
+
+@pytest.mark.parametrize(("rec_items", "expected"), NOVELTY_CASES)
+def test_novelty(beyond_utility_config, rec_items, expected):
+    """Novelty@k(u) = mean over the top-k recs of u of 1 - min-max normalized popularity, averaged."""
+    result = _novelty(beyond_utility_config, rec_items)
+    assert float(result["novelty@5"]) == pytest.approx(expected, abs=BEYOND_UTILITY_TOL)
+
+
+def test_novelty_depends_on_k():
+    result = _novelty(_beyond_utility_config([2, 5]), [[0, 1, 7, 8, 9]])
+    got = {k: float(result[f"novelty@{k}"]) for k in (2, 5)}
+    expected = {2: _mean_novelty([0, 1]), 5: _mean_novelty([0, 1, 7, 8, 9])}
+    assert got == pytest.approx(expected, abs=BEYOND_UTILITY_TOL)
 
 
 if __name__ == "__main__":

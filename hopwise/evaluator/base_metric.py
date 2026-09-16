@@ -229,8 +229,7 @@ class ConsumerTopKMetric(AbstractMetric):
         return metric_dict
 
 
-class PathQualityMetric(TopkMetric):
-    # TODO: add support for gender and age based metrics
+class PathQualityMetric(AbstractMetric):
     """:class:`PathQualityMetric` is a base object of path-based metrics. If you want to
     implement a path based metric, you can inherit this class.
 
@@ -243,6 +242,7 @@ class PathQualityMetric(TopkMetric):
 
     def __init__(self, config):
         super().__init__(config)
+        self.topk = config["topk"]
 
     def used_info(self, dataobject):
         paths = dataobject.get("rec.paths")
@@ -256,3 +256,25 @@ class PathQualityMetric(TopkMetric):
         ema_vals = values.ewm(span=len(values)).mean()
         normalized_ema_vals = (ema_vals - ema_vals.min()) / (ema_vals.max() - ema_vals.min())
         return normalized_ema_vals.to_numpy()
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Path quality metrics aggregate one value per user or per path and have no rank dimension,
+        because `rec.paths` only holds the paths of the top-`max(topk)` recommended items.
+        The same average is therefore reported for every `k`.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metric value of each user or of each path, shape of ``(n_users,)`` or \
+            ``(n_paths,)``.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = f"{metric}@{k}"
+            metric_dict[key] = round(avg_result, self.decimal_place)
+        return metric_dict
