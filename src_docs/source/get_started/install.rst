@@ -1,4 +1,4 @@
-Install Hopwise
+Install hopwise
 ======================
 hopwise can be installed from Source or via PyPI
 

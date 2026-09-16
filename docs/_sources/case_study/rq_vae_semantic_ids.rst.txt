@@ -73,7 +73,7 @@ The RQ-VAE is trained with a combination of:
             loss.backward()
             optimizer.step()
 
-Integration with Hopwise
+Integration with hopwise
 ------------------------
 
 Semantic IDs can be used with sequential recommendation models to represent items

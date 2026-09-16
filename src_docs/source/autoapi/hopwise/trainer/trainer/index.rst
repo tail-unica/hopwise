@@ -1187,7 +1187,7 @@ Module Contents
 
       Load the model parameters and training information based on the directory name,
       and navigate into subdirectories if necessary.
-      Also handles both HuggingFace and Hopwise formats by reading corresponding files.
+      Also handles both HuggingFace and hopwise formats by reading corresponding files.
 
       :param resume_file: the path to the directory containing the checkpoint files or subdirectories
       :type resume_file: str

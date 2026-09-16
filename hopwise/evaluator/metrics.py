@@ -877,7 +877,8 @@ class Serendipity(AbstractMetric):
     def get_popularity_rank(self, item_count, history_matrix, num_users):
         """Rank every item by decreasing popularity, separately for each user.
 
-        Items a user already interacted with are pushed to the end of their ranking.
+        Items a user already interacted with and the padding item are pushed below every item with a valid count,
+        items without training interactions included, so they never displace a candidate from the popular set.
 
         Args:
             item_count(numpy.ndarray): number of interactions of each item in training data.
@@ -888,8 +889,9 @@ class Serendipity(AbstractMetric):
             numpy.ndarray: popularity rank of every item, shape of ``(n_users, n_items)``, 0 being the most popular.
         """
         pop_recs = np.tile(item_count, (num_users, 1))
-        pop_recs[tuple(history_matrix)] = 0
-        pop_recs = pop_recs[1:]  # remove the padding
+        pop_recs[tuple(history_matrix)] = -1
+        pop_recs[:, 0] = -1  # padding item
+        pop_recs = pop_recs[1:]  # remove the padding user
 
         pop_order = np.argsort(pop_recs, axis=-1)[:, ::-1]
         pop_rank = np.empty_like(pop_order)
@@ -1259,7 +1261,7 @@ class LID(PathQualityMetric):
         and then averaged across users.
 
         LID is independent of the cutoff :math:`k`. The same value is reported for all
-        configured values of `k`, consistently with the current HopWise implementation.
+        configured values of `k`, consistently with the current hopwise implementation.
 
     Formally, let:
         - :math:`U` be the set of users,
@@ -1323,7 +1325,7 @@ class SED(PathQualityMetric):
         averaged across users.
 
         SED is independent of the cutoff :math:`k`. The same value is reported for all
-        configured values of `k`, consistently with the current HopWise implementation.
+        configured values of `k`, consistently with the current hopwise implementation.
 
     Formally, let:
         - :math:`U` be the set of users,
@@ -1392,7 +1394,7 @@ class PTD(PathQualityMetric):
         across users.
 
         PTD is independent of the cutoff :math:`k`. The same value is reported for all
-        configured values of `k`, consistently with the current HopWise implementation.
+        configured values of `k`, consistently with the current hopwise implementation.
 
     Formally, let:
         - :math:`U` be the set of users,
@@ -1452,20 +1454,21 @@ class PTD(PathQualityMetric):
 
 
 class PTC(PathQualityMetric):
-    r"""PTC (Path Type Concentration) is a path quality metric that measures how
-    concentrated explanation paths are with respect to their path types.
+    r"""PTC (Path Type Concentration) is a path quality metric that measures how evenly
+    explanation paths are spread across path types.
 
     Note:
-        In this implementation, PTC quantifies the concentration (i.e., lack of
-        diversity) of path types used in a user's explanation paths by adopting a
-        Simpson-style concentration index.
+        Despite its name, PTC is reported as the complement of a Simpson concentration
+        index (i.e., the Gini-Simpson diversity index): for each user, it is one minus the
+        probability that two explanation paths drawn without replacement share the same
+        path type. Higher values therefore mean lower concentration.
         The path type is identified by the first element of the last node in the path;
         if the last node corresponds to a self-loop, the path type is taken from the
-        penultimate node.
+        penultimate node. Users with a single explanation path get a PTC of 0.
 
         The metric is computed per user and then averaged across users.
         PTC is independent of the cutoff :math:`k`; the same value is reported for all
-        configured values of `k`, consistently with the current HopWise implementation.
+        configured values of `k`, consistently with the current hopwise implementation.
 
     Formally, let:
         - :math:`U` be the set of users,
@@ -1551,7 +1554,7 @@ class PPT(PathQualityMetric):
         across users.
 
         PPT is independent of the cutoff :math:`k`. The same value is reported for all
-        configured values of `k`, consistently with the current HopWise implementation.
+        configured values of `k`, consistently with the current hopwise implementation.
 
     Formally, let:
         - :math:`U` be the set of users,
@@ -1623,7 +1626,7 @@ class LITD(PathQualityMetric):
         averaged across users.
 
         LITD is independent of the cutoff :math:`k`. The same value is reported for all
-        configured values of `k`, consistently with the current HopWise implementation.
+        configured values of `k`, consistently with the current hopwise implementation.
 
     Formally, let:
         - :math:`U` be the set of users,
@@ -1685,7 +1688,7 @@ class SETD(PathQualityMetric):
         averaged across users.
 
         SETD is independent of the cutoff :math:`k`. The same value is reported for all
-        configured values of `k`, consistently with the current HopWise implementation.
+        configured values of `k`, consistently with the current hopwise implementation.
 
     Formally, let:
         - :math:`U` be the set of users,

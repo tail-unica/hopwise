@@ -27,7 +27,7 @@ If applicable, add links to Colab or other Jupyter laboratory platforms that can
 
 **Desktop (please complete the following information):**
  - OS: [e.g. Linux, macOS or Windows]
-- Hopwise Version [e.g. 0.1.0]
+- hopwise Version [e.g. 0.1.0]
 - Python Version [e.g. 3.9]
 - PyTorch Version [e.g. 1.60]
 - cudatoolkit Version [e.g. 9.2, none]
