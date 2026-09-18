@@ -107,7 +107,7 @@
   </noscript>
 
   <!-- Fonts - Optimized loading -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <!-- Defer non-critical JavaScript -->
   <script defer src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
@@ -270,6 +270,7 @@
                 <a href="https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371" target="_blank">Gianni Fenu</a>,</span>
               <span class="author-block">
                 <a href="https://francescamalloci.com" target="_blank">Francesca M. Malloci</a>,</span>
+              <br>
               <span class="author-block">
                 <a href="https://www.mirkomarras.com" target="_blank">Mirko Marras</a>,</span>
               <span class="author-block">
@@ -314,7 +315,8 @@
                 </a>
               </span>
 
-              <span class="link-block">
+              <!-- TODO: remove style="display: none" to publish the notebook button -->
+              <span class="link-block" style="display: none">
                 <a href="#" target="_blank"
                 class="external-link button is-normal is-rounded is-dark">
                   <span class="icon">
@@ -410,7 +412,7 @@
       <div class="objective-card">
         <span class="objective-num">2</span>
         <h3>Conceptualize path reasoning</h3>
-        <p>Describe explainable recommendation as a knowledge graph traversal that connects users, items, entities, and contextual evidence through interpretable paths.</p>
+        <p>Describe explainable recommendation as a knowledge graph traversal process that connects users, items, entities, and contextual evidence through interpretable reasoning paths.</p>
       </div>
       <div class="objective-card">
         <span class="objective-num">3</span>
@@ -425,11 +427,11 @@
       <div class="objective-card">
         <span class="objective-num">5</span>
         <h3>Assess recommendation and explanation quality</h3>
-        <p>Apply the metrics integrated in <em>hopwise</em> and interpret their implications for utility, explanation usefulness, and evidence transparency.</p>
+        <p>Apply the evaluation metrics integrated in <em>hopwise</em> and interpret their implications for recommendation utility, explanation usefulness, and evidence transparency.</p>
       </div>
       <div class="objective-card">
         <span class="objective-num">6</span>
-        <h3>Explore and customize the workflow</h3>
+        <h3>Explore and customize the explainable recommendation workflow</h3>
         <p>Adapt data, configurations, reasoning strategies, or evaluation components of <em>hopwise</em> to new knowledge-intensive domains.</p>
       </div>
     </div>
@@ -512,12 +514,7 @@
             <span class="objective-chips">Obj. 6</span>
           </div>
           <h4>Extension Showcase through Differentiated Exercises</h4>
-          <p>We engage participants at different levels of technical depth by letting them choose one of the following guided exercises:</p>
-          <div class="exercise-list">
-            <span class="exercise-pill"><i class="fas fa-project-diagram"></i> Run existing methods on another knowledge graph available in <em>hopwise</em></span>
-            <span class="exercise-pill"><i class="fas fa-sliders-h"></i> Tune configuration parameters and observe changes in recommendation and explanation patterns</span>
-            <span class="exercise-pill"><i class="fas fa-code"></i> Code a simple new evaluation metric perspective</span>
-          </div>
+          <p>We engage participants at different levels of technical depth by letting them choose one of the following guided exercises: running existing methods on another knowledge graph available in <em>hopwise</em>, experimenting with configuration parameters to observe changes in recommendation and explanation patterns, or coding a simple new evaluation metric perspective.</p>
         </li>
         <li class="timeline-item">
           <div class="timeline-meta">
@@ -567,27 +564,27 @@
         <h2 class="title is-3">Organizers</h2>
         <div class="content has-text-justified">
           <p>
-            <strong>Ludovico Boratto</strong> (<a href="https://www.ludovicoboratto.com" target="_blank">webpage</a>) is Associate Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on recommender systems and their impact on stakeholders, with over 130 papers published in top-tier conference proceedings and journals. He has delivered tutorials and invited talks at major venues, including CIKM, UMAP, RecSys, ICDE, ECIR, WSDM, ICDM, DSAA, and ECAI. He is an editorial board member of Information Processing & Management (Elsevier) and Journal of Intelligent Information Systems (Springer). He regularly serves on the program committees of leading conferences, where he has received four outstanding contribution awards. In this tutorial, he provides the core conceptual bridge, enabling participants to quickly build a solid foundation in responsible recommendation within the broader CIKM context.
+            <strong>Ludovico Boratto</strong> <a class="org-link" href="https://www.ludovicoboratto.com" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is Associate Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on recommender systems and their impact on stakeholders, with over 130 papers published in top-tier conference proceedings and journals. He has delivered tutorials and invited talks at major venues, including CIKM, UMAP, RecSys, ICDE, ECIR, WSDM, ICDM, DSAA, and ECAI. He is an editorial board member of Information Processing & Management (Elsevier) and Journal of Intelligent Information Systems (Springer). He regularly serves on the program committees of leading conferences, where he has received four outstanding contribution awards. In this tutorial, he provides the core conceptual bridge, enabling participants to quickly build a solid foundation in responsible recommendation within the broader CIKM context.
           </p>
 
           <p>
-            <strong>Gianni Fenu</strong> (<a href="https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371" target="_blank">webpage</a>) is Full Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on responsible recommender systems, digital education, and personalization. He has authored more than 150 papers in conferences and journals, and has led several national and European projects, including ILEARNTV MIUR-UE (2014-2017, 10 M&euro;, 6 partners) and the European Research M-Commerce and Development project. In this tutorial, he contributes the application- and impact-oriented perspective, facilitating the connection to knowledge-intensive platforms.
+            <strong>Gianni Fenu</strong> <a class="org-link" href="https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is Full Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on responsible recommender systems, digital education, and personalization. He has authored more than 150 papers in conferences and journals, and has led several national and European projects, including ILEARNTV MIUR-UE (2014-2017, 10 M&euro;, 6 partners) and the European Research M-Commerce and Development project. In this tutorial, he contributes the application- and impact-oriented perspective, facilitating the connection to knowledge-intensive platforms.
           </p>
 
           <p>
-            <strong>Mirko Marras</strong> (<a href="https://www.mirkomarras.com" target="_blank">webpage</a>) is Tenure-Track Assistant Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research ranges across various domains impacted by user modeling and personalization. He has co-authored more than 120 papers in top-tier conferences and journals, and given tutorials at ECML-PKDD, RecSys, ICDE, ECIR, WSDM, ICDM, and UMAP. He is part of the program committees of top-tier conferences, where he received four outstanding reviewer awards. He is an associate editor for Springer's Journal of Ambient Intelligence and Humanized Computing and Neural Processing Letters. In this tutorial, he is responsible for introducing the main operative parts conceptually (knowledge graphs, path reasoning algorithms and evaluation metrics).
+            <strong>Mirko Marras</strong> <a class="org-link" href="https://www.mirkomarras.com" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is Tenure-Track Assistant Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research ranges across various domains impacted by user modeling and personalization. He has co-authored more than 120 papers in top-tier conferences and journals, and given tutorials at ECML-PKDD, RecSys, ICDE, ECIR, WSDM, ICDM, and UMAP. He is part of the program committees of top-tier conferences, where he received four outstanding reviewer awards. He is an associate editor for Springer's Journal of Ambient Intelligence and Humanized Computing and Neural Processing Letters. In this tutorial, he is responsible for introducing the main operative parts conceptually (knowledge graphs, path reasoning algorithms and evaluation metrics).
           </p>
 
           <p>
-            <strong>Francesca Maridina Malloci</strong> (<a href="https://francescamalloci.com" target="_blank">webpage</a>) is Non-Tenure Track Assistant Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). Her research focuses on predictive analytics and decision-making algorithms in multi-stakeholder contexts, with particular attention to recommender systems. She has published extensively in international journals and conference proceedings. She has delivered tutorials at ECML-PKDD and co-organized workshops on related themes at ECML-PKDD, UMAP, and SIGIR. She has also delivered course-level tutorials for doctoral students on <em>hopwise</em>, leading the preparation of the teaching materials that form the basis of the present tutorial (most recently at Boise University, July 2025). In 2019, she was a visiting scientist at the Eurecat (Spain), collaborating with the Data Science and Big Data Analytics Unit.
+            <strong>Francesca Maridina Malloci</strong> <a class="org-link" href="https://francescamalloci.com" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is Non-Tenure Track Assistant Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). Her research focuses on predictive analytics and decision-making algorithms in multi-stakeholder contexts, with particular attention to recommender systems. She has published extensively in international journals and conference proceedings. She has delivered tutorials at ECML-PKDD and co-organized workshops on related themes at ECML-PKDD, UMAP, and SIGIR. She has also delivered course-level tutorials for doctoral students on <em>hopwise</em>, leading the preparation of the teaching materials that form the basis of the present tutorial (most recently at Boise University, July 2025). In 2019, she was a visiting scientist at the Eurecat (Spain), collaborating with the Data Science and Big Data Analytics Unit.
           </p>
 
           <p>
-            <strong>Giacomo Medda</strong> (<a href="https://jackmedda.github.io" target="_blank">webpage</a>) is Postdoctoral Researcher at the Dept. of Mathematics and Computer Science of the University of Cagliari. His research spans recommender systems, responsible artificial intelligence, graph modeling, and generative artificial intelligence. He has authored over 25 publications in leading conferences and journals. He co-edited the special issue “Knowledge Discovery from Graphs” in Springer's Data Mining and Knowledge Discovery journal and regularly serves on the program committees of UMAP, RecSys, and SIGIR. He co-organized the IRonGraphs workshop at ECIR 2024. He is a core architect and lead developer of <em>hopwise</em>, and directly supports participants in understanding and extending its internal components.
+            <strong>Giacomo Medda</strong> <a class="org-link" href="https://jackmedda.github.io" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is Postdoctoral Researcher at the Dept. of Mathematics and Computer Science of the University of Cagliari. His research spans recommender systems, responsible artificial intelligence, graph modeling, and generative artificial intelligence. He has authored over 25 publications in leading conferences and journals. He co-edited the special issue “Knowledge Discovery from Graphs” in Springer's Data Mining and Knowledge Discovery journal and regularly serves on the program committees of UMAP, RecSys, and SIGIR. He co-organized the IRonGraphs workshop at ECIR 2024. He is a core architect and lead developer of <em>hopwise</em>, and directly supports participants in understanding and extending its internal components.
           </p>
 
           <p>
-            <strong>Alessandro Soccol</strong> (<a href="https://alessandrosocc.github.io" target="_blank">webpage</a>) is a Research Associate at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research focuses on explainable recommender systems, personalization, and uncertainty quantification. He has co-authored papers published in top-tier venues, such as CIKM and RecSys, and serves on the RecSys Program Committee. He is a core developer of <em>hopwise</em> and is responsible for key path reasoning and explainability modules, which he actively demonstrates and helps participants play with.
+            <strong>Alessandro Soccol</strong> <a class="org-link" href="https://alessandrosocc.github.io" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is a Research Associate at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research focuses on explainable recommender systems, personalization, and uncertainty quantification. He has co-authored papers published in top-tier venues, such as CIKM and RecSys, and serves on the RecSys Program Committee. He is a core developer of <em>hopwise</em> and is responsible for key path reasoning and explainability modules, which he actively demonstrates and helps participants play with.
           </p>
         </div>
       </div>
