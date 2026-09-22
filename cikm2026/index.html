@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-NQC3EZQZ0K"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-NQC3EZQZ0K');
+  </script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Primary Meta Tags -->
+  <!-- TODO: Replace with your paper title and author names -->
+  <meta name="title" content="Path-based Reasoning on Knowledge Graphs for Explainable Recommender Systems: A CIKM 2026 Tutorial with hopwise - Ludovico Boratto, Gianni Fenu, Francesca M. Malloci, Mirko Marras, Giacomo Medda, Alessandro Soccol">
+  <!-- TODO: Write a compelling 150-160 character description of your research -->
+  <meta name="description" content="Half-day hands-on tutorial at ACM CIKM 2026 (Rome, Italy) on building explainable-by-design recommender systems through path reasoning over knowledge graphs with hopwise: from recommendation data to knowledge graphs, reinforcement learning- and language model-based reasoning, and evaluation of recommendation utility and explanation quality.">
+  <!-- TODO: Add 5-10 relevant keywords for your research area -->
+  <meta name="keywords" content="Explainable AI, Recommender Systems, Knowledge Graphs, Path Reasoning, Personalization, Reproducibility, Open-Source Frameworks, hopwise, CIKM, CIKM2026">
+  <!-- TODO: List all authors -->
+  <meta name="author" content="Ludovico Boratto, Gianni Fenu, Francesca M. Malloci, Mirko Marras, Giacomo Medda, Alessandro Soccol">
+  <meta name="robots" content="index, follow">
+  <meta name="language" content="English">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="article">
+  <!-- TODO: Replace with your institution or lab name -->
+  <meta property="og:site_name" content="Trustworthy AI Lab - University of Cagliari">
+  <!-- TODO: Same as paper title above -->
+  <meta property="og:title" content="Path-based Reasoning on Knowledge Graphs for Explainable Recommender Systems: A CIKM 2026 Tutorial with hopwise">
+  <!-- TODO: Same as description above -->
+  <meta property="og:description" content="Half-day hands-on tutorial at ACM CIKM 2026 (Rome, Italy) on building explainable-by-design recommender systems through path reasoning over knowledge graphs with hopwise: from recommendation data to knowledge graphs, reinforcement learning- and language model-based reasoning, and evaluation of recommendation utility and explanation quality.">
+  <!-- TODO: Replace with your actual website URL -->
+  <meta property="og:url" content="https://tail-unica.github.io/cikm2026/">
+  <!-- TODO: Create a 1200x630px preview image and update path -->
+  <meta property="og:image" content="https://tail-unica.github.io/cikm2026/static/images/pipeline.jpg">
+  <meta property="og:image:alt" content="Explainable recommendation pipeline with path reasoning over knowledge graphs in hopwise">
+  <meta property="article:published_time" content="2026-11-07T00:00:00.000Z">
+  <meta property="article:author" content="Ludovico Boratto, Gianni Fenu, Francesca M. Malloci, Mirko Marras, Giacomo Medda, Alessandro Soccol">
+  <meta property="article:section" content="Research">
+  <meta property="article:tag" content="Explainable Recommendation">
+  <meta property="article:tag" content="Knowledge Graphs">
+  <meta property="article:tag" content="Path Reasoning">
+
+  <!-- Twitter -->
+  <!-- <meta name="twitter:card" content="summary_large_image"> -->
+  <!-- TODO: Replace with your lab/institution Twitter handle -->
+  <!-- <meta name="twitter:site" content="@YOUR_TWITTER_HANDLE"> -->
+  <!-- TODO: Replace with first author's Twitter handle -->
+  <!-- <meta name="twitter:creator" content="@AUTHOR_TWITTER_HANDLE"> -->
+  <!-- TODO: Same as paper title above -->
+  <!-- <meta name="twitter:title" content="PAPER_TITLE"> -->
+  <!-- TODO: Same as description above -->
+  <!-- <meta name="twitter:description" content="BRIEF_DESCRIPTION_OF_YOUR_RESEARCH_CONTRIBUTION_AND_FINDINGS"> -->
+  <!-- TODO: Same as social preview image above -->
+  <!-- <meta name="twitter:image" content="https://YOUR_DOMAIN.com/static/images/social_preview.png"> -->
+  <!-- <meta name="twitter:image:alt" content="PAPER_TITLE - Research Preview"> -->
+
+  <!-- Academic/Research Specific -->
+  <!-- <meta name="citation_title" content="PAPER_TITLE">
+  <meta name="citation_author" content="FIRST_AUTHOR_LAST, FIRST_AUTHOR_FIRST">
+  <meta name="citation_author" content="SECOND_AUTHOR_LAST, SECOND_AUTHOR_FIRST">
+  <meta name="citation_publication_date" content="2024">
+  <meta name="citation_conference_title" content="CONFERENCE_NAME">
+  <meta name="citation_pdf_url" content="https://YOUR_DOMAIN.com/static/pdfs/paper.pdf">
+   -->
+  <!-- Additional SEO -->
+  <meta name="theme-color" content="#9b2c1f">
+  <meta name="msapplication-TileColor" content="#9b2c1f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <!-- Preconnect for performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://ajax.googleapis.com">
+  <link rel="preconnect" href="https://documentcloud.adobe.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+
+
+  <!-- TODO: Replace with your paper title and authors -->
+  <title>Path-based Reasoning on Knowledge Graphs for Explainable Recommender Systems | CIKM 2026 Tutorial</title>
+
+  <!-- Favicon and App Icons -->
+  <link rel="icon" type="image/x-icon" href="static/images/favicon.ico">
+  <link rel="apple-touch-icon" href="static/images/favicon.ico">
+
+  <!-- Critical CSS - Load synchronously -->
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+
+  <!-- Non-critical CSS - Load asynchronously -->
+  <link rel="preload" href="static/css/bulma-carousel.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="static/css/bulma-slider.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="static/css/fontawesome.all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+
+  <!-- Fallback for browsers that don't support preload -->
+  <noscript>
+    <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
+    <link rel="stylesheet" href="static/css/bulma-slider.min.css">
+    <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  </noscript>
+
+  <!-- Fonts - Optimized loading -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Defer non-critical JavaScript -->
+  <script defer src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="https://documentcloud.adobe.com/view-sdk/main.js"></script>
+  <script defer src="static/js/fontawesome.all.min.js"></script>
+  <script defer src="static/js/bulma-carousel.min.js"></script>
+  <script defer src="static/js/bulma-slider.min.js"></script>
+  <script defer src="static/js/index.js"></script>
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ScholarlyArticle",
+    "headline": "Path-based Reasoning on Knowledge Graphs for Explainable Recommender Systems",
+    "description": "Half-day hands-on tutorial at ACM CIKM 2026 (Rome, Italy) on building explainable-by-design recommender systems through path reasoning over knowledge graphs with hopwise.",
+    "author": [
+      {"@type": "Person", "name": "Ludovico Boratto", "affiliation": {"@type": "CollegeOrUniversity", "name": "University of Cagliari"}},
+      {"@type": "Person", "name": "Gianni Fenu", "affiliation": {"@type": "CollegeOrUniversity", "name": "University of Cagliari"}},
+      {"@type": "Person", "name": "Francesca Maridina Malloci", "affiliation": {"@type": "CollegeOrUniversity", "name": "University of Cagliari"}},
+      {"@type": "Person", "name": "Mirko Marras", "affiliation": {"@type": "CollegeOrUniversity", "name": "University of Cagliari"}},
+      {"@type": "Person", "name": "Giacomo Medda", "affiliation": {"@type": "CollegeOrUniversity", "name": "University of Cagliari"}},
+      {"@type": "Person", "name": "Alessandro Soccol", "affiliation": {"@type": "CollegeOrUniversity", "name": "University of Cagliari"}}
+    ],
+    "datePublished": "2026-11-07",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Association for Computing Machinery"
+    },
+    "isPartOf": {
+      "@type": "Event",
+      "name": "35th ACM International Conference on Information and Knowledge Management (CIKM '26)",
+      "startDate": "2026-11-07",
+      "endDate": "2026-11-11",
+      "location": {"@type": "Place", "name": "Rome, Italy"}
+    },
+    "sameAs": "https://doi.org/10.1145/3799682.3839276",
+    "url": "https://tail-unica.github.io/cikm2026/",
+    "image": "https://tail-unica.github.io/cikm2026/static/images/pipeline.jpg",
+    "keywords": ["Personalization", "Explainable AI", "Recommender Systems", "Knowledge Graphs", "Reproducibility", "Open-Source Frameworks"],
+    "isAccessibleForFree": true,
+    "license": "https://creativecommons.org/licenses/by-nc-nd/4.0/"
+  }
+  </script>
+
+  <!-- Website/Organization Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Trustworthy AI Lab - University of Cagliari",
+    "url": "https://github.com/tail-unica",
+    "sameAs": [
+      "https://github.com/tail-unica/hopwise"
+    ]
+  }
+  </script>
+</head>
+<body>
+
+
+  <!-- Scroll to Top Button -->
+  <button class="scroll-to-top" onclick="scrollToTop()" title="Scroll to top" aria-label="Scroll to top">
+    <i class="fas fa-chevron-up"></i>
+  </button>
+
+  <!-- Sticky navigation bar -->
+  <nav class="site-nav" aria-label="Page sections">
+    <div class="site-nav-inner">
+      <a class="site-nav-brand" href="#main-content"><em>hopwise</em> <span>@ CIKM '26</span></a>
+      <div class="site-nav-links">
+        <a href="#abstract">Abstract</a>
+        <a href="#objectives">Objectives</a>
+        <a href="#program">Program</a>
+        <a href="#audience">Audience</a>
+        <a href="#organizers">Organizers</a>
+        <a href="#BibTeX">Cite</a>
+      </div>
+
+      <!-- More Works Dropdown -->
+      <div class="more-works-container">
+        <button class="more-works-btn" onclick="toggleMoreWorks()" title="View More Works from Our Lab">
+          <i class="fas fa-flask"></i>
+          More Works
+          <i class="fas fa-chevron-down dropdown-arrow"></i>
+        </button>
+        <div class="more-works-dropdown" id="moreWorksDropdown">
+          <div class="dropdown-header">
+            <h4>More Works from Our Lab</h4>
+            <button class="close-btn" onclick="toggleMoreWorks()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="works-list">
+            <!-- TODO: Replace with your lab's related works -->
+            <a href="https://dl.acm.org/doi/10.1145/3640457.3691703" class="work-item" target="_blank">
+              <div class="work-info">
+                <!-- TODO: Replace with actual paper title -->
+                <h5>KGGLM: A Generative Language Model for Generalizable Knowledge Graph Representation Learning in Recommendation</h5>
+                <!-- TODO: Replace with brief description -->
+                <p>Current recommendation methods based on knowledge graphs rely on entity and relation representations for several steps along the pipeline, with knowledge completion and path reasoning being the most influential. Despite their similarities, the most effective representation methods for these steps differ, leading to inefficiencies, limited representativeness, and reduced interpretability. In this paper, we introduce KGGLM, a decoder-only Transformer model designed for generalizable knowledge representation learning to support recommendation. The model is trained on generic paths sampled from the knowledge graph to capture foundational patterns, and then fine-tuned on paths specific of the downstream step (knowledge completion and path reasoning in our case). Experiments on ML1M and LFM1M show that KGGLM beats twenty-two baselines in effectiveness under both knowledge completion and recommendation. Source code and pre-processed data sets are available at https://github.com/mirkomarras/kgglm.</p>
+                <!-- TODO: Replace with venue and year -->
+                <span class="work-venue">RecSys '24</span>
+              </div>
+              <i class="fas fa-external-link-alt"></i>
+            </a>
+             <a href="https://dl.acm.org/doi/pdf/10.1145/3477495.3532041" class="work-item" target="_blank">
+              <div class="work-info">
+                <!-- TODO: Replace with actual paper title -->
+                <h5>Post Processing Recommender Systems with Knowledge Graphs for Recency, Popularity, and Diversity of Explanations</h5>
+                <!-- TODO: Replace with brief description -->
+                <p>Existing explainable recommender systems have mainly modeled relationships between recommended and already experienced products, and shaped explanation types accordingly (e.g., movie “x” starred by actress “y” recommended to a user because that user watched other movies with “y” as an actress). However, none of these systems has investigated the extent to which properties of a single explanation (e.g., the recency of interaction with that actress) and of a group of explanations for a recommended list (e.g., the diversity of the explanation types) can influence the perceived explanation quality. In this paper, we conceptualized three novel properties that model the quality of the explanations (linking interaction recency, shared entity popularity, and explanation type diversity) and proposed re-ranking approaches able to optimize for these properties. Experiments on two public data sets showed that our approaches can increase explanation quality according to the proposed properties, fairly across demographic groups, while preserving recommendation utility. The source code and data are available at https://github.com/giacoballoccu/explanation-quality-recsys.</p>
+                <!-- TODO: Replace with venue and year -->
+                <span class="work-venue">SIGIR '22</span>
+              </div>
+              <i class="fas fa-external-link-alt"></i>
+            </a>
+            <!-- TODO: Add more related works or remove extra items -->
+            <!-- <a href="https://arxiv.org/abs/PAPER_ID_2" class="work-item" target="_blank">
+              <div class="work-info">
+                <h5>Paper Title 2</h5>
+                <p>Brief description of the work and its main contribution.</p>
+                <span class="work-venue">Conference/Journal 2023</span>
+              </div>
+              <i class="fas fa-external-link-alt"></i>
+            </a> -->
+            <!-- <a href="https://arxiv.org/abs/PAPER_ID_3" class="work-item" target="_blank">
+              <div class="work-info">
+                <h5>Paper Title 3</h5>
+                <p>Brief description of the work and its main contribution.</p>
+                <span class="work-venue">Conference/Journal 2023</span>
+              </div>
+              <i class="fas fa-external-link-alt"></i>
+            </a> -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main-content">
+  <section class="hero cikm-hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <div class="venue-badge">
+              <span><i class="fas fa-landmark"></i> ACM CIKM 2026</span>
+              <span class="venue-sep" aria-hidden="true"></span>
+              <span><i class="fas fa-map-marker-alt"></i> Rome, Italy</span>
+              <span class="venue-sep" aria-hidden="true"></span>
+              <span><i class="far fa-calendar-alt"></i> November 07&ndash;11, 2026</span>
+            </div>
+            <h1 class="title is-1 publication-title">Path-based Reasoning on Knowledge Graphs for Explainable Recommender Systems</h1>
+            <h2 class="subtitle is-5 publication-subtitle">A hands-on tutorial with <em>hopwise</em> at the 35th ACM International Conference on Information and Knowledge Management (CIKM '26)</h2>
+            <div class="is-size-5 publication-authors">
+              <span class="author-block">
+                <a href="https://www.ludovicoboratto.com" target="_blank">Ludovico Boratto</a>,</span>
+              <span class="author-block">
+                <a href="https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371" target="_blank">Gianni Fenu</a>,</span>
+              <span class="author-block">
+                <a href="https://francescamalloci.com" target="_blank">Francesca M. Malloci</a>,</span>
+              <br>
+              <span class="author-block">
+                <a href="https://www.mirkomarras.com" target="_blank">Mirko Marras</a>,</span>
+              <span class="author-block">
+                <a href="https://jackmedda.github.io" target="_blank">Giacomo Medda</a>,</span>
+              <span class="author-block">
+                <a href="https://alessandrosocc.github.io" target="_blank">Alessandro Soccol</a>
+              </span>
+            </div>
+
+            <div class="is-size-6 publication-affiliation">
+              <span class="author-block">University of Cagliari, Cagliari, Italy 🇮🇹</span>
+            </div>
+
+            <div class="publication-links">
+              <span class="link-block">
+                <a href="https://doi.org/10.1145/3799682.3839276" target="_blank"
+                class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                    <i class="fas fa-file-alt"></i>
+                  </span>
+                  <span>Tutorial paper (CIKM '26)</span>
+                </a>
+              </span>
+
+              <span class="link-block">
+                <a href="https://dl.acm.org/doi/10.1145/3746252.3761641" target="_blank"
+                class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                    <i class="fas fa-file-pdf"></i>
+                  </span>
+                  <span><em>hopwise</em> paper (CIKM '25)</span>
+                </a>
+              </span>
+
+              <span class="link-block">
+                <a href="https://github.com/tail-unica/hopwise" target="_blank"
+                class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                    <i class="fab fa-github"></i>
+                  </span>
+                  <span>Code</span>
+                </a>
+              </span>
+
+              <!-- TODO: remove style="display: none" to publish the notebook button -->
+              <span class="link-block" style="display: none">
+                <a href="#" target="_blank"
+                class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                    <i class="fas fa-laptop-code"></i>
+                  </span>
+                  <span>Notebook</span>
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Key facts -->
+  <section class="key-facts-section">
+    <div class="container is-max-desktop">
+      <div class="key-facts">
+        <div class="key-fact">
+          <i class="fas fa-hourglass-half"></i>
+          <div>
+            <span class="key-fact-label">Format</span>
+            <span class="key-fact-value">Half day, 2 &times; 90 min</span>
+          </div>
+        </div>
+        <div class="key-fact">
+          <i class="fas fa-chalkboard-teacher"></i>
+          <div>
+            <span class="key-fact-label">Style</span>
+            <span class="key-fact-value">Lectures + hands-on</span>
+          </div>
+        </div>
+        <div class="key-fact">
+          <i class="fas fa-globe-europe"></i>
+          <div>
+            <span class="key-fact-label">You need</span>
+            <span class="key-fact-value">A browser (Google Colab)</span>
+          </div>
+        </div>
+        <div class="key-fact">
+          <i class="fas fa-users"></i>
+          <div>
+            <span class="key-fact-label">Level</span>
+            <span class="key-fact-value">All backgrounds</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+<!-- Teaser image -->
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+      <figure class="teaser-figure">
+        <img src="static/images/pipeline.jpg" alt="Explainable recommendation pipeline in hopwise: from recommendation data to knowledge graphs, path reasoning, explanations, and evaluation"/>
+        <figcaption>The explainable recommendation workflow covered in the tutorial: from recommendation data to knowledge graphs, path reasoning, explanation generation, and evaluation in <em>hopwise</em>.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+<!-- End teaser image -->
+
+<!-- Abstract -->
+<section class="section hero is-light" id="abstract">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            Recommender systems are central in modern knowledge-intensive applications. Beyond predicting user-item interactions, this class of systems increasingly requires models to reason over heterogeneous entities, relations, and contextual evidence while remaining transparent, trustworthy, and reusable. Path reasoning over knowledge graphs provides a principled foundation for this goal, as it connects users, items, and knowledge through semantically meaningful chains that support explainable recommendation. However, adoption remains limited by fragmented implementations, heterogeneous preprocessing pipelines, and high coding complexity. This tutorial introduces <b>hopwise</b>, a framework for building explainable-by-design recommender systems through path reasoning on knowledge graphs. Participants follow a progressive hands-on workflow: transforming recommendation datasets into knowledge graphs, running reinforcement learning-based and language model-based reasoning methods, evaluating their utility and explainability, and extending the framework from multiple perspectives.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End abstract -->
+
+<!-- Learning objectives -->
+<section class="section" id="objectives">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered">What You Will Learn</h2>
+    <p class="section-lead has-text-centered">By the end of the tutorial, attendees will be able to:</p>
+    <div class="objectives-grid">
+      <div class="objective-card">
+        <span class="objective-num">1</span>
+        <h3>Relate explainability to knowledge-intensive information systems</h3>
+        <p>Describe how transparent recommendation methods support inspection, trust, and accountability in retrieval, ranking, and decision-support scenarios.</p>
+      </div>
+      <div class="objective-card">
+        <span class="objective-num">2</span>
+        <h3>Conceptualize path reasoning</h3>
+        <p>Describe explainable recommendation as a knowledge graph traversal process that connects users, items, entities, and contextual evidence through interpretable reasoning paths.</p>
+      </div>
+      <div class="objective-card">
+        <span class="objective-num">3</span>
+        <h3>Compare path reasoning paradigms</h3>
+        <p>Identify key differences between reinforcement learning-based and language model-based methods for generating recommendation paths and explanations.</p>
+      </div>
+      <div class="objective-card">
+        <span class="objective-num">4</span>
+        <h3>Run an explainable recommendation pipeline</h3>
+        <p>Use <em>hopwise</em> for knowledge graph loading, path reasoning execution, path extraction, and explanation generation.</p>
+      </div>
+      <div class="objective-card">
+        <span class="objective-num">5</span>
+        <h3>Assess recommendation and explanation quality</h3>
+        <p>Apply the evaluation metrics integrated in <em>hopwise</em> and interpret their implications for recommendation utility, explanation usefulness, and evidence transparency.</p>
+      </div>
+      <div class="objective-card">
+        <span class="objective-num">6</span>
+        <h3>Explore and customize the explainable recommendation workflow</h3>
+        <p>Adapt data, configurations, reasoning strategies, or evaluation components of <em>hopwise</em> to new knowledge-intensive domains.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End learning objectives -->
+
+<!-- Tutorial outline -->
+<section class="section hero is-light" id="program">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered">Tutorial Outline</h2>
+    <p class="section-lead has-text-centered">A progressive pipeline: from foundations, to knowledge graph construction, to executable path reasoning workflows, and finally to evaluation and extension.</p>
+
+    <div class="session-block">
+      <div class="session-header">
+        <span class="session-tag">Session 1</span>
+        <h3>From Knowledge-Intensive Recommendation to Path Reasoning Workflows</h3>
+        <span class="session-duration"><i class="far fa-clock"></i> 90 min</span>
+      </div>
+      <ol class="timeline">
+        <li class="timeline-item">
+          <div class="timeline-meta">
+            <span class="format-tag is-lecture"><i class="fas fa-chalkboard-teacher"></i> Lecture</span>
+            <span class="timeline-time">15 min</span>
+            <span class="objective-chips">Obj. 1&ndash;2</span>
+          </div>
+          <h4>Explainable Recommendation in Knowledge-Intensive Information Systems</h4>
+          <p>We introduce explainability as a core requirement for recommender systems operating in decision-support scenarios. We present the full explainable recommendation pipeline and frame knowledge graphs and path reasoning as mechanisms for connecting recommendations to evidence. We contrast post-hoc explanation approaches with explainable-by-design methods.</p>
+        </li>
+        <li class="timeline-item">
+          <div class="timeline-meta">
+            <span class="format-tag is-handson"><i class="fas fa-laptop-code"></i> Hands-on</span>
+            <span class="timeline-time">25 min</span>
+            <span class="objective-chips">Obj. 2&ndash;3</span>
+          </div>
+          <h4>From Recommendation Data to Knowledge Graphs</h4>
+          <p>We show how users, items, interactions, entities, and contextual signals are represented in recommendation datasets, and how they can be transformed into knowledge graphs that support path reasoning in <em>hopwise</em>. This step emphasizes the role of knowledge graphs as an explicit layer connecting data management, retrieval, reasoning, and machine learning.</p>
+        </li>
+        <li class="timeline-item">
+          <div class="timeline-meta">
+            <span class="format-tag is-lecture"><i class="fas fa-chalkboard-teacher"></i> Lecture</span>
+            <span class="timeline-time">20 min</span>
+            <span class="objective-chips">Obj. 3</span>
+          </div>
+          <h4>Path Reasoning Paradigms for Explainable Recommendation</h4>
+          <p>We introduce two families of path reasoning methods: reinforcement learning-based (e.g., PGPR, TPRec) and language model-based (e.g., KGGLM, PLM-Rec). We discuss their assumptions, strengths, and trade-offs.</p>
+        </li>
+        <li class="timeline-item">
+          <div class="timeline-meta">
+            <span class="format-tag is-handson"><i class="fas fa-laptop-code"></i> Hands-on</span>
+            <span class="timeline-time">30 min</span>
+            <span class="objective-chips">Obj. 3&ndash;4</span>
+          </div>
+          <h4>Running Path Reasoning Methods in <em>hopwise</em></h4>
+          <p>We run one representative method for each family, compare their reasoning behavior, and visualize the generated explanation paths in <em>hopwise</em>. This hands-on segment shows how different reasoning strategies expose recommendation evidence.</p>
+        </li>
+      </ol>
+    </div>
+
+    <div class="session-block">
+      <div class="session-header">
+        <span class="session-tag">Session 2</span>
+        <h3>Evaluation, Customization, and Open Directions for Explainable Recommendation</h3>
+        <span class="session-duration"><i class="far fa-clock"></i> 90 min</span>
+      </div>
+      <ol class="timeline">
+        <li class="timeline-item">
+          <div class="timeline-meta">
+            <span class="format-tag is-handson"><i class="fas fa-laptop-code"></i> Hands-on</span>
+            <span class="timeline-time">30 min</span>
+            <span class="objective-chips">Obj. 4&ndash;5</span>
+          </div>
+          <h4>Evaluating Recommendation Utility and Explanation Quality</h4>
+          <p>We inspect the standardized path representation, translate reasoning paths into natural-language explanations, and evaluate recommendation utility and explanation path quality in <em>hopwise</em>. The focus is on interpreting results as both predictive performance indicators and evidence of explanation usefulness, transparency, and reliability.</p>
+        </li>
+        <li class="timeline-item">
+          <div class="timeline-meta">
+            <span class="format-tag is-handson"><i class="fas fa-laptop-code"></i> Hands-on</span>
+            <span class="timeline-time">50 min</span>
+            <span class="objective-chips">Obj. 6</span>
+          </div>
+          <h4>Extension Showcase through Differentiated Exercises</h4>
+          <p>We engage participants at different levels of technical depth by letting them choose one of the following guided exercises: running existing methods on another knowledge graph available in <em>hopwise</em>, experimenting with configuration parameters to observe changes in recommendation and explanation patterns, or coding a simple new evaluation metric perspective.</p>
+        </li>
+        <li class="timeline-item">
+          <div class="timeline-meta">
+            <span class="format-tag is-lecture"><i class="fas fa-chalkboard-teacher"></i> Lecture</span>
+            <span class="timeline-time">10 min</span>
+            <span class="objective-chips">Obj. 1&ndash;6</span>
+          </div>
+          <h4>Open Directions in Explainable Knowledge-Aware Recommendation</h4>
+          <p>We conclude with a brief discussion of current challenges, grounded in recent literature, including explanation faithfulness, scalability, robustness, evaluation limitations, and the integration of symbolic and language-based reasoning. This segment is intended to motivate participants to extend <em>hopwise</em> toward emerging CIKM-relevant directions.</p>
+        </li>
+      </ol>
+    </div>
+  </div>
+</section>
+<!-- End tutorial outline -->
+
+<!-- Audience and materials -->
+<section class="section" id="audience">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered">Who Is It For</h2>
+    <p class="section-lead has-text-centered">Researchers, practitioners, and doctoral students working on information retrieval, knowledge management, data mining, recommender systems, knowledge graphs, and explainable AI. Foundational notions are briefly introduced to establish a shared vocabulary.</p>
+    <div class="audience-grid">
+      <div class="audience-card">
+        <div class="audience-icon"><i class="fas fa-microscope"></i></div>
+        <h3>Implementation-oriented</h3>
+        <p>Participants with a stronger technical or methodological background are guided to inspect <em>where</em> and <em>how</em> path reasoning models, explanation generators, and evaluation metrics are implemented, exploring data transformation, graph construction, reasoning strategies, and evaluation procedures.</p>
+      </div>
+      <div class="audience-card">
+        <div class="audience-icon"><i class="fas fa-seedling"></i></div>
+        <h3>Application-oriented</h3>
+        <p>Participants interested in applying explainable recommendation to knowledge-intensive domains (e.g., education, music, cultural heritage, e-commerce, or scientific information access) rely on <em>hopwise</em> abstractions and interact mainly through configuration parameters, without low-level coding.</p>
+      </div>
+      <div class="audience-card">
+        <div class="audience-icon"><i class="fas fa-laptop"></i></div>
+        <h3>Required materials</h3>
+        <p>Only a web browser on a personal device with an Internet connection. All practical components are delivered through Jupyter notebooks executable remotely on Google Colaboratory: no local installation or specialized hardware needed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End audience and materials -->
+
+<section class="section hero is-light" id="organizers">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Organizers</h2>
+        <div class="content has-text-justified">
+          <p>
+            <strong>Ludovico Boratto</strong> <a class="org-link" href="https://www.ludovicoboratto.com" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is Associate Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on recommender systems and their impact on stakeholders, with over 130 papers published in top-tier conference proceedings and journals. He has delivered tutorials and invited talks at major venues, including CIKM, UMAP, RecSys, ICDE, ECIR, WSDM, ICDM, DSAA, and ECAI. He is an editorial board member of Information Processing & Management (Elsevier) and Journal of Intelligent Information Systems (Springer). He regularly serves on the program committees of leading conferences, where he has received four outstanding contribution awards. In this tutorial, he provides the core conceptual bridge, enabling participants to quickly build a solid foundation in responsible recommendation within the broader CIKM context.
+          </p>
+
+          <p>
+            <strong>Gianni Fenu</strong> <a class="org-link" href="https://web.unica.it/unica/it/ateneo_s07_ss01.page?contentId=SHD30371" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is Full Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research interests focus on responsible recommender systems, digital education, and personalization. He has authored more than 150 papers in conferences and journals, and has led several national and European projects, including ILEARNTV MIUR-UE (2014-2017, 10 M&euro;, 6 partners) and the European Research M-Commerce and Development project. In this tutorial, he contributes the application- and impact-oriented perspective, facilitating the connection to knowledge-intensive platforms.
+          </p>
+
+          <p>
+            <strong>Mirko Marras</strong> <a class="org-link" href="https://www.mirkomarras.com" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is Tenure-Track Assistant Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research ranges across various domains impacted by user modeling and personalization. He has co-authored more than 120 papers in top-tier conferences and journals, and given tutorials at ECML-PKDD, RecSys, ICDE, ECIR, WSDM, ICDM, and UMAP. He is part of the program committees of top-tier conferences, where he received four outstanding reviewer awards. He is an associate editor for Springer's Journal of Ambient Intelligence and Humanized Computing and Neural Processing Letters. In this tutorial, he is responsible for introducing the main operative parts conceptually (knowledge graphs, path reasoning algorithms and evaluation metrics).
+          </p>
+
+          <p>
+            <strong>Francesca Maridina Malloci</strong> <a class="org-link" href="https://francescamalloci.com" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is Non-Tenure Track Assistant Professor at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). Her research focuses on predictive analytics and decision-making algorithms in multi-stakeholder contexts, with particular attention to recommender systems. She has published extensively in international journals and conference proceedings. She has delivered tutorials at ECML-PKDD and co-organized workshops on related themes at ECML-PKDD, UMAP, and SIGIR. She has also delivered course-level tutorials for doctoral students on <em>hopwise</em>, leading the preparation of the teaching materials that form the basis of the present tutorial (most recently at Boise University, July 2025). In 2019, she was a visiting scientist at the Eurecat (Spain), collaborating with the Data Science and Big Data Analytics Unit.
+          </p>
+
+          <p>
+            <strong>Giacomo Medda</strong> <a class="org-link" href="https://jackmedda.github.io" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is Postdoctoral Researcher at the Dept. of Mathematics and Computer Science of the University of Cagliari. His research spans recommender systems, responsible artificial intelligence, graph modeling, and generative artificial intelligence. He has authored over 25 publications in leading conferences and journals. He co-edited the special issue “Knowledge Discovery from Graphs” in Springer's Data Mining and Knowledge Discovery journal and regularly serves on the program committees of UMAP, RecSys, and SIGIR. He co-organized the IRonGraphs workshop at ECIR 2024. He is a core architect and lead developer of <em>hopwise</em>, and directly supports participants in understanding and extending its internal components.
+          </p>
+
+          <p>
+            <strong>Alessandro Soccol</strong> <a class="org-link" href="https://alessandrosocc.github.io" target="_blank">webpage <i class="fas fa-external-link-alt"></i></a> is a Research Associate at the Dept. of Mathematics and Computer Science of the University of Cagliari (Italy). His research focuses on explainable recommender systems, personalization, and uncertainty quantification. He has co-authored papers published in top-tier venues, such as CIKM and RecSys, and serves on the RecSys Program Committee. He is a core developer of <em>hopwise</em> and is responsible for key path reasoning and explainability modules, which he actively demonstrates and helps participants play with.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Image carousel -->
+<!-- <section class="hero is-small">
+  <div class="hero-body">
+    <div class="container">
+      <div id="results-carousel" class="carousel results-carousel">
+       <div class="item">
+
+        <img src="static/images/carousel1.jpg" alt="First research result visualization" loading="lazy"/>
+
+        <h2 class="subtitle has-text-centered">
+          First image description.
+        </h2>
+      </div>
+      <div class="item">
+
+        <img src="static/images/carousel2.jpg" alt="Second research result visualization" loading="lazy"/>
+        <h2 class="subtitle has-text-centered">
+          Second image description.
+        </h2>
+      </div>
+      <div class="item">
+
+        <img src="static/images/carousel3.jpg" alt="Third research result visualization" loading="lazy"/>
+        <h2 class="subtitle has-text-centered">
+         Third image description.
+       </h2>
+     </div>
+     <div class="item">
+
+      <img src="static/images/carousel4.jpg" alt="Fourth research result visualization" loading="lazy"/>
+      <h2 class="subtitle has-text-centered">
+        Fourth image description.
+      </h2>
+    </div>
+  </div>
+</div>
+</div>
+</section> -->
+<!-- End image carousel -->
+
+
+
+
+<!-- Youtube video -->
+<!-- <section class="hero is-small is-light">
+  <div class="hero-body">
+    <div class="container">
+      <h2 class="title is-3">Video Presentation</h2>
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths">
+
+          <div class="publication-video">
+            <iframe src="https://www.youtube.com/embed/JkaxUblCGz0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section> -->
+<!-- End youtube video -->
+
+
+<!-- Video carousel -->
+<!-- <section class="hero is-small">
+  <div class="hero-body">
+    <div class="container">
+      <h2 class="title is-3">Another Carousel</h2>
+      <div id="results-carousel" class="carousel results-carousel">
+        <div class="item item-video1">
+
+          <video poster="" id="video1" controls muted loop height="100%" preload="metadata">
+
+            <source src="static/videos/carousel1.mp4" type="video/mp4">
+          </video>
+        </div>
+        <div class="item item-video2">
+
+          <video poster="" id="video2" controls muted loop height="100%" preload="metadata">
+
+            <source src="static/videos/carousel2.mp4" type="video/mp4">
+          </video>
+        </div>
+        <div class="item item-video3">
+
+          <video poster="" id="video3" controls muted loop height="100%" preload="metadata">
+
+            <source src="static/videos/carousel3.mp4" type="video/mp4">
+          </video>
+        </div>
+      </div>
+    </div>
+  </div>
+</section> -->
+<!-- End video carousel -->
+
+
+
+
+
+
+<!-- Paper poster -->
+<!-- <section class="hero is-small is-light">
+  <div class="hero-body">
+    <div class="container">
+      <h2 class="title">Poster</h2>
+      <iframe  src="static/pdfs/sample.pdf" width="100%" height="550">
+          </iframe>
+
+      </div>
+    </div>
+  </section> -->
+<!--End paper poster -->
+
+
+
+<!--BibTex citation -->
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <div class="bibtex-header">
+        <h2 class="title">Cite</h2>
+        <button class="copy-bibtex-btn" onclick="copyBibTeX()" title="Copy BibTeX to clipboard">
+          <i class="fas fa-copy"></i>
+          <span class="copy-text">Copy</span>
+        </button>
+      </div>
+      <p class="bibtex-note">If you use the tutorial materials or <em>hopwise</em> in your research, please cite:</p>
+
+      <div id="bibtex-code">
+      <pre><code>@inproceedings{10.1145/3799682.3839276,
+  author = {Boratto, Ludovico and Fenu, Gianni and Malloci, Francesca Maridina and Marras, Mirko and Medda, Giacomo and Soccol, Alessandro},
+  title = {Path-based Reasoning on Knowledge Graphs for Explainable Recommender Systems},
+  year = {2026},
+  isbn = {9798400725395},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  url = {https://doi.org/10.1145/3799682.3839276},
+  doi = {10.1145/3799682.3839276},
+  booktitle = {Proceedings of the 35th ACM International Conference on Information and Knowledge Management},
+  numpages = {4},
+  keywords = {personalization, explainable AI, recommender systems, knowledge graphs, reproducibility, open-source frameworks},
+  location = {Rome, Italy},
+  series = {CIKM '26}
+}</code></pre>
+<pre><code>@inproceedings{10.1145/3746252.3761641,
+  author = {Boratto, Ludovico and Fenu, Gianni and Marras, Mirko and Medda, Giacomo and Soccol, Alessandro},
+  title = {hopwise: A Python Library for Explainable Recommendation based on Path Reasoning over Knowledge Graphs},
+  year = {2025},
+  isbn = {9798400720406},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  url = {https://doi.org/10.1145/3746252.3761641},
+  doi = {10.1145/3746252.3761641},
+  booktitle = {Proceedings of the 34th ACM International Conference on Information and Knowledge Management},
+  pages = {6328--6333},
+  numpages = {6},
+  keywords = {language model, path reasoning, reproducibility, transparency},
+  location = {Seoul, Republic of Korea},
+  series = {CIKM '25}
+}</code></pre>
+    </div>
+    </div>
+</section>
+<!--End BibTex citation -->
+  </main>
+
+
+  <footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+
+          <p>
+            Looking for the previous edition? See the <a href="../umap2026/">UMAP 2026 tutorial page</a>.
+          </p>
+
+          <p>
+            This page was built using the <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank">Academic Project Page Template</a> which was adopted from the <a href="https://nerfies.github.io" target="_blank">Nerfies</a> project page.
+            You are free to borrow the source code of this website, we just ask that you link back to this page in the footer. <br> This website is licensed under a <a rel="license"  href="http://creativecommons.org/licenses/by-sa/4.0/" target="_blank">Creative
+            Commons Attribution-ShareAlike 4.0 International License</a>.
+          </p>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Statcounter tracking code -->
+
+<!-- You can add a tracker to track page visits by creating an account at statcounter.com -->
+
+    <!-- End of Statcounter Code -->
+
+  </body>
+  </html>
