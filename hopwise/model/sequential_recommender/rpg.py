@@ -49,7 +49,8 @@ class RPG(SequentialRecommender):
             if self.n_edges > self.n_items - 1:
                 raise ValueError(f"n_edges [{self.n_edges}] should not be greater than the number of items.")
 
-        self.item2shifted_sem_id = dataset.item2shifted_sem_id.to(self.device)
+        # registered as a buffer so reloading never depends on FAISS reproducing the same codes
+        self.register_buffer("item2shifted_sem_id", dataset.item2shifted_sem_id.clone())
         self.n_digit = dataset.n_digit
         self.codebook_size = dataset.codebook_size
 
@@ -82,6 +83,11 @@ class RPG(SequentialRecommender):
 
         # item-item graph used for graph-constrained decoding, built once per evaluation
         self.adjacency = None
+
+    def load_state_dict(self, *args, **kwargs):
+        # the decoding graph depends on the token embeddings, so it must be rebuilt with the loaded weights
+        self.adjacency = None
+        return super().load_state_dict(*args, **kwargs)
 
     def train(self, mode=True):
         # model weights change during training, so the decoding graph must be rebuilt at the next evaluation
