@@ -96,6 +96,7 @@ class KnowledgeBasedDataset(Dataset):
         super()._data_filtering()
         self._filter_kg_by_triple_num()
         self._filter_link()
+        self._reset_index()
 
     def _filter_kg_by_triple_num(self):
         """Filter by number of triples.
