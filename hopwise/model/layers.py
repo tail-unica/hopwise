@@ -1546,6 +1546,7 @@ class ResidualBlock(nn.Module):
         self.linear = nn.Linear(hidden_size, hidden_size)
         # Initialize as an identity mapping
         torch.nn.init.zeros_(self.linear.weight)
+        torch.nn.init.zeros_(self.linear.bias)
         # Use SiLU activation to keep consistent with the Llama model
         self.act = nn.SiLU()
 

@@ -18,7 +18,6 @@ r"""RPG
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers import GPT2Config, GPT2Model
 
 from hopwise.model.abstract_recommender import SequentialRecommender
 from hopwise.model.layers import ResidualBlock
@@ -28,6 +27,8 @@ class RPG(SequentialRecommender):
     r"""RPG is a recommendation model that generates each token of the next semantic ID in parallel."""
 
     def __init__(self, config, dataset):
+        from transformers import GPT2Config, GPT2Model
+
         super().__init__(config, dataset)
 
         self.topk = config["topk"]
@@ -40,6 +41,13 @@ class RPG(SequentialRecommender):
         self.n_beams = config["n_beams"]
         self.propagation_steps = config["propagation_steps"]
         self.loss_type = config["loss_type"]  # necessary otherwise hopwise don't recognize seq recommender
+
+        if self.use_gcd:
+            # the neighbors of the best beam are n_edges distinct items, so there are always enough beams to select
+            if self.n_beams > self.n_edges:
+                raise ValueError(f"n_beams [{self.n_beams}] should not be greater than n_edges [{self.n_edges}].")
+            if self.n_edges > self.n_items - 1:
+                raise ValueError(f"n_edges [{self.n_edges}] should not be greater than the number of items.")
 
         self.item2shifted_sem_id = dataset.item2shifted_sem_id.to(self.device)
         self.n_digit = dataset.n_digit
@@ -182,14 +190,13 @@ class RPG(SequentialRecommender):
 
         results = torch.full((batch_size, self.n_items), -torch.inf, device=self.device)
 
-        # Randomly sample num_beams distinct node IDs in [1..n_nodes]
+        # Randomly sample n_beams item ids in [1, n_items) as initial beams
         topk_nodes_sorted = torch.randint(
             1, self.n_items, (batch_size, self.n_beams), dtype=torch.long, device=token_logits.device
         )
 
         for propagation_step in range(self.propagation_steps):
-            # Find neighbors of these top num_beams nodes
-            #      adjacency_list is 0-based internally => need node_id-1
+            # Find the neighbors of the current beams. The adjacency list is indexed by item id
             all_neighbors = adjacency[topk_nodes_sorted].view(batch_size, -1)
 
             next_nodes = []
@@ -205,7 +212,7 @@ class RPG(SequentialRecommender):
                 # if it's the last propagation step, save the scores
                 if propagation_step == self.propagation_steps - 1:
                     topk = torch.topk(scores, min(max(self.topk), scores.shape[0])).indices
-                    results[batch_id, topk] = scores[topk]
+                    results[batch_id, neighbors_in_batch[topk]] = scores[topk]
                 else:
                     # otherwise, select beams and propagate again
                     topk = torch.topk(scores, self.n_beams).indices
@@ -216,82 +223,41 @@ class RPG(SequentialRecommender):
 
         return results
 
-    def build_ii_sim_mat(self):
-        # Assuming n_digit=32, codebook_size=256
-        # 1) Reshape first 8192 rows of token embeddings into [32, 256, d]
-        #    ignoring 2 rows which might be special tokens
-        #    shape: (32, 256, d)
-
-        wte = self.gpt2.wte.weight[1:-1].view(self.n_digit, self.codebook_size, -1)
-
-        # 2) Normalize each (256, d) sub-matrix to compute pairwise cosine similarities
-        #    We'll do this in a batch for all 32 groups.
-        # We do a batch matrix multiply to get (256 x 256) for each group
-        # => token_sims: (32, 256, 256)
-        wte = F.normalize(wte, dim=-1)
-        token_sims = torch.bmm(wte, wte.transpose(1, 2))
-
-        # 3) Convert [-1, 1] to [0, 1] range
-        token_sims_01 = 0.5 * (token_sims + 1.0)  # shape: (32, 256, 256)
-
-        # 4) Prepare an output similarity matrix
-        item_item_sim = torch.zeros((self.n_items, self.n_items), device=self.gpt2.device, dtype=torch.float32)
-
-        # 5) Fill the item-item matrix in chunks
-        for i_start in range(1, self.n_items, self.chunk_size):
-            i_end = min(i_start + self.chunk_size, self.n_items)
-
-            # shape: (chunk_i_size, 32)
-            # sub-block for items i
-            tokens_i = self.item2shifted_sem_id[i_start:i_end]
-
-            for j_start in range(1, self.n_items, self.chunk_size):
-                j_end = min(j_start + self.chunk_size, self.n_items)
-
-                # shape: (chunk_j_size, 32)
-                # sub-block for items j
-                tokens_j = self.item2shifted_sem_id[j_start:j_end]
-
-                # We want to compute a sub-block of shape: (chunk_i_size, chunk_j_size).
-                # For each digit k in [0..31], we look up token_sims_01[k, tokens_i[i, k], tokens_j[j, k]].
-
-                # We'll accumulate the similarity for each of the 32 digits
-                block_size_i = i_end - i_start
-                block_size_j = j_end - j_start
-                sum_block = torch.zeros((block_size_i, block_size_j), device=self.gpt2.device, dtype=torch.float32)
-
-                # We'll do a small loop over k=0..31 (which is constant = 32).
-                # Each token_sims_01[k] is (256, 256). We gather from it using:
-                #   row indices = tokens_i[:, k]
-                #   col indices = tokens_j[:, k]
-                #
-                # The typical approach is:
-                #   sub = token_sims_01[k].index_select(0, row_inds).index_select(1, col_inds)
-                # Then sum them up across k.
-                for k in range(self.n_digit):
-                    # row_inds shape: (block_size_i,)
-                    row_inds = tokens_i[:, k] - k * self.codebook_size - 1
-                    # col_inds shape: (block_size_j,)
-                    col_inds = tokens_j[:, k] - k * self.codebook_size - 1
-
-                    # token_sims_01[k] -> shape (256, 256)
-                    # row-gather => shape (block_size_i, 256)
-                    temp = token_sims_01[k].index_select(0, row_inds)
-                    # col-gather across dim=1 => shape (block_size_i, block_size_j)
-                    temp = temp.index_select(1, col_inds)
-
-                    # Accumulate
-                    sum_block += temp
-
-                # Now take the average across the 32 digits
-                avg_block = sum_block / self.n_digit
-
-                # Write back into the final item_item_sim
-                item_item_sim[i_start:i_end, j_start:j_end] = avg_block
-
-        return item_item_sim
-
+    @torch.no_grad()
     def init_graph(self):
-        item_item_sim = self.build_ii_sim_mat()
-        adjacency = torch.topk(item_item_sim, k=self.n_edges, dim=-1).indices
+        """Builds the item-item graph used for graph-constrained decoding.
+
+        The similarity of two items is the average over the digits of the cosine similarity, rescaled in [0, 1],
+        between the token embeddings of their semantic IDs. Each item is connected to its ``n_edges`` most similar
+        items. Similarities are computed in chunks of ``chunk_size`` items, such that the full ``n_items x n_items``
+        similarity matrix is never materialized.
+
+        Returns:
+            torch.Tensor: The adjacency list of shape ``[n_items, n_edges]``. Row 0 (PAD) is not used.
+        """
+        device = self.gpt2.wte.weight.device
+
+        # token embeddings of each digit, ignoring PAD and EOS tokens. shape: (n_digit, codebook_size, d)
+        wte = F.normalize(self.gpt2.wte.weight[1:-1].view(self.n_digit, self.codebook_size, -1), dim=-1)
+        # pairwise similarities between the codewords of each digit, from [-1, 1] to [0, 1]
+        # shape: (n_digit, codebook_size, codebook_size)
+        token_sims = 0.5 * (torch.bmm(wte, wte.transpose(1, 2)) + 1.0)
+
+        # codeword index of each digit for each item, excluding PAD. shape: (n_items - 1, n_digit)
+        digit_offsets = torch.arange(self.n_digit, device=device) * self.codebook_size + 1
+        codes = self.item2shifted_sem_id[1:].to(device) - digit_offsets
+
+        adjacency = torch.zeros((self.n_items, self.n_edges), dtype=torch.long, device=device)
+        for i_start in range(0, codes.shape[0], self.chunk_size):
+            codes_i = codes[i_start : i_start + self.chunk_size]
+
+            # average similarity between the items of the chunk and all the items. shape: (chunk_size, n_items - 1)
+            item_sims = torch.zeros((codes_i.shape[0], codes.shape[0]), device=device)
+            for k in range(self.n_digit):
+                item_sims += token_sims[k].index_select(0, codes_i[:, k]).index_select(1, codes[:, k])
+            item_sims /= self.n_digit
+
+            # column indices are shifted by 1 to obtain item ids, so PAD can never be a neighbor
+            adjacency[i_start + 1 : i_start + 1 + codes_i.shape[0]] = torch.topk(item_sims, k=self.n_edges).indices + 1
+
         return adjacency

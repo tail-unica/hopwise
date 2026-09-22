@@ -3,6 +3,15 @@
 # @Email  : alessandro.soccol@unica.it
 # source: https://github.com/justinhangoebl/Semantic-ID-Generation
 
+"""Semantic IDs generation with RQ-VAE
+====================================
+Here is the sample code to generate semantic IDs of items with an RQ-VAE.
+
+It requires additional dependencies that are not included in hopwise:
+
+    pip install einops sentence-transformers
+"""
+
 import argparse
 import os
 from typing import NamedTuple

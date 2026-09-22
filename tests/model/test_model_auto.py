@@ -823,7 +823,14 @@ class TestSequentialRecommender(unittest.TestCase):
     def test_rpg_with_graph_constrained_decoding(self):
         pytest.importorskip("faiss", reason="RPG requires the optional faiss dependency")
         pytest.importorskip("transformers", reason="RPG requires the optional transformers dependency")
-        config_dict = {"model": "RPG", "n_codebook": 2, "codebook_size": 32, "use_gcd": True, "n_edges": 10}
+        config_dict = {
+            "model": "RPG",
+            "n_codebook": 2,
+            "codebook_size": 32,
+            "use_gcd": True,
+            "n_edges": 10,
+            "n_beams": 5,
+        }
         quick_test(config_dict)
 
 
