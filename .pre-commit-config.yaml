@@ -13,15 +13,15 @@ repos:
     hooks:
       # Run the linter.
       - id: ruff
-        types_or: [ python, pyi ]
+        types_or: [ python, pyi, jupyter ]
         args: [ --fix ]
       # Run the formatter.
       - id: ruff-format
-        types_or: [ python, pyi ]
+        types_or: [ python, pyi, jupyter ]
       # Run the isort import formatter.
       - id: ruff
         args: [ "check", "--select", "I", "--fix" ]
-        types_or: [ python, pyi ]
+        types_or: [ python, pyi, jupyter ]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0  # Use the ref you want to point at

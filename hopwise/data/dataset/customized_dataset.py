@@ -789,3 +789,165 @@ class TPRecDataset(KnowledgeBasedDataset):
         )
 
         return datasets
+
+
+class RPGDataset(SequentialDataset):
+    """Dataset for :class:`~hopwise.model.sequential_recommender.rpg.RPG`.
+
+    Each item is mapped to a semantic ID of ``n_codebook`` digits, obtained by quantizing the item embeddings
+    (e.g., from a sentence encoder) with OPQ. Semantic IDs are generated in :meth:`build`, after the split,
+    so that the codebooks are trained only on the items of the training set.
+
+    An example of the token space when "codebook_size == 256, n_codebook == 32":
+        0: padding
+        1-256: digit 1
+        257-512: digit 2
+        ...
+        7937-8192: digit 32
+        8193: eos
+
+    Attributes:
+        n_codebook (int): The number of digits of each semantic ID.
+        codebook_size (int): The number of codewords of each digit.
+        index_factory (str): The FAISS index factory string for the OPQ algorithm.
+        item2sem_ids (dict): A dictionary mapping item ids to their semantic IDs.
+        item2shifted_sem_id (torch.Tensor): Tensor of shape ``[item_num, n_codebook]`` mapping item ids to
+            the tokens of their semantic IDs.
+        eos_token (int): The end-of-sequence token.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.n_codebook = config["n_codebook"]
+        self.codebook_size = config["codebook_size"]
+        self.n_codebook_bits = self._get_codebook_bits(self.codebook_size)
+        self.index_factory = f"OPQ{self.n_codebook},IVF1,PQ{self.n_codebook}x{self.n_codebook_bits}"
+        self.eos_token = self.n_digit * self.codebook_size + 1
+
+        self.item2sem_ids = None
+        self.item2shifted_sem_id = None
+
+    @property
+    def n_digit(self):
+        """Returns the number of digits of each semantic ID, i.e., the value of `n_codebook`."""
+        return self.n_codebook
+
+    @property
+    def vocab_size(self) -> int:
+        """Returns the vocabulary size, including padding and eos tokens."""
+        return self.eos_token + 1
+
+    def _get_codebook_bits(self, codebook_size):
+        x = np.log2(codebook_size)
+        if not x.is_integer() or x < 0:
+            raise ValueError(f"codebook_size [{codebook_size}] should be a power of 2.")
+        return int(x)
+
+    def build(self):
+        datasets = super().build()
+
+        # Items seen in training, both as history and as target, are used to train the OPQ codebooks
+        train_inter_feat = datasets[0].inter_feat
+        training_items = torch.cat(
+            [train_inter_feat[self.iid_field], train_inter_feat[self.item_id_list_field].flatten()]
+        ).unique()
+        training_items = training_items[training_items != 0].numpy()
+
+        item2sem_ids = self.OPQ(training_items)
+        item2shifted_sem_id = self.shift_semantic_ids(item2sem_ids)
+
+        for dataset in [self, *datasets]:
+            dataset.item2sem_ids = item2sem_ids
+            dataset.item2shifted_sem_id = item2shifted_sem_id
+
+        return datasets
+
+    def OPQ(self, training_items):
+        """Generates semantic IDs using the OPQ algorithm.
+
+        OPQ32,IVF1,PQ32x8 means:
+        - OPQ32: Learn a rotation and split vector into 32 subspaces for quantization.
+        - IVF1: Single inverted list (no real partitioning).
+        - PQ32x8: Encode each of the 32 subspaces with 8 bits (256 centroids each).
+
+        Args:
+            training_items (numpy.ndarray): The ids of the items used to train the index.
+
+        Returns:
+            dict: A dictionary mapping item ids to their semantic IDs.
+        """
+        import faiss
+
+        # the item embeddings are preloaded through a field that is an alias of the item id field
+        preload_fields = [field for field in self.config["preload_weight"] or {} if field in self.alias["item_id"]]
+        if len(preload_fields) != 1:
+            raise ValueError(
+                "RPG requires exactly one `preload_weight` field of item embeddings in `alias_of_item_id`, "
+                f"found {preload_fields}."
+            )
+        # rows are sorted by item id, row 0 is padding
+        embeddings = self.get_preload_weight(preload_fields[0])[1:].astype(np.float32)
+
+        faiss.omp_set_num_threads(self.config["faiss_omp_num_threads"])
+
+        # generate ANN from self.index_factory string using inner product to calculate distances
+        index = faiss.index_factory(embeddings.shape[1], self.index_factory, faiss.METRIC_INNER_PRODUCT)
+
+        # The PQ used to learn the OPQ rotation must have the same number of bits of the index PQ
+        opq = faiss.downcast_VectorTransform(index.chain.at(0))
+        custom_pq = faiss.ProductQuantizer(opq.d_out, opq.M, self.n_codebook_bits)
+        opq.pq = custom_pq
+
+        self.logger.info(set_color("Training OPQ index...", "green"))
+        index.train(embeddings[training_items - 1])
+        index.add(embeddings)
+
+        ivf_index = faiss.downcast_index(index.index)
+        invlists = faiss.extract_index_ivf(ivf_index).invlists
+        ls = invlists.list_size(0)
+        # extract semantic ids, with shape |items| x |code_size|
+        pq_codes = faiss.rev_swig_ptr(invlists.get_codes(0), ls * invlists.code_size)
+        pq_codes = pq_codes.reshape(-1, invlists.code_size)
+
+        item2sem_ids = {}
+        n_bytes = pq_codes.shape[1]
+        for item, u8code in enumerate(pq_codes, start=1):
+            bs = faiss.BitstringReader(faiss.swig_ptr(u8code), n_bytes)
+            item2sem_ids[item] = tuple(bs.read(self.n_codebook_bits) for _ in range(self.n_digit))
+
+        return item2sem_ids
+
+    def shift_semantic_ids(self, item2sem_ids):
+        """Converts semantic IDs to tokens.
+
+        Each digit of a semantic ID is shifted by an offset of ``self.codebook_size * digit + 1``,
+        such that each digit has its own token range. This is used when doing MTP (Multi Token Prediction)
+        through multiple heads.
+
+        Args:
+            item2sem_ids (dict): A dictionary mapping item ids to their semantic IDs.
+
+        Returns:
+            torch.Tensor: Tensor of shape ``[item_num, n_digit]`` mapping item ids to their tokens.
+        """
+        item2shifted_sem_id = torch.zeros((self.item_num, self.n_digit), dtype=torch.long)
+        offsets = torch.arange(self.n_digit) * self.codebook_size + 1  # "+ 1" as 0 is reserved for padding
+        for item, semantic_id_tuple in item2sem_ids.items():
+            item2shifted_sem_id[item] = torch.LongTensor(semantic_id_tuple) + offsets
+        return item2shifted_sem_id
+
+    def __str__(self):
+        info = [
+            super().__str__(),
+            set_color("Vocabulary Size", "green") + f": {self.vocab_size}",
+            set_color("Number of digits", "green") + f": {self.n_digit}",
+            set_color("Codebook Size and number of PQ centroids", "green") + f": {self.codebook_size}",
+            set_color("FAISS Configuration", "green") + f": {self.index_factory}",
+        ]
+        if self.item2sem_ids is not None:
+            info.append(
+                set_color("Percentage of unique Semantic IDs", "green")
+                + f": {len(set(self.item2sem_ids.values())) / len(self.item2sem_ids)}"
+            )
+
+        return "\n".join(info)
