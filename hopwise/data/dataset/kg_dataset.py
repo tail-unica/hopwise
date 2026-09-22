@@ -96,6 +96,7 @@ class KnowledgeBasedDataset(Dataset):
         super()._data_filtering()
         self._filter_kg_by_triple_num()
         self._filter_link()
+        self._reset_index()
 
     def _filter_kg_by_triple_num(self):
         """Filter by number of triples.
@@ -349,6 +350,7 @@ class KnowledgeBasedDataset(Dataset):
         """
         item_tokens = self._get_rec_item_token()
         ent_tokens = self._get_entity_token()
+
         illegal_item = set()
         illegal_ent = set()
         for item in self.item2entity:
@@ -360,9 +362,14 @@ class KnowledgeBasedDataset(Dataset):
             del self.item2entity[item]
         for ent in illegal_ent:
             del self.entity2item[ent]
+
         remained_inter = pd.Series(True, index=self.inter_feat.index)
         remained_inter &= self.inter_feat[self.iid_field].isin(self.item2entity.keys())
         self.inter_feat.drop(self.inter_feat.index[~remained_inter], inplace=True)
+
+        if self.item_feat is not None:
+            remained_item = self.item_feat[self.iid_field].isin(self.item2entity.keys())
+            self.item_feat.drop(self.item_feat.index[~remained_item], inplace=True)
 
     def _download(self):
         super()._download()
@@ -530,8 +537,6 @@ class KnowledgeBasedDataset(Dataset):
         return set(tokens)
 
     def _reset_ent_remapID(self, field, idmap, id2token, token2id):
-        if field == self.entity_field:
-            breakpoint()
         self.field2id_token[field] = id2token
         self.field2token_id[field] = token2id
         for feat in self.field2feats(field):
