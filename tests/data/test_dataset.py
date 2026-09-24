@@ -871,13 +871,17 @@ class TestKGDataset:
         }
         dataset = new_dataset(config_dict=config_dict)
         item_list = dataset.token2id("item_id", ["ib", "ic", "id"])
-        entity_list = dataset.token2id("entity_id", ["eb", "ec", "ed", "ee", "ea"])
+        entity_list = dataset.token2id("entity_id", ["eb", "ec", "ed", "ea"])
         assert (item_list == [1, 2, 3]).all()
-        assert (entity_list == [1, 2, 3, 4, 5]).all()
+        assert (entity_list == [1, 2, 3, 4]).all()
         assert (dataset.inter_feat["user_id"] == [1, 2, 3]).all()
         assert (dataset.inter_feat["item_id"] == [1, 2, 3]).all()
-        assert (dataset.kg_feat["head_id"] == [1, 2, 3, 4]).all()
-        assert (dataset.kg_feat["tail_id"] == [5, 1, 2, 3]).all()
+        assert (dataset.kg_feat["head_id"] == [1, 2, 3]).all()
+        assert (dataset.kg_feat["tail_id"] == [4, 1, 2]).all()
+        # `ie` is linked to `ee`, but it does not occur in the interactions, so the link is dropped
+        # and `ee` is dropped from the kg as well, instead of being remapped as a plain kg entity
+        with pytest.raises(ValueError):
+            dataset.token2id("entity_id", "ee")
 
     def test_kg_reverse_r(self):
         config_dict = {
@@ -888,9 +892,11 @@ class TestKGDataset:
             "load_col": None,
         }
         dataset = new_dataset(config_dict=config_dict)
+        # `rd` only occurs in the triple of `ee`, whose link to `ie` is dropped because `ie` does not
+        # occur in the interactions, so `rd` is dropped from the kg together with `ee`
         relation_list = dataset.token2id("relation_id", ["ra", "rb", "ra_r", "rb_r"])
-        assert (relation_list == [1, 2, 5, 6]).all()
-        assert dataset.relation_num == 10
+        assert (relation_list == [1, 2, 4, 5]).all()
+        assert dataset.relation_num == 8
 
     def test_kg_filter_by_triple_num_in_min_entity_kg_num(self):
         config_dict = {
