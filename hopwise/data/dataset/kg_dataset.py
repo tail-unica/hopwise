@@ -96,7 +96,6 @@ class KnowledgeBasedDataset(Dataset):
         super()._data_filtering()
         self._filter_kg_by_triple_num()
         self._filter_link()
-        self._reset_index()
 
     def _filter_kg_by_triple_num(self):
         """Filter by number of triples.
@@ -347,29 +346,49 @@ class KnowledgeBasedDataset(Dataset):
         """Filter rows of :attr:`item2entity` and :attr:`entity2item`,
         whose ``entity_id`` doesn't occur in kg triplets and
         ``item_id`` doesn't occur in interaction records.
+
+        Dropped items are propagated to :attr:`inter_feat`, :attr:`kg_feat` and :attr:`item_feat`.
         """
-        item_tokens = self._get_rec_item_token()
-        ent_tokens = self._get_entity_token()
+        while True:
+            # loop is needed because dropping triples can remove an entity from the kg,
+            # which in turn can make a still linked item illegal
+            item_tokens = self._get_rec_item_token()
+            ent_tokens = self._get_entity_token()
 
-        illegal_item = set()
-        illegal_ent = set()
-        for item in self.item2entity:
-            ent = self.item2entity[item]
-            if item not in item_tokens or ent not in ent_tokens:
-                illegal_item.add(item)
-                illegal_ent.add(ent)
-        for item in illegal_item:
-            del self.item2entity[item]
-        for ent in illegal_ent:
-            del self.entity2item[ent]
+            illegal_item = set()
+            illegal_ent = set()
+            for item in self.item2entity:
+                ent = self.item2entity[item]
+                if item not in item_tokens or ent not in ent_tokens:
+                    illegal_item.add(item)
+                    illegal_ent.add(ent)
+            for item in illegal_item:
+                del self.item2entity[item]
+            for ent in illegal_ent:
+                del self.entity2item[ent]
 
-        remained_inter = pd.Series(True, index=self.inter_feat.index)
-        remained_inter &= self.inter_feat[self.iid_field].isin(self.item2entity.keys())
-        self.inter_feat.drop(self.inter_feat.index[~remained_inter], inplace=True)
+            remained_inter = pd.Series(True, index=self.inter_feat.index)
+            remained_inter &= self.inter_feat[self.iid_field].isin(self.item2entity.keys())
+            self.inter_feat.drop(self.inter_feat.index[~remained_inter], inplace=True)
 
-        if self.item_feat is not None:
-            remained_item = self.item_feat[self.iid_field].isin(self.item2entity.keys())
-            self.item_feat.drop(self.item_feat.index[~remained_item], inplace=True)
+            # dropped items are propagated to the kg, otherwise their entities would still be
+            # remapped as plain kg entities, even though the items do not exist anymore
+            remained_kg = pd.Series(True, index=self.kg_feat.index)
+            remained_kg &= ~self.kg_feat[self.head_entity_field].isin(illegal_ent)
+            remained_kg &= ~self.kg_feat[self.tail_entity_field].isin(illegal_ent)
+            self.kg_feat.drop(self.kg_feat.index[~remained_kg], inplace=True)
+
+            # if dropped items are not propagated to item_feat, item_num is larger and
+            # the entity field2id_token includes mappings of items missing from inter_feat
+            if self.item_feat is not None:
+                remained_item = self.item_feat[self.iid_field].isin(self.item2entity.keys())
+                self.item_feat.drop(self.item_feat.index[~remained_item], inplace=True)
+
+            # feats are re-indexed for safe index dropping and while loop stop conditions
+            self._reset_index()
+
+            if remained_inter.all() and remained_kg.all():
+                break
 
     def _download(self):
         super()._download()
@@ -1056,6 +1075,9 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
         Extended to also filter rows of :attr:`user2entity` and :attr:`entity2user`,
         whose ``entity_id`` doesn't occur in kg triplets and
         ``user_id`` doesn't occur in interaction records.
+
+        Dropped users and items are propagated to :attr:`inter_feat`, :attr:`kg_feat`,
+        :attr:`item_feat` and :attr:`user_feat`.
         """
         while True:
             # loop is needed in case dropped index lead to drop of user/item
@@ -1092,19 +1114,31 @@ class UserItemKnowledgeBasedDataset(KnowledgeBasedDataset):
                 del self.entity2user[ent]
 
             remained_inter &= self.inter_feat[self.uid_field].isin(self.user2entity.keys())
-
-            if not (~remained_inter).any():
-                break
-
             self.inter_feat.drop(self.inter_feat.index[~remained_inter], inplace=True)
 
-        if self.item_feat is not None:
-            remained_item = self.item_feat[self.iid_field].isin(self.item2entity.keys())
-            self.item_feat.drop(self.item_feat.index[~remained_item], inplace=True)
+            # dropped users and items are propagated to the kg, otherwise their entities would still
+            # be remapped as plain kg entities, even though they do not exist anymore
+            illegal_ent = illegal_item_ent | illegal_user_ent
+            remained_kg = pd.Series(True, index=self.kg_feat.index)
+            remained_kg &= ~self.kg_feat[self.head_entity_field].isin(illegal_ent)
+            remained_kg &= ~self.kg_feat[self.tail_entity_field].isin(illegal_ent)
+            self.kg_feat.drop(self.kg_feat.index[~remained_kg], inplace=True)
 
-        if self.user_feat is not None:
-            remained_user = self.user_feat[self.uid_field].isin(self.user2entity.keys())
-            self.user_feat.drop(self.user_feat.index[~remained_user], inplace=True)
+            # if dropped users/items are not propagated to user_feat/item_feat, user_num and item_num
+            # are larger and the entity field2id_token includes mappings missing from inter_feat
+            if self.item_feat is not None:
+                remained_item = self.item_feat[self.iid_field].isin(self.item2entity.keys())
+                self.item_feat.drop(self.item_feat.index[~remained_item], inplace=True)
+
+            if self.user_feat is not None:
+                remained_user = self.user_feat[self.uid_field].isin(self.user2entity.keys())
+                self.user_feat.drop(self.user_feat.index[~remained_user], inplace=True)
+
+            # feats are re-indexed for safe index dropping and while loop stop conditions
+            self._reset_index()
+
+            if remained_inter.all() and remained_kg.all():
+                break
 
     def _load_data(self, token, dataset_path):
         super(KnowledgeBasedDataset, self)._load_data(token, dataset_path)

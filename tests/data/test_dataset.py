@@ -871,13 +871,52 @@ class TestKGDataset:
         }
         dataset = new_dataset(config_dict=config_dict)
         item_list = dataset.token2id("item_id", ["ib", "ic", "id"])
-        entity_list = dataset.token2id("entity_id", ["eb", "ec", "ed", "ee", "ea"])
+        entity_list = dataset.token2id("entity_id", ["eb", "ec", "ed", "ea"])
         assert (item_list == [1, 2, 3]).all()
-        assert (entity_list == [1, 2, 3, 4, 5]).all()
+        assert (entity_list == [1, 2, 3, 4]).all()
         assert (dataset.inter_feat["user_id"] == [1, 2, 3]).all()
         assert (dataset.inter_feat["item_id"] == [1, 2, 3]).all()
-        assert (dataset.kg_feat["head_id"] == [1, 2, 3, 4]).all()
-        assert (dataset.kg_feat["tail_id"] == [5, 1, 2, 3]).all()
+        assert (dataset.kg_feat["head_id"] == [1, 2, 3]).all()
+        assert (dataset.kg_feat["tail_id"] == [4, 1, 2]).all()
+        # `ie` is linked to `ee`, but it does not occur in the interactions, so the link is dropped
+        # and `ee` is dropped from the kg as well, instead of being remapped as a plain kg entity
+        with pytest.raises(ValueError):
+            dataset.token2id("entity_id", "ee")
+
+    def test_kg_filter_link(self):
+        config_dict = {
+            "model": "KGAT",
+            "dataset": "kg_filter_link",
+            "data_path": current_path,
+            "load_col": None,
+        }
+        dataset = new_dataset(config_dict=config_dict)
+
+        # `i2` is linked to `e2`, which does not occur in the kg, so `i2` is dropped from inter_feat
+        # and item_feat. If item_feat was not filtered, `i2` would still be an item token
+        assert dataset.item_num == 3  # [PAD] + i1, i3
+        assert "i2" not in dataset.field2token_id["item_id"]
+        assert "e2" not in dataset.field2token_id["entity_id"]
+        assert (dataset.item_feat["price"] != 5.0).all()
+
+        # `i4` does not occur in the interactions, so its entity `e4` is dropped from the kg,
+        # together with the triples it takes part in, instead of being remapped as a plain entity
+        assert "e4" not in dataset.field2token_id["entity_id"]
+        assert "x2" not in dataset.field2token_id["entity_id"]  # only linked to `e4`
+        assert "r2" not in dataset.field2token_id["relation_id"]  # only used by dropped triples
+
+        # `i5` is a legal item at first, as it occurs in both inter_feat and item_feat, but `e5` only
+        # occurs in a triple with `e4`. Dropping that triple leaves `e5` out of the kg, which makes
+        # `i5` illegal in turn, and it is detected by the second iteration of the filtering loop
+        assert "i5" not in dataset.field2token_id["item_id"]
+        assert "e5" not in dataset.field2token_id["entity_id"]
+        assert "r3" not in dataset.field2token_id["relation_id"]
+        assert (dataset.item_feat["price"] != 7.0).all()
+
+        assert (dataset.token2id("item_id", ["i1", "i3"]) == [1, 2]).all()
+        assert (dataset.token2id("entity_id", ["e1", "e3", "x1"]) == [1, 2, 3]).all()
+        assert dataset.kg_num == 2
+        assert len(dataset.inter_feat) == 4  # the interactions of `i2` and `i5` are dropped
 
     def test_kg_reverse_r(self):
         config_dict = {
@@ -888,9 +927,11 @@ class TestKGDataset:
             "load_col": None,
         }
         dataset = new_dataset(config_dict=config_dict)
+        # `rd` only occurs in the triple of `ee`, whose link to `ie` is dropped because `ie` does not
+        # occur in the interactions, so `rd` is dropped from the kg together with `ee`
         relation_list = dataset.token2id("relation_id", ["ra", "rb", "ra_r", "rb_r"])
-        assert (relation_list == [1, 2, 5, 6]).all()
-        assert dataset.relation_num == 10
+        assert (relation_list == [1, 2, 4, 5]).all()
+        assert dataset.relation_num == 8
 
     def test_kg_filter_by_triple_num_in_min_entity_kg_num(self):
         config_dict = {
@@ -1075,6 +1116,36 @@ class TestUserKGDataset:
         assert len(dataset.inter_feat) == 3
         assert "ua" not in dataset.field2token_id["user_id"]
         assert "ia" not in dataset.field2token_id["item_id"]
+
+    def test_user_item_kg_filter_link(self):
+        config_dict = {
+            "model": "KGAT",
+            "dataset": "user_item_kg_filter_link",
+            "data_path": current_path,
+            "load_col": None,
+        }
+        dataset = new_dataset(config_dict=config_dict)
+
+        # `u2` and `i2` are linked to entities that do not occur in the kg, so they are dropped from
+        # inter_feat, user_feat and item_feat. If the feats were not filtered, `u2` and `i2` would
+        # still be user and item tokens
+        assert dataset.user_num == 2  # [PAD] + u1
+        assert dataset.item_num == 2  # [PAD] + i1
+        assert "u2" not in dataset.field2token_id["user_id"]
+        assert "i2" not in dataset.field2token_id["item_id"]
+        assert (dataset.user_feat["age"] != 30.0).all()
+        assert (dataset.item_feat["price"] != 2.0).all()
+        assert len(dataset.inter_feat) == 1  # only `u1` interacting with `i1` is left
+
+        # `u3` and `i3` do not occur in the interactions, but their entities take part in the kg,
+        # so the related triples are dropped instead of being remapped as plain kg entities
+        for token in ["eu_2", "ei_2", "eu_3", "ei_3"]:
+            assert token not in dataset.field2token_id["entity_id"]
+        assert "r2" not in dataset.field2token_id["relation_id"]  # only used by dropped triples
+        assert "r3" not in dataset.field2token_id["relation_id"]
+
+        assert (dataset.token2id("entity_id", ["eu_1", "ei_1", "ex_1"]) == [1, 3, 4]).all()
+        assert dataset.kg_num == 2
 
 
 class TestKGPathDataset(unittest.TestCase):

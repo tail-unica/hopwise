@@ -269,9 +269,9 @@ class TestGeneralDataloader:
                 "positive_i": [1],
             },
             {
-                "item_id_check": lambda data: (data[0:2].numpy() == [17, 18]).all()
-                and (16 < data[2:]).all()
-                and (data[2:] <= 100).all(),
+                "item_id_check": lambda data: (
+                    (data[0:2].numpy() == [17, 18]).all() and (16 < data[2:]).all() and (data[2:] <= 100).all()
+                ),
                 "row_idx": [0] * 202,
                 "positive_u": [0, 0],
                 "positive_i": [17, 18],
@@ -293,9 +293,9 @@ class TestGeneralDataloader:
                 "positive_i": [1],
             },
             {
-                "item_id_check": lambda data: (data[0:2].numpy() == [19, 20]).all()
-                and (18 < data[2:]).all()
-                and (data[2:] <= 100).all(),
+                "item_id_check": lambda data: (
+                    (data[0:2].numpy() == [19, 20]).all() and (18 < data[2:]).all() and (data[2:] <= 100).all()
+                ),
                 "row_idx": [0] * 202,
                 "positive_u": [0, 0],
                 "positive_i": [19, 20],
@@ -334,19 +334,21 @@ class TestGeneralDataloader:
 
         valid_result = [
             {
-                "item_id_check": lambda data: data[0] == 9
-                and (8 < data[1:101]).all()
-                and (data[1:101] <= 100).all()
-                and data[101] == 1
-                and (data[102:202] != 1).all(),
+                "item_id_check": lambda data: (
+                    data[0] == 9
+                    and (8 < data[1:101]).all()
+                    and (data[1:101] <= 100).all()
+                    and data[101] == 1
+                    and (data[102:202] != 1).all()
+                ),
                 "row_idx": [0] * 101 + [1] * 101,
                 "positive_u": [0, 1],
                 "positive_i": [9, 1],
             },
             {
-                "item_id_check": lambda data: (data[0:2].numpy() == [17, 18]).all()
-                and (16 < data[2:]).all()
-                and (data[2:] <= 100).all(),
+                "item_id_check": lambda data: (
+                    (data[0:2].numpy() == [17, 18]).all() and (16 < data[2:]).all() and (data[2:] <= 100).all()
+                ),
                 "row_idx": [0] * 202,
                 "positive_u": [0, 0],
                 "positive_i": [17, 18],
@@ -356,19 +358,21 @@ class TestGeneralDataloader:
 
         test_result = [
             {
-                "item_id_check": lambda data: data[0] == 10
-                and (9 < data[1:101]).all()
-                and (data[1:101] <= 100).all()
-                and data[101] == 1
-                and (data[102:202] != 1).all(),
+                "item_id_check": lambda data: (
+                    data[0] == 10
+                    and (9 < data[1:101]).all()
+                    and (data[1:101] <= 100).all()
+                    and data[101] == 1
+                    and (data[102:202] != 1).all()
+                ),
                 "row_idx": [0] * 101 + [1] * 101,
                 "positive_u": [0, 1],
                 "positive_i": [10, 1],
             },
             {
-                "item_id_check": lambda data: (data[0:2].numpy() == [19, 20]).all()
-                and (18 < data[2:]).all()
-                and (data[2:] <= 100).all(),
+                "item_id_check": lambda data: (
+                    (data[0:2].numpy() == [19, 20]).all() and (18 < data[2:]).all() and (data[2:] <= 100).all()
+                ),
                 "row_idx": [0] * 202,
                 "positive_u": [0, 0],
                 "positive_i": [19, 20],
