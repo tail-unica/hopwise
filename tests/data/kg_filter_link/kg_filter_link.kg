@@ -1,0 +1,5 @@
+head_id:token	tail_id:token	relation_id:token
+e1	x1	r1
+e3	x1	r1
+e4	x2	r2
+e4	e5	r3
