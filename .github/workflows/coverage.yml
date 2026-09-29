@@ -1,0 +1,57 @@
+name: Publish coverage report
+
+on:
+  push:
+    branches: [main]
+    # The publish job's own commit touches only coverage/, so it must not re-trigger this workflow
+    paths-ignore:
+      - "coverage/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/sync_and_test.yml
+    with:
+      env: cuda
+      python-version: "3.10"
+      os: ubuntu-latest
+      experimental_or_skip_heavy_tests: false
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: coverage-publish
+      cancel-in-progress: false
+
+    steps:
+      # If COVERAGE_DEPLOY_KEY is unset, checkout falls back to GITHUB_TOKEN.
+      # The deploy key is only needed when main is protected against direct pushes.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          ssh-key: ${{ secrets.COVERAGE_DEPLOY_KEY }}
+      - name: Replace previous report
+        run: |
+          rm -rf coverage
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage
+      - name: Commit and push coverage report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A coverage
+          if git diff --cached --quiet; then
+            echo "Coverage report unchanged"
+            exit 0
+          fi
+          git commit -m "Update coverage report"
+          git pull --rebase origin main
+          git push origin HEAD:main

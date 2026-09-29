@@ -34,11 +34,37 @@ jobs:
           uv sync --extra pyg
 
       # Testing pipeline
-      # TODO: add pytest-cov to generate coverage reports with Full Test
       - name: Full Test
         if: ${{ inputs.experimental_or_skip_heavy_tests == false && inputs.os == 'ubuntu-latest' }}
         run: |
-          uv run -m pytest -v -n auto tests
+          uv run -m pytest -v -n auto --cov=hopwise --cov-report= tests
+      - name: Build coverage report and badge
+        if: ${{ !cancelled() && inputs.experimental_or_skip_heavy_tests == false && inputs.os == 'ubuntu-latest' }}
+        run: |
+          uv run coverage html -d coverage-report
+          # coverage.py writes a catch-all .gitignore that would prevent committing the report
+          rm -f coverage-report/.gitignore
+          total=$(uv run coverage report --format=total)
+          if   [ "$total" -ge 90 ]; then color=brightgreen
+          elif [ "$total" -ge 75 ]; then color=green
+          elif [ "$total" -ge 60 ]; then color=yellow
+          elif [ "$total" -ge 40 ]; then color=orange
+          else color=red
+          fi
+          printf '{"schemaVersion": 1, "label": "coverage", "message": "%s%%", "color": "%s"}\n' \
+            "$total" "$color" > coverage-report/badge.json
+          {
+            echo "## Coverage: ${total}%"
+            echo
+            uv run coverage report --format=markdown --skip-covered
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage report
+        if: ${{ !cancelled() && inputs.experimental_or_skip_heavy_tests == false && inputs.os == 'ubuntu-latest' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report/
+          include-hidden-files: true
       - name: Test Config
         if: ${{ inputs.experimental_or_skip_heavy_tests != false || inputs.os != 'ubuntu-latest' }}
         run: |

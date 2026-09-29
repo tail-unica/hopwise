@@ -43,6 +43,7 @@ cover/
 env/
 venv/
 ENV/
+ssh/
 
 # =============================================================================
 # Machine Learning & Data Science
