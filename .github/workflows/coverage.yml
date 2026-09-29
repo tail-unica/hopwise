@@ -22,6 +22,8 @@ jobs:
 
   publish:
     needs: test
+    # Manual runs may target any branch; only main's coverage is published
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
