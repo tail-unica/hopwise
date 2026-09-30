@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">663 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">549<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">114<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">553<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">110<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_8034f1c7a3dfe0c9_cfkg_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-09-30 08:49 +0000
+            created at 2026-09-30 13:25 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -253,8 +253,8 @@
     <p class="pln"><span class="n"><a id="t171" href="#t171">171</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t172" href="#t172">172</a></span><span class="t">            <span class="com"># Sample a history path from memory.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t173" href="#t173">173</a></span><span class="t">            <span class="key">if</span> <span class="nam">self</span><span class="op">.</span><span class="nam">rng</span><span class="op">.</span><span class="nam">random</span><span class="op">(</span><span class="op">)</span> <span class="op">&lt;</span> <span class="nam">use_memory_prob</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t174" href="#t174">174</a></span><span class="t">                <span class="nam">hist_path</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">replay_memory</span><span class="op">[</span><span class="nam">mpid</span><span class="op">]</span><span class="op">.</span><span class="nam">sample</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t175" href="#t175">175</a></span><span class="t">                <span class="nam">pos_path_batch</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="nam">hist_path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t174" href="#t174">174</a></span><span class="t">                <span class="nam">hist_path</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">replay_memory</span><span class="op">[</span><span class="nam">mpid</span><span class="op">]</span><span class="op">.</span><span class="nam">sample</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t175" href="#t175">175</a></span><span class="t">                <span class="nam">pos_path_batch</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="nam">hist_path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t176" href="#t176">176</a></span><span class="t">            <span class="com"># Sample a new path from graph.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t177" href="#t177">177</a></span><span class="t">            <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t178" href="#t178">178</a></span><span class="t">                <span class="nam">paths</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">fast_sample_path_with_target</span><span class="op">(</span><span class="nam">mpid</span><span class="op">,</span> <span class="nam">user</span><span class="op">,</span> <span class="nam">item</span><span class="op">,</span> <span class="num">1</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -794,9 +794,9 @@
     <p class="pln"><span class="n"><a id="t712" href="#t712">712</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t713" href="#t713">713</a></span><span class="t">    <span class="key">def</span> <span class="nam">sample</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t714" href="#t714">714</a></span><span class="t">        <span class="com"># memory is empty.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t715" href="#t715">715</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">self</span><span class="op">.</span><span class="nam">memory</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t715" href="#t715">715</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">self</span><span class="op">.</span><span class="nam">memory</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t716" href="#t716">716</a></span><span class="t">            <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t717" href="#t717">717</a></span><span class="t">        <span class="key">return</span> <span class="nam">random</span><span class="op">.</span><span class="nam">choice</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">memory</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t717" href="#t717">717</a></span><span class="t">        <span class="key">return</span> <span class="nam">random</span><span class="op">.</span><span class="nam">choice</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">memory</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t718" href="#t718">718</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t719" href="#t719">719</a></span><span class="t">    <span class="key">def</span> <span class="nam">__len__</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t720" href="#t720">720</a></span><span class="t">        <span class="key">return</span> <span class="nam">len</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">memory</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -1053,7 +1053,7 @@
             <a class="nav" href="z_8034f1c7a3dfe0c9_cfkg_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-09-30 08:49 +0000
+            created at 2026-09-30 13:25 +0000
         </p>
     </div>
 </footer>
