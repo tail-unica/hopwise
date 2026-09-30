@@ -3,12 +3,12 @@ name: Lint
 on:
   workflow_call:
     inputs:
-      python-version:
-        required: true
-        type: string
       os:
         required: true
         type: string
+
+permissions:
+  contents: read
 
 jobs:
   lint:
@@ -16,19 +16,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ inputs.python-version }}
-      - name: Install the project to follow ruff directives in pyproject.toml
-        run: |
-          uv sync
-      # - uses: astral-sh/ruff-action@v3
+      # Keep the ruff version in sync with .pre-commit-config.yaml
       - name: Lint code
-        run: |
-          uv run ruff check --fix
-          uv run ruff format
-      - name: Apply code-format changes
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: astral-sh/ruff-action@v3
         with:
-          commit_message: Format code with ruff
+          version: "0.16.7"
+          args: "check --output-format=github"
+      - name: Check code format
+        run: |
+          ruff format --check --diff
