@@ -112,7 +112,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         has_bos_token = self.is_bos_token_in_input(input_ids)
 
         unique_input_ids = input_ids
-        if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
+        if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 2 + has_bos_token:
             # Determine whether the next token to generate is a relation or an entity:
             # - relation: only the last entity is needed (1 token) → for [user123] last_n_tokens = 1
             # - entity: the last 2 tokens are needed (entity, relation) → for [user123, watched] last_n_tokens = 2
@@ -138,7 +138,7 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
 
             full_mask[idx] = banned_mask
 
-        if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 1 - has_bos_token:
+        if self.task == KnowledgeEvaluationType.REC and current_len < self.max_sequence_length - 2 + has_bos_token:
             scores[full_mask[input_ids_inv]] = -torch.inf
         else:
             scores[full_mask] = -torch.inf
@@ -151,7 +151,9 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
         has_bos_token = self.is_bos_token_in_input(input_ids)
 
         key = self.get_current_key(input_ids, idx)
-        if current_len == self.max_sequence_length - 1 - has_bos_token:
+        # Last content token (the recommended item) is generated when the prefix holds all but one
+        # content token, i.e. (max_sequence_length - 1) content tokens minus 1, plus the BOS token if present.
+        if current_len == self.max_sequence_length - 2 + has_bos_token:
             current_uid = input_ids[idx, int(has_bos_token)].item()
             uid_cond_key = (current_uid, *key)
 
@@ -208,6 +210,10 @@ class ConstrainedLogitsProcessorWordLevel(LogitsProcessor):
             else:
                 # return relations given head
                 return set(self.tokenized_ckg[key1].keys())
+        elif key1 in self.tokenizer.all_special_ids:
+            # A special token (e.g. the pad emitted by the empty-candidate fallback) is a dead-end path,
+            # not a graph node: it has no continuation, which lets the fallback terminate the path.
+            return set()
         else:
             raise ValueError(f"Key {key1} ('{self.tokenizer.convert_ids_to_tokens(key1)}') not found in tokenized_ckg")
 
@@ -303,7 +309,7 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
         has_bos_token = self.is_bos_token_in_input(input_ids)
 
         unique_input_ids = input_ids
-        if self.task == KnowledgeEvaluationType.REC and current_len == (self.max_sequence_length - 1 - has_bos_token):
+        if self.task == KnowledgeEvaluationType.REC and current_len == (self.max_sequence_length - 2 + has_bos_token):
             user_idx = int(has_bos_token)
             _, input_ids_indices, input_ids_inv = np.unique(
                 input_ids.cpu().numpy()[:, [user_idx]], axis=0, return_index=True, return_inverse=True
@@ -341,7 +347,9 @@ class PLMLogitsProcessorWordLevel(LogitsProcessor):
         current_len = input_ids.shape[-1]
         has_bos_token = self.is_bos_token_in_input(input_ids)
 
-        if current_len == self.max_sequence_length - 1 - has_bos_token:
+        # Last content token (the recommended item) is generated when the prefix holds all but one
+        # content token, i.e. (max_sequence_length - 1) content tokens minus 1, plus the BOS token if present.
+        if current_len == self.max_sequence_length - 2 + has_bos_token:
             current_uid = input_ids[idx, int(has_bos_token)].item()
             candidate_tokens = self.pos_candidates_cache.get(current_uid)
             if candidate_tokens is None:
