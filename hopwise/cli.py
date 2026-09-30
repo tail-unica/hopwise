@@ -35,6 +35,16 @@ class hopwiseClickCommand(click.Command):
         return result
 
 
+def _split_config_files(ctx, param, value):
+    if not value:
+        return None
+    paths = value.strip().split()
+    for p in paths:
+        if not os.path.isfile(p):
+            raise click.BadParameter(f"config file not found: {p}")
+    return paths
+
+
 console = Console()
 debug_message = """[dim]
     Use --debug for full traceback or --rich-traceback for enhanced formatting. Please, be careful
@@ -76,7 +86,7 @@ def cli(ctx, debug, rich_traceback):
 )
 @click.option("--model", "-m", default="BPR", help="Model name to train")
 @click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
-@click.option("--config-files", help="Space-separated config files")
+@click.option("--config-files", "-c", help="Space-separated config files", callback=_split_config_files)
 @click.option("--checkpoint", help="Checkpoint (.pth) file path")
 @click.option("--nproc", default=1, help="Number of processes")
 @click.option("--ip", default="localhost", help="Master node IP")
@@ -92,15 +102,13 @@ def train(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_
         proc_title = f"[hopwise] {model} {dataset} training"
     setproctitle(proc_title)
 
-    config_file_list = config_files.strip().split(" ") if config_files else None
-
     try:
         run(
             model,
             dataset,
             "train",
             checkpoint,
-            config_file_list=config_file_list,
+            config_file_list=config_files,
             nproc=nproc,
             world_size=world_size,
             ip=ip,
@@ -135,7 +143,7 @@ def train(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_
 )
 @click.option("--model", "-m", default="BPR", help="Model name to train")
 @click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
-@click.option("--config-files", help="Space-separated config files")
+@click.option("--config-files", "-c", help="Space-separated config files", callback=_split_config_files)
 @click.option("--checkpoint", help="Checkpoint (.pth) file path")
 @click.option("--nproc", default=1, help="Number of processes")
 @click.option("--ip", default="localhost", help="Master node IP")
@@ -151,15 +159,13 @@ def evaluate(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, wor
         proc_title = f"[hopwise] {model} {dataset} evaluation"
     setproctitle(proc_title)
 
-    config_file_list = config_files.strip().split(" ") if config_files else None
-
     try:
         run(
             model,
             dataset,
             "evaluate",
             checkpoint,
-            config_file_list=config_file_list,
+            config_file_list=config_files,
             nproc=nproc,
             world_size=world_size,
             ip=ip,
@@ -194,7 +200,7 @@ def evaluate(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, wor
 )
 @click.option("--models", "-m", required=True, help="Comma-separated model names")
 @click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
-@click.option("--config-files", help="Space-separated config files")
+@click.option("--config-files", "-c", help="Space-separated config files", callback=_split_config_files)
 @click.option("--valid-latex", default="./latex/valid.tex", help="Valid results LaTeX file")
 @click.option("--test-latex", default="./latex/test.tex", help="Test results LaTeX file")
 @click.option("--nproc", default=1, help="Number of processes")
@@ -222,7 +228,6 @@ def benchmark(
     setproctitle(proc_title)
 
     model_list = [m.strip() for m in models.split(",")]
-    config_file_list = config_files.strip().split(" ") if config_files else None
 
     os.makedirs(os.path.dirname(valid_latex), exist_ok=True)
     os.makedirs(os.path.dirname(test_latex), exist_ok=True)
@@ -247,7 +252,7 @@ def benchmark(
             result = run(
                 model,
                 dataset,
-                config_file_list=config_file_list,
+                config_file_list=config_files,
                 nproc=nproc,
                 world_size=world_size,
                 ip=ip,
@@ -298,7 +303,7 @@ def benchmark(
     ),
 )
 @click.argument("params-file", type=click.Path(exists=True, dir_okay=False, readable=True))
-@click.option("--config-files", help="Fixed config files")
+@click.option("--config-files", "-c", help="Fixed config files", callback=_split_config_files)
 @click.option("--output-path", default="saved/hyper", help="Output directory")
 @click.option("--display-file", help="Visualization file")
 @click.option("--max-evals", default=10, help="Maximum evaluations")
@@ -320,7 +325,7 @@ def tune(
     if not study_name:
         study_name = f"hyper_{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}"
 
-    config_file_list = config_files.strip().split(" ") if config_files else None
+    config_file_list = config_files if config_files else None
 
     console.print(
         Panel(

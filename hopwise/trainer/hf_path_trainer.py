@@ -25,12 +25,17 @@ class HFPathTrainer(Trainer):
     """A HuggingFace Trainer that integrates with hopwise for training and evaluation."""
 
     def __init__(self, model, callbacks, train_data=None, args=None, tokenizer=None):
-        tokenizer = tokenizer or train_data.dataset.tokenizer
+        tokenizer = tokenizer or (train_data.dataset.tokenizer if train_data is not None else None)
+        if tokenizer is None:
+            raise ValueError(
+                "A tokenizer must be provided, either directly via `tokenizer` or through `train_data`. "
+                "When resuming a checkpoint without data, the tokenizer is loaded from the saved model."
+            )
         super().__init__(
             model=model,
             args=args,
             callbacks=None,
-            train_dataset=train_data.dataset,
+            train_dataset=train_data.dataset if train_data is not None else None,
             eval_dataset="none",
             processing_class=tokenizer,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
