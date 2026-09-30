@@ -1968,7 +1968,7 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
 
     def init_hf_trainer(
         self,
-        train_data,
+        train_data=None,
         valid_data=None,
         verbose=True,
         saved=True,
@@ -1976,6 +1976,7 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
         hf_callbacks=None,
         callback_fn=None,
         training_args=None,
+        tokenizer=None,
     ):
         from hopwise.trainer.hf_path_trainer import HFPathTrainer, hopwiseCallback
 
@@ -1984,22 +1985,22 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
         hf_callbacks = hf_callbacks or []
         hf_args = self.prepare_hf_args(**training_args)
 
-        callbacks = [
-            hopwiseCallback(
-                self,
-                train_data,
-                valid_data=valid_data,
-                verbose=verbose,
-                saved=saved,
-                show_progress=show_progress,
-                callback_fn=callback_fn,
-                model=self.model,
-                model_name=self.model.__class__.__name__,
-            ),
-            *hf_callbacks,
-        ]
+        self.hopwise_callback = hopwiseCallback(
+            self,
+            train_data,
+            valid_data=valid_data,
+            verbose=verbose,
+            saved=saved,
+            show_progress=show_progress,
+            callback_fn=callback_fn,
+            model=self.model,
+            model_name=self.model.__class__.__name__,
+        )
+        callbacks = [self.hopwise_callback, *hf_callbacks]
 
-        self.hf_trainer = HFPathTrainer(self.model, callbacks, train_data=train_data, args=hf_args)
+        self.hf_trainer = HFPathTrainer(
+            self.model, callbacks, train_data=train_data, args=hf_args, tokenizer=tokenizer
+        )
 
     @property
     def processing_class(self):
@@ -2039,10 +2040,7 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
             resume_file (str): the path to the directory containing the checkpoint files or subdirectories
         """
         from safetensors.torch import load_file
-        from transformers import AutoTokenizer
-
-        if not hasattr(self, "hf_trainer"):
-            raise ValueError("The HuggingFace Trainer has not been initialized. Please call `init_hf_trainer` first.")
+        from transformers import AutoTokenizer, DataCollatorForLanguageModeling
 
         if os.path.basename(resume_file).startswith(self.HUGGINGFACE_SAVE_PATH_SUFFIX):
             hf_resume_file = resume_file
@@ -2058,9 +2056,26 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
         self.cur_step = checkpoint["cur_step"]
         self.best_valid_score = checkpoint["best_valid_score"]
 
+        # Load the tokenizer saved alongside the HuggingFace model so that token ids match the checkpoint.
+        # It is kept on the trainer to (i) initialize the HF Trainer here, when resuming without data, and
+        # (ii) be re-assigned to the dataset once data becomes available in `fit`/`evaluate` (see #240).
+        self._loaded_tokenizer = AutoTokenizer.from_pretrained(hf_resume_file)
+
+        # `resume_checkpoint` may be called without train/valid/test data (e.g. resuming to evaluate). The HF
+        # Trainer and the hopwise callback do not need the data at construction time, so they are initialized
+        # here with `train_data=None` and bound to the actual data later, in `fit`/`evaluate` (see #227).
+        if not hasattr(self, "hf_trainer"):
+            self.init_hf_trainer(tokenizer=self._loaded_tokenizer)
+        else:
+            self.hf_trainer.processing_class = self._loaded_tokenizer
+            self.hf_trainer.data_collator = DataCollatorForLanguageModeling(self._loaded_tokenizer, mlm=False)
+
         weights = load_file(os.path.join(hf_resume_file, "model.safetensors"))
         self.model.load_state_dict(weights, strict=False)
-        self.processing_class.tokenizer = AutoTokenizer.from_pretrained(hf_resume_file)
+        # `lm_head` is tied to the input embeddings (`wte`) and is therefore omitted from the safetensors, so
+        # `load_state_dict(strict=False)` reports it as missing. Re-tie explicitly to keep them sharing storage
+        # regardless of how the model was built (see #239).
+        self.model.tie_weights()
 
     def fit(
         self,
@@ -2072,6 +2087,8 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
         callback_fn=None,
     ):
         self.eval_collector.train_data_collect(train_data)
+        self._sync_loaded_tokenizer(train_data)
+        self._sync_loaded_tokenizer(valid_data)
 
         if not hasattr(self, "hf_trainer"):
             self.init_hf_trainer(
@@ -2082,11 +2099,28 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
                 show_progress=show_progress,
                 callback_fn=callback_fn,
             )
+        else:
+            # The HF Trainer was initialized without data (e.g. by `resume_checkpoint`). Bind the data now.
+            if self.hf_trainer.train_dataset is None:
+                self.hf_trainer.train_dataset = train_data.dataset
+            self.hopwise_callback.train_data = train_data
+            self.hopwise_callback.valid_data = valid_data
 
         self.hf_trainer.train()
         self.hf_trainer.save_model()
 
         return self.best_valid_score, self.best_valid_result
+
+    def _sync_loaded_tokenizer(self, data):
+        """Re-assign the tokenizer loaded by `resume_checkpoint` to the dataset (see #240).
+
+        The dataset builds its tokenizer deterministically from the atomic files, so a resumed run rebuilds an
+        equivalent tokenizer; re-assigning the loaded one keeps the dataset, the dataloaders and the HuggingFace
+        Trainer in sync with the exact tokenizer that produced the checkpoint.
+        """
+        tokenizer = getattr(self, "_loaded_tokenizer", None)
+        if tokenizer is not None and data is not None:
+            data.dataset.tokenizer = tokenizer
 
     def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
         return super()._full_sort_batch_eval(
@@ -2102,6 +2136,8 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
     def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
         if not eval_data:
             return
+
+        self._sync_loaded_tokenizer(eval_data)
 
         if load_best_model:
             self.hf_trainer._load_best_model()

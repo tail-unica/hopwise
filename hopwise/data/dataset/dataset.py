@@ -14,6 +14,7 @@
 import copy
 import os
 import pickle
+import shutil
 import sys
 from collections import Counter, defaultdict
 from logging import getLogger
@@ -250,7 +251,14 @@ class Dataset(torch.utils.data.Dataset):
             dataset_path (str): path of dataset dir.
         """
         if not os.path.exists(dataset_path):
-            self._download()
+            bundled_path = os.path.join(
+                os.path.dirname(os.path.realpath(__file__)), "..", "..", "dataset_example", token
+            )
+            if os.path.isdir(bundled_path):
+                self.logger.info(set_color(f"Copying bundled dataset [{token}] into [{dataset_path}].", "green"))
+                shutil.copytree(bundled_path, dataset_path)
+            else:
+                self._download()
         self._load_inter_feat(token, dataset_path)
         self.user_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.USER, "uid_field")
         self.item_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.ITEM, "iid_field")

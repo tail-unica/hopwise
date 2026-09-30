@@ -1090,6 +1090,57 @@ class TestPathLanguageModelingRecommender(unittest.TestCase):
         config_dict = {"model": "PLM", **self.hf_lm_base_config}
         quick_test(config_dict)
 
+    def test_resume_checkpoint_and_evaluate(self):
+        # Regression for #227 and #240. Train a path-LM with saving, then, in a fresh trainer/model/dataset
+        # (as a new process would), resume the checkpoint and evaluate WITHOUT a manual `init_hf_trainer` call:
+        # `resume_checkpoint` must lazily initialize the HuggingFace Trainer with the tokenizer saved in the
+        # checkpoint (#227), and re-assign that tokenizer to the dataset used for evaluation (#240).
+        from hopwise.config import Config
+        from hopwise.data import create_dataset, data_preparation
+        from hopwise.utils import get_model, get_trainer, init_seed
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            config_dict = {
+                "model": "PEARLM",
+                "checkpoint_dir": tmpdirname,
+                "epochs": 1,
+                "eval_step": 1,
+                **self.hf_lm_base_config,
+            }
+
+            def build():
+                config = Config(model="PEARLM", config_file_list=config_file_list, config_dict=config_dict)
+                init_seed(config["seed"], config["reproducibility"])
+                dataset = create_dataset(config)
+                train_data, valid_data, test_data = data_preparation(config, dataset)
+                model = get_model(config["model"])(config, train_data.dataset).to(config["device"])
+                trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
+                return dataset, train_data, valid_data, test_data, trainer
+
+            # train and save a checkpoint
+            _, train_data, valid_data, _, trainer = build()
+            trainer.fit(train_data, valid_data, saved=True, show_progress=False)
+            checkpoint = trainer.saved_model_file
+            self.assertTrue(os.path.exists(checkpoint))
+
+            # fresh trainer/model/dataset: resume and evaluate with no manual `init_hf_trainer`
+            dataset2, train_data2, _, test_data2, trainer2 = build()
+            regenerated_vocab = dataset2.tokenizer.get_vocab()
+
+            self.assertFalse(hasattr(trainer2, "hf_trainer"))
+            trainer2.eval_collector.train_data_collect(train_data2)
+            trainer2.resume_checkpoint(checkpoint)
+            self.assertTrue(hasattr(trainer2, "hf_trainer"))  # lazily initialized (#227)
+
+            result = trainer2.evaluate(test_data2, load_best_model=False, show_progress=False)
+            self.assertIsNotNone(result)
+            self.assertGreater(len(result), 0)
+
+            # #240: the tokenizer loaded from the checkpoint is re-assigned to the dataset, and it matches
+            # the deterministically regenerated one (so token ids are consistent with the saved model)
+            self.assertIs(test_data2.dataset.tokenizer, trainer2._loaded_tokenizer)
+            self.assertEqual(trainer2._loaded_tokenizer.get_vocab(), regenerated_vocab)
+
     def test_kgglm(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
             config_dict = {
