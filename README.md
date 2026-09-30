@@ -7,6 +7,7 @@
 <p align="center">
   <a href="https://tail-unica.github.io/hopwise/docs/"><img alt="Static Badge" src="https://img.shields.io/badge/docs-hopwise-purple?logo=sphinx&link=http%3A%2F%2Ftail-unica.github.io%2Fhopwise%2F"></a>
   <img src="https://img.shields.io/badge/Python-3.9%7C3.10%7C3.11-green" />
+  <a href="https://tail-unica.github.io/hopwise/coverage/"><img alt="Coverage" src="https://img.shields.io/endpoint?url=https%3A%2F%2Ftail-unica.github.io%2Fhopwise%2Fcoverage%2Fbadge.json"></a>
   <img src="https://img.shields.io/github/license/tail-unica/hopwise" />
   <img src="https://img.shields.io/github/repo-size/tail-unica/hopwise">
   <a href="https://github.com/tail-unica/hopwise/network"><img alt="GitHub forks" src="https://img.shields.io/github/forks/tail-unica/hopwise"></a>

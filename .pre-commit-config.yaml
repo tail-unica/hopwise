@@ -3,6 +3,9 @@ default_stages: [
     pre-merge-commit
 ]
 
+# Generated coverage report published on GitHub Pages
+exclude: ^coverage/
+
 default_language_version:
     python: python3
 

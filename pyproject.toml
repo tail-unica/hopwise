@@ -139,6 +139,7 @@ docs = [
 ]
 test = [
   "pytest-xdist",
+  "pytest-cov",
 ]
 lint = [
   "ruff",
@@ -170,6 +171,16 @@ name = "testpypi"
 url = "https://test.pypi.org/simple/"
 publish-url = "https://test.pypi.org/legacy/"
 explicit = true
+
+[tool.coverage.run]
+source = ["hopwise"]
+relative_files = true
+
+[tool.coverage.report]
+skip_empty = true
+
+[tool.coverage.html]
+title = "hopwise coverage"
 
 [tool.ruff]
 line-length = 119
