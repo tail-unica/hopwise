@@ -335,7 +335,12 @@ class Config:
     def _set_default_parameters(self):
         self.final_config_dict["dataset"] = self.dataset
         self.final_config_dict["model"] = self.model
-        self.final_config_dict["data_path"] = os.path.join(self.final_config_dict["data_path"], self.dataset)
+        data_path = os.path.join(self.final_config_dict["data_path"], self.dataset)
+        # datasets shipped with hopwise (e.g. ml-100k) are read in place when not present in `data_path`
+        bundled_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "dataset_example", self.dataset)
+        if not os.path.exists(data_path) and os.path.isdir(bundled_path):
+            data_path = os.path.normpath(bundled_path)
+        self.final_config_dict["data_path"] = data_path
 
         if hasattr(self.model_class, "input_type"):
             self.final_config_dict["MODEL_INPUT_TYPE"] = self.model_class.input_type

@@ -252,12 +252,15 @@ SERENDIPITY_CASES = [
 ]
 
 
-def _serendipity(config, rec_items, history_index, count_items=SERENDIPITY_COUNT_ITEMS):
+def _serendipity(config, rec_items, history_index, count_items=SERENDIPITY_COUNT_ITEMS, user_ids=None, num_users=None):
+    if user_ids is None:
+        user_ids = list(range(1, len(rec_items) + 1))  # every user evaluated, users 1-indexed due to padding
     store = {
         "rec.items": _NumpyWrap(rec_items),
+        "rec.users": _NumpyWrap(user_ids),
         "data.count_items": count_items,
         "data.num_items": SERENDIPITY_NUM_ITEMS,
-        "data.num_users": len(rec_items) + 1,  # padding row 0
+        "data.num_users": num_users or len(rec_items) + 1,  # padding row 0
         "data.history_index": history_index,
     }
     return metrics_dict["serendipity"](config).calculate_metric(_DataObject(store))
@@ -275,6 +278,15 @@ def test_serendipity_depends_on_k():
     # @2: popular {1, 2}, no overlap -> 1.0; @5: popular {1..5}, overlap {4, 5} -> 1 - 2/5
     got = {k: float(result[f"serendipity@{k}"]) for k in (2, 5)}
     assert got == pytest.approx({2: 1.0, 5: 1 - 2 / 5}, abs=BEYOND_UTILITY_TOL)
+
+
+def test_serendipity_subset_of_users_evaluated():
+    """Rows of rec.items belong to the evaluated users only, in batch order, not to every user."""
+    # User 2 is not evaluated; user 3 has items {1, 2} in history, so its popular set is {3, 4, 5, 6, 7}.
+    history_index = np.array([[3, 3], [1, 2]], dtype=int)
+    rec_items = [[1, 2, 3, 10, 9], [1, 2, 3, 4, 5]]  # user 3 first, then user 1
+    result = _serendipity(_beyond_utility_config([5]), rec_items, history_index, user_ids=[3, 1], num_users=4)
+    assert float(result["serendipity@5"]) == pytest.approx((1 - 1 / 5 + 0.0) / 2, abs=BEYOND_UTILITY_TOL)
 
 
 # item 0 is the least popular (count 1), item 9 the most popular (count 10)

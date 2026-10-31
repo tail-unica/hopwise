@@ -240,7 +240,7 @@ class Collector:
                 self.data_struct._data_dict[key] = self.data_struct._data_dict[key].cpu()
 
         returned_struct = copy.deepcopy(self.data_struct)
-        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label", "rec.paths"]:
+        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "rec.users", "data.label", "rec.paths"]:
             if key in self.data_struct:
                 del self.data_struct[key]
 

@@ -854,7 +854,14 @@ class Serendipity(AbstractMetric):
     """
 
     metric_type = EvaluatorType.RANKING
-    metric_need = ["rec.items", "data.num_items", "data.num_users", "data.count_items", "data.history_index"]
+    metric_need = [
+        "rec.items",
+        "rec.users",
+        "data.num_items",
+        "data.num_users",
+        "data.count_items",
+        "data.history_index",
+    ]
 
     def __init__(self, config):
         super().__init__(config)
@@ -866,13 +873,14 @@ class Serendipity(AbstractMetric):
         num_items = dataobject.get("data.num_items")
         item_counter = dataobject.get("data.count_items")
         item_matrix = dataobject.get("rec.items")
+        user_ids = dataobject.get("rec.users")
         history_matrix = dataobject.get("data.history_index")
 
         items, count = zip(*item_counter.items())
         item_counter = np.zeros(num_items, dtype=int)
         item_counter[list(items)] = count
 
-        return item_matrix.numpy(), item_counter, history_matrix, num_users
+        return item_matrix.numpy(), user_ids.numpy(), item_counter, history_matrix, num_users
 
     def get_popularity_rank(self, item_count, history_matrix, num_users):
         """Rank every item by decreasing popularity, separately for each user.
@@ -887,33 +895,38 @@ class Serendipity(AbstractMetric):
 
         Returns:
             numpy.ndarray: popularity rank of every item, shape of ``(n_users, n_items)``, 0 being the most popular.
+            Rows are indexed by user id, so row 0 belongs to the padding user.
         """
         pop_recs = np.tile(item_count, (num_users, 1))
         pop_recs[tuple(history_matrix)] = -1
         pop_recs[:, 0] = -1  # padding item
-        pop_recs = pop_recs[1:]  # remove the padding user
 
         pop_order = np.argsort(pop_recs, axis=-1)[:, ::-1]
         pop_rank = np.empty_like(pop_order)
         np.put_along_axis(pop_rank, pop_order, np.arange(pop_recs.shape[1]), axis=1)
         return pop_rank
 
-    def metric_info(self, item_matrix, pop_rank):
+    def metric_info(self, item_matrix, user_ids, pop_rank):
         """Look up the popularity rank of each recommended item.
 
         A recommended item is among the `k` most popular ones iff its rank is lower than `k`,
         so this single matrix serves every cutoff and no set intersection is needed.
 
+        Args:
+            item_matrix(numpy.ndarray): recommended items, shape of ``(n_eval_users, max(topk))``.
+            user_ids(numpy.ndarray): user id of each row of ``item_matrix``, as not every user is evaluated.
+            pop_rank(numpy.ndarray): popularity rank of every item for every user, indexed by user id.
+
         Returns:
-            numpy.ndarray: popularity rank of the recommended items, shape of ``(n_users, max(topk))``.
+            numpy.ndarray: popularity rank of the recommended items, shape of ``(n_eval_users, max(topk))``.
         """
-        return np.take_along_axis(pop_rank, item_matrix, axis=1)
+        return np.take_along_axis(pop_rank[user_ids], item_matrix, axis=1)
 
     def calculate_metric(self, dataobject):
-        item_matrix, item_count, history_matrix, num_users = self.used_info(dataobject)
+        item_matrix, user_ids, item_count, history_matrix, num_users = self.used_info(dataobject)
 
         pop_rank = self.get_popularity_rank(item_count, history_matrix, num_users)
-        result = self.metric_info(item_matrix, pop_rank)
+        result = self.metric_info(item_matrix, user_ids, pop_rank)
         metric_dict = self.topk_result("serendipity", result)
         return metric_dict
 

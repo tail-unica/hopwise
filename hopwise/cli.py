@@ -15,6 +15,9 @@ from hopwise.quick_start import objective_function, run
 from hopwise.trainer import HyperTuning
 from hopwise.utils import list_to_latex
 
+# options that accept several space-separated values, e.g. `--config-files a.yaml b.yaml`
+MULTI_VALUE_OPTIONS = ("--config-files", "-c")
+
 
 class hopwiseClickCommand(click.Command):
     def parse_args(self, ctx, args):
@@ -23,10 +26,17 @@ class hopwiseClickCommand(click.Command):
         click_args = []
         hopwise_args = []
 
+        multi_value_option = None
         for arg in args:
             if arg.startswith("--") and "=" in arg:
                 hopwise_args.append(arg)
+            elif multi_value_option is not None and not arg.startswith("-"):
+                # `--config-files a.yaml b.yaml` is expanded to `--config-files a.yaml --config-files b.yaml`
+                click_args.extend([multi_value_option, arg])
+            elif arg in MULTI_VALUE_OPTIONS:
+                multi_value_option = arg
             else:
+                multi_value_option = None
                 click_args.append(arg)
 
         result = super().parse_args(ctx, click_args)
@@ -38,7 +48,8 @@ class hopwiseClickCommand(click.Command):
 def _split_config_files(ctx, param, value):
     if not value:
         return None
-    paths = value.strip().split()
+    # each value is a single path, or several space-separated paths for backward compatibility
+    paths = [p for v in value for p in ([v] if os.path.isfile(v) else v.strip().split())]
     for p in paths:
         if not os.path.isfile(p):
             raise click.BadParameter(f"config file not found: {p}")
@@ -86,7 +97,7 @@ def cli(ctx, debug, rich_traceback):
 )
 @click.option("--model", "-m", default="BPR", help="Model name to train")
 @click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
-@click.option("--config-files", "-c", help="Space-separated config files", callback=_split_config_files)
+@click.option("--config-files", "-c", help="Config files", multiple=True, callback=_split_config_files)
 @click.option("--checkpoint", help="Checkpoint (.pth) file path")
 @click.option("--nproc", default=1, help="Number of processes")
 @click.option("--ip", default="localhost", help="Master node IP")
@@ -143,7 +154,7 @@ def train(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, world_
 )
 @click.option("--model", "-m", default="BPR", help="Model name to train")
 @click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
-@click.option("--config-files", "-c", help="Space-separated config files", callback=_split_config_files)
+@click.option("--config-files", "-c", help="Config files", multiple=True, callback=_split_config_files)
 @click.option("--checkpoint", help="Checkpoint (.pth) file path")
 @click.option("--nproc", default=1, help="Number of processes")
 @click.option("--ip", default="localhost", help="Master node IP")
@@ -200,7 +211,7 @@ def evaluate(ctx, model, dataset, config_files, nproc, checkpoint, ip, port, wor
 )
 @click.option("--models", "-m", required=True, help="Comma-separated model names")
 @click.option("--dataset", "-d", default="ml-100k", help="Dataset name")
-@click.option("--config-files", "-c", help="Space-separated config files", callback=_split_config_files)
+@click.option("--config-files", "-c", help="Config files", multiple=True, callback=_split_config_files)
 @click.option("--valid-latex", default="./latex/valid.tex", help="Valid results LaTeX file")
 @click.option("--test-latex", default="./latex/test.tex", help="Test results LaTeX file")
 @click.option("--nproc", default=1, help="Number of processes")
@@ -303,7 +314,7 @@ def benchmark(
     ),
 )
 @click.argument("params-file", type=click.Path(exists=True, dir_okay=False, readable=True))
-@click.option("--config-files", "-c", help="Fixed config files", callback=_split_config_files)
+@click.option("--config-files", "-c", help="Fixed config files", multiple=True, callback=_split_config_files)
 @click.option("--output-path", default="saved/hyper", help="Output directory")
 @click.option("--display-file", help="Visualization file")
 @click.option("--max-evals", default=10, help="Maximum evaluations")

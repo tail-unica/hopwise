@@ -2100,11 +2100,16 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
                 callback_fn=callback_fn,
             )
         else:
-            # The HF Trainer was initialized without data (e.g. by `resume_checkpoint`). Bind the data now.
+            # The HF Trainer was initialized without data (e.g. by `resume_checkpoint`).
+            # Bind the data and the options of this `fit` call now.
             if self.hf_trainer.train_dataset is None:
                 self.hf_trainer.train_dataset = train_data.dataset
             self.hopwise_callback.train_data = train_data
             self.hopwise_callback.valid_data = valid_data
+            self.hopwise_callback.verbose = verbose
+            self.hopwise_callback.saved = saved
+            self.hopwise_callback.show_progress = show_progress
+            self.hopwise_callback.callback_fn = callback_fn
 
         self.hf_trainer.train()
         self.hf_trainer.save_model()
@@ -2120,6 +2125,13 @@ class HFPathLanguageModelingTrainer(ExplainableTrainer):
         """
         tokenizer = getattr(self, "_loaded_tokenizer", None)
         if tokenizer is not None and data is not None:
+            # the tokenized dataset, the dataloaders and the model processors were already built with the
+            # rebuilt tokenizer, so they are consistent with the checkpoint only if both map tokens equally
+            if data.dataset.tokenizer is not None and data.dataset.tokenizer.get_vocab() != tokenizer.get_vocab():
+                raise ValueError(
+                    "The tokenizer loaded from the checkpoint does not match the one built from the dataset. "
+                    "Make sure the dataset and its filtering settings are the same used to train the checkpoint."
+                )
             data.dataset.tokenizer = tokenizer
 
     def _full_sort_batch_eval(self, batched_data, tot_item_num, item_tensor):
