@@ -28,7 +28,7 @@ jobs:
 
           - os: ubuntu-latest
             env: cuda
-            python-version: "3.9"
+            python-version: "3.13"
             experimental_or_skip_heavy_tests: true
 
           - os: windows-latest
