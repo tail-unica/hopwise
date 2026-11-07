@@ -883,6 +883,41 @@ class TestKGDataset:
         with pytest.raises(ValueError):
             dataset.token2id("entity_id", "ee")
 
+    def test_avg_degree_kg_item(self):
+        # Regression for #241. In `kg_remap_id` the kept links are ib->eb, ic->ec, id->ed
+        # (ie->ee is dropped), and the kept triples are (eb, ea), (ec, eb), (ed, ec), i.e.
+        # internal ids (1, 4), (2, 1), (3, 2). The linked entity ids are eb=1, ec=2, ed=3
+        # with head+tail degrees 2, 2, 1 -> mean 5/3. Matching on item2entity keys (item
+        # tokens ib/ic/id) instead of values (entity tokens) would wrongly yield 0.0 here.
+        from collections import Counter
+
+        import torch
+
+        from hopwise.data.interaction import Interaction
+
+        config_dict = {
+            "model": "KGAT",
+            "dataset": "kg_remap_id",
+            "data_path": current_path,
+            "load_col": None,
+        }
+        dataset = new_dataset(config_dict=config_dict)
+
+        # independent ground truth computed from item2entity VALUES (entity tokens)
+        entity_ids = dataset.token2id("entity_id", list(dataset.item2entity.values()))
+        head = dataset.kg_feat["head_id"].to_numpy()
+        tail = dataset.kg_feat["tail_id"].to_numpy()
+        counter = Counter(head) + Counter(tail)
+        expected = np.mean([counter[eid] for eid in entity_ids])
+        assert expected == pytest.approx(5 / 3)
+
+        # DataFrame branch
+        assert dataset.avg_degree_kg_item == pytest.approx(expected)
+
+        # Interaction branch must return the same value (the two branches were asymmetric)
+        dataset.kg_feat = Interaction({"head_id": torch.as_tensor(head), "tail_id": torch.as_tensor(tail)})
+        assert dataset.avg_degree_kg_item == pytest.approx(expected)
+
     def test_kg_filter_link(self):
         config_dict = {
             "model": "KGAT",

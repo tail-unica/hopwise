@@ -178,7 +178,8 @@ def run_hopwise(
         trainer.eval_collector.train_data_collect(train_data)
 
         if isinstance(trainer, HFPathLanguageModelingTrainer):
-            trainer.init_hf_trainer(train_data, valid_data, show_progress=config["show_progress"])
+            # `resume_checkpoint` lazily initializes the HuggingFace Trainer (with the tokenizer saved in the
+            # checkpoint) and binds the evaluation data later, so no manual `init_hf_trainer` call is needed (#227).
             trainer.resume_checkpoint(checkpoint)
 
         best_valid_result = trainer.evaluate(

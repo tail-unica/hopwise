@@ -183,7 +183,7 @@ Run the project with the following command:
 hopwise train \
     --model MODEL \
     --dataset DATASET \
-    --config_files CONF_FILE_1.yaml CONF_FILE_2.yaml
+    --config-files CONF_FILE_1.yaml CONF_FILE_2.yaml
 ```
 
 Override config parameters directly from the CLI using =:

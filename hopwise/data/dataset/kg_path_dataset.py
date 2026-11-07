@@ -221,6 +221,12 @@ class KnowledgePathDataset(KnowledgeBasedDataset):
     def tokenizer(self):
         return self._tokenizer
 
+    @tokenizer.setter
+    def tokenizer(self, tokenizer):
+        # Allows re-assigning a tokenizer loaded from a checkpoint (see #240), keeping the dataset in sync
+        # with the exact tokenizer that produced the saved model.
+        self._tokenizer = tokenizer
+
     @property
     def tokenized_dataset(self):
         if self._tokenized_dataset is None:

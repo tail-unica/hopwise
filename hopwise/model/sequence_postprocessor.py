@@ -7,8 +7,6 @@
 Common post-processors for path sequences in path language modeling recommender systems.
 """
 
-from collections import defaultdict
-
 import torch
 
 from hopwise.utils import PathLanguageModelingTokenType
@@ -19,11 +17,10 @@ class BaseSequencePostProcessor:
     Base class for sequence score post-processors.
     """
 
-    def __init__(self, tokenizer, used_ids, item_num, topk=10):
+    def __init__(self, tokenizer, used_ids, item_num):
         self.tokenizer = tokenizer
         self.used_ids = used_ids
         self.item_num = item_num
-        self.topk = topk
 
     def get_sequences(self, generation_outputs, max_new_tokens=24):
         """
@@ -92,39 +89,39 @@ class BaseSequencePostProcessor:
         return uid, recommended_item, seq
 
 
-class SequencePostProcessorLP:
-    def __init__(self, tokenizer, kg_positives, K=10, max_new_tokens=24):
-        self.tokenizer = tokenizer
-        self.kg_positives = kg_positives
-        self.topk = defaultdict(list)
-        self.topk_sequences = defaultdict(list)
-        self.max_new_tokens = max_new_tokens
-        self.K = K
+# class SequencePostProcessorLP:
+#     def __init__(self, tokenizer, kg_positives, K=10, max_new_tokens=24):
+#         self.tokenizer = tokenizer
+#         self.kg_positives = kg_positives
+#         self.topk = defaultdict(list)
+#         self.topk_sequences = defaultdict(list)
+#         self.max_new_tokens = max_new_tokens
+#         self.K = K
 
-    def update_topk(self, generate_outputs):
-        sorted_scores = generate_outputs.sequences_scores.argsort(descending=True)
-        generate_outputs.sequences = generate_outputs.sequences[sorted_scores]
-        for sequence in generate_outputs.sequences:
-            seq = self.tokenizer.decode(sequence).split(" ")
-            head_eid = int(seq[1][1:])
-            rel_rid = int(seq[2][1:])
-            if len(self.topk[head_eid, rel_rid]) >= self.K:
-                continue
-            recommended_token = seq[-1]
-            recommended_item = int(recommended_token[1:])
-            if (
-                recommended_item in self.kg_positives[(head_eid, rel_rid)]
-                or recommended_item in self.topk[head_eid, rel_rid]
-            ):
-                continue
-            self.topk[head_eid, rel_rid].append(recommended_item)
-            self.topk_sequences[head_eid, rel_rid].append(seq)
+#     def update_topk(self, generate_outputs):
+#         sorted_scores = generate_outputs.sequences_scores.argsort(descending=True)
+#         generate_outputs.sequences = generate_outputs.sequences[sorted_scores]
+#         for sequence in generate_outputs.sequences:
+#             seq = self.tokenizer.decode(sequence).split(" ")
+#             head_eid = int(seq[1][1:])
+#             rel_rid = int(seq[2][1:])
+#             if len(self.topk[head_eid, rel_rid]) >= self.K:
+#                 continue
+#             recommended_token = seq[-1]
+#             recommended_item = int(recommended_token[1:])
+#             if (
+#                 recommended_item in self.kg_positives[(head_eid, rel_rid)]
+#                 or recommended_item in self.topk[head_eid, rel_rid]
+#             ):
+#                 continue
+#             self.topk[head_eid, rel_rid].append(recommended_item)
+#             self.topk_sequences[head_eid, rel_rid].append(seq)
 
-    def reset_topks(self):
-        del self.topk
-        del self.topk_sequences
-        self.topk = defaultdict(list)
-        self.topk_sequences = defaultdict(list)
+#     def reset_topks(self):
+#         del self.topk
+#         del self.topk_sequences
+#         self.topk = defaultdict(list)
+#         self.topk_sequences = defaultdict(list)
 
 
 class CumulativeSequenceScorePostProcessor(BaseSequencePostProcessor):

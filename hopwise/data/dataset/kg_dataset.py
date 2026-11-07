@@ -455,19 +455,23 @@ class KnowledgeBasedDataset(Dataset):
         Returns:
             float: Average number of KG triples each item is involved in.
         """  # assumes a DataFrame or dict with head, relation, tail
+        # ``item2entity`` maps item tokens (keys) to entity tokens (values), while ``kg_feat`` stores
+        # internal entity ids. Degrees must therefore be looked up by the linked entity ids, i.e. the
+        # internal ids of ``item2entity.values()``, not by the item tokens (keys).
+        item_entity_ids = self.token2id(self.entity_field, list(self.item2entity.values()))
         if isinstance(self.kg_feat, pd.DataFrame):
             head_counts = self.kg_feat[self.head_entity_field].value_counts()
             tail_counts = self.kg_feat[self.tail_entity_field].value_counts()
             total_counts = head_counts.add(tail_counts, fill_value=0)
-            item_degrees = total_counts[total_counts.index.astype(str).isin(self.item2entity.keys())]
-            return item_degrees.mean() if not item_degrees.empty else 0.0
+            item_degrees = total_counts.reindex(item_entity_ids, fill_value=0)
+            return float(item_degrees.mean()) if not item_degrees.empty else 0.0
         else:
             # fallback if not using pandas
             head = self.kg_feat[self.head_entity_field].numpy()
             tail = self.kg_feat[self.tail_entity_field].numpy()
             counter = Counter(head) + Counter(tail)
-            item_degrees = [counter[pid] for pid in self.item2entity.keys()]
-            return np.mean(item_degrees) if item_degrees else 0.0
+            item_degrees = [counter[eid] for eid in item_entity_ids]
+            return float(np.mean(item_degrees)) if item_degrees else 0.0
 
     @property
     def avg_degree_kg(self):
